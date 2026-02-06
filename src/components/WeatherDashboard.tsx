@@ -449,9 +449,9 @@ export const TidesPanel: React.FC<{
                                 
                                 // Correlate with weather/waves
                                 const weatherIdx = weather.hourly.time.findIndex(t => t.startsWith(evt.time.substring(0, 13)));
-                                const swellHeight = tides.hourly.wave_height?.[weatherIdx] || 0;
-                                const swellPeriod = tides.hourly.wave_period?.[weatherIdx] || 0;
-                                const tideHeight = evt.tideHeight !== undefined ? evt.tideHeight : tides.hourly.tide_height?.[weatherIdx];
+                                const swellHeight = tides?.hourly.wave_height?.[weatherIdx] || 0;
+                                const swellPeriod = tides?.hourly.wave_period?.[weatherIdx] || 0;
+                                const tideHeight = evt.tideHeight !== undefined ? evt.tideHeight : tides?.hourly.tide_height?.[weatherIdx];
                                 const wind = weather.hourly.wind_speed_10m?.[weatherIdx] || 0;
                                 
                                 // Color coding for current (Safety)
