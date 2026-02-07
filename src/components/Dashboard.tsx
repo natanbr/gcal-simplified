@@ -371,7 +371,7 @@ export const Dashboard: React.FC = () => {
                                               </div>
  
                                               {/* Absolute Events Layer */}
-                                              <div className="absolute inset-0 overflow-hidden">
+                                              <div className="absolute inset-0 pointer-events-none">
                                                    {(() => {
                                                      const activeStart = startHour;
                                                      const activeEnd = endHour;
@@ -399,20 +399,35 @@ export const Dashboard: React.FC = () => {
  
                                                             const widthP = 100 / group.length;
                                                             const leftP = idx * widthP;
+
+                                                            // Enlarge cards logic
+                                                            const isSmallDuration = duration < 1;
+                                                            // Vertical expansion as % of total container height
+                                                            // 0.8% is approx 7-8 mins on a 14h day
+                                                            // 0.4% is approx 3-4 mins
+                                                            const verticalExpandP = isSmallDuration ? 0.8 : 0.4;
+                                                            // Horizontal expansion as % of column width
+                                                            const horizontalExpandP = 1.5;
+
+                                                            const finalTopP = topP - verticalExpandP;
+                                                            const finalHeightP = heightP + (verticalExpandP * 2);
+                                                            const finalLeftP = leftP - horizontalExpandP;
+                                                            const finalWidthP = widthP + (horizontalExpandP * 2);
  
                                                             return (
                                                                 <div 
                                                                     key={event.id}
-                                                                    className="absolute z-10"
+                                                                    className="absolute pointer-events-auto"
                                                                     style={{
-                                                                        top: `${topP}%`,
-                                                                        height: `${heightP}%`,
-                                                                        left: `${leftP}%`,
-                                                                        width: `${widthP}%`
+                                                                        top: `${finalTopP}%`,
+                                                                        height: `${finalHeightP}%`,
+                                                                        left: `${finalLeftP}%`,
+                                                                        width: `${finalWidthP}%`,
+                                                                        zIndex: isSmallDuration ? 20 : 10
                                                                     }}
                                                                 >
                                                                     <div className="h-full w-full">
-                                                                        <EventCard event={event} className="h-full" />
+                                                                        <EventCard event={event} className="h-full shadow-md" />
                                                                     </div>
                                                                 </div>
                                                             )
