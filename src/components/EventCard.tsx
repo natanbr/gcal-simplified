@@ -12,7 +12,7 @@ interface EventCardProps {
   className?: string;
 }
 
-import { getEventColorClass } from '../utils/colorMapping';
+import { getEventColorStyles } from '../utils/colorMapping';
 
 // Icon mapping for specific event types
 const getEventIcon = (title: string, description?: string) => {
@@ -38,9 +38,9 @@ const getEventIcon = (title: string, description?: string) => {
 };
 
 export const EventCard: React.FC<EventCardProps> = ({ event, className }) => {
-  const colorClass = useMemo(
-    () => getEventColorClass(event.title, event.description, event.colorId),
-    [event.title, event.description, event.colorId]
+  const colorStyles = useMemo(
+    () => getEventColorStyles(event.title, event.description, event.colorId, event.color),
+    [event.title, event.description, event.colorId, event.color]
   );
   const icon = useMemo(() => getEventIcon(event.title, event.description), [event.title, event.description]);
   
@@ -61,9 +61,10 @@ export const EventCard: React.FC<EventCardProps> = ({ event, className }) => {
       className={clsx(
         'w-full rounded-md shadow-sm border-l-[3px] text-sm overflow-hidden leading-tight',
         isShortEvent ? 'p-0' : 'p-1',
-        colorClass,
+        colorStyles.className,
         className
       )}
+      style={colorStyles.style}
     >
       {isShortEvent ? (
         // Compact single-row layout for short events
