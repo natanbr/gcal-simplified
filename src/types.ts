@@ -8,6 +8,7 @@ export interface AppEvent {
     description?: string;
     location?: string;
     colorId?: string;
+    color?: string; // Hex color for calendar color inheritance
 }
 
 export interface AppTask {

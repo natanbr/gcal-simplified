@@ -1,3 +1,5 @@
+import { getContrastColor, adjustColorBrightness } from './colors';
+
 /**
  * Color mapping utility for Google Calendar events
  * Maps Google Calendar colorId (1-11) to Tailwind CSS classes
@@ -76,31 +78,75 @@ function getColorFromName(title: string, description?: string): ColorClasses | n
 }
 
 /**
- * Get complete color class string for an event
- * Priority: Google Calendar colorId > Name-based > Default
+ * Get complete color styles for an event.
+ * Priority:
+ * 1. Google Calendar colorId (1-11)
+ * 2. Custom Hex Color (Calendar Color)
+ * 3. Name-based color
+ * 4. Default color
  * 
  * @param title - Event title
  * @param description - Event description (optional)
  * @param colorId - Google Calendar colorId (optional)
- * @returns Complete CSS class string with background, text, and border
+ * @param hexColor - Custom hex color (optional)
+ * @returns Object containing className and optional inline style
+ */
+export function getEventColorStyles(
+    title: string,
+    description?: string,
+    colorId?: string,
+    hexColor?: string
+): { className: string; style?: React.CSSProperties } {
+    // Priority 1: Google Calendar color ID (Maps to Tailwind classes)
+    const googleColor = getColorFromGoogleCalendar(colorId);
+    if (googleColor) {
+        return {
+            className: `${googleColor.bg} ${googleColor.text} border-l-4 ${googleColor.border}`
+        };
+    }
+
+    // Priority 2: Custom Hex Color (from Calendar)
+    if (hexColor) {
+        // We rely on inline styles for arbitrary colors, but keep border-l-4 from Tailwind
+        // We also need to compute a darker border color and appropriate text color
+
+        // Remove hash to ensure consistency for helpers if needed (helpers handle it)
+        const contrastText = getContrastColor(hexColor) === 'black' ? 'text-black' : 'text-white';
+        const darkerBorder = adjustColorBrightness(hexColor, -40); // Darken by roughly 15-20%
+
+        return {
+            className: `border-l-4 ${contrastText}`,
+            style: {
+                backgroundColor: hexColor,
+                borderLeftColor: darkerBorder
+            }
+        };
+    }
+
+    // Priority 3: Name-based color
+    const nameColor = getColorFromName(title, description);
+    if (nameColor) {
+        return {
+            className: `${nameColor.bg} ${nameColor.text} border-l-4 ${nameColor.border}`
+        };
+    }
+
+    // Priority 4: Default color
+    return {
+        className: `${DEFAULT_COLOR.bg} ${DEFAULT_COLOR.text} border-l-4 ${DEFAULT_COLOR.border}`
+    };
+}
+
+/**
+ * Deprecated: Use getEventColorStyles instead.
+ * Kept for backward compatibility if needed, but updated to use new logic fundamentally where possible.
+ * Note: Does not support hexColor return as string class names don't support arbitrary values easily.
  */
 export function getEventColorClass(
     title: string,
     description?: string,
     colorId?: string
 ): string {
-    // Priority 1: Google Calendar color
-    const googleColor = getColorFromGoogleCalendar(colorId);
-    if (googleColor) {
-        return `${googleColor.bg} ${googleColor.text} border-l-4 ${googleColor.border}`;
-    }
-
-    // Priority 2: Name-based color
-    const nameColor = getColorFromName(title, description);
-    if (nameColor) {
-        return `${nameColor.bg} ${nameColor.text} border-l-4 ${nameColor.border}`;
-    }
-
-    // Priority 3: Default color
-    return `${DEFAULT_COLOR.bg} ${DEFAULT_COLOR.text} border-l-4 ${DEFAULT_COLOR.border}`;
+    const result = getEventColorStyles(title, description, colorId);
+    return result.className;
 }

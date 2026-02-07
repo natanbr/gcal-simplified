@@ -80,4 +80,18 @@ describe('EventCard', () => {
         // Should show full time range
         expect(screen.getByText('10:00 - 11:00')).toBeInTheDocument();
     });
+
+    it('applies custom hex color style when provided', () => {
+        const hexEvent: AppEvent = {
+            ...defaultEvent,
+            color: '#ff0000', // Red
+            title: 'Red Event',
+        };
+        const { container } = render(<EventCard event={hexEvent} />);
+
+        // Should have inline style
+        expect(container.firstChild).toHaveStyle({ backgroundColor: '#ff0000' });
+        // Should also check contrast text color logic (via class)
+        expect(container.firstChild).toHaveClass('text-white');
+    });
 });

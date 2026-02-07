@@ -14,6 +14,7 @@ interface AppEvent {
     description?: string;
     location?: string;
     colorId?: string;
+    color?: string; // Hex color for calendar color inheritance
 }
 
 interface AppTask {
@@ -64,6 +65,24 @@ export class ApiService {
         // Default to 'primary' if nothing selected (first run logic mainly)
         const calendarIds = config.calendarIds.length > 0 ? config.calendarIds : ['primary'];
 
+        // Fetch calendar colors map
+        const calendarColors = new Map<string, string>();
+        try {
+            const calList = await calendar.calendarList.list();
+            if (calList.data.items) {
+                calList.data.items.forEach(c => {
+                    if (c.id && c.backgroundColor) {
+                        calendarColors.set(c.id, c.backgroundColor);
+                        if (c.primary) {
+                            calendarColors.set('primary', c.backgroundColor);
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("Failed to fetch calendar colors", e);
+        }
+
         const allEventsPromises = calendarIds.map(async (calId) => {
             try {
                 const res = await calendar.events.list({
@@ -103,7 +122,8 @@ export class ApiService {
                         location: event.location || undefined,
                         description: event.description || undefined,
                         isHoliday: isHoliday,
-                        colorId: event.colorId || undefined
+                        colorId: event.colorId || undefined,
+                        color: event.colorId ? undefined : calendarColors.get(calId)
                     } as AppEvent;
                 });
             } catch (error) {
