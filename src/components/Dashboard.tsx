@@ -34,8 +34,71 @@ export const Dashboard: React.FC = () => {
   const [weekOffset, setWeekOffset] = useState(0);
 
   const today = useMemo(() => new Date(), []);
-  const startDate = weekOffset === 0 ? today : getWeekStartDate(today, weekOffset);
-  const days = Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i));
+  const startDate = useMemo(() => weekOffset === 0 ? today : getWeekStartDate(today, weekOffset), [today, weekOffset]);
+  const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
+
+  const calendarData = useMemo(() => {
+    const startHour = config.activeHoursStart ?? 7;
+    const endHour = config.activeHoursEnd ?? 21;
+    const totalHours = endHour - startHour;
+
+    return days.map(day => {
+        const isToday = isSameDay(day, today);
+        const isWeekendDay = isWeekend(day);
+        const dayEvents = events.filter(e => isSameDay(e.start, day));
+        const holidays = dayEvents.filter(e => e.isHoliday);
+        const standardEvents = dayEvents.filter(e => !e.isHoliday);
+
+        const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour);
+
+        const beforeGroups = groupOverlappingEvents(buckets.before);
+        const afterGroups = groupOverlappingEvents(buckets.after);
+
+        const hourlyEvents = standardEvents.filter(e => {
+            const s = e.start.getHours() + e.start.getMinutes() / 60;
+            const end = e.end.getHours() + e.end.getMinutes() / 60;
+            return s < endHour && end > startHour;
+        }).sort((a, b) => a.start.getTime() - b.start.getTime());
+
+        const hourlyGroups = groupOverlappingEvents(hourlyEvents);
+
+        const visualEvents = hourlyGroups.flatMap(group => {
+            return group.map((event, idx) => {
+                const s = event.start.getHours() + event.start.getMinutes() / 60;
+                const e = event.end.getHours() + event.end.getMinutes() / 60;
+
+                const visualsStart = Math.max(s, startHour);
+                const visualsEnd = Math.min(e, endHour);
+
+                const topP = ((visualsStart - startHour) / totalHours) * 100;
+                const duration = visualsEnd - visualsStart;
+                const heightP = (duration / totalHours) * 100;
+
+                const widthP = 100 / group.length;
+                const leftP = idx * widthP;
+
+                return {
+                    event,
+                    top: `${topP}%`,
+                    height: `${heightP}%`,
+                    left: `${leftP}%`,
+                    width: `${widthP}%`
+                };
+            });
+        });
+
+        return {
+            isToday,
+            isWeekendDay,
+            holidays,
+            buckets,
+            beforeGroups,
+            afterGroups,
+            visualEvents,
+            hours: Array.from({ length: endHour - startHour }, (_, idx) => startHour + idx)
+        };
+    });
+  }, [days, events, config, today]);
 
   const currentLocation = useMemo(() => 
       MARINE_LOCATIONS.find(l => l.id === selectedLocationId) || MARINE_LOCATIONS[0], 
@@ -246,11 +309,9 @@ export const Dashboard: React.FC = () => {
             
             {/* Day Headers Grid */}
             <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-800">
-                {days.map((day, i) => {
-                    const isToday = isSameDay(day, today);
-                    const isWeekendDay = isWeekend(day);
-                    const dayEvents = events.filter(e => isSameDay(e.start, day));
-                    const holidays = dayEvents.filter(e => e.isHoliday);
+                {calendarData.map((data, i) => {
+                    const day = days[i];
+                    const { isToday, isWeekendDay, holidays } = data;
 
                     return (
                         <div key={i} className={`py-4 px-3 flex flex-col justify-center min-h-[100px] ${isToday ? 'bg-family-cyan/5' : isWeekendDay ? 'bg-family-orange/5' : ''}`}>
@@ -299,142 +360,81 @@ export const Dashboard: React.FC = () => {
              
              {/* Global Sidebar - Time Labels */}
              <div className="w-12 flex-shrink-0 flex flex-col border-r border-zinc-800 bg-zinc-950">
-                 {(() => {
-                     const startHour = config.activeHoursStart ?? 7;
-                     const endHour = config.activeHoursEnd ?? 21;
-                     const hours = Array.from({ length: endHour - startHour }, (_, idx) => startHour + idx);
+                {/* Before Label Spacer */}
+                <div className="h-16 flex-shrink-0 border-b border-zinc-800/50 relative bg-zinc-900/20">
+                    <span className="absolute bottom-1 right-1 text-[9px] text-zinc-600 font-mono">PRE</span>
+                </div>
 
-                     return (
-                         <>
-                             {/* Before Label Spacer */}
-                             <div className="h-16 flex-shrink-0 border-b border-zinc-800/50 relative bg-zinc-900/20">
-                                 <span className="absolute bottom-1 right-1 text-[9px] text-zinc-600 font-mono">PRE</span>
-                             </div>
+                {/* Hourly Labels */}
+                <div className="flex-1 flex flex-col min-h-0">
+                    {calendarData[0]?.hours.map(hour => (
+                        <div key={hour} className="flex-1 relative border-b border-zinc-800/30">
+                            <span className="absolute -top-2 right-1 text-[10px] text-zinc-500 font-mono bg-zinc-950 px-0.5">
+                                {hour}
+                            </span>
+                        </div>
+                    ))}
+                </div>
 
-                             {/* Hourly Labels */}
-                             <div className="flex-1 flex flex-col min-h-0">
-                                 {hours.map(hour => (
-                                     <div key={hour} className="flex-1 relative border-b border-zinc-800/30">
-                                         <span className="absolute -top-2 right-1 text-[10px] text-zinc-500 font-mono bg-zinc-950 px-0.5">
-                                             {hour}
-                                         </span>
-                                     </div>
-                                 ))}
-                             </div>
-
-                             {/* After Label Spacer */}
-                             <div className="h-16 flex-shrink-0 border-t border-zinc-800/50 relative bg-zinc-900/20">
-                                 <span className="absolute top-1 right-1 text-[9px] text-zinc-600 font-mono">POST</span>
-                             </div>
-                         </>
-                     );
-                 })()}
+                {/* After Label Spacer */}
+                <div className="h-16 flex-shrink-0 border-t border-zinc-800/50 relative bg-zinc-900/20">
+                    <span className="absolute top-1 right-1 text-[9px] text-zinc-600 font-mono">POST</span>
+                </div>
              </div>
 
              {/* Days Content Grid */}
              <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-800 overflow-hidden" data-testid="calendar-grid">
-                {days.map((day, i) => {
-                    const isToday = isSameDay(day, today);
-                    const isWeekendDay = isWeekend(day);
-                    const dayEvents = events.filter(e => isSameDay(e.start, day));
-                    // We need standardEvents for the buckets
-                    const standardEvents = dayEvents.filter(e => !e.isHoliday);
+                {calendarData.map((data, i) => {
+                    const { isToday, isWeekendDay, beforeGroups, hours, visualEvents, afterGroups } = data;
 
                      return (
                          <div key={i} className={`flex flex-col h-full relative ${isToday ? 'bg-family-cyan/[0.03]' : isWeekendDay ? 'bg-family-orange/[0.03]' : ''}`}>
-                             {(() => {
-                                 const startHour = config.activeHoursStart ?? 7;
-                                 const endHour = config.activeHoursEnd ?? 21;
-                                 const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour);
-                                 const hours = Array.from({ length: endHour - startHour }, (_, idx) => startHour + idx);
- 
-                                 return (
-                                     <>
-                                         {/* Before Bucket content */}
-                                         <div className="h-16 flex-shrink-0 border-b border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
-                                             <div className="flex gap-0.5">
-                                                {groupOverlappingEvents(buckets.before).map((group, gIdx) => (
-                                                    <div key={`before-${gIdx}`} className="flex-1 min-w-0">
-                                                        {group.map(event => <div key={event.id}><EventCard event={event} /></div>)}
-                                                    </div>
-                                                ))}
-                                             </div>
-                                         </div>
- 
-                                         {/* Hourly Slots Content (Absolute) */}
-                                         <div className="flex-1 relative flex flex-col min-h-0">
-                                              {/* Background Grid Lines (match sidebar) */}
-                                              <div className="absolute inset-0 flex flex-col pointer-events-none">
-                                                  {hours.map(hour => (
-                                                      <div key={`grid-${hour}`} className="flex-1 border-b border-zinc-800/30" />
-                                                  ))}
-                                              </div>
- 
-                                              {/* Absolute Events Layer */}
-                                              <div className="absolute inset-0 overflow-hidden">
-                                                   {(() => {
-                                                     const activeStart = startHour;
-                                                     const activeEnd = endHour;
-                                                     const totalHours = activeEnd - activeStart;
- 
-                                                     const hourlyEvents = standardEvents.filter(e => {
-                                                         const s = e.start.getHours() + e.start.getMinutes()/60;
-                                                         const end = e.end.getHours() + e.end.getMinutes()/60;
-                                                         return s < activeEnd && end > activeStart;
-                                                     }).sort((a,b) => a.start.getTime() - b.start.getTime());
- 
-                                                     const groups = groupOverlappingEvents(hourlyEvents);
-                                                     
-                                                     return groups.flatMap(group => {
-                                                         return group.map((event, idx) => {
-                                                            const s = event.start.getHours() + event.start.getMinutes()/60;
-                                                            const e = event.end.getHours() + event.end.getMinutes()/60;
-                                                            
-                                                            const visualsStart = Math.max(s, activeStart);
-                                                            const visualsEnd = Math.min(e, activeEnd);
-                                                            
-                                                            const topP = ((visualsStart - activeStart) / totalHours) * 100;
-                                                            const duration = visualsEnd - visualsStart;
-                                                            const heightP = (duration / totalHours) * 100;
- 
-                                                            const widthP = 100 / group.length;
-                                                            const leftP = idx * widthP;
- 
-                                                            return (
-                                                                <div 
-                                                                    key={event.id}
-                                                                    className="absolute z-10"
-                                                                    style={{
-                                                                        top: `${topP}%`,
-                                                                        height: `${heightP}%`,
-                                                                        left: `${leftP}%`,
-                                                                        width: `${widthP}%`
-                                                                    }}
-                                                                >
-                                                                    <div className="h-full w-full">
-                                                                        <EventCard event={event} className="h-full" />
-                                                                    </div>
-                                                                </div>
-                                                            )
-                                                         });
-                                                     });
-                                                  })()}
-                                              </div>
-                                         </div>
- 
-                                         {/* After Bucket content */}
-                                         <div className="h-16 flex-shrink-0 border-t border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
-                                             <div className="flex gap-0.5">
-                                                {groupOverlappingEvents(buckets.after).map((group, gIdx) => (
-                                                    <div key={`after-${gIdx}`} className="flex-1 min-w-0">
-                                                        {group.map(event => <div key={event.id}><EventCard event={event} /></div>)}
-                                                    </div>
-                                                ))}
-                                             </div>
-                                         </div>
-                                     </>
-                                 );
-                             })()}
+                             {/* Before Bucket content */}
+                             <div className="h-16 flex-shrink-0 border-b border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
+                                 <div className="flex gap-0.5">
+                                    {beforeGroups.map((group, gIdx) => (
+                                        <div key={`before-${gIdx}`} className="flex-1 min-w-0">
+                                            {group.map(event => <div key={event.id}><EventCard event={event} /></div>)}
+                                        </div>
+                                    ))}
+                                 </div>
+                             </div>
+
+                             {/* Hourly Slots Content (Absolute) */}
+                             <div className="flex-1 relative flex flex-col min-h-0">
+                                  {/* Background Grid Lines (match sidebar) */}
+                                  <div className="absolute inset-0 flex flex-col pointer-events-none">
+                                      {hours.map(hour => (
+                                          <div key={`grid-${hour}`} className="flex-1 border-b border-zinc-800/30" />
+                                      ))}
+                                  </div>
+
+                                  {/* Absolute Events Layer */}
+                                  <div className="absolute inset-0 overflow-hidden">
+                                       {visualEvents.map(({ event, top, height, left, width }) => (
+                                            <div
+                                                key={event.id}
+                                                className="absolute z-10"
+                                                style={{ top, height, left, width }}
+                                            >
+                                                <div className="h-full w-full">
+                                                    <EventCard event={event} className="h-full" />
+                                                </div>
+                                            </div>
+                                       ))}
+                                  </div>
+                             </div>
+
+                             {/* After Bucket content */}
+                             <div className="h-16 flex-shrink-0 border-t border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
+                                 <div className="flex gap-0.5">
+                                    {afterGroups.map((group, gIdx) => (
+                                        <div key={`after-${gIdx}`} className="flex-1 min-w-0">
+                                            {group.map(event => <div key={event.id}><EventCard event={event} /></div>)}
+                                        </div>
+                                    ))}
+                                 </div>
+                             </div>
                          </div>
                      )
                 })}
