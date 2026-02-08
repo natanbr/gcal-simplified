@@ -31,16 +31,6 @@ const GOOGLE_CALENDAR_COLORS: Record<string, ColorClasses> = {
 };
 
 /**
- * Name-based color mapping (fallback when no colorId)
- */
-const NAME_COLORS: Record<string, ColorClasses> = {
-    natan: { bg: 'bg-blue-500', text: 'text-white', border: 'border-blue-700' },
-    alon: { bg: 'bg-green-500', text: 'text-white', border: 'border-green-700' },
-    uval: { bg: 'bg-purple-500', text: 'text-white', border: 'border-purple-700' },
-    marta: { bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-700' },
-};
-
-/**
  * Default color for events with no colorId or name match
  */
 const DEFAULT_COLOR: ColorClasses = {
@@ -60,33 +50,14 @@ export function getColorFromGoogleCalendar(colorId: string | undefined): ColorCl
 }
 
 /**
- * Get color classes based on event name (fallback)
- * @param title - Event title
- * @param description - Event description (optional)
- * @returns ColorClasses object or null if no match
- */
-function getColorFromName(title: string, description?: string): ColorClasses | null {
-    const text = `${title} ${description || ''}`.toLowerCase();
-
-    for (const [name, colors] of Object.entries(NAME_COLORS)) {
-        if (text.includes(name)) {
-            return colors;
-        }
-    }
-
-    return null;
-}
-
-/**
  * Get complete color styles for an event.
  * Priority:
  * 1. Google Calendar colorId (1-11)
  * 2. Custom Hex Color (Calendar Color)
- * 3. Name-based color
- * 4. Default color
- * 
- * @param title - Event title
- * @param description - Event description (optional)
+ * 3. Default color
+ *
+ * @param title - Event title (unused for color mapping now)
+ * @param description - Event description (unused for color mapping now)
  * @param colorId - Google Calendar colorId (optional)
  * @param hexColor - Custom hex color (optional)
  * @returns Object containing className and optional inline style
@@ -123,15 +94,7 @@ export function getEventColorStyles(
         };
     }
 
-    // Priority 3: Name-based color
-    const nameColor = getColorFromName(title, description);
-    if (nameColor) {
-        return {
-            className: `${nameColor.bg} ${nameColor.text} border-l-4 ${nameColor.border}`
-        };
-    }
-
-    // Priority 4: Default color
+    // Priority 3: Default color
     return {
         className: `${DEFAULT_COLOR.bg} ${DEFAULT_COLOR.text} border-l-4 ${DEFAULT_COLOR.border}`
     };
