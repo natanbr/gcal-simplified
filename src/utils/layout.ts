@@ -29,3 +29,32 @@ export const groupOverlappingEvents = (events: AppEvent[]): EventGroup[] => {
     groups.push(currentGroup);
     return groups;
 };
+
+export const calculateEventStyles = (
+    topP: number,
+    heightP: number,
+    leftP: number,
+    widthP: number,
+    durationHours: number
+) => {
+    const isSmallDuration = durationHours < 1;
+    // Vertical expansion as % of total container height
+    // 0.8% is approx 7-8 mins on a 14h day
+    // 0.4% is approx 3-4 mins
+    const verticalExpandP = isSmallDuration ? 0.8 : 0.4;
+    // Horizontal expansion as % of column width
+    const horizontalExpandP = 1.5;
+
+    const finalTopP = topP - verticalExpandP;
+    const finalHeightP = heightP + (verticalExpandP * 2);
+    const finalLeftP = leftP - horizontalExpandP;
+    const finalWidthP = widthP + (horizontalExpandP * 2);
+
+    return {
+        top: `${finalTopP}%`,
+        height: `${finalHeightP}%`,
+        left: `${finalLeftP}%`,
+        width: `${finalWidthP}%`,
+        zIndex: isSmallDuration ? 20 : 10
+    };
+};

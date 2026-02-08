@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupOverlappingEvents } from './layout';
+import { groupOverlappingEvents, calculateEventStyles } from './layout';
 import { AppEvent } from '../types';
 
 describe('groupOverlappingEvents', () => {
@@ -132,5 +132,47 @@ describe('groupOverlappingEvents', () => {
         const result = groupOverlappingEvents(events);
         expect(result).toHaveLength(1);
         expect(result[0]).toHaveLength(3); // All three overlap
+    });
+});
+
+describe('calculateEventStyles', () => {
+    it('should expand small events (< 1h) more vertically', () => {
+        const result = calculateEventStyles(10, 5, 0, 100, 0.5);
+        // Small duration: < 1h -> verticalExpandP = 0.8
+        // top = 10 - 0.8 = 9.2
+        // height = 5 + 1.6 = 6.6
+        // left = 0 - 1.5 = -1.5
+        // width = 100 + 3 = 103
+        // zIndex = 20
+        expect(result.top).toBe('9.2%');
+        expect(result.height).toBe('6.6%');
+        expect(result.left).toBe('-1.5%');
+        expect(result.width).toBe('103%');
+        expect(result.zIndex).toBe(20);
+    });
+
+    it('should expand larger events (>= 1h) less vertically', () => {
+        const result = calculateEventStyles(10, 10, 0, 100, 2);
+        // Large duration: >= 1h -> verticalExpandP = 0.4
+        // top = 10 - 0.4 = 9.6
+        // height = 10 + 0.8 = 10.8
+        // left = 0 - 1.5 = -1.5
+        // width = 100 + 3 = 103
+        // zIndex = 10
+        expect(result.top).toBe('9.6%');
+        expect(result.height).toBe('10.8%');
+        expect(result.left).toBe('-1.5%');
+        expect(result.width).toBe('103%');
+        expect(result.zIndex).toBe(10);
+    });
+
+    it('should always expand horizontally by 1.5%', () => {
+        const horizontalExpandP = 1.5;
+        const result = calculateEventStyles(10, 10, 0, 100, 2);
+
+        // left = 0 - 1.5
+        // width = 100 + 3
+        expect(parseFloat(result.left)).toBeCloseTo(-horizontalExpandP);
+        expect(parseFloat(result.width)).toBeCloseTo(100 + horizontalExpandP * 2);
     });
 });

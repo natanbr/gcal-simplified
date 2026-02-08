@@ -5,7 +5,7 @@ import { EventCard } from './EventCard';
 import { SettingsModal } from './SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ListTodo, X, RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
-import { groupOverlappingEvents } from '../utils/layout';
+import { groupOverlappingEvents, calculateEventStyles } from '../utils/layout';
 import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
 import { WeatherDashboard, getWeatherIcon } from './WeatherDashboard';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
@@ -371,7 +371,7 @@ export const Dashboard: React.FC = () => {
                                               </div>
  
                                               {/* Absolute Events Layer */}
-                                              <div className="absolute inset-0 overflow-hidden">
+                                              <div className="absolute inset-0 pointer-events-none">
                                                    {(() => {
                                                      const activeStart = startHour;
                                                      const activeEnd = endHour;
@@ -399,20 +399,23 @@ export const Dashboard: React.FC = () => {
  
                                                             const widthP = 100 / group.length;
                                                             const leftP = idx * widthP;
+
+                                                            const styles = calculateEventStyles(
+                                                                topP,
+                                                                heightP,
+                                                                leftP,
+                                                                widthP,
+                                                                duration
+                                                            );
  
                                                             return (
                                                                 <div 
                                                                     key={event.id}
-                                                                    className="absolute z-10"
-                                                                    style={{
-                                                                        top: `${topP}%`,
-                                                                        height: `${heightP}%`,
-                                                                        left: `${leftP}%`,
-                                                                        width: `${widthP}%`
-                                                                    }}
+                                                                    className="absolute pointer-events-auto"
+                                                                    style={styles}
                                                                 >
                                                                     <div className="h-full w-full">
-                                                                        <EventCard event={event} className="h-full" />
+                                                                        <EventCard event={event} className="h-full shadow-md" />
                                                                     </div>
                                                                 </div>
                                                             )
