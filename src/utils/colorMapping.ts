@@ -63,8 +63,8 @@ export function getColorFromGoogleCalendar(colorId: string | undefined): ColorCl
  * @returns Object containing className and optional inline style
  */
 export function getEventColorStyles(
-    title: string,
-    description?: string,
+    _title: string,
+    _description?: string,
     colorId?: string,
     hexColor?: string
 ): { className: string; style?: React.CSSProperties } {
