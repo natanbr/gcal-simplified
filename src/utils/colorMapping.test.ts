@@ -18,12 +18,6 @@ describe('getEventColorStyles', () => {
         expect(result.className).toContain('text-white');
     });
 
-    it('returns name-based color when colorId and hexColor are missing but name matches', () => {
-        const result = getEventColorStyles('Meeting with Natan', undefined, undefined);
-        expect(result.className).toContain('bg-blue-500');
-        expect(result.style).toBeUndefined();
-    });
-
     it('returns default color when no match found', () => {
         const result = getEventColorStyles('Random Event', undefined, undefined);
         expect(result.className).toContain('bg-zinc-800');

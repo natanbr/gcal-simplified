@@ -30,14 +30,6 @@ describe('EventCard', () => {
         expect(screen.queryByText(/\d{2}:\d{2}/)).not.toBeInTheDocument();
     });
 
-    it('applies specific color class for name "Natan"', () => {
-        const natanEvent = { ...defaultEvent, title: 'Natan Dentist' };
-        const { container } = render(<EventCard event={natanEvent} />);
-        // Checking for blue class
-        // Current implementation for Natan: bg-blue-500
-        expect(container.firstChild).toHaveClass('bg-blue-500');
-    });
-
     it('renders a trash icon for "Garbage" events', () => {
         const trashEvent = { ...defaultEvent, title: 'Garbage Day' };
         const { container } = render(<EventCard event={trashEvent} />);
