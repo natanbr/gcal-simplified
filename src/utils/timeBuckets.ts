@@ -24,7 +24,6 @@ export const partitionEventsIntoHourlySlots = (
 
     events.forEach(event => {
         const eventStartHour = event.start.getHours();
-        // eventEndHour is not used currently
 
         // Check overlap with active hours
         // Simple logic: if it starts before active hours, put in before (unless it drags into active)
