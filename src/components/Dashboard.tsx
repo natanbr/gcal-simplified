@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { addDays, format, isSameDay, isWeekend } from 'date-fns';
-import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
-import { EventCard } from './EventCard';
 import { SettingsModal } from './SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ListTodo, X, RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, AlignLeft } from 'lucide-react';
 import { SideDrawer } from './SideDrawer';
-import { groupOverlappingEvents, calculateEventStyles } from '../utils/layout';
+import { DayColumn } from './DayColumn';
 import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
 import { WeatherDashboard } from './WeatherDashboard';
 import { getWeatherIcon } from '../utils/weatherIcons';
@@ -42,7 +40,11 @@ export const Dashboard: React.FC = () => {
 
   const today = useMemo(() => new Date(), []);
   const startDate = weekOffset === 0 ? today : getWeekStartDate(today, weekOffset);
-  const days = Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i));
+  const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
+
+  const eventsByDay = useMemo(() => {
+    return days.map(day => events.filter(e => isSameDay(e.start, day)));
+  }, [events, days]);
 
   const currentLocation = useMemo(() => 
       MARINE_LOCATIONS.find(l => l.id === selectedLocationId) || MARINE_LOCATIONS[0], 
@@ -341,118 +343,16 @@ export const Dashboard: React.FC = () => {
 
              {/* Days Content Grid */}
              <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-200 dark:divide-zinc-800 overflow-hidden transition-colors duration-300" data-testid="calendar-grid">
-                {days.map((day, i) => {
-                    const isToday = isSameDay(day, today);
-                    const isWeekendDay = isWeekend(day);
-                    const dayEvents = events.filter(e => isSameDay(e.start, day));
-                    // We need standardEvents for the buckets
-                    const standardEvents = dayEvents.filter(e => !e.isHoliday);
-
-                     return (
-                         <div key={i} className={`flex flex-col h-full relative ${isToday ? 'bg-family-cyan/[0.05] dark:bg-family-cyan/[0.03]' : isWeekendDay ? 'bg-family-orange/[0.05] dark:bg-family-orange/[0.03]' : ''}`}>
-                             {(() => {
-                                 const startHour = config.activeHoursStart ?? 7;
-                                 const endHour = config.activeHoursEnd ?? 21;
-                                 const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour);
-                                 const hours = Array.from({ length: endHour - startHour }, (_, idx) => startHour + idx);
- 
-                                 return (
-                                     <>
-                                         {/* Before Bucket content */}
-                                         <div className="h-16 flex-shrink-0 border-b border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
-                                             <div className="flex gap-0.5">
-                                                {groupOverlappingEvents(buckets.before).map((group, gIdx) => (
-                                                    <div key={`before-${gIdx}`} className="flex-1 min-w-0">
-                                                        {group.map(event => <div key={event.id}><EventCard event={event} onClick={() => setSelectedEvent(event)} /></div>)}
-                                                    </div>
-                                                ))}
-                                             </div>
-                                         </div>
- 
-                                         {/* Hourly Slots Content (Absolute) */}
-                                         <div className="flex-1 relative flex flex-col min-h-0">
-                                              {/* Background Grid Lines (match sidebar) */}
-                                              <div className="absolute inset-0 flex flex-col pointer-events-none">
-                                                  {hours.map(hour => (
-                                                      <div key={`grid-${hour}`} className="flex-1 border-b border-zinc-200/50 dark:border-zinc-800/30" />
-                                                  ))}
-                                              </div>
- 
-                                              {/* Absolute Events Layer */}
-                                              <div className="absolute inset-0 pointer-events-none">
-                                                   {(() => {
-                                                     const activeStart = startHour;
-                                                     const activeEnd = endHour;
-                                                     const totalHours = activeEnd - activeStart;
- 
-                                                     const hourlyEvents = standardEvents.filter(e => {
-                                                         const s = e.start.getHours() + e.start.getMinutes()/60;
-                                                         const end = e.end.getHours() + e.end.getMinutes()/60;
-                                                         return s < activeEnd && end > activeStart;
-                                                     }).sort((a,b) => a.start.getTime() - b.start.getTime());
- 
-                                                     const groups = groupOverlappingEvents(hourlyEvents);
-                                                     
-                                                     return groups.flatMap(group => {
-                                                         return group.map((event, idx) => {
-                                                            const s = event.start.getHours() + event.start.getMinutes()/60;
-                                                            const e = event.end.getHours() + event.end.getMinutes()/60;
-                                                            
-                                                            const visualsStart = Math.max(s, activeStart);
-                                                            const visualsEnd = Math.min(e, activeEnd);
-                                                            
-                                                            const topP = ((visualsStart - activeStart) / totalHours) * 100;
-                                                            const duration = visualsEnd - visualsStart;
-                                                            const heightP = (duration / totalHours) * 100;
- 
-                                                            const widthP = 100 / group.length;
-                                                            const leftP = idx * widthP;
-
-                                                            const styles = calculateEventStyles(
-                                                                topP,
-                                                                heightP,
-                                                                leftP,
-                                                                widthP,
-                                                                duration
-                                                            );
- 
-                                                            return (
-                                                                <div 
-                                                                    key={event.id}
-                                                                    className="absolute pointer-events-auto"
-                                                                    style={styles}
-                                                                >
-                                                                    <div className="h-full w-full">
-                                                                        <EventCard
-                                                                            event={event}
-                                                                            className="h-full shadow-md"
-                                                                            onClick={() => setSelectedEvent(event)}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            )
-                                                         });
-                                                     });
-                                                  })()}
-                                              </div>
-                                         </div>
- 
-                                         {/* After Bucket content */}
-                                         <div className="h-16 flex-shrink-0 border-t border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
-                                             <div className="flex gap-0.5">
-                                                {groupOverlappingEvents(buckets.after).map((group, gIdx) => (
-                                                    <div key={`after-${gIdx}`} className="flex-1 min-w-0">
-                                                        {group.map(event => <div key={event.id}><EventCard event={event} onClick={() => setSelectedEvent(event)} /></div>)}
-                                                    </div>
-                                                ))}
-                                             </div>
-                                         </div>
-                                     </>
-                                 );
-                             })()}
-                         </div>
-                     )
-                })}
+                {days.map((day, i) => (
+                    <DayColumn
+                        key={day.toISOString()}
+                        day={day}
+                        events={eventsByDay[i]}
+                        config={config}
+                        isToday={isSameDay(day, today)}
+                        onEventClick={setSelectedEvent}
+                    />
+                ))}
              </div>
         </div>
       </div>
