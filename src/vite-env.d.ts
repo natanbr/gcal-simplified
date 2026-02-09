@@ -5,7 +5,6 @@ interface Window {
     ipcRenderer: {
         invoke(channel: string, ...args: unknown[]): Promise<unknown>;
         on(channel: string, listener: (...args: unknown[]) => void): () => void;
-        off(channel: string, ...args: unknown[]): unknown;
-        send(channel: string, ...args: unknown[]): void;
+        // 'off' and 'send' are removed for security
     }
 }
