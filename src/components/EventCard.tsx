@@ -10,6 +10,7 @@ import {
 interface EventCardProps {
   event: AppEvent;
   className?: string;
+  onClick?: () => void;
 }
 
 import { getEventColorStyles } from '../utils/colorMapping';
@@ -37,7 +38,7 @@ const getEventIcon = (title: string, description?: string) => {
   return null;
 };
 
-export const EventCard: React.FC<EventCardProps> = ({ event, className }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, className, onClick }) => {
   const colorStyles = useMemo(
     () => getEventColorStyles(event.title, event.description, event.colorId, event.color),
     [event.title, event.description, event.colorId, event.color]
@@ -58,8 +59,12 @@ export const EventCard: React.FC<EventCardProps> = ({ event, className }) => {
       data-testid={`event-card-${event.id}`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
       className={clsx(
-        'w-full rounded-md shadow-sm border-l-[3px] text-sm overflow-hidden leading-tight',
+        'w-full rounded-md shadow-sm border-l-[3px] text-sm overflow-hidden leading-tight transition-shadow hover:shadow-md',
+        onClick && 'cursor-pointer',
         isShortEvent ? 'p-0' : 'p-1',
         colorStyles.className,
         className
