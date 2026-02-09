@@ -25,7 +25,7 @@ export class AuthService {
         this.oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
-            'http://localhost:3000/callback' // Redirect URI
+            'http://localhost/callback' // Redirect URI placeholder
         );
 
         // Load saved tokens
@@ -46,16 +46,7 @@ export class AuthService {
 
     async startAuth(): Promise<void> {
         return new Promise((resolve, reject) => {
-            // 1. Generate Auth URL
-            const authUrl = this.oauth2Client.generateAuthUrl({
-                access_type: 'offline', // Crucial for refresh token
-                scope: SCOPES,
-            });
-
-            // 2. Open in System Browser
-            shell.openExternal(authUrl);
-
-            // 3. Spin up local server to catch callback
+            // 1. Spin up local server to catch callback
             const server = http.createServer(async (req, res) => {
                 try {
                     if (!req.url) return;
@@ -64,14 +55,20 @@ export class AuthService {
 
                     if (code) {
                         // 4. Exchange code for tokens
-                        const { tokens } = await this.oauth2Client.getToken(code as string);
+                        const address = server.address();
+                        const port = address && typeof address !== 'string' ? address.port : 0;
+                        const redirectUri = `http://localhost:${port}/callback`;
+
+                        const { tokens } = await this.oauth2Client.getToken({
+                            code: code as string,
+                            redirect_uri: redirectUri
+                        });
                         this.oauth2Client.setCredentials(tokens);
                         store.set('tokens', tokens); // Persist
 
                         res.end('Authentication successful! You can close this window.');
 
-                        // Notify via IPC (we'll assume the caller handles the IPC reply)
-                        // Or better, we resolve the promise and the main process sends the event
+                        // Notify via IPC
                         resolve();
                     }
                 } catch (e) {
@@ -82,8 +79,26 @@ export class AuthService {
                 }
             });
 
-            server.listen(3000, () => {
-                console.log('Auth server listening on port 3000');
+            server.on('error', (err) => {
+                reject(err);
+            });
+
+            server.listen(0, () => {
+                const address = server.address();
+                const port = address && typeof address !== 'string' ? address.port : 0;
+                console.log(`Auth server listening on port ${port}`);
+
+                const redirectUri = `http://localhost:${port}/callback`;
+
+                // 2. Generate Auth URL
+                const authUrl = this.oauth2Client.generateAuthUrl({
+                    access_type: 'offline', // Crucial for refresh token
+                    scope: SCOPES,
+                    redirect_uri: redirectUri
+                });
+
+                // 3. Open in System Browser
+                shell.openExternal(authUrl);
             });
         });
     }
