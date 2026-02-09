@@ -34,9 +34,9 @@ const GOOGLE_CALENDAR_COLORS: Record<string, ColorClasses> = {
  * Default color for events with no colorId or name match
  */
 const DEFAULT_COLOR: ColorClasses = {
-    bg: 'bg-zinc-800',
-    text: 'text-white',
-    border: 'border-zinc-600',
+    bg: 'bg-zinc-100 dark:bg-zinc-800',
+    text: 'text-zinc-900 dark:text-white',
+    border: 'border-zinc-300 dark:border-zinc-600',
 };
 
 /**

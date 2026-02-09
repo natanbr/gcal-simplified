@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, powerMonitor } from 'electron'
+import { exec } from 'node:child_process'
 import 'dotenv/config'
 // import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -139,4 +140,59 @@ app.whenReady().then(() => {
   ipcMain.handle('tides:get', async (_, tideStation?: string, currentStation?: string, lat?: number, lng?: number) => {
     return await weatherService.getTides(tideStation, currentStation, lat, lng);
   });
+
+  // Power Management Loop
+  setInterval(checkPowerPolicy, 60 * 1000); // Check every minute
 })
+
+// Power Management Logic
+function turnOffScreen() {
+    // Prevent repeated firing if likely already off (simple debounce by relying on interval)
+    console.log('Turning off screen due to sleep schedule inactivity...');
+
+    if (process.platform === 'win32') {
+        // PowerShell command to turn off monitor via SendMessage(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2)
+        const psCommand = '(Add-Type -MemberDefinition "[DllImport(\'user32.dll\')] public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);" -Name "Win32SendMessage" -Namespace Win32Functions -PassThru)::SendMessage(0xffff, 0x0112, 0xF170, 2)';
+        exec(`powershell -command "${psCommand}"`, (error) => {
+             if (error) console.error('Failed to turn off screen:', error);
+        });
+    } else if (process.platform === 'darwin') {
+        exec('pmset displaysleepnow');
+    } else if (process.platform === 'linux') {
+        exec('xset dpms force off');
+    }
+}
+
+function checkPowerPolicy() {
+    try {
+        const config = apiService.getSettings();
+        if (config.sleepEnabled === false) return; // Explicit false check, default true
+
+        const now = new Date();
+        const currentHour = now.getHours();
+
+        const start = config.sleepStart ?? 22;
+        const end = config.sleepEnd ?? 6;
+
+        let inSleepWindow = false;
+        if (start === end) {
+            inSleepWindow = false; // Disable if start == end
+        } else if (start > end) {
+            // e.g. 22 to 6: 22, 23, 0, 1, 2, 3, 4, 5
+            inSleepWindow = currentHour >= start || currentHour < end;
+        } else {
+            // e.g. 1 to 5
+            inSleepWindow = currentHour >= start && currentHour < end;
+        }
+
+        if (inSleepWindow) {
+            const idleTime = powerMonitor.getSystemIdleTime(); // seconds
+            // 5 minutes = 300 seconds
+            if (idleTime >= 300) {
+                 turnOffScreen();
+            }
+        }
+    } catch (e) {
+        console.error("Error in power policy check:", e);
+    }
+}

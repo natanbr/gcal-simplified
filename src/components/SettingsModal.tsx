@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Save, Check, RefreshCw } from 'lucide-react';
+import { X, Save, Check, RefreshCw, Moon, Sun, Power } from 'lucide-react';
 import { CalendarSource, TaskListSource, UserConfig } from '../types';
 
 interface SettingsModalProps {
@@ -65,41 +65,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
             return { ...prev, taskListIds: newIds };
         });
     };
-
-    // Helper to check if checked.
-    // If config.calendarIds is empty, we logicially select 'primary'.
-    // BUT we want to show the specific primary calendar as checked if it matches.
-    // To simplify: if empty, NOTHING is visually checked, unless we auto-check primary in UI state.
-    // Let's implement robust UI: if empty, show as "Default (Primary)".
-    // A better UX: Initial load, if config is empty, pre-fill with primary.
-    // Actually, backend defaults to primary if empty for *fetching*.
-    // For *editing*, we should show what is saved. If empty, show empty.
     
     return (
         <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-8"
         >
             <motion.div 
                 initial={{ scale: 0.95 }} 
                 animate={{ scale: 1 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl overflow-hidden"
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden transition-colors duration-300"
             >
                 {/* Header */}
-                <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900">
-                    <h2 className="text-2xl font-bold text-white uppercase tracking-wide">Configuration</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
+                <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-900 transition-colors duration-300">
+                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">Configuration</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white transition-colors">
                         <X size={24} />
                     </button>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-8 grid grid-cols-2 gap-12">
+                <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-12 custom-scrollbar">
                     {/* Calendars Section */}
                     <div className="flex flex-col gap-4">
-                        <h3 className="text-lg font-bold text-blue-400 uppercase tracking-widest border-b border-zinc-800 pb-2">
+                        <h3 className="text-lg font-bold text-blue-500 dark:text-blue-400 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-2">
                             Calendars ({calendars.length})
                         </h3>
                         <div className="space-y-2">
@@ -109,14 +100,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                     <div 
                                         key={cal.id} 
                                         onClick={() => toggleCalendar(cal.id)}
-                                        className={`p-4 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${isChecked ? 'bg-blue-500/10 border-blue-500/50' : 'bg-zinc-950 border-zinc-800 hover:bg-zinc-900'}`}
+                                        className={`p-4 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${isChecked ? 'bg-blue-500/10 border-blue-500/50' : 'bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900'}`}
                                     >
-                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-zinc-600'}`}>
+                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-zinc-400 dark:border-zinc-600'}`}>
                                             {isChecked && <Check size={14} className="text-white" />}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-zinc-200 truncate">{cal.summary}</div>
-                                            {cal.primary && <div className="text-xs text-blue-400 font-mono mt-0.5">PRIMARY</div>}
+                                            <div className="font-bold text-zinc-800 dark:text-zinc-200 truncate">{cal.summary}</div>
+                                            {cal.primary && <div className="text-xs text-blue-500 dark:text-blue-400 font-mono mt-0.5">PRIMARY</div>}
                                         </div>
                                     </div>
                                 );
@@ -126,7 +117,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
 
                     {/* Task Lists Section */}
                     <div className="flex flex-col gap-4">
-                         <h3 className="text-lg font-bold text-green-400 uppercase tracking-widest border-b border-zinc-800 pb-2">
+                         <h3 className="text-lg font-bold text-green-500 dark:text-green-400 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-2">
                             Task Lists ({taskLists.length})
                         </h3>
                          <div className="space-y-2">
@@ -136,13 +127,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                     <div 
                                         key={list.id} 
                                         onClick={() => toggleTaskList(list.id)}
-                                        className={`p-4 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${isChecked ? 'bg-green-500/10 border-green-500/50' : 'bg-zinc-950 border-zinc-800 hover:bg-zinc-900'}`}
+                                        className={`p-4 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${isChecked ? 'bg-green-500/10 border-green-500/50' : 'bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900'}`}
                                     >
-                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${isChecked ? 'bg-green-500 border-green-500' : 'border-zinc-600'}`}>
+                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${isChecked ? 'bg-green-500 border-green-500' : 'border-zinc-400 dark:border-zinc-600'}`}>
                                             {isChecked && <Check size={14} className="text-white" />}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-zinc-200 truncate">{list.title}</div>
+                                            <div className="font-bold text-zinc-800 dark:text-zinc-200 truncate">{list.title}</div>
                                         </div>
                                     </div>
                                 );
@@ -152,11 +143,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
 
                     
                     {/* Active Hours Section */}
-                    <div className="col-span-2 border-t border-zinc-800 pt-8 mt-4">
-                        <h3 className="text-lg font-bold text-orange-400 uppercase tracking-widest mb-4">
+                    <div className="lg:col-span-2 border-t border-zinc-200 dark:border-zinc-800 pt-8 mt-4">
+                        <h3 className="text-lg font-bold text-orange-500 dark:text-orange-400 uppercase tracking-widest mb-4">
                             Active Hours
                         </h3>
-                        <div className="flex items-center gap-8 bg-zinc-950 p-6 rounded-xl border border-zinc-800">
+                        <div className="flex flex-col sm:flex-row items-center gap-8 bg-zinc-50 dark:bg-zinc-950 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
                              <div className="flex flex-col gap-2">
                                 <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Start Time (24h)</label>
                                 <input 
@@ -165,10 +156,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                     max={23}
                                     value={config.activeHoursStart ?? 7}
                                     onChange={(e) => setConfig(prev => ({ ...prev, activeHoursStart: parseInt(e.target.value) }))}
-                                    className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-white font-mono text-xl w-32 focus:outline-none focus:border-orange-500 transition-colors"
+                                    className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg px-4 py-2 text-zinc-900 dark:text-white font-mono text-xl w-32 focus:outline-none focus:border-orange-500 transition-colors"
                                 />
                              </div>
-                             <div className="h-px w-8 bg-zinc-700" />
+                             <div className="h-px w-full sm:w-8 bg-zinc-300 dark:bg-zinc-700" />
                              <div className="flex flex-col gap-2">
                                 <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">End Time (24h)</label>
                                 <input 
@@ -177,24 +168,121 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                     max={23}
                                     value={config.activeHoursEnd ?? 21}
                                     onChange={(e) => setConfig(prev => ({ ...prev, activeHoursEnd: parseInt(e.target.value) }))}
-                                    className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-white font-mono text-xl w-32 focus:outline-none focus:border-orange-500 transition-colors"
+                                    className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg px-4 py-2 text-zinc-900 dark:text-white font-mono text-xl w-32 focus:outline-none focus:border-orange-500 transition-colors"
                                 />
                              </div>
-                             <div className="ml-auto text-sm text-zinc-500 max-w-sm">
+                             <div className="sm:ml-auto text-sm text-zinc-500 max-w-sm">
                                 Define the "Active Hours" for your day. Events outside this range will be grouped into "Before" and "After" buckets.
                              </div>
+                        </div>
+                    </div>
+
+                    {/* Display & Power Section */}
+                    <div className="lg:col-span-2 border-t border-zinc-200 dark:border-zinc-800 pt-8 mt-4">
+                        <h3 className="text-lg font-bold text-purple-500 dark:text-purple-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                           <Moon size={20} /> Display & Power
+                        </h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Theme Settings */}
+                            <div className="bg-zinc-50 dark:bg-zinc-950 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                                <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Theme Mode</h4>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setConfig(prev => ({ ...prev, themeMode: 'auto' }))}
+                                        className={`flex-1 py-2 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${config.themeMode !== 'manual' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700'}`}
+                                    >
+                                        <Sun size={16} /> AUTO (Sun)
+                                    </button>
+                                    <button
+                                        onClick={() => setConfig(prev => ({ ...prev, themeMode: 'manual' }))}
+                                        className={`flex-1 py-2 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${config.themeMode === 'manual' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700'}`}
+                                    >
+                                        <RefreshCw size={16} /> MANUAL
+                                    </button>
+                                </div>
+
+                                {config.themeMode === 'manual' && (
+                                    <div className="flex items-center gap-4 mt-4 animate-pulse-once">
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs font-bold text-zinc-400 uppercase">Day Start</label>
+                                            <input
+                                                type="number" min={0} max={23}
+                                                value={config.manualDayStart ?? 7}
+                                                onChange={(e) => setConfig(prev => ({ ...prev, manualDayStart: parseInt(e.target.value) }))}
+                                                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 w-20 text-center font-mono text-zinc-900 dark:text-white"
+                                            />
+                                        </div>
+                                        <div className="h-px flex-1 bg-zinc-300 dark:bg-zinc-700 mx-2" />
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs font-bold text-zinc-400 uppercase">Day End</label>
+                                            <input
+                                                type="number" min={0} max={23}
+                                                value={config.manualDayEnd ?? 19}
+                                                onChange={(e) => setConfig(prev => ({ ...prev, manualDayEnd: parseInt(e.target.value) }))}
+                                                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 w-20 text-center font-mono text-zinc-900 dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                                <p className="text-xs text-zinc-500 mt-2">
+                                    {config.themeMode === 'manual'
+                                        ? "Manually switch between Light and Dark mode based on these hours."
+                                        : "Automatically switch based on local sunrise and sunset times (Weather data required)."}
+                                </p>
+                            </div>
+
+                            {/* Power Settings */}
+                            <div className="bg-zinc-50 dark:bg-zinc-950 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2"><Power size={16} /> Sleep Schedule</h4>
+                                    <button
+                                        onClick={() => setConfig(prev => ({ ...prev, sleepEnabled: !prev.sleepEnabled }))}
+                                        className={`w-12 h-6 rounded-full transition-colors relative ${config.sleepEnabled !== false ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+                                    >
+                                        <div className={`absolute top-1 bottom-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${config.sleepEnabled !== false ? 'translate-x-6' : 'translate-x-0'}`} />
+                                    </button>
+                                </div>
+
+                                <div className={`space-y-4 transition-opacity ${config.sleepEnabled !== false ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                    <div className="flex items-center gap-4">
+                                         <div className="flex flex-col gap-1">
+                                            <label className="text-xs font-bold text-zinc-400 uppercase">Sleep Start</label>
+                                            <input
+                                                type="number" min={0} max={23}
+                                                value={config.sleepStart ?? 22}
+                                                onChange={(e) => setConfig(prev => ({ ...prev, sleepStart: parseInt(e.target.value) }))}
+                                                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 w-20 text-center font-mono text-zinc-900 dark:text-white"
+                                            />
+                                        </div>
+                                        <div className="h-px flex-1 bg-zinc-300 dark:bg-zinc-700 mx-2" />
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs font-bold text-zinc-400 uppercase">Sleep End</label>
+                                            <input
+                                                type="number" min={0} max={23}
+                                                value={config.sleepEnd ?? 6}
+                                                onChange={(e) => setConfig(prev => ({ ...prev, sleepEnd: parseInt(e.target.value) }))}
+                                                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 w-20 text-center font-mono text-zinc-900 dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-zinc-500">
+                                        During these hours, the screen will turn off after 5 minutes of inactivity. Mouse movement wakes the screen.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-4">
-                    <button onClick={onClose} className="px-6 py-3 rounded-xl font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
+                <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/50 flex justify-end gap-4 transition-colors duration-300">
+                    <button onClick={onClose} className="px-6 py-3 rounded-xl font-bold text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                         Cancel
                     </button>
                     <button 
                         onClick={handleSave} 
-                        className="px-8 py-3 rounded-xl font-bold bg-white text-black hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                        className="px-8 py-3 rounded-xl font-bold bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
                     >
                         <Save size={18} />
                         Save Changes
@@ -202,7 +290,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                 </div>
 
                 {isLoading && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center flex-col gap-4">
+                    <div className="absolute inset-0 bg-white/80 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center flex-col gap-4">
                         <RefreshCw size={48} className="animate-spin text-zinc-500" />
                     </div>
                 )}

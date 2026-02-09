@@ -2,14 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { SideDrawer } from './SideDrawer';
 import { WeatherData, TideData } from '../types';
 import {
-    Cloud, CloudDrizzle, CloudFog, CloudLightning,
-    CloudRain, CloudSnow, Sun,
     Anchor,
-    Info
+    Info,
+    Sun
 } from 'lucide-react';
 import { format, addHours, parseISO, isSameDay } from 'date-fns';
 import { calculateSlackWindows } from '../utils/slackWindows';
 import { interpolateExtremeTime } from '../utils/tideMath';
+import { getWeatherIcon } from '../utils/weatherIcons';
 
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,17 +25,6 @@ interface WeatherDashboardProps {
     onTidesActive: () => void;
 }
 
-export const getWeatherIcon = (code: number) => {
-    if (code === 0) return <Sun className="text-yellow-500" />;
-    if (code >= 1 && code <= 3) return <Cloud className="text-zinc-400" />;
-    if (code >= 45 && code <= 48) return <CloudFog className="text-zinc-500" />;
-    if (code >= 51 && code <= 67) return <CloudDrizzle className="text-blue-400" />;
-    if (code >= 71 && code <= 77) return <CloudSnow className="text-white" />;
-    if (code >= 80 && code <= 82) return <CloudRain className="text-blue-500" />;
-    if (code >= 95) return <CloudLightning className="text-yellow-600" />;
-    return <Sun className="text-yellow-500" />;
-};
-
 const WeatherPanel: React.FC<{ weather: WeatherData }> = ({ weather }) => {
     // Current hour index
     const now = new Date();
@@ -46,21 +35,21 @@ const WeatherPanel: React.FC<{ weather: WeatherData }> = ({ weather }) => {
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/50">
-                    <div className="text-zinc-500 text-xs font-bold uppercase mb-1">Temperature</div>
-                    <div className="text-3xl font-black text-white">{Math.round(weather.current.temperature)}°C</div>
+                <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700/50">
+                    <div className="text-zinc-500 dark:text-zinc-500 text-xs font-bold uppercase mb-1">Temperature</div>
+                    <div className="text-3xl font-black text-zinc-900 dark:text-white">{Math.round(weather.current.temperature)}°C</div>
                 </div>
-                <div className="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/50">
-                    <div className="text-zinc-500 text-xs font-bold uppercase mb-1">Wind</div>
-                    <div className="text-3xl font-black text-white">{Math.round(weather.current.windSpeed)} <span className="text-sm font-normal text-zinc-400">km/h</span></div>
+                <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700/50">
+                    <div className="text-zinc-500 dark:text-zinc-500 text-xs font-bold uppercase mb-1">Wind</div>
+                    <div className="text-3xl font-black text-zinc-900 dark:text-white">{Math.round(weather.current.windSpeed)} <span className="text-sm font-normal text-zinc-400 dark:text-zinc-400">km/h</span></div>
                 </div>
             </div>
 
             <div>
-                <h3 className="text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Hourly Forecast</h3>
-                <div className="bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-700/50">
+                <h3 className="text-zinc-400 dark:text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Hourly Forecast</h3>
+                <div className="bg-zinc-50 dark:bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700/50">
                      <table className="w-full text-left text-sm">
-                         <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
+                         <thead className="bg-zinc-100 dark:bg-zinc-900/50 text-zinc-500 dark:text-zinc-500 text-xs uppercase font-bold">
                              <tr>
                                  <th className="p-2">Time</th>
                                  <th className="p-2">Cond</th>
@@ -69,19 +58,19 @@ const WeatherPanel: React.FC<{ weather: WeatherData }> = ({ weather }) => {
                                  <th className="p-2 text-right">Wind</th>
                              </tr>
                          </thead>
-                         <tbody className="divide-y divide-zinc-800/50">
+                         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
                             {hourlyData.map((time, i) => {
                                 const idx = startIndex + i;
                                 const t = new Date(time);
                                 return (
-                                    <tr key={time} className="hover:bg-zinc-800/50 transition-colors">
-                                        <td className="p-2 font-mono text-zinc-300">{format(t, 'HH:mm')}</td>
+                                    <tr key={time} className="hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors">
+                                        <td className="p-2 font-mono text-zinc-600 dark:text-zinc-300">{format(t, 'HH:mm')}</td>
                                         <td className="p-2">{getWeatherIcon(weather.hourly.weather_code[idx])}</td>
-                                        <td className="p-2 text-right font-bold text-white">{Math.round(weather.hourly.temperature_2m[idx])}°</td>
-                                        <td className="p-2 text-right text-blue-400 font-medium">
+                                        <td className="p-2 text-right font-bold text-zinc-900 dark:text-white">{Math.round(weather.hourly.temperature_2m[idx])}°</td>
+                                        <td className="p-2 text-right text-blue-500 dark:text-blue-400 font-medium">
                                             {weather.hourly.precipitation_probability[idx] > 0 ? `${weather.hourly.precipitation_probability[idx]}%` : '-'}
                                         </td>
-                                        <td className="p-2 text-right text-zinc-400 text-xs">
+                                        <td className="p-2 text-right text-zinc-500 dark:text-zinc-400 text-xs">
                                             {Math.round(weather.hourly.wind_speed_10m?.[idx] || 0)}
                                         </td>
                                     </tr>
@@ -107,11 +96,9 @@ export const TidesPanel: React.FC<{
     const [showLocMenu, setShowLocMenu] = useState(false);
     const currentLocation = MARINE_LOCATIONS.find(l => l.id === locationId) || MARINE_LOCATIONS[0];
 
-    // Safe access to tides
-    const hourlyTides = tides?.hourly;
-
     // Generate Events (Slack, Max Flood, Max Ebb, High Tide, Low Tide)
     const events = useMemo(() => {
+        const hourlyTides = tides?.hourly;
         if (!tides || !hourlyTides || !hourlyTides.current_speed?.length) return [];
         const speeds = hourlyTides.current_speed;
         const directions = hourlyTides.current_direction || [];
@@ -199,11 +186,6 @@ export const TidesPanel: React.FC<{
                 }
             });
         } else if (tideHeights.length > 0) {
-             // Fallback tide detection (if needed, though CHS usually provides wlp-hilo)
-             // ... [Existing manual tide logic if we want to keep it, but stripped for brevity or kept if existing code had it]
-             // The previous code had manual tide detection. I should preserve it if possible or rely on CHS.
-             // Given CHS wlp-hilo is robust, we might not need it, but to be safe/consistent with previous file state:
-             
             let tideTrend = 0;
             const EPSILON = 0.001;
             for (let i = 1; i < tideHeights.length; i++) {
@@ -253,6 +235,7 @@ export const TidesPanel: React.FC<{
 
     // Calculate slack windows for spearfishing
     const slackWindows = useMemo(() => {
+        const hourlyTides = tides?.hourly;
         if (!tides || !hourlyTides || !hourlyTides.current_speed?.length) return [];
         
         const speeds = hourlyTides.current_speed;
@@ -274,7 +257,7 @@ export const TidesPanel: React.FC<{
         const sunset = weather.daily.sunset[todayIndex] ? new Date(weather.daily.sunset[todayIndex]) : undefined;
         
         return calculateSlackWindows(times, speeds, tideHeights, slackIndices, sunrise, sunset);
-    }, [tides, hourlyTides, events, weather.daily.sunrise, weather.daily.sunset]);
+    }, [tides, events, weather.daily.sunrise, weather.daily.sunset]);
 
 
 
@@ -287,15 +270,15 @@ export const TidesPanel: React.FC<{
             <div className="relative mb-6 z-50">
                 <button
                     onClick={() => setShowLocMenu(!showLocMenu)}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-800/80 border border-zinc-700/50 hover:bg-zinc-800 transition-all group"
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all group"
                 >
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-full bg-blue-500/10 text-blue-400">
                             <MapPin size={18} />
                         </div>
                         <div className="text-left">
-                            <div className="text-[10px] uppercase font-bold text-zinc-500 tracking-widest">Selected Location</div>
-                            <div className="text-sm font-bold text-white group-hover:text-blue-200 transition-colors">
+                            <div className="text-[10px] uppercase font-bold text-zinc-500 dark:text-zinc-500 tracking-widest">Selected Location</div>
+                            <div className="text-sm font-bold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-200 transition-colors">
                                 {currentLocation.name}
                             </div>
                         </div>
@@ -310,7 +293,7 @@ export const TidesPanel: React.FC<{
                                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden z-50 py-1 max-h-[300px] overflow-y-auto"
+                                className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl overflow-hidden z-50 py-1 max-h-[300px] overflow-y-auto"
                             >
                                 {MARINE_LOCATIONS.map(loc => (
                                     <button
@@ -319,7 +302,7 @@ export const TidesPanel: React.FC<{
                                             onLocationChange(loc.id);
                                             setShowLocMenu(false);
                                         }}
-                                        className={`w-full text-left px-4 py-3 text-sm font-medium flex items-center justify-between hover:bg-zinc-800 transition-colors ${locationId === loc.id ? 'text-family-cyan bg-family-cyan/5' : 'text-zinc-300'}`}
+                                        className={`w-full text-left px-4 py-3 text-sm font-medium flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${locationId === loc.id ? 'text-family-cyan bg-family-cyan/5' : 'text-zinc-700 dark:text-zinc-300'}`}
                                     >
                                         {loc.name}
                                         {locationId === loc.id && <Check size={16} />}
@@ -332,8 +315,8 @@ export const TidesPanel: React.FC<{
             </div>
 
             {loading && (
-                 <div className="absolute inset-0 z-30 bg-zinc-950/50 backdrop-blur-sm flex flex-col items-center justify-center space-y-4">
-                     <div className="w-48 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                 <div className="absolute inset-0 z-30 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm flex flex-col items-center justify-center space-y-4">
+                     <div className="w-48 h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
                          <motion.div 
                              className="h-full bg-family-cyan"
                              initial={{ width: "0%" }}
@@ -350,10 +333,10 @@ export const TidesPanel: React.FC<{
             {/* Beginner Guide */}
             <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">
                 <div className="flex items-center gap-2 mb-2">
-                    <Info size={16} className="text-blue-400" />
-                    <h3 className="text-blue-200 font-bold uppercase text-xs tracking-widest">Diver's Guide</h3>
+                    <Info size={16} className="text-blue-500 dark:text-blue-400" />
+                    <h3 className="text-blue-600 dark:text-blue-200 font-bold uppercase text-xs tracking-widest">Diver's Guide</h3>
                 </div>
-                <ul className="text-xs text-blue-100/70 space-y-1 list-disc list-inside">
+                <ul className="text-xs text-blue-800/70 dark:text-blue-100/70 space-y-1 list-disc list-inside">
                     <li><strong>Slack Water:</strong> Current near 0kn. Best for swimming/diving.</li>
                     <li><strong>Max Flood/Ebb:</strong> Peak current speed. Can be dangerous (&gt;1.5kn).</li>
                     <li><strong>Visibility:</strong> Est. from weather. Rain/Wind reduces clarity.</li>
@@ -364,7 +347,7 @@ export const TidesPanel: React.FC<{
             {/* Best Times for Spearfishing */}
             {futureSlackWindows.length > 0 && (
                 <div>
-                    <h3 className="text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Best Times for Spearfishing</h3>
+                    <h3 className="text-zinc-500 dark:text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Best Times for Spearfishing</h3>
                     <div className="space-y-3">
                         {futureSlackWindows.map((window) => {
                             const slackDate = parseISO(window.slackTime);
@@ -377,46 +360,46 @@ export const TidesPanel: React.FC<{
                                     className={`p-4 rounded-xl border ${
                                         window.isHighTide 
                                             ? 'bg-emerald-500/10 border-emerald-500/30' 
-                                            : 'bg-zinc-800/30 border-zinc-700/50'
+                                            : 'bg-zinc-50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-700/50'
                                     }`}
                                 >
                                     <div className="flex items-start justify-between mb-2">
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-sm font-bold text-zinc-300">
+                                                <span className="text-sm font-bold text-zinc-800 dark:text-zinc-300">
                                                     {format(slackDate, 'EEEE, MMM d')}
                                                 </span>
                                                 {window.isHighTide && (
-                                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold uppercase tracking-wider">
+                                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-bold uppercase tracking-wider">
                                                         High Tide - Best!
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="text-xs text-zinc-500 mt-0.5">
+                                            <div className="text-xs text-zinc-500 dark:text-zinc-500 mt-0.5">
                                                 Tide: {window.tideHeight.toFixed(1)}m
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-lg font-black text-white">
+                                            <div className="text-lg font-black text-zinc-900 dark:text-white">
                                                 {format(startDate, 'HH:mm')} - {format(endDate, 'HH:mm')}
                                             </div>
-                                            <div className="text-[10px] text-zinc-500 font-medium">
+                                            <div className="text-[10px] text-zinc-500 dark:text-zinc-500 font-medium">
                                                 {window.duration} min window
                                             </div>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 gap-2 text-xs">
-                                        <div className="bg-zinc-900/50 p-2 rounded">
-                                            <div className="text-zinc-500 text-[10px] uppercase font-bold">Current</div>
-                                            <div className="text-green-400 font-bold">{window.currentSpeed.toFixed(1)}kn</div>
+                                        <div className="bg-zinc-100 dark:bg-zinc-900/50 p-2 rounded">
+                                            <div className="text-zinc-500 dark:text-zinc-500 text-[10px] uppercase font-bold">Current</div>
+                                            <div className="text-green-600 dark:text-green-400 font-bold">{window.currentSpeed.toFixed(1)}kn</div>
                                         </div>
-                                        <div className="bg-zinc-900/50 p-2 rounded">
-                                            <div className="text-zinc-500 text-[10px] uppercase font-bold">Peak</div>
-                                            <div className="text-white font-bold">{format(slackDate, 'HH:mm')}</div>
+                                        <div className="bg-zinc-100 dark:bg-zinc-900/50 p-2 rounded">
+                                            <div className="text-zinc-500 dark:text-zinc-500 text-[10px] uppercase font-bold">Peak</div>
+                                            <div className="text-zinc-900 dark:text-white font-bold">{format(slackDate, 'HH:mm')}</div>
                                         </div>
-                                        <div className="bg-zinc-900/50 p-2 rounded">
-                                            <div className="text-zinc-500 text-[10px] uppercase font-bold">Conditions</div>
-                                            <div className="text-zinc-400 font-bold">Good</div>
+                                        <div className="bg-zinc-100 dark:bg-zinc-900/50 p-2 rounded">
+                                            <div className="text-zinc-500 dark:text-zinc-500 text-[10px] uppercase font-bold">Conditions</div>
+                                            <div className="text-zinc-600 dark:text-zinc-400 font-bold">Good</div>
                                         </div>
                                     </div>
                                 </div>
@@ -428,10 +411,10 @@ export const TidesPanel: React.FC<{
 
             {/* Combined Events Table */}
             <div>
-                <h3 className="text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Marine Events (Next 48h)</h3>
-                <div className="bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-700/50">
+                <h3 className="text-zinc-500 dark:text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Marine Events (Next 48h)</h3>
+                <div className="bg-zinc-50 dark:bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700/50">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold text-center">
+                        <thead className="bg-zinc-100 dark:bg-zinc-900/50 text-zinc-500 dark:text-zinc-500 text-xs uppercase font-bold text-center">
                             <tr>
                                 <th className="p-2 text-left">Event</th>
                                 <th className="p-2">Time</th>
@@ -442,7 +425,7 @@ export const TidesPanel: React.FC<{
                                 <th className="p-2 hidden sm:table-cell">Wind</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-800/50">
+                        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
                             {events.map((evt, i) => {
                                 const d = parseISO(evt.time);
                                 const isNewDay = i === 0 || !isSameDay(parseISO(events[i-1].time), d);
@@ -455,46 +438,46 @@ export const TidesPanel: React.FC<{
                                 const wind = weather.hourly.wind_speed_10m?.[weatherIdx] || 0;
                                 
                                 // Color coding for current (Safety)
-                                const speedColor = evt.speed < 1.0 ? "text-green-400" : evt.speed > 1.5 ? "text-red-400" : "text-yellow-400";
+                                const speedColor = evt.speed < 1.0 ? "text-green-600 dark:text-green-400" : evt.speed > 1.5 ? "text-red-600 dark:text-red-400" : "text-yellow-600 dark:text-yellow-400";
                                 
                                 // Event type styling
                                 const getEventDisplay = () => {
-                                    if (evt.type === 'Slack') return <span className="text-green-300">Slack</span>;
-                                    if (evt.type === 'Max Flood') return <span className="text-red-300">Max Flood</span>;
-                                    if (evt.type === 'Max Ebb') return <span className="text-red-300">Max Ebb</span>;
-                                    if (evt.type === 'High Tide') return <span className="text-blue-300">High Tide</span>;
-                                    if (evt.type === 'Low Tide') return <span className="text-cyan-300">Low Tide</span>;
+                                    if (evt.type === 'Slack') return <span className="text-green-600 dark:text-green-300">Slack</span>;
+                                    if (evt.type === 'Max Flood') return <span className="text-red-600 dark:text-red-300">Max Flood</span>;
+                                    if (evt.type === 'Max Ebb') return <span className="text-red-600 dark:text-red-300">Max Ebb</span>;
+                                    if (evt.type === 'High Tide') return <span className="text-blue-600 dark:text-blue-300">High Tide</span>;
+                                    if (evt.type === 'Low Tide') return <span className="text-cyan-600 dark:text-cyan-300">Low Tide</span>;
                                     return evt.type;
                                 };
 
                                 return (
                                     <React.Fragment key={evt.time}>
                                         {isNewDay && (
-                                            <tr className="bg-zinc-900/40">
-                                                <td colSpan={7} className="p-1 px-3 text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                                            <tr className="bg-zinc-100 dark:bg-zinc-900/40">
+                                                <td colSpan={7} className="p-1 px-3 text-xs font-bold text-zinc-500 dark:text-zinc-500 uppercase tracking-widest">
                                                     {format(d, 'EEEE, MMM d')}
                                                 </td>
                                             </tr>
                                         )}
-                                        <tr className="hover:bg-zinc-800/50 transition-colors text-center">
-                                            <td className="p-2 text-left font-bold text-zinc-300">
+                                        <tr className="hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors text-center">
+                                            <td className="p-2 text-left font-bold text-zinc-800 dark:text-zinc-300">
                                                 {getEventDisplay()}
                                             </td>
-                                            <td className="p-2 font-mono text-zinc-400">{format(d, 'HH:mm')}</td>
+                                            <td className="p-2 font-mono text-zinc-500 dark:text-zinc-400">{format(d, 'HH:mm')}</td>
                                             <td className={`p-2 font-mono font-bold ${speedColor}`}>
                                                 {evt.type === 'High Tide' || evt.type === 'Low Tide' 
                                                     ? '-' 
                                                     : `${evt.speed.toFixed(1)}kn`}
                                                 {evt.type !== 'High Tide' && evt.type !== 'Low Tide' && (
-                                                    <span className="text-[10px] text-zinc-600 font-normal"> ({Math.round(evt.direction)}°)</span>
+                                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-600 font-normal"> ({Math.round(evt.direction)}°)</span>
                                                 )}
                                             </td>
-                                            <td className="p-2 hidden sm:table-cell text-zinc-400 text-xs text-mono">
+                                            <td className="p-2 hidden sm:table-cell text-zinc-500 dark:text-zinc-400 text-xs text-mono">
                                                 {tideHeight !== undefined ? `${tideHeight.toFixed(1)}m` : '-'}
                                             </td>
-                                            <td className="p-2 text-zinc-400 text-xs">{swellHeight.toFixed(1)}m</td>
-                                            <td className="p-2 hidden sm:table-cell text-zinc-400 text-xs">{swellPeriod.toFixed(1)}s</td>
-                                            <td className="p-2 hidden sm:table-cell text-zinc-400 text-xs">{Math.round(wind)}kn</td>
+                                            <td className="p-2 text-zinc-500 dark:text-zinc-400 text-xs">{swellHeight.toFixed(1)}m</td>
+                                            <td className="p-2 hidden sm:table-cell text-zinc-500 dark:text-zinc-400 text-xs">{swellPeriod.toFixed(1)}s</td>
+                                            <td className="p-2 hidden sm:table-cell text-zinc-500 dark:text-zinc-400 text-xs">{Math.round(wind)}kn</td>
                                         </tr>
                                     </React.Fragment>
                                 );
@@ -506,13 +489,13 @@ export const TidesPanel: React.FC<{
             </div>
 
             {/* Data Sources Footer */}
-            <div className="text-[10px] text-zinc-600 border-t border-zinc-800/50 pt-3">
-                <div className="font-bold uppercase tracking-widest mb-1">Data Sources</div>
+            <div className="text-[10px] text-zinc-600 border-t border-zinc-200 dark:border-zinc-800/50 pt-3">
+                <div className="font-bold uppercase tracking-widest mb-1 text-zinc-500 dark:text-zinc-500">Data Sources</div>
                 <div className="space-y-0.5">
                     {tides?.sources?.map((s, i) => (
                         <div key={i} className="flex gap-1">
                             <span className="text-zinc-500 font-medium">{s.name}:</span>
-                            <span className="text-zinc-600 font-mono">{s.details}</span>
+                            <span className="text-zinc-600 dark:text-zinc-600 font-mono">{s.details}</span>
                         </div>
                     ))}
                     {(!tides?.sources || tides.sources.length === 0) && <div>Source data unavailable</div>}
@@ -546,10 +529,10 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
             <div className="flex gap-2">
                 <button 
                     onClick={() => setWeatherOpen(true)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 transition-all border border-zinc-700/50 shadow-lg group"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all border border-zinc-200 dark:border-zinc-700/50 shadow-lg group"
                 >
                     {getWeatherIcon(weather.current.weatherCode)}
-                    <span className="text-sm font-black text-zinc-100 group-hover:text-white">
+                    <span className="text-sm font-black text-zinc-900 dark:text-zinc-100 group-hover:text-black dark:group-hover:text-white">
                         {Math.round(weather.current.temperature)}°C
                     </span>
                 </button>
@@ -558,10 +541,10 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
                     onClick={() => {
                         setTidesOpen(true);
                     }}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 transition-all border border-zinc-700/50 shadow-lg group"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all border border-zinc-200 dark:border-zinc-700/50 shadow-lg group"
                 >
-                    <Anchor className="text-blue-400" size={16} />
-                    <span className="text-sm font-black text-zinc-100 group-hover:text-white">
+                    <Anchor className="text-blue-500 dark:text-blue-400" size={16} />
+                    <span className="text-sm font-black text-zinc-900 dark:text-zinc-100 group-hover:text-black dark:group-hover:text-white">
                         Tides
                     </span>
                 </button>
@@ -591,4 +574,3 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
         </>
     );
 };
-

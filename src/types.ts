@@ -35,6 +35,14 @@ export interface UserConfig {
     taskListIds: string[];
     activeHoursStart?: number; // 0-23
     activeHoursEnd?: number;   // 0-23
+
+    // Theme & Power Settings
+    themeMode?: 'auto' | 'manual';
+    manualDayStart?: number; // 0-23 (Default 7)
+    manualDayEnd?: number;   // 0-23 (Default 19)
+    sleepEnabled?: boolean;  // Default true
+    sleepStart?: number;     // 0-23 (Default 22)
+    sleepEnd?: number;       // 0-23 (Default 6)
 }
 
 export interface WeatherData {
@@ -85,5 +93,3 @@ export interface TideData {
         details: string;
     }[];
 }
-
-
