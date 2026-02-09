@@ -4,7 +4,8 @@ import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { EventCard } from './EventCard';
 import { SettingsModal } from './SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ListTodo, X, RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ListTodo, X, RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, AlignLeft } from 'lucide-react';
+import { SideDrawer } from './SideDrawer';
 import { groupOverlappingEvents, calculateEventStyles } from '../utils/layout';
 import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
 import { WeatherDashboard } from './WeatherDashboard';
@@ -18,6 +19,7 @@ const DAYS_TO_SHOW = 7;
 export const Dashboard: React.FC = () => {
   const [showTasks, setShowTasks] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState('sooke');
   
   const [events, setEvents] = useState<AppEvent[]>([]);
@@ -361,7 +363,7 @@ export const Dashboard: React.FC = () => {
                                              <div className="flex gap-0.5">
                                                 {groupOverlappingEvents(buckets.before).map((group, gIdx) => (
                                                     <div key={`before-${gIdx}`} className="flex-1 min-w-0">
-                                                        {group.map(event => <div key={event.id}><EventCard event={event} /></div>)}
+                                                        {group.map(event => <div key={event.id}><EventCard event={event} onClick={() => setSelectedEvent(event)} /></div>)}
                                                     </div>
                                                 ))}
                                              </div>
@@ -421,7 +423,11 @@ export const Dashboard: React.FC = () => {
                                                                     style={styles}
                                                                 >
                                                                     <div className="h-full w-full">
-                                                                        <EventCard event={event} className="h-full shadow-md" />
+                                                                        <EventCard
+                                                                            event={event}
+                                                                            className="h-full shadow-md"
+                                                                            onClick={() => setSelectedEvent(event)}
+                                                                        />
                                                                     </div>
                                                                 </div>
                                                             )
@@ -436,7 +442,7 @@ export const Dashboard: React.FC = () => {
                                              <div className="flex gap-0.5">
                                                 {groupOverlappingEvents(buckets.after).map((group, gIdx) => (
                                                     <div key={`after-${gIdx}`} className="flex-1 min-w-0">
-                                                        {group.map(event => <div key={event.id}><EventCard event={event} /></div>)}
+                                                        {group.map(event => <div key={event.id}><EventCard event={event} onClick={() => setSelectedEvent(event)} /></div>)}
                                                     </div>
                                                 ))}
                                              </div>
@@ -493,6 +499,67 @@ export const Dashboard: React.FC = () => {
             />
         )}
       </AnimatePresence>
+
+      <SideDrawer
+        isOpen={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        title="Event Details"
+      >
+            {selectedEvent && (
+                <div className="space-y-8">
+                    <div>
+                        <h3 className="text-3xl font-black text-white leading-tight mb-2">
+                            {selectedEvent.title}
+                        </h3>
+                        <div className="flex items-center gap-2 text-zinc-400 font-medium">
+                            <Clock size={18} className="text-family-cyan" />
+                            <span>
+                                {selectedEvent.allDay
+                                    ? 'All Day'
+                                    : `${format(selectedEvent.start, 'EEEE, MMMM d')} • ${format(selectedEvent.start, 'HH:mm')} - ${format(selectedEvent.end, 'HH:mm')}`
+                                }
+                            </span>
+                        </div>
+                    </div>
+
+                    {selectedEvent.location && (
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-zinc-300 font-bold uppercase tracking-wider text-xs">
+                                <MapPin size={16} className="text-family-orange" />
+                                <span>Location</span>
+                            </div>
+                            <div className="text-zinc-400 bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/30">
+                                {selectedEvent.location}
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedEvent.description && (
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-zinc-300 font-bold uppercase tracking-wider text-xs">
+                                <AlignLeft size={16} className="text-family-cyan" />
+                                <span>Description</span>
+                            </div>
+                            <div className="text-zinc-400 bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/30 whitespace-pre-wrap leading-relaxed">
+                                {selectedEvent.description}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Meta info */}
+                    <div className="pt-8 border-t border-zinc-800 flex flex-wrap gap-4">
+                        <div className="px-3 py-1 rounded-full bg-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest">
+                            ID: {selectedEvent.id.substring(0, 8)}...
+                        </div>
+                        {selectedEvent.isHoliday && (
+                            <div className="px-3 py-1 rounded-full bg-family-orange/20 text-family-orange text-[10px] font-black uppercase tracking-widest">
+                                Public Holiday
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+      </SideDrawer>
     </div>
   );
 };
