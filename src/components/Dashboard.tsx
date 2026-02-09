@@ -7,9 +7,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ListTodo, X, RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { groupOverlappingEvents, calculateEventStyles } from '../utils/layout';
 import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
-import { WeatherDashboard, getWeatherIcon } from './WeatherDashboard';
+import { WeatherDashboard } from './WeatherDashboard';
+import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
 import { MARINE_LOCATIONS } from '../utils/marineLocations';
+import { useTheme } from '../hooks/useTheme';
 
 const DAYS_TO_SHOW = 7;
 
@@ -32,6 +34,9 @@ export const Dashboard: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState('Syncing...');
   const [error, setError] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+
+  // Apply Theme Logic
+  useTheme(config, weather);
 
   const today = useMemo(() => new Date(), []);
   const startDate = weekOffset === 0 ? today : getWeekStartDate(today, weekOffset);
@@ -110,11 +115,11 @@ export const Dashboard: React.FC = () => {
       if (hasTidesOpened) {
           fetchTides();
       }
-  }, [fetchTides, hasTidesOpened]); // Re-fetch if location changes (fetchTides depends on it) and panel uses it
+  }, [fetchTides, hasTidesOpened]);
 
   if (loading && events.length === 0 && !error) {
       return (
-          <div className="h-screen w-screen bg-zinc-950 flex flex-col items-center justify-center text-zinc-500 gap-4">
+          <div className="h-screen w-screen bg-white dark:bg-zinc-950 flex flex-col items-center justify-center text-zinc-500 gap-4 transition-colors duration-300">
               <RefreshCw className="animate-spin" size={48} />
               <div className="text-xl tracking-widest uppercase">Syncing with Google...</div>
           </div>
@@ -122,16 +127,16 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden relative">
+    <div className="h-screen w-screen flex flex-col bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden relative transition-colors duration-300">
       {/* Header / Status Bar */}
-      <div className="flex justify-between items-center px-6 py-4 border-b border-zinc-800 bg-zinc-950/90 z-10 sticky top-0">
+      <div className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 z-10 sticky top-0 transition-colors duration-300">
         <div className="flex items-center gap-6">
             {/* Week Navigation */}
-            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-1">
+            <div className="flex items-center bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-1 transition-colors duration-300">
                 <button 
                     onClick={() => setWeekOffset(prev => Math.max(0, prev - 1))}
                     disabled={!canNavigateToPreviousWeek(weekOffset)}
-                    className={`p-1.5 rounded-md transition-all ${!canNavigateToPreviousWeek(weekOffset) ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
+                    className={`p-1.5 rounded-md transition-all ${!canNavigateToPreviousWeek(weekOffset) ? 'text-zinc-400 cursor-not-allowed' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
                     title="Previous Week"
                     data-testid="prev-week-button"
                     aria-label="Previous Week"
@@ -140,13 +145,13 @@ export const Dashboard: React.FC = () => {
                 </button>
                 
                 <button 
-                    className={`px-3 py-1 flex items-center gap-2 rounded-md transition-colors ${isCurrentWeek(weekOffset) ? 'text-zinc-500 cursor-default' : 'text-zinc-200 hover:bg-zinc-800'}`}
+                    className={`px-3 py-1 flex items-center gap-2 rounded-md transition-colors ${isCurrentWeek(weekOffset) ? 'text-zinc-400 dark:text-zinc-500 cursor-default' : 'text-zinc-600 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
                     onClick={() => setWeekOffset(0)}
                     title="Go to Today"
                     data-testid="today-button"
                     aria-label="Go to Today"
                 >
-                    <Calendar size={14} className={isCurrentWeek(weekOffset) ? 'text-family-cyan' : 'text-zinc-500'} />
+                    <Calendar size={14} className={isCurrentWeek(weekOffset) ? 'text-family-cyan' : 'text-zinc-400 dark:text-zinc-500'} />
                     <span className={`text-[11px] font-black uppercase tracking-[0.2em]`}>
                         {isCurrentWeek(weekOffset) ? 'Current Week' : 'Back To Today'}
                     </span>
@@ -154,7 +159,7 @@ export const Dashboard: React.FC = () => {
 
                 <button 
                     onClick={() => setWeekOffset(prev => prev + 1)}
-                    className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all"
+                    className="p-1.5 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all"
                     title="Next Week"
                     data-testid="next-week-button"
                     aria-label="Next Week"
@@ -165,7 +170,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="flex flex-col items-center gap-1">
-            <div className="text-2xl font-bold text-zinc-300">
+            <div className="text-2xl font-bold text-zinc-700 dark:text-zinc-300 transition-colors duration-300">
                 {isCurrentWeek(weekOffset) ? format(today, 'EEEE, MMMM d') : `${format(days[0], 'MMM d')} - ${format(days[6], 'MMM d, yyyy')}`}
             </div>
             <AnimatePresence>
@@ -176,7 +181,7 @@ export const Dashboard: React.FC = () => {
                         exit={{ opacity: 0, y: -10 }}
                         className="flex flex-col items-center w-full max-w-[200px] gap-1"
                     >
-                        <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden" data-testid="loading-bar">
+                        <div className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden" data-testid="loading-bar">
                             <motion.div 
                                 className="h-full bg-family-cyan"
                                 initial={{ width: "0%" }}
@@ -205,8 +210,6 @@ export const Dashboard: React.FC = () => {
                   isTidesLoading={isTidesLoading}
                   onTidesActive={() => {
                       setHasTidesOpened(true);
-                      // If we are opening it and it hasn't been opened (triggered useEffect), fetch.
-                      // Or if it's currently null.
                       if (!tides) fetchTides();
                   }}
                 />
@@ -217,16 +220,19 @@ export const Dashboard: React.FC = () => {
              
              <button
                 onClick={() => setShowSettings(true)}
-                className="p-3 rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white transition-colors"
+                className="p-3 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-500 hover:text-black dark:hover:text-white transition-colors"
                 title="Settings"
              >
                  <Settings size={20} />
              </button>
 
-             <span className="text-xs font-bold uppercase tracking-widest text-zinc-600">Power Saving Active</span>
+             {config.sleepEnabled && (
+                 <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Power Saving On</span>
+             )}
+
              <button 
                 onClick={() => setShowTasks(!showTasks)}
-                className={`p-3 rounded-full transition-colors ${showTasks ? 'bg-zinc-800 text-white' : 'bg-transparent text-zinc-500 hover:text-white'}`}
+                className={`p-3 rounded-full transition-colors ${showTasks ? 'bg-zinc-200 dark:bg-zinc-800 text-black dark:text-white' : 'bg-transparent text-zinc-500 hover:text-black dark:hover:text-white'}`}
              >
                 {showTasks ? <X size={24} /> : <div className="relative">
                     <ListTodo size={24} />
@@ -240,12 +246,12 @@ export const Dashboard: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         
         {/* Global Header Row */}
-        <div className="flex border-b border-zinc-800 bg-zinc-950/90 z-10 shrink-0">
+        <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 z-10 shrink-0 transition-colors duration-300">
             {/* Sidebar Header Spacer */}
-            <div className="w-12 flex-shrink-0 border-r border-zinc-800 bg-zinc-950/50" />
+            <div className="w-12 flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50" />
             
             {/* Day Headers Grid */}
-            <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-800">
+            <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-200 dark:divide-zinc-800">
                 {days.map((day, i) => {
                     const isToday = isSameDay(day, today);
                     const isWeekendDay = isWeekend(day);
@@ -253,14 +259,14 @@ export const Dashboard: React.FC = () => {
                     const holidays = dayEvents.filter(e => e.isHoliday);
 
                     return (
-                        <div key={i} className={`py-4 px-3 flex flex-col justify-center min-h-[100px] ${isToday ? 'bg-family-cyan/5' : isWeekendDay ? 'bg-family-orange/5' : ''}`}>
+                        <div key={i} className={`py-4 px-3 flex flex-col justify-center min-h-[100px] ${isToday ? 'bg-family-cyan/10 dark:bg-family-cyan/5' : isWeekendDay ? 'bg-family-orange/10 dark:bg-family-orange/5' : ''}`}>
                              <div className="flex items-center justify-center gap-6">
                                  {/* Day and Date Column */}
                                  <div className="flex flex-col items-center">
-                                     <div className={`text-[15px] font-black uppercase tracking-widest mb-1 ${isToday ? 'text-family-cyan' : isWeekendDay ? 'text-family-orange' : 'text-zinc-500'}`}>
+                                     <div className={`text-[15px] font-black uppercase tracking-widest mb-1 ${isToday ? 'text-family-cyan' : isWeekendDay ? 'text-family-orange' : 'text-zinc-400 dark:text-zinc-500'}`}>
                                         {format(day, 'EEEE')}
                                      </div>
-                                     <div className={`text-4xl font-black transition-all ${isToday ? 'text-family-cyan' : isWeekendDay ? 'text-family-orange' : 'text-zinc-200'}`}>
+                                     <div className={`text-4xl font-black transition-all ${isToday ? 'text-family-cyan' : isWeekendDay ? 'text-family-orange' : 'text-zinc-800 dark:text-zinc-200'}`}>
                                         {format(day, 'd')}
                                      </div>
                                  </div>
@@ -272,7 +278,7 @@ export const Dashboard: React.FC = () => {
                                             {getWeatherIcon(weather.daily.weather_code[i])}
                                         </div>
                                         {weather.daily.temperature_2m_max && (
-                                            <div className="text-[13px] font-black text-blue-400/80 font-mono">
+                                            <div className="text-[13px] font-black text-blue-500/80 dark:text-blue-400/80 font-mono">
                                                 {Math.round(weather.daily.temperature_2m_max[i])}-{Math.round(weather.daily.temperature_2m_min[i])}
                                             </div>
                                         )}
@@ -283,7 +289,7 @@ export const Dashboard: React.FC = () => {
                              {/* Holidays */}
                              <div className="mt-3 flex flex-wrap justify-center gap-1">
                                 {holidays.map((h, idx) => (
-                                    <div key={h.id || idx} className="text-[10px] uppercase font-bold text-zinc-500 bg-zinc-900/80 px-1.5 py-0.5 rounded border border-zinc-800 max-w-full truncate">
+                                    <div key={h.id || idx} className="text-[10px] uppercase font-bold text-zinc-500 bg-zinc-100 dark:bg-zinc-900/80 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800 max-w-full truncate">
                                         {h.title}
                                     </div>
                                 ))}
@@ -298,7 +304,7 @@ export const Dashboard: React.FC = () => {
         <div className="flex-1 flex overflow-hidden">
              
              {/* Global Sidebar - Time Labels */}
-             <div className="w-12 flex-shrink-0 flex flex-col border-r border-zinc-800 bg-zinc-950">
+             <div className="w-12 flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-colors duration-300">
                  {(() => {
                      const startHour = config.activeHoursStart ?? 7;
                      const endHour = config.activeHoursEnd ?? 21;
@@ -307,15 +313,15 @@ export const Dashboard: React.FC = () => {
                      return (
                          <>
                              {/* Before Label Spacer */}
-                             <div className="h-16 flex-shrink-0 border-b border-zinc-800/50 relative bg-zinc-900/20">
-                                 <span className="absolute bottom-1 right-1 text-[9px] text-zinc-600 font-mono">PRE</span>
+                             <div className="h-16 flex-shrink-0 border-b border-zinc-200/50 dark:border-zinc-800/50 relative bg-zinc-50 dark:bg-zinc-900/20">
+                                 <span className="absolute bottom-1 right-1 text-[9px] text-zinc-400 dark:text-zinc-600 font-mono">PRE</span>
                              </div>
 
                              {/* Hourly Labels */}
                              <div className="flex-1 flex flex-col min-h-0">
                                  {hours.map(hour => (
-                                     <div key={hour} className="flex-1 relative border-b border-zinc-800/30">
-                                         <span className="absolute -top-2 right-1 text-[10px] text-zinc-500 font-mono bg-zinc-950 px-0.5">
+                                     <div key={hour} className="flex-1 relative border-b border-zinc-200/50 dark:border-zinc-800/30">
+                                         <span className="absolute -top-2 right-1 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono bg-white dark:bg-zinc-950 px-0.5">
                                              {hour}
                                          </span>
                                      </div>
@@ -323,8 +329,8 @@ export const Dashboard: React.FC = () => {
                              </div>
 
                              {/* After Label Spacer */}
-                             <div className="h-16 flex-shrink-0 border-t border-zinc-800/50 relative bg-zinc-900/20">
-                                 <span className="absolute top-1 right-1 text-[9px] text-zinc-600 font-mono">POST</span>
+                             <div className="h-16 flex-shrink-0 border-t border-zinc-200/50 dark:border-zinc-800/50 relative bg-zinc-50 dark:bg-zinc-900/20">
+                                 <span className="absolute top-1 right-1 text-[9px] text-zinc-400 dark:text-zinc-600 font-mono">POST</span>
                              </div>
                          </>
                      );
@@ -332,7 +338,7 @@ export const Dashboard: React.FC = () => {
              </div>
 
              {/* Days Content Grid */}
-             <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-800 overflow-hidden" data-testid="calendar-grid">
+             <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-200 dark:divide-zinc-800 overflow-hidden transition-colors duration-300" data-testid="calendar-grid">
                 {days.map((day, i) => {
                     const isToday = isSameDay(day, today);
                     const isWeekendDay = isWeekend(day);
@@ -341,7 +347,7 @@ export const Dashboard: React.FC = () => {
                     const standardEvents = dayEvents.filter(e => !e.isHoliday);
 
                      return (
-                         <div key={i} className={`flex flex-col h-full relative ${isToday ? 'bg-family-cyan/[0.03]' : isWeekendDay ? 'bg-family-orange/[0.03]' : ''}`}>
+                         <div key={i} className={`flex flex-col h-full relative ${isToday ? 'bg-family-cyan/[0.05] dark:bg-family-cyan/[0.03]' : isWeekendDay ? 'bg-family-orange/[0.05] dark:bg-family-orange/[0.03]' : ''}`}>
                              {(() => {
                                  const startHour = config.activeHoursStart ?? 7;
                                  const endHour = config.activeHoursEnd ?? 21;
@@ -351,7 +357,7 @@ export const Dashboard: React.FC = () => {
                                  return (
                                      <>
                                          {/* Before Bucket content */}
-                                         <div className="h-16 flex-shrink-0 border-b border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
+                                         <div className="h-16 flex-shrink-0 border-b border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
                                              <div className="flex gap-0.5">
                                                 {groupOverlappingEvents(buckets.before).map((group, gIdx) => (
                                                     <div key={`before-${gIdx}`} className="flex-1 min-w-0">
@@ -366,7 +372,7 @@ export const Dashboard: React.FC = () => {
                                               {/* Background Grid Lines (match sidebar) */}
                                               <div className="absolute inset-0 flex flex-col pointer-events-none">
                                                   {hours.map(hour => (
-                                                      <div key={`grid-${hour}`} className="flex-1 border-b border-zinc-800/30" />
+                                                      <div key={`grid-${hour}`} className="flex-1 border-b border-zinc-200/50 dark:border-zinc-800/30" />
                                                   ))}
                                               </div>
  
@@ -426,7 +432,7 @@ export const Dashboard: React.FC = () => {
                                          </div>
  
                                          {/* After Bucket content */}
-                                         <div className="h-16 flex-shrink-0 border-t border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
+                                         <div className="h-16 flex-shrink-0 border-t border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
                                              <div className="flex gap-0.5">
                                                 {groupOverlappingEvents(buckets.after).map((group, gIdx) => (
                                                     <div key={`after-${gIdx}`} className="flex-1 min-w-0">
@@ -453,12 +459,12 @@ export const Dashboard: React.FC = () => {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 h-1/3 bg-zinc-900/95 backdrop-blur-xl border-t border-zinc-700 shadow-2xl z-50 flex flex-col"
+            className="absolute bottom-0 left-0 right-0 h-1/3 bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-700 shadow-2xl z-50 flex flex-col"
           >
-             <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
-                <h2 className="text-2xl font-bold uppercase tracking-wide text-white">Tasks ({tasks.length})</h2>
-                <button onClick={() => setShowTasks(false)} className="p-2 hover:bg-zinc-800 rounded-full">
-                    <X className="text-zinc-400" />
+             <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                <h2 className="text-2xl font-bold uppercase tracking-wide text-zinc-800 dark:text-white">Tasks ({tasks.length})</h2>
+                <button onClick={() => setShowTasks(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full">
+                    <X className="text-zinc-500 dark:text-zinc-400" />
                 </button>
              </div>
              
@@ -467,11 +473,11 @@ export const Dashboard: React.FC = () => {
                     <div className="text-zinc-500 text-xl font-medium">No tasks found.</div>
                 ) : (
                     tasks.map(task => (
-                        <div key={task.id} className="min-w-[300px] bg-black/40 p-6 rounded-xl border border-zinc-800 flex items-center gap-4">
-                            <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${task.status === 'completed' ? 'border-green-500 bg-green-500/20' : 'border-zinc-600'}`}>
+                        <div key={task.id} className="min-w-[300px] bg-white/50 dark:bg-black/40 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center gap-4">
+                            <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${task.status === 'completed' ? 'border-green-500 bg-green-500/20' : 'border-zinc-400 dark:border-zinc-600'}`}>
                                 {task.status === 'completed' && <div className="w-4 h-4 bg-green-500 rounded-full" />}
                             </div>
-                            <span className={`text-xl font-medium ${task.status === 'completed' ? 'line-through text-zinc-600' : 'text-zinc-200'}`}>
+                            <span className={`text-xl font-medium ${task.status === 'completed' ? 'line-through text-zinc-500 dark:text-zinc-600' : 'text-zinc-800 dark:text-zinc-200'}`}>
                                 {task.title}
                             </span>
                         </div>

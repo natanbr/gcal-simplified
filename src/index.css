@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-dark-bg text-dark-text overflow-hidden;
+    @apply bg-white dark:bg-dark-bg text-zinc-900 dark:text-dark-text overflow-hidden transition-colors duration-300;
     font-family: "Inter", system-ui, sans-serif;
   }
 }
