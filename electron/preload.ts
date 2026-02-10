@@ -1,27 +1,43 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
+// Allowed channels for communication
+const ALLOWED_INVOKE_CHANNELS = [
+  'auth:login',
+  'auth:logout',
+  'auth:check',
+  'data:events',
+  'data:tasks',
+  'data:calendars',
+  'data:tasklists',
+  'settings:get',
+  'settings:save',
+  'weather:get',
+  'tides:get',
+];
+
+const ALLOWED_ON_CHANNELS = [
+  'auth:success',
+  'main-process-message',
+];
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(channel: string, listener: (...args: unknown[]) => void) {
+    if (!ALLOWED_ON_CHANNELS.includes(channel)) {
+      console.warn(`Blocked attempt to listen on unauthorized channel: ${channel}`);
+      throw new Error(`Unauthorized channel: ${channel}`);
+    }
     const subscription = (_event: unknown, ...args: unknown[]) => listener(...args)
     ipcRenderer.on(channel, subscription)
     return () => {
       ipcRenderer.removeListener(channel, subscription)
     }
   },
-  off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.off(channel, ...omit)
+  invoke(channel: string, ...args: unknown[]) {
+    if (!ALLOWED_INVOKE_CHANNELS.includes(channel)) {
+      console.warn(`Blocked attempt to invoke unauthorized channel: ${channel}`);
+      throw new Error(`Unauthorized channel: ${channel}`);
+    }
+    return ipcRenderer.invoke(channel, ...args)
   },
-  send(...args: Parameters<typeof ipcRenderer.send>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.send(channel, ...omit)
-  },
-  invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.invoke(channel, ...omit)
-  },
-
-  // You can expose other APTs you need here.
-  // ...
 })
