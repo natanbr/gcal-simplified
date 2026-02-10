@@ -1,0 +1,151 @@
+import React, { useMemo } from 'react';
+import { AppEvent, UserConfig } from '../types';
+import { EventCard } from './EventCard';
+import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
+import { groupOverlappingEvents, calculateEventStyles } from '../utils/layout';
+
+interface DayColumnProps {
+    events: AppEvent[];
+    isToday: boolean;
+    isWeekend: boolean;
+    config: UserConfig;
+    onEventClick: (event: AppEvent) => void;
+}
+
+export const DayColumn = React.memo<DayColumnProps>(({
+    events,
+    isToday,
+    isWeekend,
+    config,
+    onEventClick
+}) => {
+    const startHour = config.activeHoursStart ?? 7;
+    const endHour = config.activeHoursEnd ?? 21;
+
+    // Memoize the partitioning and grouping
+    const {
+        beforeGroups,
+        afterGroups,
+        hourlyGroups,
+        hours
+    } = useMemo(() => {
+        // Filter out holidays as per original logic if they are treated differently in the grid
+        // In Dashboard.tsx: const standardEvents = dayEvents.filter(e => !e.isHoliday);
+        const standardEvents = events.filter(e => !e.isHoliday);
+
+        const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour);
+        const hours = Array.from({ length: endHour - startHour }, (_, idx) => startHour + idx);
+
+        const activeStart = startHour;
+        const activeEnd = endHour;
+
+        // Prepare hourly events for absolute positioning
+        const hourlyEvents = standardEvents.filter(e => {
+             const s = e.start.getHours() + e.start.getMinutes()/60;
+             const end = e.end.getHours() + e.end.getMinutes()/60;
+             return s < activeEnd && end > activeStart;
+        }).sort((a,b) => a.start.getTime() - b.start.getTime());
+
+        return {
+            beforeGroups: groupOverlappingEvents(buckets.before),
+            afterGroups: groupOverlappingEvents(buckets.after),
+            hourlyGroups: groupOverlappingEvents(hourlyEvents),
+            hours
+        };
+    }, [events, startHour, endHour]);
+
+    return (
+        <div className={`flex flex-col h-full relative ${isToday ? 'bg-family-cyan/[0.05] dark:bg-family-cyan/[0.03]' : isWeekend ? 'bg-family-orange/[0.05] dark:bg-family-orange/[0.03]' : ''}`}>
+
+            {/* Before Bucket content */}
+            <div className="h-16 flex-shrink-0 border-b border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
+                <div className="flex gap-0.5">
+                {beforeGroups.map((group, gIdx) => (
+                    <div key={`before-${gIdx}`} className="flex-1 min-w-0">
+                        {group.map(event => (
+                            <div key={event.id}>
+                                <EventCard event={event} onClick={() => onEventClick(event)} />
+                            </div>
+                        ))}
+                    </div>
+                ))}
+                </div>
+            </div>
+
+            {/* Hourly Slots Content (Absolute) */}
+            <div className="flex-1 relative flex flex-col min-h-0">
+                {/* Background Grid Lines */}
+                <div className="absolute inset-0 flex flex-col pointer-events-none">
+                    {hours.map(hour => (
+                        <div key={`grid-${hour}`} className="flex-1 border-b border-zinc-200/50 dark:border-zinc-800/30" />
+                    ))}
+                </div>
+
+                {/* Absolute Events Layer */}
+                <div className="absolute inset-0 pointer-events-none">
+                    {(() => {
+                        const activeStart = startHour;
+                        const activeEnd = endHour;
+                        const totalHours = activeEnd - activeStart;
+
+                        return hourlyGroups.flatMap(group => {
+                            return group.map((event, idx) => {
+                                const s = event.start.getHours() + event.start.getMinutes()/60;
+                                const e = event.end.getHours() + event.end.getMinutes()/60;
+
+                                const visualsStart = Math.max(s, activeStart);
+                                const visualsEnd = Math.min(e, activeEnd);
+
+                                const topP = ((visualsStart - activeStart) / totalHours) * 100;
+                                const duration = visualsEnd - visualsStart;
+                                const heightP = (duration / totalHours) * 100;
+
+                                const widthP = 100 / group.length;
+                                const leftP = idx * widthP;
+
+                                const styles = calculateEventStyles(
+                                    topP,
+                                    heightP,
+                                    leftP,
+                                    widthP,
+                                    duration
+                                );
+
+                                return (
+                                    <div
+                                        key={event.id}
+                                        className="absolute pointer-events-auto"
+                                        style={styles}
+                                    >
+                                        <div className="h-full w-full">
+                                            <EventCard
+                                                event={event}
+                                                className="h-full shadow-md"
+                                                onClick={() => onEventClick(event)}
+                                            />
+                                        </div>
+                                    </div>
+                                )
+                            });
+                        });
+                    })()}
+                </div>
+            </div>
+
+            {/* After Bucket content */}
+            <div className="h-16 flex-shrink-0 border-t border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
+                <div className="flex gap-0.5">
+                {afterGroups.map((group, gIdx) => (
+                    <div key={`after-${gIdx}`} className="flex-1 min-w-0">
+                        {group.map(event => (
+                            <div key={event.id}>
+                                <EventCard event={event} onClick={() => onEventClick(event)} />
+                            </div>
+                        ))}
+                    </div>
+                ))}
+                </div>
+            </div>
+        </div>
+    );
+});
