@@ -9,21 +9,21 @@ export const groupOverlappingEvents = (events: AppEvent[]): EventGroup[] => {
     const sorted = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
     const groups: EventGroup[] = [];
     let currentGroup: AppEvent[] = [sorted[0]];
+    let maxGroupEnd = sorted[0].end.getTime();
 
     for (let i = 1; i < sorted.length; i++) {
         const currentEvent = sorted[i];
 
-        // Check if current event overlaps with ANY event in the current group
-        // Two events overlap if: eventA.start < eventB.end AND eventB.start < eventA.end
-        const overlapsWithGroup = currentGroup.some(groupEvent =>
-            currentEvent.start < groupEvent.end && groupEvent.start < currentEvent.end
-        );
-
-        if (overlapsWithGroup) {
+        // Optimized O(1) overlap check:
+        // Since events are sorted by start time, currentEvent starts after or at the same time as any event in currentGroup.
+        // Thus, currentEvent overlaps with the group if and only if it starts before the group's maximum end time.
+        if (currentEvent.start.getTime() < maxGroupEnd) {
             currentGroup.push(currentEvent);
+            maxGroupEnd = Math.max(maxGroupEnd, currentEvent.end.getTime());
         } else {
             groups.push(currentGroup);
             currentGroup = [currentEvent];
+            maxGroupEnd = currentEvent.end.getTime();
         }
     }
     groups.push(currentGroup);
