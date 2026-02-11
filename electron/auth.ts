@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import Store from 'electron-store';
 import http from 'http';
 import url from 'url';
+import { AddressInfo } from 'net';
 import { OAuth2Client, Credentials } from 'google-auth-library';
 
 interface AuthStore {
@@ -25,7 +26,7 @@ export class AuthService {
         this.oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
-            'http://localhost:3000/callback' // Redirect URI
+            'http://localhost:3000/callback' // Default fallback
         );
 
         // Load saved tokens
@@ -46,16 +47,9 @@ export class AuthService {
 
     async startAuth(): Promise<void> {
         return new Promise((resolve, reject) => {
-            // 1. Generate Auth URL
-            const authUrl = this.oauth2Client.generateAuthUrl({
-                access_type: 'offline', // Crucial for refresh token
-                scope: SCOPES,
-            });
+            let redirectUri = ''; // To be set dynamically
 
-            // 2. Open in System Browser
-            shell.openExternal(authUrl);
-
-            // 3. Spin up local server to catch callback
+            // 1. Spin up local server to catch callback
             const server = http.createServer(async (req, res) => {
                 try {
                     if (!req.url) return;
@@ -64,7 +58,11 @@ export class AuthService {
 
                     if (code) {
                         // 4. Exchange code for tokens
-                        const { tokens } = await this.oauth2Client.getToken(code as string);
+                        // We must pass the same redirect_uri used in the auth request
+                        const { tokens } = await this.oauth2Client.getToken({
+                            code: code as string,
+                            redirect_uri: redirectUri
+                        });
                         this.oauth2Client.setCredentials(tokens);
                         store.set('tokens', tokens); // Persist
 
@@ -82,7 +80,21 @@ export class AuthService {
                 }
             });
 
-            server.listen(3000);
+            // 2. Listen on a random available port (0) and bind to loopback (127.0.0.1)
+            server.listen(0, '127.0.0.1', () => {
+                const port = (server.address() as AddressInfo).port;
+                redirectUri = `http://127.0.0.1:${port}/callback`;
+
+                // 3. Generate Auth URL with dynamic redirect_uri
+                const authUrl = this.oauth2Client.generateAuthUrl({
+                    access_type: 'offline', // Crucial for refresh token
+                    scope: SCOPES,
+                    redirect_uri: redirectUri
+                });
+
+                // 4. Open in System Browser
+                shell.openExternal(authUrl);
+            });
         });
     }
 
