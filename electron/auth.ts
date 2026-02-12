@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import Store from 'electron-store';
 import http from 'http';
 import url from 'url';
+import { AddressInfo } from 'net';
 import { OAuth2Client, Credentials } from 'google-auth-library';
 
 interface AuthStore {
@@ -24,8 +25,7 @@ export class AuthService {
         // For now, we expect them to be available in process.env
         this.oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
-            process.env.GOOGLE_CLIENT_SECRET,
-            'http://localhost:3000/callback' // Redirect URI
+            process.env.GOOGLE_CLIENT_SECRET
         );
 
         // Load saved tokens
@@ -46,16 +46,9 @@ export class AuthService {
 
     async startAuth(): Promise<void> {
         return new Promise((resolve, reject) => {
-            // 1. Generate Auth URL
-            const authUrl = this.oauth2Client.generateAuthUrl({
-                access_type: 'offline', // Crucial for refresh token
-                scope: SCOPES,
-            });
+            let redirectUri = '';
 
-            // 2. Open in System Browser
-            shell.openExternal(authUrl);
-
-            // 3. Spin up local server to catch callback
+            // Spin up local server to catch callback
             const server = http.createServer(async (req, res) => {
                 try {
                     if (!req.url) return;
@@ -63,8 +56,11 @@ export class AuthService {
                     const { code } = queryObject;
 
                     if (code) {
-                        // 4. Exchange code for tokens
-                        const { tokens } = await this.oauth2Client.getToken(code as string);
+                        // Exchange code for tokens
+                        const { tokens } = await this.oauth2Client.getToken({
+                            code: code as string,
+                            redirect_uri: redirectUri
+                        });
                         this.oauth2Client.setCredentials(tokens);
                         store.set('tokens', tokens); // Persist
 
@@ -82,7 +78,32 @@ export class AuthService {
                 }
             });
 
-            server.listen(3000);
+            // Listen on random port (0) and loopback address
+            server.listen(0, '127.0.0.1', () => {
+                const address = server.address() as AddressInfo;
+                if (address) {
+                    const port = address.port;
+                    redirectUri = `http://127.0.0.1:${port}/callback`;
+
+                    // Generate Auth URL
+                    const authUrl = this.oauth2Client.generateAuthUrl({
+                        access_type: 'offline', // Crucial for refresh token
+                        scope: SCOPES,
+                        redirect_uri: redirectUri
+                    });
+
+                    // Open in System Browser
+                    shell.openExternal(authUrl);
+                } else {
+                    reject(new Error('Failed to get server address'));
+                    server.close();
+                }
+            });
+
+            server.on('error', (err) => {
+                reject(err);
+                server.close();
+            });
         });
     }
 
