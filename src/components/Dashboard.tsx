@@ -40,7 +40,7 @@ export const Dashboard: React.FC = () => {
 
   const today = useMemo(() => new Date(), []);
   const startDate = weekOffset === 0 ? today : getWeekStartDate(today, weekOffset);
-  const days = Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i));
+  const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
 
   const currentLocation = useMemo(() => 
       MARINE_LOCATIONS.find(l => l.id === selectedLocationId) || MARINE_LOCATIONS[0], 
@@ -356,17 +356,16 @@ export const Dashboard: React.FC = () => {
              <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-200 dark:divide-zinc-800 overflow-hidden transition-colors duration-300" data-testid="calendar-grid">
                 {days.map((day, i) => {
                     const isToday = isSameDay(day, today);
-                    const isWeekendDay = isWeekend(day);
                     const dayKey = format(day, 'yyyy-MM-dd');
                     const dayEvents = eventsByDay.get(dayKey) || [];
 
                     return (
                         <DayColumn
-                            key={i}
+                            key={day.toISOString()}
+                            day={day}
                             events={dayEvents}
-                            isToday={isToday}
-                            isWeekend={isWeekendDay}
                             config={config}
+                            isToday={isToday}
                             onEventClick={handleEventClick}
                         />
                     )

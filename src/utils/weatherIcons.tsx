@@ -1,4 +1,3 @@
-import React from 'react';
 import {
     Cloud, CloudDrizzle, CloudFog, CloudLightning,
     CloudRain, CloudSnow, Sun
