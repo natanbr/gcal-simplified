@@ -13,11 +13,19 @@ const ALLOWED_INVOKE_CHANNELS = [
   'settings:save',
   'weather:get',
   'tides:get',
+  'update:check',
+  'update:download',
+  'update:install',
 ];
 
 const ALLOWED_ON_CHANNELS = [
   'auth:success',
   'main-process-message',
+  'update:available',
+  'update:not-available',
+  'update:download-progress',
+  'update:downloaded',
+  'update:error',
 ];
 
 // --------- Expose some API to the Renderer process ---------

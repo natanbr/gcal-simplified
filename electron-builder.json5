@@ -31,4 +31,5 @@
     target: ["AppImage"],
     artifactName: "${productName}-Linux-${version}.${ext}",
   },
+  publish: ["github"],
 }

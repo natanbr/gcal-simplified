@@ -23,6 +23,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.7.3",
     "framer-motion": "^12.29.2",
     "googleapis": "^171.0.0",
     "lucide-react": "^0.563.0",
