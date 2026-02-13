@@ -18,7 +18,7 @@ test.describe('Day Header Enhancement', () => {
         await window.waitForTimeout(5000); // Wait for data to fetch
 
         // check if user is on login screen, if so skip
-        const loginButton = window.locator('button:has-text("Sign in with Google")');
+        const loginButton = window.locator('[data-testid="login-button"]');
         if (await loginButton.isVisible()) {
             console.log('Skipping test as user is on Login Screen');
             await electronApp.close();
@@ -26,7 +26,7 @@ test.describe('Day Header Enhancement', () => {
         }
 
         // 1. Verify Full Day Names (expected: Sunday, Monday, etc.)
-        const dayHeaderTexts = await window.locator('.grid-cols-7 .uppercase.tracking-widest').allTextContents();
+        const dayHeaderTexts = await window.locator('[data-testid="day-header-name"]').allTextContents();
         console.log('Day Header Texts found:', dayHeaderTexts);
 
         expect(dayHeaderTexts.length).toBe(7);
@@ -40,7 +40,7 @@ test.describe('Day Header Enhancement', () => {
 
         // 3. Verify Temperature range
         // We expect something like "10° - 15°" or "10-15°"
-        const tempRangeLocator = window.locator('.grid-cols-7 .font-mono');
+        const tempRangeLocator = window.locator('[data-testid="day-header-temp-range"]');
         const tempRangeTexts = await tempRangeLocator.allTextContents();
         console.log('Temp Range Texts found:', tempRangeTexts);
         // If weather is available, we expect 7 temperature ranges (one for each day)

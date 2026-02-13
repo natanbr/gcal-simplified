@@ -53,7 +53,10 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
     }, [standardEvents, config.activeHoursStart, config.activeHoursEnd]);
 
     return (
-        <div className={`flex flex-col h-full relative ${isToday ? 'bg-family-cyan/[0.05] dark:bg-family-cyan/[0.03]' : isWeekendDay ? 'bg-family-orange/[0.05] dark:bg-family-orange/[0.03]' : ''}`}>
+        <div
+            className={`flex flex-col h-full relative ${isToday ? 'bg-family-cyan/[0.05] dark:bg-family-cyan/[0.03]' : isWeekendDay ? 'bg-family-orange/[0.05] dark:bg-family-orange/[0.03]' : ''}`}
+            data-testid="day-column"
+        >
              {/* Before Bucket content */}
              <div className="h-16 flex-shrink-0 border-b border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
                  <div className="flex gap-0.5">

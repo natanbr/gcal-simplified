@@ -229,6 +229,7 @@ export const Dashboard: React.FC = () => {
                 onClick={() => setShowSettings(true)}
                 className="p-3 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-500 hover:text-black dark:hover:text-white transition-colors"
                 title="Settings"
+                data-testid="settings-button"
              >
                  <Settings size={20} />
              </button>
@@ -240,6 +241,7 @@ export const Dashboard: React.FC = () => {
              <button 
                 onClick={() => setShowTasks(!showTasks)}
                 className={`p-3 rounded-full transition-colors ${showTasks ? 'bg-zinc-200 dark:bg-zinc-800 text-black dark:text-white' : 'bg-transparent text-zinc-500 hover:text-black dark:hover:text-white'}`}
+                data-testid="tasks-toggle-button"
              >
                 {showTasks ? <X size={24} /> : <div className="relative">
                     <ListTodo size={24} />
@@ -270,22 +272,31 @@ export const Dashboard: React.FC = () => {
                              <div className="flex items-center justify-center gap-6">
                                  {/* Day and Date Column */}
                                  <div className="flex flex-col items-center">
-                                     <div className={`text-[15px] font-black uppercase tracking-widest mb-1 ${isToday ? 'text-family-cyan' : isWeekendDay ? 'text-family-orange' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                                     <div
+                                        className={`text-[15px] font-black uppercase tracking-widest mb-1 ${isToday ? 'text-family-cyan' : isWeekendDay ? 'text-family-orange' : 'text-zinc-400 dark:text-zinc-500'}`}
+                                        data-testid="day-header-name"
+                                     >
                                         {format(day, 'EEEE')}
                                      </div>
-                                     <div className={`text-4xl font-black transition-all ${isToday ? 'text-family-cyan' : isWeekendDay ? 'text-family-orange' : 'text-zinc-800 dark:text-zinc-200'}`}>
+                                     <div
+                                        className={`text-4xl font-black transition-all ${isToday ? 'text-family-cyan' : isWeekendDay ? 'text-family-orange' : 'text-zinc-800 dark:text-zinc-200'}`}
+                                        data-testid="day-header-number"
+                                     >
                                         {format(day, 'd')}
                                      </div>
                                  </div>
 
                                  {/* Weather Column - Only show for current week forecast */}
                                  {isCurrentWeek(weekOffset) && weather && weather.daily && weather.daily.weather_code && weather.daily.weather_code[i] !== undefined && (
-                                    <div className="flex flex-col items-center gap-1 translate-y-5">
+                                    <div className="flex flex-col items-center gap-1 translate-y-5" data-testid="weather-forecast-container">
                                         <div className="scale-150">
                                             {getWeatherIcon(weather.daily.weather_code[i])}
                                         </div>
                                         {weather.daily.temperature_2m_max && (
-                                            <div className="text-[13px] font-black text-blue-500/80 dark:text-blue-400/80 font-mono">
+                                            <div
+                                                className="text-[13px] font-black text-blue-500/80 dark:text-blue-400/80 font-mono"
+                                                data-testid="day-header-temp-range"
+                                            >
                                                 {Math.round(weather.daily.temperature_2m_max[i])}-{Math.round(weather.daily.temperature_2m_min[i])}
                                             </div>
                                         )}
@@ -328,7 +339,10 @@ export const Dashboard: React.FC = () => {
                              <div className="flex-1 flex flex-col min-h-0">
                                  {hours.map(hour => (
                                      <div key={hour} className="flex-1 relative border-b border-zinc-200/50 dark:border-zinc-800/30">
-                                         <span className="absolute -top-2 right-1 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono bg-white dark:bg-zinc-950 px-0.5">
+                                         <span
+                                            className="absolute -top-2 right-1 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono bg-white dark:bg-zinc-950 px-0.5"
+                                            data-testid="hour-label"
+                                         >
                                              {hour}
                                          </span>
                                      </div>
@@ -371,8 +385,12 @@ export const Dashboard: React.FC = () => {
             className="absolute bottom-0 left-0 right-0 h-1/3 bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-700 shadow-2xl z-50 flex flex-col"
           >
              <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-                <h2 className="text-2xl font-bold uppercase tracking-wide text-zinc-800 dark:text-white">Tasks ({tasks.length})</h2>
-                <button onClick={() => setShowTasks(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full">
+                <h2 className="text-2xl font-bold uppercase tracking-wide text-zinc-800 dark:text-white" data-testid="tasks-drawer-title">Tasks ({tasks.length})</h2>
+                <button
+                    onClick={() => setShowTasks(false)}
+                    className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full"
+                    data-testid="tasks-drawer-close-button"
+                >
                     <X className="text-zinc-500 dark:text-zinc-400" />
                 </button>
              </div>

@@ -44,6 +44,7 @@ export const LoginScreen: React.FC = () => {
                     transition={{ delay: 0.2 }}
                     onClick={handleLogin}
                     disabled={isLoading}
+                    data-testid="login-button"
                     className="group relative flex items-center gap-3 px-8 py-4 bg-white text-black rounded-xl font-bold text-lg hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isLoading ? (

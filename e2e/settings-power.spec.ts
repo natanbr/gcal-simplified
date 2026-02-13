@@ -20,43 +20,43 @@ test.describe('Settings - Display & Power', () => {
         await window.waitForTimeout(3000);
 
         // Check for Login Screen - skip if present
-        if (await window.locator('text=Sign in with Google').isVisible()) {
+        if (await window.locator('[data-testid="login-button"]').isVisible()) {
             console.log('Skipping Settings test - Login required');
             await electronApp.close();
             return;
         }
 
         // Open Settings
-        const settingsButton = window.locator('button[title="Settings"]');
+        const settingsButton = window.locator('[data-testid="settings-button"]');
         await expect(settingsButton).toBeVisible();
         await settingsButton.click();
 
         // Check for Display & Power Section
-        await expect(window.locator('text=Display & Power')).toBeVisible();
+        // We use the ID for the Configuration title to ensure modal is open
+        await expect(window.locator('[data-testid="settings-modal-title"]')).toBeVisible();
+        // Verify Sleep Schedule Section presence
+        await expect(window.locator('[data-testid="sleep-schedule-section"]')).toBeVisible();
 
         // Check Theme Mode buttons
-        await expect(window.locator('button:has-text("AUTO (Sun)")')).toBeVisible();
-        await expect(window.locator('button:has-text("MANUAL")')).toBeVisible();
+        await expect(window.locator('[data-testid="theme-auto-button"]')).toBeVisible();
+        await expect(window.locator('[data-testid="theme-manual-button"]')).toBeVisible();
 
-        // Check Sleep Schedule defaults (22 to 6)
-        // We look for inputs with these values. Note: value matching might need exact check.
-        // Or simply check existence of the section.
-        await expect(window.locator('text=Sleep Schedule')).toBeVisible();
-        // Use locator with value attribute check if possible, or just presence of number inputs
-        // Inputs might have dynamic ids or classes, but we can search by surrounding text
+        // Check Sleep Schedule inputs
+        await expect(window.locator('[data-testid="sleep-start-input"]')).toBeVisible();
+        await expect(window.locator('[data-testid="sleep-end-input"]')).toBeVisible();
 
         // Toggle Theme to Manual
-        await window.locator('button:has-text("MANUAL")').click();
+        await window.locator('[data-testid="theme-manual-button"]').click();
 
         // Verify Day Start/End inputs appear
-        await expect(window.locator('text=Day Start')).toBeVisible();
-        await expect(window.locator('text=Day End')).toBeVisible();
+        await expect(window.locator('[data-testid="manual-day-start-input"]')).toBeVisible();
+        await expect(window.locator('[data-testid="manual-day-end-input"]')).toBeVisible();
 
         // Save
-        await window.locator('button:has-text("Save Changes")').click();
+        await window.locator('[data-testid="save-settings-button"]').click();
 
         // Modal should close
-        await expect(window.locator('text=Display & Power')).not.toBeVisible();
+        await expect(window.locator('[data-testid="settings-modal-title"]')).not.toBeVisible();
 
         await electronApp.close();
     });

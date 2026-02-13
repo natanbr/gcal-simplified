@@ -43,8 +43,12 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose, title, 
                         className="fixed top-0 right-0 h-full w-[90%] max-w-2xl bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-700/50 shadow-2xl z-[101] flex flex-col text-zinc-900 dark:text-zinc-100 transition-colors duration-300"
                     >
                         <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md z-10 sticky top-0 transition-colors duration-300">
-                            <div className="text-2xl font-black text-zinc-900 dark:text-white">{title}</div>
-                            <button onClick={onClose} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-500 dark:text-zinc-400">
+                            <div className="text-2xl font-black text-zinc-900 dark:text-white" data-testid="drawer-title">{title}</div>
+                            <button
+                                onClick={onClose}
+                                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-500 dark:text-zinc-400"
+                                data-testid="close-drawer-button"
+                            >
                                 <X size={24} />
                             </button>
                         </div>

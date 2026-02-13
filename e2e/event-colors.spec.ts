@@ -18,7 +18,7 @@ test.describe('Event Color Mapping', () => {
         await window.waitForTimeout(3000);
 
         // Check for Login Screen
-        const loginButton = window.locator('button:has-text("Sign in with Google")');
+        const loginButton = window.locator('[data-testid="login-button"]');
         if (await loginButton.isVisible()) {
             console.log('User is on Login Screen. Skipping color tests as authentication is required.');
             await electronApp.close();

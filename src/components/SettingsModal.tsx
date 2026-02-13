@@ -80,7 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
             >
                 {/* Header */}
                 <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-900 transition-colors duration-300">
-                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">Configuration</h2>
+                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide" data-testid="settings-modal-title">Configuration</h2>
                     <button onClick={onClose} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white transition-colors">
                         <X size={24} />
                     </button>
@@ -191,12 +191,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                     <button
                                         onClick={() => setConfig(prev => ({ ...prev, themeMode: 'auto' }))}
                                         className={`flex-1 py-2 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${config.themeMode !== 'manual' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700'}`}
+                                        data-testid="theme-auto-button"
                                     >
                                         <Sun size={16} /> AUTO (Sun)
                                     </button>
                                     <button
                                         onClick={() => setConfig(prev => ({ ...prev, themeMode: 'manual' }))}
                                         className={`flex-1 py-2 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${config.themeMode === 'manual' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700'}`}
+                                        data-testid="theme-manual-button"
                                     >
                                         <RefreshCw size={16} /> MANUAL
                                     </button>
@@ -211,6 +213,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                                 value={config.manualDayStart ?? 7}
                                                 onChange={(e) => setConfig(prev => ({ ...prev, manualDayStart: parseInt(e.target.value) }))}
                                                 className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 w-20 text-center font-mono text-zinc-900 dark:text-white"
+                                                data-testid="manual-day-start-input"
                                             />
                                         </div>
                                         <div className="h-px flex-1 bg-zinc-300 dark:bg-zinc-700 mx-2" />
@@ -221,6 +224,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                                 value={config.manualDayEnd ?? 19}
                                                 onChange={(e) => setConfig(prev => ({ ...prev, manualDayEnd: parseInt(e.target.value) }))}
                                                 className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 w-20 text-center font-mono text-zinc-900 dark:text-white"
+                                                data-testid="manual-day-end-input"
                                             />
                                         </div>
                                     </div>
@@ -233,7 +237,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                             </div>
 
                             {/* Power Settings */}
-                            <div className="bg-zinc-50 dark:bg-zinc-950 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                            <div className="bg-zinc-50 dark:bg-zinc-950 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4" data-testid="sleep-schedule-section">
                                 <div className="flex justify-between items-center">
                                     <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2"><Power size={16} /> Sleep Schedule</h4>
                                     <button
@@ -253,6 +257,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                                 value={config.sleepStart ?? 22}
                                                 onChange={(e) => setConfig(prev => ({ ...prev, sleepStart: parseInt(e.target.value) }))}
                                                 className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 w-20 text-center font-mono text-zinc-900 dark:text-white"
+                                                data-testid="sleep-start-input"
                                             />
                                         </div>
                                         <div className="h-px flex-1 bg-zinc-300 dark:bg-zinc-700 mx-2" />
@@ -263,6 +268,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                                 value={config.sleepEnd ?? 6}
                                                 onChange={(e) => setConfig(prev => ({ ...prev, sleepEnd: parseInt(e.target.value) }))}
                                                 className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 w-20 text-center font-mono text-zinc-900 dark:text-white"
+                                                data-testid="sleep-end-input"
                                             />
                                         </div>
                                     </div>
@@ -283,6 +289,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                     <button 
                         onClick={handleSave} 
                         className="px-8 py-3 rounded-xl font-bold bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                        data-testid="save-settings-button"
                     >
                         <Save size={18} />
                         Save Changes

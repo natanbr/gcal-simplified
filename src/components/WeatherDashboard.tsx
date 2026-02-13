@@ -45,7 +45,7 @@ const WeatherPanel: React.FC<{ weather: WeatherData }> = ({ weather }) => {
                 </div>
             </div>
 
-            <div>
+            <div data-testid="hourly-forecast-section">
                 <h3 className="text-zinc-400 dark:text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Hourly Forecast</h3>
                 <div className="bg-zinc-50 dark:bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700/50">
                      <table className="w-full text-left text-sm">
@@ -331,7 +331,7 @@ export const TidesPanel: React.FC<{
             {/* Content (Disabled/Blurred when loading if desired, or just overlay) */}
             <div className={`space-y-6 transition-opacity duration-300 ${loading ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
             {/* Beginner Guide */}
-            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">
+            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl" data-testid="tides-guide">
                 <div className="flex items-center gap-2 mb-2">
                     <Info size={16} className="text-blue-500 dark:text-blue-400" />
                     <h3 className="text-blue-600 dark:text-blue-200 font-bold uppercase text-xs tracking-widest">Diver's Guide</h3>
@@ -410,9 +410,9 @@ export const TidesPanel: React.FC<{
             )}
 
             {/* Combined Events Table */}
-            <div>
+            <div data-testid="marine-events-section">
                 <h3 className="text-zinc-500 dark:text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Marine Events (Next 48h)</h3>
-                <div className="bg-zinc-50 dark:bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700/50">
+                <div className="bg-zinc-50 dark:bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700/50" data-testid="tides-events-table">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-zinc-100 dark:bg-zinc-900/50 text-zinc-500 dark:text-zinc-500 text-xs uppercase font-bold text-center">
                             <tr>
@@ -530,6 +530,7 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
                 <button 
                     onClick={() => setWeatherOpen(true)}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all border border-zinc-200 dark:border-zinc-700/50 shadow-lg group"
+                    data-testid="weather-button"
                 >
                     {getWeatherIcon(weather.current.weatherCode)}
                     <span className="text-sm font-black text-zinc-900 dark:text-zinc-100 group-hover:text-black dark:group-hover:text-white">
@@ -542,6 +543,7 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
                         setTidesOpen(true);
                     }}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all border border-zinc-200 dark:border-zinc-700/50 shadow-lg group"
+                    data-testid="tides-button"
                 >
                     <Anchor className="text-blue-500 dark:text-blue-400" size={16} />
                     <span className="text-sm font-black text-zinc-900 dark:text-zinc-100 group-hover:text-black dark:group-hover:text-white">
