@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
@@ -11,6 +11,7 @@ interface EventCardProps {
   event: AppEvent;
   className?: string;
   onClick?: () => void;
+  onEventClick?: (event: AppEvent) => void;
 }
 
 import { getEventColorStyles } from '../utils/colorMapping';
@@ -38,7 +39,7 @@ const getEventIcon = (title: string, description?: string) => {
   return null;
 };
 
-export const EventCard: React.FC<EventCardProps> = ({ event, className, onClick }) => {
+export const EventCard: React.FC<EventCardProps> = memo(({ event, className, onClick, onEventClick }) => {
   const colorStyles = useMemo(
     () => getEventColorStyles(event.title, event.description, event.colorId, event.color),
     [event.title, event.description, event.colorId, event.color]
@@ -52,6 +53,16 @@ export const EventCard: React.FC<EventCardProps> = ({ event, className, onClick 
   
   // For very short events (< 30 min), use minimal padding and compact layout
   const isShortEvent = durationMinutes < 30;
+
+  const handleClick = useCallback(() => {
+      // Prioritize the new handler which passes the event object
+      if (onEventClick) {
+          onEventClick(event);
+      } else if (onClick) {
+          // Fallback for legacy usage (tests etc)
+          onClick();
+      }
+  }, [onEventClick, onClick, event]);
   
   return (
     <motion.div
@@ -61,10 +72,10 @@ export const EventCard: React.FC<EventCardProps> = ({ event, className, onClick 
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.98 }}
-      onClick={onClick}
+      onClick={handleClick}
       className={clsx(
         'w-full rounded-md shadow-sm border-l-[3px] text-sm overflow-hidden leading-tight transition-shadow hover:shadow-md',
-        onClick && 'cursor-pointer',
+        (onClick || onEventClick) && 'cursor-pointer',
         isShortEvent ? 'p-0' : 'p-1',
         colorStyles.className,
         className
@@ -104,4 +115,4 @@ export const EventCard: React.FC<EventCardProps> = ({ event, className, onClick 
       )}
     </motion.div>
   );
-};
+});
