@@ -11,6 +11,7 @@ import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
 import { MARINE_LOCATIONS } from '../utils/marineLocations';
 import { useTheme } from '../hooks/useTheme';
+import { UpdateNotification } from './UpdateNotification';
 
 const DAYS_TO_SHOW = 7;
 
@@ -218,6 +219,8 @@ export const Dashboard: React.FC = () => {
                   }}
                 />
              )}
+
+             <UpdateNotification />
 
              {loading && <RefreshCw size={16} className="animate-spin text-zinc-600" />}
              {error && <span className="text-red-500 text-xs font-bold">{error}</span>}

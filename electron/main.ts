@@ -4,6 +4,7 @@ import 'dotenv/config'
 // import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { autoUpdater } from 'electron-updater'
 import { authService } from './auth'
 import { apiService } from './api'
 import { weatherService } from './weather'
@@ -141,8 +142,49 @@ app.whenReady().then(() => {
     return await weatherService.getTides(tideStation, currentStation, lat, lng);
   });
 
+  // Update Handlers
+  ipcMain.handle('update:check', () => {
+    return autoUpdater.checkForUpdates();
+  });
+
+  ipcMain.handle('update:download', () => {
+    return autoUpdater.downloadUpdate();
+  });
+
+  ipcMain.handle('update:install', () => {
+    return autoUpdater.quitAndInstall();
+  });
+
   // Power Management Loop
   setInterval(checkPowerPolicy, 60 * 1000); // Check every minute
+
+  // Auto Updater
+  autoUpdater.autoDownload = false;
+
+  autoUpdater.on('update-available', (info) => {
+    win?.webContents.send('update:available', info);
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    win?.webContents.send('update:not-available', info);
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    win?.webContents.send('update:download-progress', progressObj);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    win?.webContents.send('update:downloaded', info);
+  });
+
+  autoUpdater.on('error', (err) => {
+    win?.webContents.send('update:error', err);
+  });
+
+  // Initial Check
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(err => console.log('Update check failed:', err));
+  }, 5000);
 })
 
 // Power Management Logic
