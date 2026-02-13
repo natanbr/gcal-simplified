@@ -46,23 +46,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
         }
     };
 
-    const toggleCalendar = (id: string) => {
+    const toggleId = (key: 'calendarIds' | 'taskListIds', id: string) => {
         setConfig(prev => {
-            const exists = prev.calendarIds.includes(id);
-            const newIds = exists 
-                ? prev.calendarIds.filter(c => c !== id)
-                : [...prev.calendarIds, id];
-            return { ...prev, calendarIds: newIds };
-        });
-    };
-
-    const toggleTaskList = (id: string) => {
-        setConfig(prev => {
-            const exists = prev.taskListIds.includes(id);
-            const newIds = exists 
-                ? prev.taskListIds.filter(t => t !== id)
-                : [...prev.taskListIds, id];
-            return { ...prev, taskListIds: newIds };
+            const currentIds = prev[key];
+            const newIds = currentIds.includes(id)
+                ? currentIds.filter(item => item !== id)
+                : [...currentIds, id];
+            return { ...prev, [key]: newIds };
         });
     };
     
@@ -99,7 +89,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                 return (
                                     <div 
                                         key={cal.id} 
-                                        onClick={() => toggleCalendar(cal.id)}
+                                        onClick={() => toggleId('calendarIds', cal.id)}
                                         className={`p-4 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${isChecked ? 'bg-blue-500/10 border-blue-500/50' : 'bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900'}`}
                                     >
                                         <div className={`w-5 h-5 rounded border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-zinc-400 dark:border-zinc-600'}`}>
@@ -126,7 +116,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                  return (
                                     <div 
                                         key={list.id} 
-                                        onClick={() => toggleTaskList(list.id)}
+                                        onClick={() => toggleId('taskListIds', list.id)}
                                         className={`p-4 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${isChecked ? 'bg-green-500/10 border-green-500/50' : 'bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900'}`}
                                     >
                                         <div className={`w-5 h-5 rounded border flex items-center justify-center ${isChecked ? 'bg-green-500 border-green-500' : 'border-zinc-400 dark:border-zinc-600'}`}>
