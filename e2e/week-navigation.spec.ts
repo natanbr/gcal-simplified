@@ -30,7 +30,7 @@ test.describe('Week Navigation', () => {
         await window.waitForLoadState('domcontentloaded');
 
         // Check if we are at login screen
-        const loginButton = window.locator('button:has-text("Sign in with Google")');
+        const loginButton = window.locator('[data-testid="login-button"]');
         const isLoginVisible = await loginButton.isVisible().catch(() => false);
         if (isLoginVisible) {
             console.warn('Authentication required for E2E tests. Skipping...');
@@ -56,8 +56,8 @@ test.describe('Week Navigation', () => {
     test('should display current week by default (starting today)', async () => {
         const today = new Date();
         // Check that the first day column shows Today
-        const firstDayHeader = window.locator('.grid-cols-7 > div').first();
-        await expect(firstDayHeader).toContainText(format(today, 'd'), { timeout: 10000 });
+        const firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
+        await expect(firstDayHeader).toHaveText(format(today, 'd'), { timeout: 10000 });
     });
 
     test('should show next week button', async () => {
@@ -88,8 +88,8 @@ test.describe('Week Navigation', () => {
         await waitForSync();
 
         // Check that the first day column now shows next Monday
-        const firstDayHeader = window.locator('.grid-cols-7 > div').first();
-        await expect(firstDayHeader).toContainText(format(nextMonday, 'd'), { timeout: 10000 });
+        const firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
+        await expect(firstDayHeader).toHaveText(format(nextMonday, 'd'), { timeout: 10000 });
     });
 
     test('should navigate back to current week when today button is clicked', async () => {
@@ -107,8 +107,8 @@ test.describe('Week Navigation', () => {
         await waitForSync();
 
         // Check that we're back to current week (starting with today)
-        const firstDayHeader = window.locator('.grid-cols-7 > div').first();
-        await expect(firstDayHeader).toContainText(format(today, 'd'), { timeout: 10000 });
+        const firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
+        await expect(firstDayHeader).toHaveText(format(today, 'd'), { timeout: 10000 });
     });
 
     test('should disable previous week button when at current week', async () => {
@@ -137,15 +137,15 @@ test.describe('Week Navigation', () => {
         await nextWeekButton.click();
         await waitForSync();
 
-        let firstDayHeader = window.locator('.grid-cols-7 > div').first();
-        await expect(firstDayHeader).toContainText(format(nextNextMonday, 'd'));
+        let firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
+        await expect(firstDayHeader).toHaveText(format(nextNextMonday, 'd'));
 
         const prevWeekButton = window.getByTestId('prev-week-button');
         await prevWeekButton.click();
         await waitForSync();
 
-        firstDayHeader = window.locator('.grid-cols-7 > div').first();
-        await expect(firstDayHeader).toContainText(format(nextMonday, 'd'), { timeout: 10000 });
+        firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
+        await expect(firstDayHeader).toHaveText(format(nextMonday, 'd'), { timeout: 10000 });
     });
 
     test('should not show weather forecast for future weeks', async () => {
@@ -153,7 +153,7 @@ test.describe('Week Navigation', () => {
         await nextWeekButton.click();
         await waitForSync();
 
-        const weatherContainer = window.locator('.grid-cols-7 > div .mt-2.scale-75');
+        const weatherContainer = window.locator('[data-testid="weather-forecast-container"]');
         await expect(weatherContainer).not.toBeVisible();
     });
 
@@ -169,7 +169,7 @@ test.describe('Week Navigation', () => {
         await waitForSync();
 
         // Find Monday column (first column in next week view)
-        const firstDayHeaderNumber = window.locator('.grid-cols-7 > div:first-child .text-3xl');
+        const firstDayHeaderNumber = window.locator('[data-testid="day-header-number"]').first();
         await expect(firstDayHeaderNumber).toHaveText(nextMondayDay);
 
         // If it's not today, it should NOT have bg-family-cyan

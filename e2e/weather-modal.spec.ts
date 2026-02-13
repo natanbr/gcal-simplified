@@ -28,7 +28,7 @@ test.describe('Weather & Tides Drawers Test', () => {
 
         // Check auth
         console.log('Checking authentication...');
-        const loginButton = window.locator('button:has-text("Sign in with Google")');
+        const loginButton = window.locator('[data-testid="login-button"]');
         const isLoginVisible = await loginButton.isVisible().catch(() => false);
         console.log('Login button visible:', isLoginVisible);
 
@@ -40,44 +40,44 @@ test.describe('Weather & Tides Drawers Test', () => {
         // --- Weather Drawer Test ---
         // --- Weather Drawer Test ---
         console.log('Looking for Weather button (Temperature)...');
-        // Button now shows "XX°C", so we look for matching pattern or icon
-        const weatherBtn = window.locator('button', { hasText: /°C/ }).first();
+        const weatherBtn = window.locator('[data-testid="weather-button"]');
         await test.expect(weatherBtn).toBeVisible({ timeout: 30000 });
         console.log('Clicking Weather button...');
         await weatherBtn.click();
 
         console.log('Waiting for Weather Forecast drawer...');
-        const weatherTitle = window.locator('text=Weather Forecast');
+        const weatherTitle = window.locator('[data-testid="drawer-title"]', { hasText: 'Weather Forecast' });
         await test.expect(weatherTitle).toBeVisible({ timeout: 15000 });
         console.log('Weather Drawer Title Found/Visible');
 
         // Check content
-        const hourlyText = window.locator('text=Hourly Forecast');
+        const hourlyText = window.locator('[data-testid="hourly-forecast-section"]');
         await test.expect(hourlyText).toBeVisible();
 
         console.log('Closing Weather Drawer...');
         // Close Weather Drawer (click X button)
-        await window.locator('button:has(svg.lucide-x)').first().click();
+        await window.locator('[data-testid="close-drawer-button"]').click();
         await test.expect(weatherTitle).not.toBeVisible();
 
         // --- Tides Drawer Test ---
         console.log('Looking for Tides button...');
-        const tidesBtn = window.locator('button:has-text("Tides")');
+        const tidesBtn = window.locator('[data-testid="tides-button"]');
         await test.expect(tidesBtn).toBeVisible();
         console.log('Clicking Tides...');
         await tidesBtn.click();
 
         console.log('Waiting for Marine Conditions drawer...');
-        const tidesTitle = window.locator('text=Marine Conditions');
+        const tidesTitle = window.locator('[data-testid="drawer-title"]', { hasText: 'Marine Conditions' });
         await test.expect(tidesTitle).toBeVisible();
 
-        // Check content (Verdict, Swell, etc)
-        await test.expect(window.locator('text=Verdict')).toBeVisible();
-        await test.expect(window.locator('text=Swell')).toBeVisible();
+        // Check content (Diver's Guide which contains Verdict/Conditions info)
+        await test.expect(window.locator('[data-testid="tides-guide"]')).toBeVisible();
+        // Check for Swell in the events table headers
+        await test.expect(window.locator('[data-testid="tides-events-table"]')).toContainText('Swell');
 
         console.log('Closing Tides Drawer...');
         // Close Tides Drawer
-        await window.locator('button:has(svg.lucide-x)').last().click();
+        await window.locator('[data-testid="close-drawer-button"]').click();
 
         await electronApp.close();
     });
