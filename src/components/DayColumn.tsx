@@ -62,7 +62,7 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
                  <div className="flex gap-0.5">
                     {beforeGroups.map((group, gIdx) => (
                         <div key={`before-${gIdx}`} className="flex-1 min-w-0">
-                            {group.map(event => <div key={event.id}><EventCard event={event} onClick={() => onEventClick(event)} /></div>)}
+                            {group.map(event => <div key={event.id}><EventCard event={event} onEventClick={onEventClick} /></div>)}
                         </div>
                     ))}
                  </div>
@@ -115,7 +115,7 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
                                             <EventCard
                                                 event={event}
                                                 className="h-full shadow-md"
-                                                onClick={() => onEventClick(event)}
+                                                onEventClick={onEventClick}
                                             />
                                         </div>
                                     </div>
@@ -131,7 +131,7 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
                  <div className="flex gap-0.5">
                     {afterGroups.map((group, gIdx) => (
                         <div key={`after-${gIdx}`} className="flex-1 min-w-0">
-                            {group.map(event => <div key={event.id}><EventCard event={event} onClick={() => onEventClick(event)} /></div>)}
+                            {group.map(event => <div key={event.id}><EventCard event={event} onEventClick={onEventClick} /></div>)}
                         </div>
                     ))}
                  </div>
