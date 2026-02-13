@@ -2,9 +2,9 @@ import { shell } from 'electron';
 import { google } from 'googleapis';
 import Store from 'electron-store';
 import http from 'http';
-import url from 'url';
 import { AddressInfo } from 'net';
 import { OAuth2Client, Credentials } from 'google-auth-library';
+import crypto from 'node:crypto';
 
 interface AuthStore {
     tokens?: Credentials;
@@ -46,19 +46,52 @@ export class AuthService {
 
     async startAuth(): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Generate a secure random state token for CSRF protection
+            const state = crypto.randomBytes(32).toString('hex');
             let redirectUri = '';
 
             // Spin up local server to catch callback
             const server = http.createServer(async (req, res) => {
                 try {
-                    if (!req.url) return;
-                    const queryObject = url.parse(req.url, true).query;
-                    const { code } = queryObject;
+                    if (!req.url) {
+                        res.end();
+                        return;
+                    }
+
+                    const requestUrl = new URL(req.url, 'http://127.0.0.1');
+
+                    // Ignore favicon and other noise - only handle the callback path
+                    if (requestUrl.pathname !== '/callback') {
+                        res.writeHead(404);
+                        res.end('Not found');
+                        return;
+                    }
+
+                    const code = requestUrl.searchParams.get('code');
+                    const returnedState = requestUrl.searchParams.get('state');
+                    const error = requestUrl.searchParams.get('error');
+
+                    if (error) {
+                        res.end('Authentication failed: ' + error);
+                        reject(new Error(error));
+                        server.close();
+                        return;
+                    }
+
+                    // Validate state parameter to prevent CSRF
+                    if (!returnedState || returnedState !== state) {
+                        console.error('State mismatch in OAuth callback');
+                        res.writeHead(403);
+                        res.end('Authentication failed: Invalid state parameter.');
+                        reject(new Error('Invalid state parameter'));
+                        server.close();
+                        return;
+                    }
 
                     if (code) {
                         // Exchange code for tokens
                         const { tokens } = await this.oauth2Client.getToken({
-                            code: code as string,
+                            code: code,
                             redirect_uri: redirectUri
                         });
                         this.oauth2Client.setCredentials(tokens);
@@ -69,11 +102,11 @@ export class AuthService {
                         // Notify via IPC (we'll assume the caller handles the IPC reply)
                         // Or better, we resolve the promise and the main process sends the event
                         resolve();
+                        server.close();
                     }
                 } catch (e) {
                     reject(e);
                     res.end('Authentication failed.');
-                } finally {
                     server.close();
                 }
             });
@@ -89,7 +122,8 @@ export class AuthService {
                     const authUrl = this.oauth2Client.generateAuthUrl({
                         access_type: 'offline', // Crucial for refresh token
                         scope: SCOPES,
-                        redirect_uri: redirectUri
+                        redirect_uri: redirectUri,
+                        state: state // Include state parameter
                     });
 
                     // Open in System Browser
