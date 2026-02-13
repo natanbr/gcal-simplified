@@ -138,7 +138,7 @@ export const UpdateNotification: React.FC = () => {
                         <Download size={16} />
                         <div className="flex flex-col items-start leading-none gap-0.5">
                             <span className="text-[9px] font-bold opacity-80 uppercase tracking-widest">Update</span>
-                            <span className="text-xs font-black uppercase tracking-widest">v{updateAvailable.version}</span>
+                            <span className="text-xs font-black uppercase tracking-widest">v{updateAvailable?.version}</span>
                         </div>
                     </button>
                 )}
