@@ -15,6 +15,7 @@ interface EventCardProps {
 }
 
 import { getEventColorStyles } from '../utils/colorMapping';
+import { areEventCardPropsEqual } from '../utils/eventUtils';
 
 // Icon mapping for specific event types
 const getEventIcon = (title: string, description?: string) => {
@@ -115,4 +116,4 @@ export const EventCard: React.FC<EventCardProps> = memo(({ event, className, onC
       )}
     </motion.div>
   );
-});
+}, areEventCardPropsEqual);
