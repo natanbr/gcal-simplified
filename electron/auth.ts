@@ -1,4 +1,4 @@
-import { shell } from 'electron';
+import { shell, safeStorage } from 'electron';
 import { google } from 'googleapis';
 import Store from 'electron-store';
 import http from 'http';
@@ -7,10 +7,11 @@ import { OAuth2Client, Credentials } from 'google-auth-library';
 import crypto from 'node:crypto';
 
 interface AuthStore {
-    tokens?: Credentials;
+    tokens?: Credentials | string;
+    isEncrypted?: boolean;
 }
 
-const store = new Store<AuthStore>();
+const store = new Store<AuthStore>({ name: 'auth-store' });
 
 const SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
@@ -29,10 +30,53 @@ export class AuthService {
         );
 
         // Load saved tokens
-        const tokens = store.get('tokens');
+        const tokens = this.loadTokens();
         if (tokens) {
             this.oauth2Client.setCredentials(tokens);
         }
+    }
+
+    private saveTokens(tokens: Credentials) {
+        if (safeStorage.isEncryptionAvailable()) {
+            try {
+                const json = JSON.stringify(tokens);
+                const buffer = safeStorage.encryptString(json);
+                store.set('tokens', buffer.toString('base64')); // Store as base64 string
+                store.set('isEncrypted', true);
+            } catch (error) {
+                console.error('Failed to encrypt tokens', error);
+                // Fallback to unencrypted
+                store.set('tokens', tokens);
+                store.set('isEncrypted', false);
+            }
+        } else {
+            // Fallback for systems without safeStorage support
+            store.set('tokens', tokens);
+            store.set('isEncrypted', false);
+        }
+    }
+
+    private loadTokens(): Credentials | null {
+        const stored = store.get('tokens');
+        const isEncrypted = store.get('isEncrypted');
+
+        if (!stored) return null;
+
+        if (isEncrypted && typeof stored === 'string' && safeStorage.isEncryptionAvailable()) {
+            try {
+                const buffer = Buffer.from(stored, 'base64');
+                const decrypted = safeStorage.decryptString(buffer);
+                return JSON.parse(decrypted);
+            } catch (e) {
+                console.error('Failed to decrypt tokens', e);
+                return null;
+            }
+        } else if (typeof stored === 'object') {
+            // Unencrypted object (legacy or fallback)
+            return stored as Credentials;
+        }
+
+        return null;
     }
 
     getAuthClient() {
@@ -40,7 +84,7 @@ export class AuthService {
     }
 
     isAuthenticated() {
-        const tokens = store.get('tokens');
+        const tokens = this.loadTokens();
         return !!tokens;
     }
 
@@ -95,7 +139,7 @@ export class AuthService {
                             redirect_uri: redirectUri
                         });
                         this.oauth2Client.setCredentials(tokens);
-                        store.set('tokens', tokens); // Persist
+                        this.saveTokens(tokens); // Persist securely
 
                         res.end('Authentication successful! You can close this window.');
 
@@ -143,6 +187,7 @@ export class AuthService {
 
     logout() {
         store.delete('tokens');
+        store.delete('isEncrypted');
         this.oauth2Client.setCredentials({});
     }
 }
