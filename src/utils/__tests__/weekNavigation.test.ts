@@ -1,53 +1,64 @@
 import { describe, it, expect } from 'vitest';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../weekNavigation';
-import { addDays, format } from 'date-fns';
+import { format } from 'date-fns';
 
 describe('weekNavigation', () => {
     describe('getWeekStartDate', () => {
-        it('should return Monday of the current week when offset is 0', () => {
-            // Wednesday, Feb 5, 2026
-            const wednesday = new Date(2026, 1, 4, 18, 41, 50); // Month is 0-indexed
-            const result = getWeekStartDate(wednesday, 0);
+        describe('today mode (default)', () => {
+            it('should return the reference date when offset is 0', () => {
+                // Wednesday, Feb 4, 2026
+                const wednesday = new Date(2026, 1, 4, 18, 41, 50);
+                const result = getWeekStartDate(wednesday, 0, 'today');
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-04');
+            });
 
-            // Should return Monday, Feb 2, 2026
-            expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-02');
-            expect(result.getDay()).toBe(1); // Monday
+            it('should return same day next week when offset is 1', () => {
+                const wednesday = new Date(2026, 1, 4, 18, 41, 50);
+                const result = getWeekStartDate(wednesday, 1, 'today');
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-11');
+            });
         });
 
-        it('should return Monday of next week when offset is 1', () => {
-            const wednesday = new Date(2026, 1, 4, 18, 41, 50);
-            const result = getWeekStartDate(wednesday, 1);
+        describe('monday mode', () => {
+            it('should return Monday of the current week when offset is 0', () => {
+                // Wednesday, Feb 4, 2026
+                const wednesday = new Date(2026, 1, 4, 18, 41, 50);
+                const result = getWeekStartDate(wednesday, 0, 'monday');
 
-            // Should return Monday, Feb 9, 2026
-            expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-09');
-            expect(result.getDay()).toBe(1); // Monday
+                // Should return Monday, Feb 2, 2026
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-02');
+                expect(result.getDay()).toBe(1); // Monday
+            });
+
+            it('should return Monday of next week when offset is 1', () => {
+                const wednesday = new Date(2026, 1, 4, 18, 41, 50);
+                const result = getWeekStartDate(wednesday, 1, 'monday');
+
+                // Should return Monday, Feb 9, 2026
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-09');
+                expect(result.getDay()).toBe(1); // Monday
+            });
         });
 
-        it('should return Monday of previous week when offset is -1', () => {
-            const wednesday = new Date(2026, 1, 4, 18, 41, 50);
-            const result = getWeekStartDate(wednesday, -1);
+        describe('sunday mode', () => {
+            it('should return Sunday of the current week when offset is 0', () => {
+                // Wednesday, Feb 4, 2026
+                const wednesday = new Date(2026, 1, 4, 18, 41, 50);
+                const result = getWeekStartDate(wednesday, 0, 'sunday');
 
-            // Should return Monday, Jan 26, 2026
-            expect(format(result, 'yyyy-MM-dd')).toBe('2026-01-26');
-            expect(result.getDay()).toBe(1); // Monday
-        });
+                // Should return Sunday, Feb 1, 2026
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-01');
+                expect(result.getDay()).toBe(0); // Sunday
+            });
 
-        it('should always return Monday even when reference date is Sunday', () => {
-            const sunday = new Date(2026, 1, 8); // Sunday, Feb 8, 2026
-            const result = getWeekStartDate(sunday, 0);
+            it('should return Sunday of next week when offset is 1', () => {
+                const wednesday = new Date(2026, 1, 4, 18, 41, 50);
+                const result = getWeekStartDate(wednesday, 1, 'sunday');
 
-            // Should return Monday, Feb 2, 2026 (start of the week containing this Sunday)
-            expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-02');
-            expect(result.getDay()).toBe(1); // Monday
-        });
-
-        it('should always return Monday even when reference date is Monday', () => {
-            const monday = new Date(2026, 1, 2); // Monday, Feb 2, 2026
-            const result = getWeekStartDate(monday, 0);
-
-            // Should return the same Monday
-            expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-02');
-            expect(result.getDay()).toBe(1); // Monday
+                // Should return Sunday, Feb 8, 2026
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-08');
+                expect(result.getDay()).toBe(0); // Sunday
+            });
         });
     });
 

@@ -40,7 +40,7 @@ export const Dashboard: React.FC = () => {
   useTheme(config, weather);
 
   const today = useMemo(() => new Date(), []);
-  const startDate = weekOffset === 0 ? today : getWeekStartDate(today, weekOffset);
+  const startDate = useMemo(() => getWeekStartDate(today, weekOffset, config.weekStartDay), [today, weekOffset, config.weekStartDay]);
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
 
   const eventsByDay = useMemo(() => {
@@ -55,7 +55,7 @@ export const Dashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-          const fetchStart = currentOffset === 0 ? today : getWeekStartDate(today, currentOffset);
+          const fetchStart = getWeekStartDate(today, currentOffset, config.weekStartDay);
           const fetchEnd = addDays(fetchStart, 8);
 
           setLoadingMessage('Fetching Events...');
@@ -89,7 +89,7 @@ export const Dashboard: React.FC = () => {
       } finally {
           setLoading(false);
       }
-  }, [weekOffset, today, currentLocation]);
+  }, [weekOffset, today, currentLocation, config.weekStartDay]);
 
   const fetchTides = useCallback(async () => {
     setIsTidesLoading(true);

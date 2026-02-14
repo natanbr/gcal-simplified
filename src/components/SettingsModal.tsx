@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Save, Check, RefreshCw, Moon, Sun, Power } from 'lucide-react';
+import { X, Save, Check, RefreshCw, Moon, Sun, Power, Calendar } from 'lucide-react';
 import { CalendarSource, TaskListSource, UserConfig } from '../types';
 
 interface SettingsModalProps {
@@ -132,6 +132,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                     </div>
 
                     
+                    {/* Calendar View Settings */}
+                    <div className="lg:col-span-2 border-t border-zinc-200 dark:border-zinc-800 pt-8 mt-4">
+                        <h3 className="text-lg font-bold text-family-cyan uppercase tracking-widest mb-4 flex items-center gap-2">
+                           <Calendar size={20} /> Calendar View
+                        </h3>
+                        <div className="bg-zinc-50 dark:bg-zinc-950 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                            <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Week Starts On</h4>
+                            <div className="flex gap-2">
+                                {(['today', 'sunday', 'monday'] as const).map((mode) => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setConfig(prev => ({ ...prev, weekStartDay: mode }))}
+                                        className={`flex-1 py-2 px-4 rounded-lg font-bold text-sm transition-all uppercase tracking-wider ${config.weekStartDay === mode || (mode === 'today' && !config.weekStartDay) ? 'bg-family-cyan text-white shadow-lg shadow-family-cyan/20' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700'}`}
+                                        data-testid={`week-start-${mode}-button`}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-zinc-500">
+                                {config.weekStartDay === 'sunday' ? "Calendar will start from Sunday of the current week." :
+                                 config.weekStartDay === 'monday' ? "Calendar will start from Monday of the current week." :
+                                 "Calendar will start from today and show the next 7 days."}
+                            </p>
+                        </div>
+                    </div>
+
                     {/* Active Hours Section */}
                     <div className="lg:col-span-2 border-t border-zinc-200 dark:border-zinc-800 pt-8 mt-4">
                         <h3 className="text-lg font-bold text-orange-500 dark:text-orange-400 uppercase tracking-widest mb-4">
