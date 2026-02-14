@@ -43,6 +43,8 @@ export interface UserConfig {
     sleepEnabled?: boolean;  // Default true
     sleepStart?: number;     // 0-23 (Default 22)
     sleepEnd?: number;       // 0-23 (Default 6)
+
+    weekStartDay?: 'sunday' | 'monday' | 'today';
 }
 
 export interface WeatherData {

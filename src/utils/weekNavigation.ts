@@ -1,11 +1,18 @@
 import { startOfWeek, addWeeks } from 'date-fns';
 
+export type WeekStartDay = 'sunday' | 'monday' | 'today';
+
 /**
- * Get the start date for a week view (always Monday)
+ * Get the start date for a week view
  */
-export function getWeekStartDate(referenceDate: Date, weekOffset: number): Date {
-    const monday = startOfWeek(referenceDate, { weekStartsOn: 1 }); // 1 = Monday
-    return addWeeks(monday, weekOffset);
+export function getWeekStartDate(referenceDate: Date, weekOffset: number, weekStartDay: WeekStartDay = 'today'): Date {
+    if (weekStartDay === 'today') {
+        return addWeeks(referenceDate, weekOffset);
+    }
+
+    const weekStartsOn = weekStartDay === 'sunday' ? 0 : 1;
+    const startOfThisWeek = startOfWeek(referenceDate, { weekStartsOn });
+    return addWeeks(startOfThisWeek, weekOffset);
 }
 
 /**

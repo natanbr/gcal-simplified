@@ -15,6 +15,8 @@ export interface UserConfig {
     sleepEnabled?: boolean;
     sleepStart?: number;     // 0-23
     sleepEnd?: number;       // 0-23
+
+    weekStartDay?: 'sunday' | 'monday' | 'today';
 }
 
 let configPath = '';
@@ -40,7 +42,8 @@ export const store = {
                     manualDayEnd: 19,
                     sleepEnabled: true,
                     sleepStart: 22,
-                    sleepEnd: 6
+                    sleepEnd: 6,
+                    weekStartDay: 'today'
                 };
             }
             const loaded = JSON.parse(fs.readFileSync(p, 'utf-8'));
@@ -55,7 +58,8 @@ export const store = {
                 manualDayEnd: loaded.manualDayEnd ?? 19,
                 sleepEnabled: loaded.sleepEnabled ?? true,
                 sleepStart: loaded.sleepStart ?? 22,
-                sleepEnd: loaded.sleepEnd ?? 6
+                sleepEnd: loaded.sleepEnd ?? 6,
+                weekStartDay: loaded.weekStartDay || 'today'
             };
         } catch (e) {
             console.error("Failed to read config", e);
@@ -67,7 +71,8 @@ export const store = {
                 manualDayEnd: 19,
                 sleepEnabled: true,
                 sleepStart: 22,
-                sleepEnd: 6
+                sleepEnd: 6,
+                weekStartDay: 'today'
             };
         }
     },
