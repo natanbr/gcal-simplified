@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "tsc": "tsc",
     "build": "tsc && vite build && electron-builder",
     "version-tag": "npm version patch && git push origin main --follow-tags",
     "release": "npm run version-tag && tsc && vite build && electron-builder --publish always",

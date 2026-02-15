@@ -28,8 +28,8 @@ export function areEventsEqual(prev: AppEvent, next: AppEvent): boolean {
  * shouldn't trigger re-render if the data hasn't changed.
  */
 export function areEventCardPropsEqual(
-    prev: { event: AppEvent; className?: string },
-    next: { event: AppEvent; className?: string }
+    prev: { event: AppEvent; className?: string; onClick?: () => void; onEventClick?: (event: AppEvent) => void },
+    next: { event: AppEvent; className?: string; onClick?: () => void; onEventClick?: (event: AppEvent) => void }
 ): boolean {
     // If className changes, we must re-render
     if (prev.className !== next.className) return false;
