@@ -4,6 +4,7 @@ import { EventCard } from './EventCard';
 import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { groupOverlappingEvents, calculateEventStyles } from '../utils/layout';
 import { isWeekend } from 'date-fns';
+import { areEventsEqual } from '../utils/eventUtils';
 
 interface DayColumnProps {
     day: Date;
@@ -11,6 +12,28 @@ interface DayColumnProps {
     config: UserConfig;
     isToday: boolean;
     onEventClick: (event: AppEvent) => void;
+}
+
+function areDayColumnPropsEqual(prev: DayColumnProps, next: DayColumnProps): boolean {
+    if (prev.day.getTime() !== next.day.getTime()) return false;
+    if (prev.isToday !== next.isToday) return false;
+
+    // Functions: Check for stability
+    if (prev.onEventClick !== next.onEventClick) return false;
+
+    // Config: Only care about active hours which affect layout
+    if (prev.config.activeHoursStart !== next.config.activeHoursStart) return false;
+    if (prev.config.activeHoursEnd !== next.config.activeHoursEnd) return false;
+
+    // Events: Deep comparison to avoid re-renders when data is refreshed but identical
+    if (prev.events.length !== next.events.length) return false;
+    for (let i = 0; i < prev.events.length; i++) {
+        if (!areEventsEqual(prev.events[i], next.events[i])) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, config, isToday, onEventClick }) => {
@@ -138,4 +161,4 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
              </div>
         </div>
     );
-});
+}, areDayColumnPropsEqual);
