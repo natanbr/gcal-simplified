@@ -54,13 +54,14 @@ export function areDayColumnPropsEqual(prev: DayColumnProps, next: DayColumnProp
     if (prev.config.activeHoursStart !== next.config.activeHoursStart) return false;
     if (prev.config.activeHoursEnd !== next.config.activeHoursEnd) return false;
 
-    // events deep compare
+    // Events array comparison
+    if (prev.events === next.events) return true;
     if (prev.events.length !== next.events.length) return false;
+
     for (let i = 0; i < prev.events.length; i++) {
         if (!areEventsEqual(prev.events[i], next.events[i])) {
             return false;
         }
     }
-
     return true;
 }
