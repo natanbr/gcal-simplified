@@ -95,8 +95,8 @@ describe('areEventCardPropsEqual', () => {
     });
 
     it('ignores onClick changes', () => {
-        const props1 = { event: baseEvent, onClick: () => {} };
-        const props2 = { event: baseEvent, onClick: () => {} };
+        const props1 = { event: baseEvent, onClick: () => { } };
+        const props2 = { event: baseEvent, onClick: () => { } };
         expect(areEventCardPropsEqual(props1, props2)).toBe(true);
     });
 });
@@ -118,7 +118,7 @@ describe('areDayColumnPropsEqual', () => {
         events: baseEvents,
         config: baseConfig,
         isToday: false,
-        onEventClick: () => {}
+        onEventClick: () => { }
     };
 
     it('returns true if all props are equal or deep equal', () => {
