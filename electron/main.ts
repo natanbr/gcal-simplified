@@ -144,15 +144,24 @@ app.whenReady().then(() => {
 
   // Update Handlers
   ipcMain.handle('update:check', () => {
+    console.log('Manual update check triggered');
     return autoUpdater.checkForUpdates();
   });
 
   ipcMain.handle('update:download', () => {
+    console.log('Update download triggered');
     return autoUpdater.downloadUpdate();
   });
 
   ipcMain.handle('update:install', () => {
+    console.log('Update installation triggered');
     return autoUpdater.quitAndInstall();
+  });
+
+  ipcMain.handle('app:info', () => {
+    return {
+      version: app.getVersion(),
+    };
   });
 
   // Power Management Loop
@@ -160,31 +169,44 @@ app.whenReady().then(() => {
 
   // Auto Updater
   autoUpdater.autoDownload = false;
+  autoUpdater.logger = console;
 
   autoUpdater.on('update-available', (info) => {
+    console.log('Update available:', info.version);
     win?.webContents.send('update:available', info);
   });
 
   autoUpdater.on('update-not-available', (info) => {
+    console.log('Update not available:', info.version);
     win?.webContents.send('update:not-available', info);
   });
 
   autoUpdater.on('download-progress', (progressObj) => {
+    console.log(`Download progress: ${progressObj.percent}%`);
     win?.webContents.send('update:download-progress', progressObj);
   });
 
   autoUpdater.on('update-downloaded', (info) => {
+    console.log('Update downloaded:', info.version);
     win?.webContents.send('update:downloaded', info);
   });
 
   autoUpdater.on('error', (err) => {
+    console.error('Update error:', err);
     win?.webContents.send('update:error', err);
   });
 
   // Initial Check
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(err => console.log('Update check failed:', err));
+    console.log('Initial update check');
+    autoUpdater.checkForUpdates().catch(err => console.error('Initial update check failed:', err));
   }, 5000);
+
+  // Periodic Check every 4 hours
+  setInterval(() => {
+    console.log('Periodic update check');
+    autoUpdater.checkForUpdates().catch(err => console.error('Periodic update check failed:', err));
+  }, 4 * 60 * 60 * 1000);
 })
 
 // Power Management Logic
