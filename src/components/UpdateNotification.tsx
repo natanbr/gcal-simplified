@@ -31,6 +31,12 @@ export const UpdateNotification: React.FC = () => {
             setUpdateAvailable(info as UpdateInfo);
         });
 
+        // Listen for update not available
+        const cleanupNotAvailable = window.ipcRenderer.on('update:not-available', () => {
+            console.log('Update not available');
+            setUpdateAvailable(null);
+        });
+
         // Listen for download progress
         const cleanupProgress = window.ipcRenderer.on('update:download-progress', (progress) => {
             const p = progress as ProgressInfo;
@@ -58,8 +64,16 @@ export const UpdateNotification: React.FC = () => {
             setTimeout(() => setError(null), 5000);
         });
 
+        // Trigger an immediate check when this component mounts
+        // This solves the race condition if the initial check in main.ts
+        // happened before the user logged in.
+        window.ipcRenderer.invoke('update:check').catch(err => {
+            console.error('Initial mount update check failed:', err);
+        });
+
         return () => {
             cleanupAvailable();
+            cleanupNotAvailable();
             cleanupProgress();
             cleanupDownloaded();
             cleanupError();
