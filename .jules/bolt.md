@@ -7,3 +7,8 @@
 
 **Learning:** When separating a `React.memo` comparison function into a utility file, the interface defined for the comparator's arguments must strictly match the component's full props interface (including callbacks like `onEventClick`), even if those props are ignored in the comparison logic.
 **Action:** Always verify that utility interfaces include all props required by the component when using `React.memo` to avoid "Property does not exist" type errors during build.
+
+## 2024-10-27 - [Unused Data Structures]
+
+**Learning:** Found that `partitionEventsIntoHourlySlots` was creating an object map of events keyed by hour, but the consumer (`DayColumn`) only needed a flat list of overlapping events. The map structure was pure overhead.
+**Action:** When optimizing, verify if complex return structures from utility functions are actually consumed in that format. Flattening to arrays can save significant O(N) operations and object allocations.
