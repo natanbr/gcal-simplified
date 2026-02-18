@@ -19,21 +19,32 @@ interface Station {
 
 export class WeatherService {
 
-    private validateCoordinates(lat: number, lng: number) {
+    private validateCoordinates(lat: unknown, lng: unknown): void {
         if (typeof lat !== 'number' || typeof lng !== 'number') {
-            throw new Error('Invalid coordinates: must be numbers');
+            throw new Error('Invalid coordinate type');
         }
-        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-            throw new Error('Invalid coordinates: out of range');
+        if (lat < -90 || lat > 90) {
+            throw new Error('Invalid latitude');
+        }
+        if (lng < -180 || lng > 180) {
+            throw new Error('Invalid longitude');
         }
     }
 
     async getWeather(lat: number = SOOKE_LAT, lng: number = SOOKE_LONG): Promise<WeatherData> {
         this.validateCoordinates(lat, lng);
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`;
+
+        const url = new URL('https://api.open-meteo.com/v1/forecast');
+        url.searchParams.append('latitude', lat.toString());
+        url.searchParams.append('longitude', lng.toString());
+        url.searchParams.append('current', 'temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m');
+        url.searchParams.append('hourly', 'temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m');
+        url.searchParams.append('daily', 'sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min');
+        url.searchParams.append('timezone', 'auto');
+        url.searchParams.append('forecast_days', '7');
 
         try {
-            const response = await fetch(url);
+            const response = await fetch(url.toString());
             if (!response.ok) throw new Error('Weather fetch failed');
             const data = await response.json();
 
@@ -110,7 +121,11 @@ export class WeatherService {
 
         // 3. Construct URLs
         // Open-Meteo for Waves/Temp only (plus currents as fallback)
-        const omUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&hourly=wave_height,wave_period,swell_wave_height,swell_wave_period,ocean_current_velocity,ocean_current_direction,sea_surface_temperature&timezone=America%2FVancouver`;
+        const omUrl = new URL('https://marine-api.open-meteo.com/v1/marine');
+        omUrl.searchParams.append('latitude', lat.toString());
+        omUrl.searchParams.append('longitude', lng.toString());
+        omUrl.searchParams.append('hourly', 'wave_height,wave_period,swell_wave_height,swell_wave_period,ocean_current_velocity,ocean_current_direction,sea_surface_temperature');
+        omUrl.searchParams.append('timezone', 'America/Vancouver');
 
         // CHS Tide URLs
         const chsTideUrl = tideStationId ? `${CHS_API_BASE}/stations/${tideStationId}/data?time-series-code=wlp&from=${start}&to=${end}` : '';
@@ -127,7 +142,7 @@ export class WeatherService {
 
         try {
             const promises = [
-                fetch(omUrl),
+                fetch(omUrl.toString()),
                 tideStationId ? fetch(chsTideUrl) : Promise.resolve({ ok: false } as Response),
                 tideStationId ? fetch(chsTideHiloUrl) : Promise.resolve({ ok: false } as Response)
             ];
@@ -322,4 +337,3 @@ export class WeatherService {
 }
 
 export const weatherService = new WeatherService();
-
