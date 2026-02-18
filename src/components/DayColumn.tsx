@@ -37,15 +37,8 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
         const afterGroups = groupOverlappingEvents(buckets.after);
 
         // Hourly events processing
-        const activeStart = startHour;
-        const activeEnd = endHour;
-
-        const hourlyEvents = standardEvents.filter(e => {
-             const s = e.start.getHours() + e.start.getMinutes()/60;
-             const end = e.end.getHours() + e.end.getMinutes()/60;
-             // Check overlap
-             return s < activeEnd && end > activeStart;
-        }).sort((a,b) => a.start.getTime() - b.start.getTime());
+        // Use the buckets directly instead of re-filtering standardEvents
+        const hourlyEvents = Object.values(buckets.hourly).flat();
 
         const hourlyGroups = groupOverlappingEvents(hourlyEvents);
 
