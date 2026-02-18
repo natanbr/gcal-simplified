@@ -15,7 +15,11 @@ import { UpdateNotification } from './UpdateNotification';
 
 const DAYS_TO_SHOW = 7;
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  onLogout?: () => void;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [showTasks, setShowTasks] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
@@ -416,7 +420,8 @@ export const Dashboard: React.FC = () => {
         {showSettings && (
             <SettingsModal 
                 onClose={() => setShowSettings(false)} 
-                onSave={fetchData} 
+                onSave={fetchData}
+                onLogout={onLogout}
             />
         )}
       </AnimatePresence>

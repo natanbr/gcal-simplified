@@ -33,59 +33,58 @@ test.describe('Week Display Customization', () => {
         // Wait a bit for the app to initialize
         await window.waitForTimeout(2000);
 
-        // Check if we are at login screen - if so, mock the auth check to bypass it
-        const isLoginVisible = await window.locator('[data-testid="login-button"]').isVisible();
-        if (isLoginVisible) {
-            console.log('Login screen detected, attempting to mock auth:check');
+        // Always mock IPC handlers for deterministic test behavior
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await electronApp.evaluate(({ ipcMain }: { ipcMain: any }) => {
+            // Mock auth:check to return true
+            ipcMain.removeHandler('auth:check');
+            ipcMain.handle('auth:check', () => true);
+
+            // Mock data handlers
+            ipcMain.removeHandler('data:events');
+            ipcMain.handle('data:events', () => []);
+
+            ipcMain.removeHandler('data:tasks');
+            ipcMain.handle('data:tasks', () => []);
+
+            ipcMain.removeHandler('settings:get');
+            let mockSettings = {
+                calendarIds: [],
+                taskListIds: [],
+                weekStartDay: 'today'
+            };
+            ipcMain.handle('settings:get', () => mockSettings);
+
+            ipcMain.removeHandler('settings:save');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await electronApp.evaluate(({ ipcMain }: { ipcMain: any }) => {
-                // Mock auth:check to return true in the main process
-                ipcMain.removeHandler('auth:check');
-                ipcMain.handle('auth:check', () => true);
-
-                // Mock data handlers to return empty or minimal data
-                ipcMain.removeHandler('data:events');
-                ipcMain.handle('data:events', () => []);
-
-                ipcMain.removeHandler('data:tasks');
-                ipcMain.handle('data:tasks', () => []);
-
-                ipcMain.removeHandler('settings:get');
-                let mockSettings = {
-                    calendarIds: [],
-                    taskListIds: [],
-                    weekStartDay: 'today'
-                };
-                ipcMain.handle('settings:get', () => mockSettings);
-
-                ipcMain.removeHandler('settings:save');
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ipcMain.handle('settings:save', (_: any, config: any) => {
-                    mockSettings = { ...mockSettings, ...config };
-                    return true;
-                });
-
-                ipcMain.removeHandler('data:calendars');
-                ipcMain.handle('data:calendars', () => []);
-                ipcMain.removeHandler('data:tasklists');
-                ipcMain.handle('data:tasklists', () => []);
-                ipcMain.removeHandler('weather:get');
-                ipcMain.handle('weather:get', () => ({
-                    current: { temperature: 20, weatherCode: 0, windSpeed: 5 },
-                    daily: {
-                        sunrise: [],
-                        sunset: [],
-                        weather_code: [0, 0, 0, 0, 0, 0, 0],
-                        temperature_2m_max: [20, 21, 22, 23, 24, 23, 22],
-                        temperature_2m_min: [10, 11, 12, 13, 14, 13, 12]
-                    }
-                }));
+            ipcMain.handle('settings:save', (_: any, config: any) => {
+                mockSettings = { ...mockSettings, ...config };
+                return true;
             });
 
-            // Reload window to trigger the now-mocked auth check
-            await window.reload();
-            await window.waitForLoadState('domcontentloaded');
-        }
+            ipcMain.removeHandler('data:calendars');
+            ipcMain.handle('data:calendars', () => []);
+            ipcMain.removeHandler('data:tasklists');
+            ipcMain.handle('data:tasklists', () => []);
+            ipcMain.removeHandler('weather:get');
+            ipcMain.handle('weather:get', () => ({
+                current: { temperature: 20, weatherCode: 0, windSpeed: 5 },
+                daily: {
+                    sunrise: [],
+                    sunset: [],
+                    weather_code: [0, 0, 0, 0, 0, 0, 0],
+                    temperature_2m_max: [20, 21, 22, 23, 24, 23, 22],
+                    temperature_2m_min: [10, 11, 12, 13, 14, 13, 12]
+                }
+            }));
+
+            ipcMain.removeHandler('tides:get');
+            ipcMain.handle('tides:get', () => null);
+        });
+
+        // Reload window to apply mocked handlers
+        await window.reload();
+        await window.waitForLoadState('domcontentloaded');
 
         // Wait for the calendar to load
         await window.waitForSelector('[data-testid="calendar-grid"]', { timeout: 30000 });
@@ -101,6 +100,11 @@ test.describe('Week Display Customization', () => {
         const settingsButton = window.getByTestId('settings-button');
         await settingsButton.click();
         await window.waitForSelector('[data-testid="settings-modal-title"]');
+        // Wait for settings data to load (loading overlay to disappear)
+        // The RefreshCw spinner inside the modal has absolute positioning
+        await window.waitForTimeout(500); // Brief wait for IPC calls to resolve
+        // Ensure the week-start buttons are available before returning
+        await window.getByTestId('week-start-today-button').waitFor({ state: 'attached', timeout: 10000 });
     };
 
     const saveSettings = async () => {

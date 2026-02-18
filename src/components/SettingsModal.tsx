@@ -1,43 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Save, Check, RefreshCw, Moon, Sun, Power, Calendar } from 'lucide-react';
+import { X, Save, Check, RefreshCw, Moon, Sun, Power, Calendar, LogOut } from 'lucide-react';
 import { CalendarSource, TaskListSource, UserConfig } from '../types';
 
 interface SettingsModalProps {
     onClose: () => void;
     onSave: () => void; // Trigger a refresh
+    onLogout?: () => void; // Trigger a logout and re-login
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, onLogout }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [appVersion, setAppVersion] = useState<string>('');
     const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [calendars, setCalendars] = useState<CalendarSource[]>([]);
     const [taskLists, setTaskLists] = useState<TaskListSource[]>([]);
     const [config, setConfig] = useState<UserConfig>({ calendarIds: [], taskListIds: [] });
+    const [isReconnecting, setIsReconnecting] = useState(false);
+
+    const loadData = async () => {
+        try {
+            setIsLoading(true);
+            setLoadError(null);
+            const [cals, lists, settings, appInfo] = await Promise.all([
+                window.ipcRenderer.invoke('data:calendars'),
+                window.ipcRenderer.invoke('data:tasklists'),
+                window.ipcRenderer.invoke('settings:get'),
+                window.ipcRenderer.invoke('app:info')
+            ]);
+            
+            setCalendars(cals as CalendarSource[]);
+            setTaskLists(lists as TaskListSource[]);
+            setConfig(settings as UserConfig);
+            setAppVersion((appInfo as { version: string }).version);
+        } catch (e) {
+            console.error("Failed to load settings data", e);
+            setLoadError(e instanceof Error ? e.message : 'Failed to load settings data. Check your connection and try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const loadData = async () => {
-            try {
-                setIsLoading(true);
-                const [cals, lists, settings, appInfo] = await Promise.all([
-                    window.ipcRenderer.invoke('data:calendars'),
-                    window.ipcRenderer.invoke('data:tasklists'),
-                    window.ipcRenderer.invoke('settings:get'),
-                    window.ipcRenderer.invoke('app:info')
-                ]);
-                
-                setCalendars(cals as CalendarSource[]);
-                setAppVersion((appInfo as { version: string }).version);
-                setTaskLists(lists as TaskListSource[]);
-                setConfig(settings as UserConfig);
-            } catch (e) {
-                console.error("Failed to load settings data", e);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+
         loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleSave = async () => {
@@ -94,6 +102,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-12 custom-scrollbar">
+                    {/* Error Banner */}
+                    {loadError && (
+                        <div className="lg:col-span-2 bg-red-500/10 border border-red-500/50 rounded-xl p-4 flex items-center justify-between" data-testid="settings-load-error">
+                            <span className="text-red-400 text-sm font-medium">{loadError}</span>
+                            <button 
+                                onClick={() => { setLoadError(null); loadData(); }}
+                                className="px-4 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 text-sm font-bold transition-colors flex items-center gap-2"
+                            >
+                                <RefreshCw size={14} /> Retry
+                            </button>
+                        </div>
+                    )}
+
                     {/* Calendars Section */}
                     <div className="flex flex-col gap-4">
                         <h3 className="text-lg font-bold text-blue-500 dark:text-blue-400 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-2">
@@ -313,6 +334,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                         </div>
                     </div>
 
+                    {/* Account Section */}
+                    <div className="lg:col-span-2 border-t border-zinc-200 dark:border-zinc-800 pt-8 mt-4">
+                        <h3 className="text-lg font-bold text-red-500 dark:text-red-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <LogOut size={20} /> Google Account
+                        </h3>
+                        <div className="bg-zinc-50 dark:bg-zinc-950 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-4">
+                            <div>
+                                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                    If your calendar data isn't loading or you see authentication errors, reconnect your Google account to get a fresh token.
+                                </p>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    setIsReconnecting(true);
+                                    try {
+                                        await window.ipcRenderer.invoke('auth:logout');
+                                        await window.ipcRenderer.invoke('auth:login');
+                                        // Reload settings data after re-auth
+                                        await loadData();
+                                    } catch (e) {
+                                        console.error('Reconnect failed', e);
+                                        // If login was cancelled/failed, trigger logout to show login screen
+                                        if (onLogout) onLogout();
+                                    } finally {
+                                        setIsReconnecting(false);
+                                    }
+                                }}
+                                disabled={isReconnecting}
+                                className="px-6 py-3 rounded-xl font-bold bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500/20 transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
+                                data-testid="reconnect-google-button"
+                            >
+                                {isReconnecting ? (
+                                    <><RefreshCw size={16} className="animate-spin" /> Reconnecting...</>
+                                ) : (
+                                    <><LogOut size={16} /> Reconnect Account</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
                     {/* About Section */}
                     <div className="lg:col-span-2 border-t border-zinc-200 dark:border-zinc-800 pt-8 mt-4 mb-8">
                         <h3 className="text-lg font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -334,6 +395,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                             </button>
                         </div>
                     </div>
+
                 </div>
 
                 {/* Footer */}

@@ -39,7 +39,7 @@ function App() {
 
   return (
     <>
-      {isAuthenticated ? <Dashboard /> : <LoginScreen />}
+      {isAuthenticated ? <Dashboard onLogout={() => setIsAuthenticated(false)} /> : <LoginScreen />}
     </>
   );
 }
