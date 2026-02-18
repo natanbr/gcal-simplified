@@ -10,6 +10,8 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave }) => {
     const [isLoading, setIsLoading] = useState(true);
+    const [appVersion, setAppVersion] = useState<string>('');
+    const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
     const [calendars, setCalendars] = useState<CalendarSource[]>([]);
     const [taskLists, setTaskLists] = useState<TaskListSource[]>([]);
     const [config, setConfig] = useState<UserConfig>({ calendarIds: [], taskListIds: [] });
@@ -18,13 +20,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
         const loadData = async () => {
             try {
                 setIsLoading(true);
-                const [cals, lists, settings] = await Promise.all([
+                const [cals, lists, settings, appInfo] = await Promise.all([
                     window.ipcRenderer.invoke('data:calendars'),
                     window.ipcRenderer.invoke('data:tasklists'),
-                    window.ipcRenderer.invoke('settings:get')
+                    window.ipcRenderer.invoke('settings:get'),
+                    window.ipcRenderer.invoke('app:info')
                 ]);
                 
                 setCalendars(cals as CalendarSource[]);
+                setAppVersion((appInfo as { version: string }).version);
                 setTaskLists(lists as TaskListSource[]);
                 setConfig(settings as UserConfig);
             } catch (e) {
@@ -43,6 +47,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
             onClose();
         } catch (e) {
             console.error("Failed to save settings", e);
+        }
+    };
+
+    const handleCheckUpdates = async () => {
+        setIsCheckingUpdates(true);
+        try {
+            await window.ipcRenderer.invoke('update:check');
+            // Give visual feedback for at least 2 seconds
+            setTimeout(() => setIsCheckingUpdates(false), 2000);
+        } catch (e) {
+            console.error("Manual update check failed", e);
+            setIsCheckingUpdates(false);
         }
     };
 
@@ -294,6 +310,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave })
                                     </p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* About Section */}
+                    <div className="lg:col-span-2 border-t border-zinc-200 dark:border-zinc-800 pt-8 mt-4 mb-8">
+                        <h3 className="text-lg font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                           <RefreshCw size={20} /> About
+                        </h3>
+                        <div className="bg-zinc-50 dark:bg-zinc-950 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-6">
+                            <div className="flex flex-col gap-1">
+                                <div className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Application Version</div>
+                                <div className="text-2xl font-black text-zinc-800 dark:text-zinc-200 font-mono">v{appVersion}</div>
+                            </div>
+
+                            <button
+                                onClick={handleCheckUpdates}
+                                disabled={isCheckingUpdates}
+                                className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isCheckingUpdates ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700'}`}
+                            >
+                                <RefreshCw size={18} className={isCheckingUpdates ? 'animate-spin' : ''} />
+                                {isCheckingUpdates ? 'Checking for updates...' : 'Check for Updates'}
+                            </button>
                         </div>
                     </div>
                 </div>

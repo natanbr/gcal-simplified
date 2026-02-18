@@ -19,7 +19,17 @@ interface Station {
 
 export class WeatherService {
 
+    private validateCoordinates(lat: number, lng: number) {
+        if (typeof lat !== 'number' || typeof lng !== 'number') {
+            throw new Error('Invalid coordinates: must be numbers');
+        }
+        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+            throw new Error('Invalid coordinates: out of range');
+        }
+    }
+
     async getWeather(lat: number = SOOKE_LAT, lng: number = SOOKE_LONG): Promise<WeatherData> {
+        this.validateCoordinates(lat, lng);
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`;
 
         try {
@@ -59,6 +69,8 @@ export class WeatherService {
     }
 
     async getTides(tideStationCode: string = '07020', currentStationCode: string = '07090', lat: number = SOOKE_LAT, lng: number = SOOKE_LONG): Promise<TideData> {
+        this.validateCoordinates(lat, lng);
+
         // 1. Define Time Range
         const now = new Date();
         const start = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();

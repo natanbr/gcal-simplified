@@ -13,6 +13,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'settings:save',
   'weather:get',
   'tides:get',
+  'app:info',
   'update:check',
   'update:download',
   'update:install',
