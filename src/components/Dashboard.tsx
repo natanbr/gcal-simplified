@@ -11,6 +11,7 @@ import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
 import { MARINE_LOCATIONS } from '../utils/marineLocations';
 import { useTheme } from '../hooks/useTheme';
+import { useCurrentDate } from '../hooks/useCurrentDate';
 import { UpdateNotification } from './UpdateNotification';
 
 const DAYS_TO_SHOW = 7;
@@ -43,7 +44,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   // Apply Theme Logic
   useTheme(config, weather);
 
-  const today = useMemo(() => new Date(), []);
+  const today = useCurrentDate();
   const startDate = useMemo(() => getWeekStartDate(today, weekOffset, config.weekStartDay), [today, weekOffset, config.weekStartDay]);
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
 
