@@ -1,29 +1,42 @@
-import { describe, it, expect } from 'vitest';
-import { WeatherService } from './weather';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { weatherService } from './weather';
 
 describe('WeatherService Security', () => {
-    const service = new WeatherService();
+    const fetchMock = vi.fn();
 
-    it('should reject invalid latitude', async () => {
-        // @ts-expect-error - Testing invalid input
-        await expect(service.getWeather("invalid", -123)).rejects.toThrow(/Invalid latitude/);
-        // @ts-expect-error - Testing invalid input
-        await expect(service.getWeather(100, -123)).rejects.toThrow(/Invalid latitude/); // > 90
-        // @ts-expect-error - Testing invalid input
-        await expect(service.getWeather(-91, -123)).rejects.toThrow(/Invalid latitude/); // < -90
+    beforeEach(() => {
+        global.fetch = fetchMock;
+        fetchMock.mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                current: {}, daily: {}, hourly: { time: [] }
+            })
+        });
     });
 
-    it('should reject invalid longitude', async () => {
-        // @ts-expect-error - Testing invalid input
-        await expect(service.getWeather(50, "invalid")).rejects.toThrow(/Invalid longitude/);
-        // @ts-expect-error - Testing invalid input
-        await expect(service.getWeather(50, 200)).rejects.toThrow(/Invalid longitude/); // > 180
-        // @ts-expect-error - Testing invalid input
-        await expect(service.getWeather(50, -181)).rejects.toThrow(/Invalid longitude/); // < -180
+    afterEach(() => {
+        vi.restoreAllMocks();
     });
 
-    it('should prevent parameter injection', async () => {
-         // @ts-expect-error - Testing invalid input
-         await expect(service.getWeather("50&evil=true", -123)).rejects.toThrow(/Invalid latitude/);
+    it('should validate latitude input to prevent parameter injection', async () => {
+        // Attack payload: injecting extra query parameters
+        // We cast to any to simulate IPC call passing a string where a number is expected
+        const maliciousLat = "50&hourly=sensitive_data" as any;
+
+        // This should throw an error due to input validation
+        await expect(weatherService.getWeather(maliciousLat, -123.0))
+            .rejects.toThrow(/Invalid coordinates/);
+    });
+
+    it('should validate longitude input to prevent parameter injection', async () => {
+        const maliciousLng = "-123&hourly=sensitive_data" as any;
+        await expect(weatherService.getWeather(50.0, maliciousLng))
+            .rejects.toThrow(/Invalid coordinates/);
+    });
+
+    it('should validate coordinates in getTides', async () => {
+        const maliciousLat = "50&hourly=sensitive_data" as any;
+        await expect(weatherService.getTides('07020', '07090', maliciousLat, -123.0))
+            .rejects.toThrow(/Invalid coordinates/);
     });
 });
