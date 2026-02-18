@@ -165,3 +165,15 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 ## Bug Fixes
 
 - **Monday Highlighting**: Fixed issue where Monday was incorrectly highlighted in future weeks. Highlighting is now strictly reserved for the actual "Today".
+
+## Changelog
+
+### 2026-02-18 Settings Modal Redesign
+
+- **New Layout**: Replaced long scroll list with a sidebar navigation layout.
+- **Categorization**: Settings are now grouped into:
+  - **Google Account**: Account connection status and actions.
+  - **General**: Calendar View, Active Hours, Display & Power, About.
+  - **Calendars**: Toggle visibility of specific Google Calendars.
+  - **Tasks**: Toggle visibility of specific Task Lists.
+- **UI/UX**: Improved navigation and accessibility with clear category icons and structured content.
