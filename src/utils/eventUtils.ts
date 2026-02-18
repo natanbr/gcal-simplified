@@ -1,4 +1,4 @@
-import { AppEvent } from '../types';
+import { AppEvent, UserConfig } from '../types';
 
 /**
  * deeply compares two AppEvent objects.
@@ -36,4 +36,31 @@ export function areEventCardPropsEqual(
 
     // Compare event data deeply
     return areEventsEqual(prev.event, next.event);
+}
+
+interface DayColumnProps {
+    day: Date;
+    events: AppEvent[];
+    config: UserConfig;
+    isToday: boolean;
+    onEventClick: (event: AppEvent) => void;
+}
+
+export function areDayColumnPropsEqual(prev: DayColumnProps, next: DayColumnProps): boolean {
+    if (prev.isToday !== next.isToday) return false;
+    if (prev.day.getTime() !== next.day.getTime()) return false;
+
+    // config deep compare for used properties
+    if (prev.config.activeHoursStart !== next.config.activeHoursStart) return false;
+    if (prev.config.activeHoursEnd !== next.config.activeHoursEnd) return false;
+
+    // events deep compare
+    if (prev.events.length !== next.events.length) return false;
+    for (let i = 0; i < prev.events.length; i++) {
+        if (!areEventsEqual(prev.events[i], next.events[i])) {
+            return false;
+        }
+    }
+
+    return true;
 }
