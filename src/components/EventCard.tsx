@@ -54,6 +54,7 @@ export const EventCard: React.FC<EventCardProps> = memo(({ event, className, onC
   
   // For very short events (< 30 min), use minimal padding and compact layout
   const isShortEvent = durationMinutes < 30;
+  const isLongEvent = durationMinutes >= 60;
 
   const handleClick = useCallback(() => {
       // Prioritize the new handler which passes the event object
@@ -101,8 +102,8 @@ export const EventCard: React.FC<EventCardProps> = memo(({ event, className, onC
       ) : (
         // Standard multi-row layout for longer events
         <div className="flex flex-col">
-          <div className="flex items-center justify-between gap-1 mb-0.5">
-            <span className="font-bold opacity-90 truncate">
+          <div className={clsx("flex justify-between gap-1 mb-0.5", isLongEvent ? "items-start" : "items-center")}>
+            <span className={clsx("font-bold opacity-90", isLongEvent ? "whitespace-normal" : "truncate")}>
                {event.title}
             </span>
             {icon}
