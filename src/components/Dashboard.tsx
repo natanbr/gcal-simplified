@@ -324,7 +324,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                      const endHour = config.activeHoursEnd ?? 21;
                                      // Filter out holidays first as they are shown above
                                      const standardEvents = dayEvents.filter(e => !e.isHoliday);
-                                     const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour);
+                                     const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour, day);
                                      
                                      const allDayEvents = buckets.allDay.sort((a, b) => {
                                          if (a.allDay && !b.allDay) return -1;

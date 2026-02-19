@@ -33,7 +33,7 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
         const endHour = config.activeHoursEnd ?? 21;
         const hours = Array.from({ length: endHour - startHour }, (_, idx) => startHour + idx);
 
-        const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour);
+        const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour, day);
 
         // Hourly events processing
         const hourlyEvents = buckets.hourly.sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -41,7 +41,7 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
         const hourlyGroups = groupOverlappingEvents(hourlyEvents);
 
         return { hourlyGroups, hours, startHour, endHour };
-    }, [standardEvents, config.activeHoursStart, config.activeHoursEnd]);
+    }, [standardEvents, config.activeHoursStart, config.activeHoursEnd, day]);
 
     return (
         <div

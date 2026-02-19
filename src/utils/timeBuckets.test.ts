@@ -95,4 +95,30 @@ describe('partitionEventsIntoHourlySlots', () => {
         expect(buckets.allDay[0].id).toBe('7');
         expect(buckets.hourly).toHaveLength(0);
     });
+
+    it('should use referenceDate for optimization when provided and produce same results', () => {
+        const start = new Date('2023-10-27T10:30:00');
+        const end = new Date('2023-10-27T11:30:00');
+        const event = createEvent('8', start, end);
+        const referenceDate = new Date('2023-10-27T00:00:00');
+
+        const buckets = partitionEventsIntoHourlySlots([event], 7, 21, referenceDate);
+
+        expect(buckets.hourly).toHaveLength(1);
+        expect(buckets.hourly[0].id).toBe('8');
+        expect(buckets.allDay).toHaveLength(0);
+    });
+
+    it('should correctly filter events outside active hours using referenceDate', () => {
+        const start = new Date('2023-10-27T05:00:00');
+        const end = new Date('2023-10-27T06:00:00');
+        const event = createEvent('9', start, end);
+        const referenceDate = new Date('2023-10-27T00:00:00');
+
+        const buckets = partitionEventsIntoHourlySlots([event], 7, 21, referenceDate);
+
+        expect(buckets.allDay).toHaveLength(1);
+        expect(buckets.allDay[0].id).toBe('9');
+        expect(buckets.hourly).toHaveLength(0);
+    });
 });
