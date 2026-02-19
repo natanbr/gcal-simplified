@@ -11,7 +11,7 @@ const createEvent = (id: string, start: Date, end: Date): AppEvent => ({
 });
 
 describe('partitionEventsIntoHourlySlots', () => {
-    it('should place events completely before active hours in the "before" bucket', () => {
+    it('should place events completely before active hours in the "allDay" bucket', () => {
         // Active hours 7-21
         const start = new Date('2023-10-27T05:00:00');
         const end = new Date('2023-10-27T06:00:00');
@@ -19,22 +19,20 @@ describe('partitionEventsIntoHourlySlots', () => {
 
         const buckets = partitionEventsIntoHourlySlots([event], 7, 21);
 
-        expect(buckets.before).toHaveLength(1);
-        expect(buckets.before[0].id).toBe('1');
-        expect(buckets.after).toHaveLength(0);
+        expect(buckets.allDay).toHaveLength(1);
+        expect(buckets.allDay[0].id).toBe('1');
         expect(buckets.hourly).toHaveLength(0);
     });
 
-    it('should place events completely after active hours in the "after" bucket', () => {
+    it('should place events completely after active hours in the "allDay" bucket', () => {
         const start = new Date('2023-10-27T22:00:00');
         const end = new Date('2023-10-27T23:00:00');
         const event = createEvent('2', start, end);
 
         const buckets = partitionEventsIntoHourlySlots([event], 7, 21);
 
-        expect(buckets.after).toHaveLength(1);
-        expect(buckets.after[0].id).toBe('2');
-        expect(buckets.before).toHaveLength(0);
+        expect(buckets.allDay).toHaveLength(1);
+        expect(buckets.allDay[0].id).toBe('2');
         expect(buckets.hourly).toHaveLength(0);
     });
 
@@ -47,8 +45,7 @@ describe('partitionEventsIntoHourlySlots', () => {
 
         expect(buckets.hourly).toHaveLength(1);
         expect(buckets.hourly[0].id).toBe('3');
-        expect(buckets.before).toHaveLength(0);
-        expect(buckets.after).toHaveLength(0);
+        expect(buckets.allDay).toHaveLength(0);
     });
 
     it('should handle events that overlap the start boundary (start before, end inside)', () => {
@@ -61,7 +58,7 @@ describe('partitionEventsIntoHourlySlots', () => {
 
         expect(buckets.hourly).toHaveLength(1);
         expect(buckets.hourly[0].id).toBe('4');
-        expect(buckets.before).toHaveLength(0);
+        expect(buckets.allDay).toHaveLength(0);
     });
 
     it('should handle events that overlap the end boundary (start inside, end after)', () => {
@@ -74,7 +71,7 @@ describe('partitionEventsIntoHourlySlots', () => {
 
         expect(buckets.hourly).toHaveLength(1);
         expect(buckets.hourly[0].id).toBe('5');
-        expect(buckets.after).toHaveLength(0);
+        expect(buckets.allDay).toHaveLength(0);
     });
 
     it('should default to active hours 7-21 if not specified', () => {
@@ -84,6 +81,18 @@ describe('partitionEventsIntoHourlySlots', () => {
 
         const buckets = partitionEventsIntoHourlySlots([event]);
 
-        expect(buckets.before).toHaveLength(1);
+        expect(buckets.allDay).toHaveLength(1);
+    });
+
+    it('should place explicit all-day events in the "allDay" bucket', () => {
+        const start = new Date('2023-10-27T00:00:00');
+        const end = new Date('2023-10-28T00:00:00');
+        const event = { ...createEvent('7', start, end), allDay: true };
+
+        const buckets = partitionEventsIntoHourlySlots([event], 7, 21);
+
+        expect(buckets.allDay).toHaveLength(1);
+        expect(buckets.allDay[0].id).toBe('7');
+        expect(buckets.hourly).toHaveLength(0);
     });
 });

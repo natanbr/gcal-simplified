@@ -21,9 +21,7 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
     // Filter standard events (non-holidays) for the layout
     const standardEvents = useMemo(() => events.filter(e => !e.isHoliday), [events]);
 
-    const {
-        beforeGroups,
-        afterGroups,
+        const {
         hourlyGroups,
         hours,
         startHour,
@@ -35,15 +33,12 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
 
         const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour);
 
-        const beforeGroups = groupOverlappingEvents(buckets.before);
-        const afterGroups = groupOverlappingEvents(buckets.after);
-
         // Hourly events processing
         const hourlyEvents = buckets.hourly.sort((a, b) => a.start.getTime() - b.start.getTime());
 
         const hourlyGroups = groupOverlappingEvents(hourlyEvents);
 
-        return { beforeGroups, afterGroups, hourlyGroups, hours, startHour, endHour };
+        return { hourlyGroups, hours, startHour, endHour };
     }, [standardEvents, config.activeHoursStart, config.activeHoursEnd]);
 
     return (
@@ -51,16 +46,7 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
             className={`flex flex-col h-full relative ${isToday ? 'bg-family-cyan/[0.05] dark:bg-family-cyan/[0.03]' : isWeekendDay ? 'bg-family-orange/[0.05] dark:bg-family-orange/[0.03]' : ''}`}
             data-testid="day-column"
         >
-             {/* Before Bucket content */}
-             <div className="h-16 flex-shrink-0 border-b border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
-                 <div className="flex gap-0.5">
-                    {beforeGroups.map((group, gIdx) => (
-                        <div key={`before-${gIdx}`} className="flex-1 min-w-0">
-                            {group.map(event => <div key={event.id}><EventCard event={event} onEventClick={onEventClick} /></div>)}
-                        </div>
-                    ))}
-                 </div>
-             </div>
+
 
              {/* Hourly Slots Content (Absolute) */}
              <div className="flex-1 relative flex flex-col min-h-0">
@@ -120,16 +106,7 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
                   </div>
              </div>
 
-             {/* After Bucket content */}
-             <div className="h-16 flex-shrink-0 border-t border-zinc-200/50 dark:border-zinc-800/50 overflow-y-auto no-scrollbar relative p-1">
-                 <div className="flex gap-0.5">
-                    {afterGroups.map((group, gIdx) => (
-                        <div key={`after-${gIdx}`} className="flex-1 min-w-0">
-                            {group.map(event => <div key={event.id}><EventCard event={event} onEventClick={onEventClick} /></div>)}
-                        </div>
-                    ))}
-                 </div>
-             </div>
+
         </div>
     );
 }, areDayColumnPropsEqual);

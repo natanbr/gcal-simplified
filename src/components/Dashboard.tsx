@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ListTodo, X, RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, AlignLeft } from 'lucide-react';
 import { SideDrawer } from './SideDrawer';
 import { DayColumn } from './DayColumn';
+import { EventCard } from './EventCard';
 import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
+import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { WeatherDashboard } from './WeatherDashboard';
 import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
@@ -13,6 +15,7 @@ import { MARINE_LOCATIONS } from '../utils/marineLocations';
 import { useTheme } from '../hooks/useTheme';
 import { useCurrentDate } from '../hooks/useCurrentDate';
 import { UpdateNotification } from './UpdateNotification';
+import { splitMultiDayEvents } from '../utils/eventProcessing';
 
 const DAYS_TO_SHOW = 7;
 
@@ -48,9 +51,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const startDate = useMemo(() => getWeekStartDate(today, weekOffset, config.weekStartDay), [today, weekOffset, config.weekStartDay]);
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
 
+  const processedEvents = useMemo(() => splitMultiDayEvents(events), [events]);
+
   const eventsByDay = useMemo(() => {
-    return days.map(day => events.filter(e => isSameDay(e.start, day)));
-  }, [events, days]);
+    return days.map(day => processedEvents.filter(e => isSameDay(e.start, day)));
+  }, [processedEvents, days]);
 
   const currentLocation = useMemo(() => 
       MARINE_LOCATIONS.find(l => l.id === selectedLocationId) || MARINE_LOCATIONS[0], 
@@ -317,6 +322,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     </div>
                                 ))}
                              </div>
+                             
+                             {/* All Day / Outside Active Hours Events */}
+                             <div className="mt-2 w-full flex flex-col gap-1">
+                                 {(() => {
+                                     const startHour = config.activeHoursStart ?? 7;
+                                     const endHour = config.activeHoursEnd ?? 21;
+                                     // Filter out holidays first as they are shown above
+                                     const standardEvents = dayEvents.filter(e => !e.isHoliday);
+                                     const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour);
+                                     
+                                     const allDayEvents = buckets.allDay.sort((a, b) => {
+                                         if (a.allDay && !b.allDay) return -1;
+                                         if (!a.allDay && b.allDay) return 1;
+                                         return a.start.getTime() - b.start.getTime();
+                                     });
+
+                                     return allDayEvents.map(event => (
+                                         <div key={event.id}>
+                                             <EventCard event={event} onEventClick={setSelectedEvent} />
+                                         </div>
+                                     ));
+                                 })()}
+                             </div>
                         </div>
                     );
                 })}
@@ -335,17 +363,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
                      return (
                          <>
-                             {/* Before Label Spacer */}
-                             <div className="h-16 flex-shrink-0 border-b border-zinc-200/50 dark:border-zinc-800/50 relative bg-zinc-50 dark:bg-zinc-900/20">
-                                 <span className="absolute bottom-1 right-1 text-[9px] text-zinc-400 dark:text-zinc-600 font-mono">PRE</span>
-                             </div>
+
 
                              {/* Hourly Labels */}
                              <div className="flex-1 flex flex-col min-h-0">
                                  {hours.map(hour => (
                                      <div key={hour} className="flex-1 relative border-b border-zinc-200/50 dark:border-zinc-800/30">
                                          <span
-                                            className="absolute -top-2 right-1 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono bg-white dark:bg-zinc-950 px-0.5"
+                                            className="absolute top-1 right-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 font-mono"
                                             data-testid="hour-label"
                                          >
                                              {hour}
@@ -354,10 +379,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                  ))}
                              </div>
 
-                             {/* After Label Spacer */}
-                             <div className="h-16 flex-shrink-0 border-t border-zinc-200/50 dark:border-zinc-800/50 relative bg-zinc-50 dark:bg-zinc-900/20">
-                                 <span className="absolute top-1 right-1 text-[9px] text-zinc-400 dark:text-zinc-600 font-mono">POST</span>
-                             </div>
+
                          </>
                      );
                  })()}
