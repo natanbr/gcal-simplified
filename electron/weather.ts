@@ -317,17 +317,27 @@ export class WeatherService {
     }
 
     private mapChsDataToHourly(hourlyTime: string[], chsData: { eventDate: string; value: number }[]): number[] {
+        // Pre-parse timestamps to avoid repeated new Date() calls inside the loop
+        const parsedChsData = chsData.map(d => ({
+            time: new Date(d.eventDate).getTime(),
+            value: d.value
+        }));
+
+        if (parsedChsData.length === 0) {
+            return hourlyTime.map(() => 0);
+        }
+
         return hourlyTime.map((t: string) => {
             const time = new Date(t).getTime();
             // Find closest CHS data point
             // Optimization: Assuming sorted data could trigger binary search, but linear is fine for <1000 items
-            const closest = chsData.reduce((prev, curr) => {
-                const prevDiff = Math.abs(new Date(prev.eventDate).getTime() - time);
-                const currDiff = Math.abs(new Date(curr.eventDate).getTime() - time);
+            const closest = parsedChsData.reduce((prev, curr) => {
+                const prevDiff = Math.abs(prev.time - time);
+                const currDiff = Math.abs(curr.time - time);
                 return currDiff < prevDiff ? curr : prev;
-            }, chsData[0]);
+            }, parsedChsData[0]);
 
-            if (closest && Math.abs(new Date(closest.eventDate).getTime() - time) < 45 * 60 * 1000) {
+            if (closest && Math.abs(closest.time - time) < 45 * 60 * 1000) {
                 return closest.value;
             }
             return 0; // Or null/undefined if preferred
