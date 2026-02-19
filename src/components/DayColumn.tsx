@@ -3,6 +3,7 @@ import { AppEvent, UserConfig } from '../types';
 import { EventCard } from './EventCard';
 import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { groupOverlappingEvents, calculateEventStyles } from '../utils/layout';
+import { areDayColumnPropsEqual } from '../utils/eventUtils';
 
 import { isWeekend } from 'date-fns';
 
