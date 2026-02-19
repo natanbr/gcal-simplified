@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { weatherService, WeatherService } from './weather';
+import { weatherService } from './weather';
 
 describe('WeatherService Security', () => {
     const fetchMock = vi.fn();
@@ -36,16 +36,12 @@ describe('WeatherService Security', () => {
     });
 
     it('should throw error for invalid latitude value', async () => {
-        // @ts-expect-error - testing invalid range
         await expect(weatherService.getWeather(91, 0)).rejects.toThrow('Invalid latitude');
-        // @ts-expect-error - testing invalid range
         await expect(weatherService.getWeather(-91, 0)).rejects.toThrow('Invalid latitude');
     });
 
     it('should throw error for invalid longitude value', async () => {
-        // @ts-expect-error - testing invalid range
         await expect(weatherService.getWeather(0, 181)).rejects.toThrow('Invalid longitude');
-        // @ts-expect-error - testing invalid range
         await expect(weatherService.getWeather(0, -181)).rejects.toThrow('Invalid longitude');
     });
 
@@ -61,7 +57,6 @@ describe('WeatherService Security', () => {
         await expect(weatherService.getTides('07020', '07090', maliciousLat, -123.0))
             .rejects.toThrow('Invalid coordinate type');
 
-        // @ts-expect-error - testing invalid range in getTides
         await expect(weatherService.getTides('code', 'code', 91, 0)).rejects.toThrow('Invalid latitude');
     });
 });
