@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { SideDrawer } from './SideDrawer';
-import { WeatherData, TideData } from '../types';
+import { WeatherData, TideData, AppTask } from '../types';
 import {
     Anchor,
     Info,
-    Sun
+    Sun,
+    ListTodo
 } from 'lucide-react';
 import { format, addHours, parseISO, isSameDay } from 'date-fns';
 import { calculateSlackWindows } from '../utils/slackWindows';
@@ -19,6 +20,7 @@ import { MapPin, Check } from 'lucide-react';
 interface WeatherDashboardProps {
     weather: WeatherData;
     tides: TideData | null;
+    tasks: AppTask[];
     currentLocationId: string;
     onLocationChange: (id: string) => void;
     isTidesLoading: boolean;
@@ -251,7 +253,7 @@ export const TidesPanel: React.FC<{
             }
         });
         
-        // Get sunrise/sunset for safety filtering
+        // Get sunrise/sunset for safety filterng
         const todayIndex = 0; // Today's sunrise/sunset
         const sunrise = weather.daily.sunrise[todayIndex] ? new Date(weather.daily.sunrise[todayIndex]) : undefined;
         const sunset = weather.daily.sunset[todayIndex] ? new Date(weather.daily.sunset[todayIndex]) : undefined;
@@ -506,9 +508,31 @@ export const TidesPanel: React.FC<{
     );
 };
 
+const TasksPanel: React.FC<{ tasks: AppTask[] }> = ({ tasks }) => {
+    return (
+        <div className="flex flex-col gap-4">
+            {tasks.length === 0 ? (
+                <div className="text-zinc-500 text-xl font-medium text-center py-10">No tasks found.</div>
+            ) : (
+                tasks.map(task => (
+                    <div key={task.id} className="w-full bg-white dark:bg-zinc-800/80 p-6 rounded-xl border border-zinc-200 dark:border-zinc-700/50 flex items-center gap-4 shadow-sm">
+                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 ${task.status === 'completed' ? 'border-green-500 bg-green-500/20' : 'border-zinc-400 dark:border-zinc-600'}`}>
+                            {task.status === 'completed' && <div className="w-4 h-4 bg-green-500 rounded-full" />}
+                        </div>
+                        <span className={`text-lg font-medium ${task.status === 'completed' ? 'line-through text-zinc-500 dark:text-zinc-600' : 'text-zinc-800 dark:text-zinc-200'}`}>
+                            {task.title}
+                        </span>
+                    </div>
+                ))
+            )}
+        </div>
+    );
+};
+
 export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({ 
     weather, 
     tides, 
+    tasks,
     currentLocationId, 
     onLocationChange, 
     isTidesLoading, 
@@ -516,6 +540,7 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
 }) => {
     const [isWeatherOpen, setWeatherOpen] = useState(false);
     const [isTidesOpen, setTidesOpen] = useState(false);
+    const [isTasksOpen, setTasksOpen] = useState(false);
 
     // Trigger data check when Tides panel opens
     React.useEffect(() => {
@@ -550,6 +575,22 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
                         Tides
                     </span>
                 </button>
+
+                 <button 
+                    onClick={() => setTasksOpen(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all border border-zinc-200 dark:border-zinc-700/50 shadow-lg group"
+                    data-testid="tasks-button"
+                >
+                    <ListTodo className="text-purple-500 dark:text-purple-400" size={16} />
+                    <span className="text-sm font-black text-zinc-900 dark:text-zinc-100 group-hover:text-black dark:group-hover:text-white">
+                        Tasks
+                    </span>
+                    {tasks.length > 0 && (
+                        <span className="bg-purple-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {tasks.length}
+                        </span>
+                    )}
+                </button>
             </div>
 
             <SideDrawer 
@@ -572,6 +613,14 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
                     onLocationChange={onLocationChange}
                     loading={isTidesLoading}
                 />
+            </SideDrawer>
+
+            <SideDrawer 
+                isOpen={isTasksOpen} 
+                onClose={() => setTasksOpen(false)} 
+                title={<span className="flex items-center gap-2"><ListTodo className="text-purple-500" /> Tasks</span>}
+            >
+                <TasksPanel tasks={tasks} />
             </SideDrawer>
         </>
     );

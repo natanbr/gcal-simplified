@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { addDays, format, isSameDay, isWeekend } from 'date-fns';
 import { SettingsModal } from './SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ListTodo, X, RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, AlignLeft } from 'lucide-react';
+import { RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, AlignLeft } from 'lucide-react';
 import { SideDrawer } from './SideDrawer';
 import { DayColumn } from './DayColumn';
 import { EventCard } from './EventCard';
@@ -25,7 +25,6 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
-  const [showTasks, setShowTasks] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState('sooke');
@@ -225,6 +224,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 <WeatherDashboard 
                   weather={weather} 
                   tides={tides} 
+                  tasks={tasks}
                   currentLocationId={selectedLocationId}
                   onLocationChange={setSelectedLocationId}
                   isTidesLoading={isTidesLoading}
@@ -252,17 +252,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
              {config.sleepEnabled && (
                  <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Power Saving On</span>
              )}
-
-             <button 
-                onClick={() => setShowTasks(!showTasks)}
-                className={`p-3 rounded-full transition-colors ${showTasks ? 'bg-zinc-200 dark:bg-zinc-800 text-black dark:text-white' : 'bg-transparent text-zinc-500 hover:text-black dark:hover:text-white'}`}
-                data-testid="tasks-toggle-button"
-             >
-                {showTasks ? <X size={24} /> : <div className="relative">
-                    <ListTodo size={24} />
-                    {tasks.length > 0 && <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full" />}
-                </div>}
-             </button>
         </div>
       </div>
 
@@ -408,43 +397,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
       {/* Todo List Drawer */}
       <AnimatePresence>
-        {showTasks && (
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 h-1/3 bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-700 shadow-2xl z-50 flex flex-col"
-          >
-             <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-                <h2 className="text-2xl font-bold uppercase tracking-wide text-zinc-800 dark:text-white" data-testid="tasks-drawer-title">Tasks ({tasks.length})</h2>
-                <button
-                    onClick={() => setShowTasks(false)}
-                    className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full"
-                    data-testid="tasks-drawer-close-button"
-                >
-                    <X className="text-zinc-500 dark:text-zinc-400" />
-                </button>
-             </div>
-             
-             <div className="flex-1 p-6 overflow-x-auto flex gap-6 items-center">
-                {tasks.length === 0 ? (
-                    <div className="text-zinc-500 text-xl font-medium">No tasks found.</div>
-                ) : (
-                    tasks.map(task => (
-                        <div key={task.id} className="min-w-[300px] bg-white/50 dark:bg-black/40 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center gap-4">
-                            <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${task.status === 'completed' ? 'border-green-500 bg-green-500/20' : 'border-zinc-400 dark:border-zinc-600'}`}>
-                                {task.status === 'completed' && <div className="w-4 h-4 bg-green-500 rounded-full" />}
-                            </div>
-                            <span className={`text-xl font-medium ${task.status === 'completed' ? 'line-through text-zinc-500 dark:text-zinc-600' : 'text-zinc-800 dark:text-zinc-200'}`}>
-                                {task.title}
-                            </span>
-                        </div>
-                    ))
-                )}
-            </div>
-          </motion.div>
-        )}
         {showSettings && (
             <SettingsModal 
                 onClose={() => setShowSettings(false)} 
@@ -478,8 +430,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             </span>
                         </div>
                     </div>
-                    {/* Rest of the content wrapped in the IIFE output... wait, I should just match the start/end and return the children */}
-
 
                     {selectedEvent.location && (
                         <div className="space-y-2">
