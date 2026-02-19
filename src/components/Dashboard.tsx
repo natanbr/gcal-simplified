@@ -16,6 +16,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useCurrentDate } from '../hooks/useCurrentDate';
 import { UpdateNotification } from './UpdateNotification';
 import { splitMultiDayEvents } from '../utils/eventProcessing';
+import { getEventTitleStyle } from '../utils/colorMapping';
 
 const DAYS_TO_SHOW = 7;
 
@@ -60,6 +61,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const currentLocation = useMemo(() => 
       MARINE_LOCATIONS.find(l => l.id === selectedLocationId) || MARINE_LOCATIONS[0], 
   [selectedLocationId]);
+
+  const titleStyle = useMemo(() => 
+      selectedEvent ? getEventTitleStyle(selectedEvent.colorId, selectedEvent.color) : {}, 
+  [selectedEvent]);
 
   const fetchData = useCallback(async (currentOffset = weekOffset) => {
       setLoading(true);
@@ -457,10 +462,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             {selectedEvent && (
                 <div className="space-y-8">
                     <div>
-                        <h3 className="text-3xl font-black text-white leading-tight mb-2">
+                        <h3 
+                            className={`text-3xl font-black leading-tight mb-2 ${titleStyle.className || ''}`}
+                            style={titleStyle.style}
+                        >
                             {selectedEvent.title}
                         </h3>
-                        <div className="flex items-center gap-2 text-zinc-400 font-medium">
+                        <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400 font-medium">
                             <Clock size={18} className="text-family-cyan" />
                             <span>
                                 {selectedEvent.allDay
@@ -470,10 +478,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             </span>
                         </div>
                     </div>
+                    {/* Rest of the content wrapped in the IIFE output... wait, I should just match the start/end and return the children */}
+
 
                     {selectedEvent.location && (
                         <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-zinc-300 font-bold uppercase tracking-wider text-xs">
+                            <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-xs">
                                 <MapPin size={16} className="text-family-orange" />
                                 <span>Location</span>
                             </div>
@@ -485,7 +495,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
                     {selectedEvent.description && (
                         <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-zinc-300 font-bold uppercase tracking-wider text-xs">
+                            <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-xs">
                                 <AlignLeft size={16} className="text-family-cyan" />
                                 <span>Description</span>
                             </div>

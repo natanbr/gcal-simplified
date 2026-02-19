@@ -67,7 +67,12 @@ export const UpdateNotification: React.FC = () => {
         // Trigger an immediate check when this component mounts
         // This solves the race condition if the initial check in main.ts
         // happened before the user logged in.
-        window.ipcRenderer.invoke('update:check').catch(err => {
+        window.ipcRenderer.invoke('update:check').then((result: any) => {
+            if (result && result.updateInfo) {
+                console.log('Update check result:', result.updateInfo);
+                setUpdateAvailable(result.updateInfo);
+            }
+        }).catch(err => {
             console.error('Initial mount update check failed:', err);
         });
 

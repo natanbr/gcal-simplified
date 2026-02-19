@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { SettingsModal } from '../SettingsModal';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -30,6 +30,7 @@ vi.mock('lucide-react', () => {
     return {
         X: icon, Save: icon, Check: icon, RefreshCw: icon,
         Moon: icon, Sun: icon, Power: icon, Calendar: icon, LogOut: icon,
+        User: icon, Settings: icon, CheckSquare: icon,
     };
 });
 
@@ -78,6 +79,8 @@ describe('SettingsModal', () => {
                     return Promise.resolve(overrides?.taskLists ?? defaultTaskLists);
                 case 'settings:get':
                     return Promise.resolve(overrides?.settings ?? defaultSettings);
+                case 'app:info':
+                    return Promise.resolve({ version: '1.0.0' });
                 default:
                     return Promise.resolve(null);
             }
@@ -93,6 +96,9 @@ describe('SettingsModal', () => {
             expect(screen.getByText('Calendars (2)')).toBeInTheDocument();
         });
 
+        // Click on Calendars tab
+        fireEvent.click(screen.getByText('Calendars (2)'));
+
         expect(screen.getByText('My Calendar')).toBeInTheDocument();
         expect(screen.getByText('Work Calendar')).toBeInTheDocument();
         expect(screen.getByText('PRIMARY')).toBeInTheDocument();
@@ -107,6 +113,9 @@ describe('SettingsModal', () => {
             expect(screen.getByText('Task Lists (1)')).toBeInTheDocument();
         });
 
+        // Click on Task Lists tab
+        fireEvent.click(screen.getByText('Task Lists (1)'));
+
         expect(screen.getByText('My Tasks')).toBeInTheDocument();
     });
 
@@ -114,6 +123,14 @@ describe('SettingsModal', () => {
         setupMocks();
 
         render(<SettingsModal onClose={vi.fn()} onSave={vi.fn()} />);
+
+        // Wait for loading to finish and sidebar to appear
+        await waitFor(() => {
+            expect(screen.getByText('General')).toBeInTheDocument();
+        });
+
+        // Click on General tab
+        fireEvent.click(screen.getByText('General'));
 
         await waitFor(() => {
             expect(screen.getByTestId('week-start-today-button')).toBeInTheDocument();

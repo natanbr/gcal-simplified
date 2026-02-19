@@ -10,6 +10,7 @@ export interface ColorClasses {
     bg: string;
     text: string;
     border: string;
+    titleText: string;
 }
 
 /**
@@ -17,17 +18,17 @@ export interface ColorClasses {
  * Maps colorId to Tailwind classes with good contrast
  */
 const GOOGLE_CALENDAR_COLORS: Record<string, ColorClasses> = {
-    '1': { bg: 'bg-blue-500', text: 'text-white', border: 'border-blue-700' },      // Lavender
-    '2': { bg: 'bg-green-500', text: 'text-white', border: 'border-green-700' },    // Sage
-    '3': { bg: 'bg-purple-500', text: 'text-white', border: 'border-purple-700' },  // Grape
-    '4': { bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-700' },      // Flamingo
-    '5': { bg: 'bg-yellow-400', text: 'text-black', border: 'border-yellow-600' },  // Banana (light, needs dark text)
-    '6': { bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-700' },  // Tangerine
-    '7': { bg: 'bg-cyan-500', text: 'text-white', border: 'border-cyan-700' },      // Peacock
-    '8': { bg: 'bg-gray-400', text: 'text-black', border: 'border-gray-600' },      // Graphite (light, needs dark text)
-    '9': { bg: 'bg-blue-500', text: 'text-white', border: 'border-blue-700' },      // Blueberry
-    '10': { bg: 'bg-green-500', text: 'text-white', border: 'border-green-700' },   // Basil
-    '11': { bg: 'bg-red-600', text: 'text-white', border: 'border-red-800' },       // Tomato
+    '1': { bg: 'bg-blue-500', text: 'text-white', border: 'border-blue-700', titleText: 'text-blue-600 dark:text-blue-400' },      // Lavender
+    '2': { bg: 'bg-green-500', text: 'text-white', border: 'border-green-700', titleText: 'text-green-600 dark:text-green-400' },    // Sage
+    '3': { bg: 'bg-purple-500', text: 'text-white', border: 'border-purple-700', titleText: 'text-purple-600 dark:text-purple-400' },  // Grape
+    '4': { bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-700', titleText: 'text-pink-600 dark:text-pink-400' },      // Flamingo
+    '5': { bg: 'bg-yellow-400', text: 'text-black', border: 'border-yellow-600', titleText: 'text-yellow-600 dark:text-yellow-400' },  // Banana
+    '6': { bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-700', titleText: 'text-orange-600 dark:text-orange-400' },  // Tangerine
+    '7': { bg: 'bg-cyan-500', text: 'text-white', border: 'border-cyan-700', titleText: 'text-cyan-600 dark:text-cyan-400' },      // Peacock
+    '8': { bg: 'bg-gray-400', text: 'text-black', border: 'border-gray-600', titleText: 'text-gray-600 dark:text-gray-400' },      // Graphite
+    '9': { bg: 'bg-blue-500', text: 'text-white', border: 'border-blue-700', titleText: 'text-blue-600 dark:text-blue-400' },      // Blueberry
+    '10': { bg: 'bg-green-500', text: 'text-white', border: 'border-green-700', titleText: 'text-green-600 dark:text-green-400' },   // Basil
+    '11': { bg: 'bg-red-600', text: 'text-white', border: 'border-red-800', titleText: 'text-red-600 dark:text-red-400' },       // Tomato
 };
 
 /**
@@ -37,6 +38,7 @@ const DEFAULT_COLOR: ColorClasses = {
     bg: 'bg-zinc-100 dark:bg-zinc-800',
     text: 'text-zinc-900 dark:text-white',
     border: 'border-zinc-300 dark:border-zinc-600',
+    titleText: 'text-zinc-900 dark:text-white',
 };
 
 /**
@@ -97,6 +99,35 @@ export function getEventColorStyles(
     // Priority 3: Default color
     return {
         className: `${DEFAULT_COLOR.bg} ${DEFAULT_COLOR.text} border-l-4 ${DEFAULT_COLOR.border}`
+    };
+}
+
+/**
+ * Get color styles for the event title.
+ * Used in the Event Details modal.
+ */
+export function getEventTitleStyle(
+    colorId?: string,
+    hexColor?: string
+): { className?: string; style?: React.CSSProperties } {
+    // Priority 1: Google Calendar color ID
+    const googleColor = getColorFromGoogleCalendar(colorId);
+    if (googleColor) {
+        return {
+            className: googleColor.titleText
+        };
+    }
+
+    // Priority 2: Custom Hex Color
+    if (hexColor) {
+        return {
+            style: { color: hexColor }
+        };
+    }
+
+    // Priority 3: Default
+    return {
+        className: DEFAULT_COLOR.titleText
     };
 }
 

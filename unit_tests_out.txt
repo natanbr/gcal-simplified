@@ -1,0 +1,256 @@
+
+> gcal-simplified@0.0.7 test:unit
+> vitest run src/components/__tests__/SettingsModal.test.tsx
+
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90mC:/Users/brnat/Documents/Projects/gcal-simplified[39m
+
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+[90mstderr[2m | src/components/__tests__/SettingsModal.test.tsx[2m > [22m[2mSettingsModal[2m > [22m[2mshould render at least one calendar when API returns calendars
+[22m[39mThe above error occurred in the <SettingsModal> component:
+
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:10:26)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+[90mstderr[2m | src/components/__tests__/SettingsModal.test.tsx[2m > [22m[2mSettingsModal[2m > [22m[2mshould render task lists when API returns task lists
+[22m[39mThe above error occurred in the <SettingsModal> component:
+
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:10:26)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+[90mstderr[2m | src/components/__tests__/SettingsModal.test.tsx[2m > [22m[2mSettingsModal[2m > [22m[2mshould always render week start day buttons
+[22m[39mThe above error occurred in the <SettingsModal> component:
+
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:10:26)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+[90mstderr[2m | src/components/__tests__/SettingsModal.test.tsx[2m > [22m[2mSettingsModal[2m > [22m[2mshould show error banner when loading fails
+[22m[39mThe above error occurred in the <SettingsModal> component:
+
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:10:26)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+[90mstderr[2m | src/components/__tests__/SettingsModal.test.tsx[2m > [22m[2mSettingsModal[2m > [22m[2mshould show empty calendars list with count 0 when API returns empty array
+[22m[39mThe above error occurred in the <SettingsModal> component:
+
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:10:26)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+Error: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:311:17)
+    at Object.get (file:///C:/Users/brnat/Documents/Projects/gcal-simplified/node_modules/vitest/dist/chunks/startModuleRunner.DEj0jb3e.js:384:16)
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:112:30)
+    at renderWithHooks (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+    at innerInvokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (C:\Users\brnat\Documents\Projects\gcal-simplified\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+[90mstderr[2m | src/components/__tests__/SettingsModal.test.tsx[2m > [22m[2mSettingsModal[2m > [22m[2mshould render Configuration title and Save button
+[22m[39mThe above error occurred in the <SettingsModal> component:
+
+    at SettingsModal (C:/Users/brnat/Documents/Projects/gcal-simplified/src/components/SettingsModal.tsx:10:26)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+ [31m❯[39m src/components/__tests__/SettingsModal.test.tsx [2m([22m[2m6 tests[22m[2m | [22m[31m6 failed[39m[2m)[22m[32m 66[2mms[22m[39m
+[31m     [31m×[31m should render at least one calendar when API returns calendars[39m[32m 39[2mms[22m[39m
+[31m     [31m×[31m should render task lists when API returns task lists[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m should always render week start day buttons[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m should show error banner when loading fails[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m should show empty calendars list with count 0 when API returns empty array[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m should render Configuration title and Save button[39m[32m 4[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 6 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/__tests__/SettingsModal.test.tsx[2m > [22mSettingsModal[2m > [22mshould render at least one calendar when API returns calendars
+[41m[1m FAIL [22m[49m src/components/__tests__/SettingsModal.test.tsx[2m > [22mSettingsModal[2m > [22mshould render task lists when API returns task lists
+[41m[1m FAIL [22m[49m src/components/__tests__/SettingsModal.test.tsx[2m > [22mSettingsModal[2m > [22mshould always render week start day buttons
+[41m[1m FAIL [22m[49m src/components/__tests__/SettingsModal.test.tsx[2m > [22mSettingsModal[2m > [22mshould show error banner when loading fails
+[41m[1m FAIL [22m[49m src/components/__tests__/SettingsModal.test.tsx[2m > [22mSettingsModal[2m > [22mshould show empty calendars list with count 0 when API returns empty array
+[41m[1m FAIL [22m[49m src/components/__tests__/SettingsModal.test.tsx[2m > [22mSettingsModal[2m > [22mshould render Configuration title and Save button
+[31m[1mError[22m: [vitest] No "User" export is defined on the "lucide-react" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+[39m
+vi.mock(import("lucide-react"), async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    // your mocked methods
+  }
+})
+
+[36m [2m❯[22m SettingsModal src/components/SettingsModal.tsx:[2m112:30[22m[39m
+
+[90m [2m❯[22m renderWithHooks node_modules/react-dom/cjs/react-dom.development.js:[2m15486:18[22m[39m
+[90m [2m❯[22m mountIndeterminateComponent node_modules/react-dom/cjs/react-dom.development.js:[2m20103:13[22m[39m
+[90m [2m❯[22m beginWork node_modules/react-dom/cjs/react-dom.development.js:[2m21626:16[22m[39m
+[90m [2m❯[22m beginWork$1 node_modules/react-dom/cjs/react-dom.development.js:[2m27465:14[22m[39m
+[90m [2m❯[22m performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:[2m26599:12[22m[39m
+[90m [2m❯[22m workLoopSync node_modules/react-dom/cjs/react-dom.development.js:[2m26505:5[22m[39m
+[90m [2m❯[22m renderRootSync node_modules/react-dom/cjs/react-dom.development.js:[2m26473:7[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m6 failed[39m[22m[90m (6)[39m
+[2m   Start at [22m 18:17:33
+[2m   Duration [22m 3.17s[2m (transform 247ms, setup 180ms, import 602ms, tests 66ms, environment 1.32s)[22m
+
