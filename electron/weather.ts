@@ -317,30 +317,41 @@ export class WeatherService {
     }
 
     private mapChsDataToHourly(hourlyTime: string[], chsData: { eventDate: string; value: number }[]): number[] {
-        // Pre-parse timestamps to avoid repeated new Date() calls inside the loop
-        const parsedChsData = chsData.map(d => ({
-            time: new Date(d.eventDate).getTime(),
-            value: d.value
-        }));
-
-        if (parsedChsData.length === 0) {
+        if (chsData.length === 0) {
             return hourlyTime.map(() => 0);
         }
 
-        return hourlyTime.map((t: string) => {
-            const time = new Date(t).getTime();
-            // Find closest CHS data point
-            // Optimization: Assuming sorted data could trigger binary search, but linear is fine for <1000 items
-            const closest = parsedChsData.reduce((prev, curr) => {
-                const prevDiff = Math.abs(prev.time - time);
-                const currDiff = Math.abs(curr.time - time);
-                return currDiff < prevDiff ? curr : prev;
-            }, parsedChsData[0]);
+        // Pre-parse and sort CHS data by time
+        const parsedChsData = chsData.map(d => ({
+            time: new Date(d.eventDate).getTime(),
+            value: d.value
+        })).sort((a, b) => a.time - b.time);
 
-            if (closest && Math.abs(closest.time - time) < 45 * 60 * 1000) {
+        // Pre-parse hourly times to avoid repeated new Date() calls
+        const parsedHourlyTime = hourlyTime.map(t => new Date(t).getTime());
+
+        let chsIdx = 0;
+        const MAX_DIFF = 45 * 60 * 1000;
+
+        return parsedHourlyTime.map((time) => {
+            // Advance chsIdx to the closest point for the current 'time'
+            // Since both datasets are sorted by time, we only need to move forward.
+            while (chsIdx < parsedChsData.length - 1) {
+                const currentDiff = Math.abs(parsedChsData[chsIdx].time - time);
+                const nextDiff = Math.abs(parsedChsData[chsIdx + 1].time - time);
+                // Use < to prefer the earlier point in case of an exact tie, matching original behavior
+                if (nextDiff < currentDiff) {
+                    chsIdx++;
+                } else {
+                    break;
+                }
+            }
+
+            const closest = parsedChsData[chsIdx];
+            if (closest && Math.abs(closest.time - time) < MAX_DIFF) {
                 return closest.value;
             }
-            return 0; // Or null/undefined if preferred
+            return 0;
         });
     }
 
