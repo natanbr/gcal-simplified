@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { addDays, format, isSameDay, isWeekend } from 'date-fns';
+import { addDays, addMonths, format, isSameDay, isWeekend } from 'date-fns';
 import { SettingsModal } from './SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, AlignLeft } from 'lucide-react';
 import { SideDrawer } from './SideDrawer';
 import { DayColumn } from './DayColumn';
 import { EventCard } from './EventCard';
+import { MonthlyView } from './MonthlyView';
 import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
 import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { WeatherDashboard } from './WeatherDashboard';
 import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
+import { getMonthViewDates, getMonthViewStartDate, isCurrentMonth, canNavigateBackMonth } from '../utils/monthUtils';
 import { MARINE_LOCATIONS } from '../utils/marineLocations';
 import { useTheme } from '../hooks/useTheme';
 import { useCurrentDate } from '../hooks/useCurrentDate';
@@ -43,6 +45,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [loadingMessage, setLoadingMessage] = useState('Syncing...');
   const [error, setError] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
 
   // Apply Theme Logic
   useTheme(config, weather);
@@ -50,6 +54,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const today = useCurrentDate();
   const startDate = useMemo(() => getWeekStartDate(today, weekOffset, config.weekStartDay), [today, weekOffset, config.weekStartDay]);
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
+  const monthDays = useMemo(() => getMonthViewDates(today, monthOffset, config.weekStartDay), [today, monthOffset, config.weekStartDay]);
 
   const processedEvents = useMemo(() => splitMultiDayEvents(events), [events]);
 
@@ -65,12 +70,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       selectedEvent ? getEventTitleStyle(selectedEvent.colorId, selectedEvent.color) : {}, 
   [selectedEvent]);
 
-  const fetchData = useCallback(async (currentOffset = weekOffset) => {
+  const fetchData = useCallback(async () => {
       setLoading(true);
       setError(null);
       try {
-          const fetchStart = getWeekStartDate(today, currentOffset, config.weekStartDay);
-          const fetchEnd = addDays(fetchStart, 8);
+          const fetchStart = viewMode === 'week'
+            ? getWeekStartDate(today, weekOffset, config.weekStartDay)
+            : getMonthViewStartDate(today, monthOffset, config.weekStartDay);
+
+          const fetchEnd = addDays(fetchStart, viewMode === 'week' ? 8 : 42);
 
           setLoadingMessage('Fetching Events...');
           const fetchedEvents = await window.ipcRenderer.invoke('data:events', fetchStart.toISOString(), fetchEnd.toISOString());
@@ -103,7 +111,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       } finally {
           setLoading(false);
       }
-  }, [weekOffset, today, currentLocation, config.weekStartDay]);
+  }, [weekOffset, monthOffset, viewMode, today, currentLocation, config.weekStartDay]);
 
   const fetchTides = useCallback(async () => {
     setIsTidesLoading(true);
@@ -124,10 +132,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   // Initial Data Load
   useEffect(() => {
-    fetchData(weekOffset);
-    const interval = setInterval(() => fetchData(weekOffset), 5 * 60 * 1000);
+    fetchData();
+    const interval = setInterval(() => fetchData(), 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [weekOffset, fetchData]);
+  }, [weekOffset, monthOffset, viewMode, fetchData]);
 
   // Tides Lazy Load Effect
   useEffect(() => {
@@ -153,44 +161,56 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             {/* Week Navigation */}
             <div className="flex items-center bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-1 transition-colors duration-300">
                 <button 
-                    onClick={() => setWeekOffset(prev => Math.max(0, prev - 1))}
-                    disabled={!canNavigateToPreviousWeek(weekOffset)}
-                    className={`p-1.5 rounded-md transition-all ${!canNavigateToPreviousWeek(weekOffset) ? 'text-zinc-400 cursor-not-allowed' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
-                    title="Previous Week"
+                    onClick={() => viewMode === 'week' ? setWeekOffset(prev => Math.max(0, prev - 1)) : setMonthOffset(prev => Math.max(0, prev - 1))}
+                    disabled={viewMode === 'week' ? !canNavigateToPreviousWeek(weekOffset) : !canNavigateBackMonth(monthOffset)}
+                    className={`p-1.5 rounded-md transition-all ${(viewMode === 'week' ? !canNavigateToPreviousWeek(weekOffset) : !canNavigateBackMonth(monthOffset)) ? 'text-zinc-400 cursor-not-allowed' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
+                    title={viewMode === 'week' ? "Previous Week" : "Previous Month"}
                     data-testid="prev-week-button"
-                    aria-label="Previous Week"
+                    aria-label={viewMode === 'week' ? "Previous Week" : "Previous Month"}
                 >
                     <ChevronLeft size={20} />
                 </button>
                 
                 <button 
-                    className={`px-3 py-1 flex items-center gap-2 rounded-md transition-colors ${isCurrentWeek(weekOffset) ? 'text-zinc-400 dark:text-zinc-500 cursor-default' : 'text-zinc-600 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
-                    onClick={() => setWeekOffset(0)}
+                    className={`px-3 py-1 flex items-center gap-2 rounded-md transition-colors ${(viewMode === 'week' ? isCurrentWeek(weekOffset) : isCurrentMonth(today, monthOffset)) ? 'text-zinc-400 dark:text-zinc-500 cursor-default' : 'text-zinc-600 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
+                    onClick={() => { setWeekOffset(0); setMonthOffset(0); }}
                     title="Go to Today"
                     data-testid="today-button"
                     aria-label="Go to Today"
                 >
-                    <Calendar size={14} className={isCurrentWeek(weekOffset) ? 'text-family-cyan' : 'text-zinc-400 dark:text-zinc-500'} />
+                    <Calendar size={14} className={(viewMode === 'week' ? isCurrentWeek(weekOffset) : isCurrentMonth(today, monthOffset)) ? 'text-family-cyan' : 'text-zinc-400 dark:text-zinc-500'} />
                     <span className={`text-[11px] font-black uppercase tracking-[0.2em]`}>
-                        {isCurrentWeek(weekOffset) ? 'Current Week' : 'Back To Today'}
+                        {(viewMode === 'week' ? isCurrentWeek(weekOffset) : isCurrentMonth(today, monthOffset)) ? (viewMode === 'week' ? 'Current Week' : 'Current Month') : 'Back To Today'}
                     </span>
                 </button>
 
                 <button 
-                    onClick={() => setWeekOffset(prev => prev + 1)}
+                    onClick={() => viewMode === 'week' ? setWeekOffset(prev => prev + 1) : setMonthOffset(prev => prev + 1)}
                     className="p-1.5 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all"
-                    title="Next Week"
+                    title={viewMode === 'week' ? "Next Week" : "Next Month"}
                     data-testid="next-week-button"
-                    aria-label="Next Week"
+                    aria-label={viewMode === 'week' ? "Next Week" : "Next Month"}
                 >
                     <ChevronRight size={20} />
                 </button>
             </div>
+
+            <select
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value as 'week' | 'month')}
+                className="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 outline-none hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                aria-label="Switch View"
+            >
+                <option value="week">Weekly</option>
+                <option value="month">Monthly</option>
+            </select>
         </div>
 
         <div className="flex flex-col items-center gap-1">
             <div className="text-2xl font-bold text-zinc-700 dark:text-zinc-300 transition-colors duration-300">
-                {isCurrentWeek(weekOffset) ? format(today, 'EEEE, MMMM d') : `${format(days[0], 'MMM d')} - ${format(days[6], 'MMM d, yyyy')}`}
+                {viewMode === 'week'
+                    ? (isCurrentWeek(weekOffset) ? format(today, 'EEEE, MMMM d') : `${format(days[0], 'MMM d')} - ${format(days[6], 'MMM d, yyyy')}`)
+                    : format(addMonths(today, monthOffset), 'MMMM yyyy')}
             </div>
             <AnimatePresence>
                 {loading && (
@@ -258,6 +278,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       {/* Main Content Area - Split Layout */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
+        {viewMode === 'week' ? (
+          <>
         {/* Global Header Row */}
         <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 z-10 shrink-0 transition-colors duration-300">
             {/* Sidebar Header Spacer */}
@@ -393,6 +415,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 ))}
              </div>
         </div>
+          </>
+        ) : (
+          <MonthlyView
+            days={monthDays}
+            events={processedEvents}
+            onEventClick={setSelectedEvent}
+            currentDate={today}
+            referenceDate={addMonths(today, monthOffset)}
+          />
+        )}
       </div>
 
       {/* Todo List Drawer */}
