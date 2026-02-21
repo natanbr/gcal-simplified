@@ -165,7 +165,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     disabled={viewMode === 'week' ? !canNavigateToPreviousWeek(weekOffset) : !canNavigateBackMonth(monthOffset)}
                     className={`p-1.5 rounded-md transition-all ${(viewMode === 'week' ? !canNavigateToPreviousWeek(weekOffset) : !canNavigateBackMonth(monthOffset)) ? 'text-zinc-400 cursor-not-allowed' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
                     title={viewMode === 'week' ? "Previous Week" : "Previous Month"}
-                    data-testid="prev-button"
+                    data-testid="prev-week-button"
                     aria-label={viewMode === 'week' ? "Previous Week" : "Previous Month"}
                 >
                     <ChevronLeft size={20} />
@@ -188,7 +188,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     onClick={() => viewMode === 'week' ? setWeekOffset(prev => prev + 1) : setMonthOffset(prev => prev + 1)}
                     className="p-1.5 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all"
                     title={viewMode === 'week' ? "Next Week" : "Next Month"}
-                    data-testid="next-button"
+                    data-testid="next-week-button"
                     aria-label={viewMode === 'week' ? "Next Week" : "Next Month"}
                 >
                     <ChevronRight size={20} />
