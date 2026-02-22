@@ -116,7 +116,10 @@ export class AuthService {
                     const error = requestUrl.searchParams.get('error');
 
                     if (error) {
-                        res.end('Authentication failed: ' + error);
+                        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                        // Sanitize error just in case, though text/plain makes it safe
+                        const sanitizedError = error.replace(/[<>]/g, '');
+                        res.end('Authentication failed: ' + sanitizedError);
                         reject(new Error(error));
                         server.close();
                         return;
@@ -125,6 +128,7 @@ export class AuthService {
                     // Validate state parameter to prevent CSRF
                     if (!returnedState || returnedState !== state) {
                         console.error('State mismatch in OAuth callback');
+                        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
                         res.writeHead(403);
                         res.end('Authentication failed: Invalid state parameter.');
                         reject(new Error('Invalid state parameter'));
@@ -141,7 +145,8 @@ export class AuthService {
                         this.oauth2Client.setCredentials(tokens);
                         this.saveTokens(tokens); // Persist securely
 
-                        res.end('Authentication successful! You can close this window.');
+                        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                        res.end('<h1>Authentication successful!</h1><p>You can close this window.</p><script>window.close()</script>');
 
                         // Notify via IPC (we'll assume the caller handles the IPC reply)
                         // Or better, we resolve the promise and the main process sends the event
@@ -150,6 +155,7 @@ export class AuthService {
                     }
                 } catch (e) {
                     reject(e);
+                    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
                     res.end('Authentication failed.');
                     server.close();
                 }
