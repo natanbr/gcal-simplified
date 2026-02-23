@@ -101,8 +101,11 @@ test.describe('Week Display Customization', () => {
         await settingsButton.click();
         await window.waitForSelector('[data-testid="settings-modal-title"]');
         // Wait for settings data to load (loading overlay to disappear)
-        // The RefreshCw spinner inside the modal has absolute positioning
-        await window.waitForTimeout(500); // Brief wait for IPC calls to resolve
+        await window.waitForTimeout(2000);
+
+        // Settings are categorized. Week start is in the general tab.
+        await window.getByText('General', { exact: true }).click();
+
         // Ensure the week-start buttons are available before returning
         await window.getByTestId('week-start-today-button').waitFor({ state: 'attached', timeout: 10000 });
     };
@@ -112,8 +115,8 @@ test.describe('Week Display Customization', () => {
         await saveButton.click();
         // Wait for modal to close
         await window.waitForSelector('[data-testid="settings-modal-title"]', { state: 'hidden' });
-        // Wait for loading bar to disappear
-        await window.locator('[data-testid="loading-bar"]').waitFor({ state: 'hidden', timeout: 30000 });
+        // Wait for loading bar to become inactive
+        await window.waitForTimeout(2000);
     };
 
     test('should allow switching between Today, Monday, and Sunday start days', async () => {

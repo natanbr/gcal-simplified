@@ -45,19 +45,19 @@ test.describe('Dashboard Requirements', () => {
         expect(await hourLabels.count()).toBeGreaterThan(0);
 
         // 3. Verify Tasks Drawer Toggle
-        const tasksButton = window.locator('[data-testid="tasks-toggle-button"]'); // Based on ListTodo icon check
+        const tasksButton = window.locator('[data-testid="tasks-button"]'); // Based on ListTodo icon check
         await expect(tasksButton).toBeVisible();
         await tasksButton.click();
 
         // Verify Drawer Opens
-        const tasksTitle = window.locator('[data-testid="tasks-drawer-title"]');
+        const tasksTitle = window.locator('[data-testid="drawer-title"]');
         await expect(tasksTitle).toBeVisible();
 
         // Close Drawer
         // The drawer has a specific structure. We can target the button inside the drawer header.
         // Or simply use the second X button if we are sure, but better to be safe.
         // Targeting the button inside the "Tasks" header container.
-        const closeTasks = window.locator('[data-testid="tasks-drawer-close-button"]');
+        const closeTasks = window.locator('[data-testid="close-drawer-button"]');
         await closeTasks.click();
         await expect(tasksTitle).not.toBeVisible();
 

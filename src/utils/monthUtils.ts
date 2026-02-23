@@ -1,4 +1,4 @@
-import { startOfMonth, startOfWeek, addMonths, addDays, isSameMonth, isSameDay } from 'date-fns';
+import { startOfMonth, startOfWeek, addMonths, addDays, isSameMonth } from 'date-fns';
 
 export type WeekStartDay = 'sunday' | 'monday' | 'today';
 

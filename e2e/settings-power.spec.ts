@@ -34,6 +34,13 @@ test.describe('Settings - Display & Power', () => {
         // Check for Display & Power Section
         // We use the ID for the Configuration title to ensure modal is open
         await expect(window.locator('[data-testid="settings-modal-title"]')).toBeVisible();
+
+        // Wait for settings data to load (loading overlay to disappear)
+        await window.waitForTimeout(2000);
+
+        // Settings are categorized. Display & Power is in the general tab.
+        await window.getByText('General', { exact: true }).click();
+
         // Verify Sleep Schedule Section presence
         await expect(window.locator('[data-testid="sleep-schedule-section"]')).toBeVisible();
 

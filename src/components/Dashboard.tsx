@@ -12,7 +12,7 @@ import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { WeatherDashboard } from './WeatherDashboard';
 import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
-import { getMonthViewDates, getMonthViewStartDate, isCurrentMonth, canNavigateBackMonth } from '../utils/monthUtils';
+import { getMonthViewDates, isCurrentMonth, canNavigateBackMonth } from '../utils/monthUtils';
 import { MARINE_LOCATIONS } from '../utils/marineLocations';
 import { useTheme } from '../hooks/useTheme';
 import { useCurrentDate } from '../hooks/useCurrentDate';
@@ -21,6 +21,8 @@ import { splitMultiDayEvents } from '../utils/eventProcessing';
 import { getEventTitleStyle } from '../utils/colorMapping';
 
 const DAYS_TO_SHOW = 7;
+
+import { useCalendarData } from '../hooks/useCalendarData';
 
 interface DashboardProps {
   onLogout?: () => void;
@@ -31,7 +33,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState('sooke');
   
-  const [events, setEvents] = useState<AppEvent[]>([]);
   const [tasks, setTasks] = useState<AppTask[]>([]);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   
@@ -56,6 +57,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
   const monthDays = useMemo(() => getMonthViewDates(today, monthOffset, config.weekStartDay), [today, monthOffset, config.weekStartDay]);
 
+  const { events, isEventsLoading, isBackgroundLoading, error: eventsError, fetchEventsForMonth, refreshEvents } = useCalendarData();
+
   const processedEvents = useMemo(() => splitMultiDayEvents(events), [events]);
 
   const eventsByDay = useMemo(() => {
@@ -70,48 +73,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       selectedEvent ? getEventTitleStyle(selectedEvent.colorId, selectedEvent.color) : {}, 
   [selectedEvent]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isInitial: boolean = false) => {
       setLoading(true);
       setError(null);
       try {
-          const fetchStart = viewMode === 'week'
+          // Pass a representative date inside the month to ensure we fetch the correct month's grid
+          const representiveDateForFetch = viewMode === 'week'
             ? getWeekStartDate(today, weekOffset, config.weekStartDay)
-            : getMonthViewStartDate(today, monthOffset, config.weekStartDay);
+            : addMonths(today, monthOffset);
 
-          const fetchEnd = addDays(fetchStart, viewMode === 'week' ? 8 : 42);
-
-          setLoadingMessage('Fetching Events...');
-          const fetchedEvents = await window.ipcRenderer.invoke('data:events', fetchStart.toISOString(), fetchEnd.toISOString());
+          if (isInitial) {
+             setLoadingMessage('Fetching Events...');
+          }
+          await fetchEventsForMonth(representiveDateForFetch, config.weekStartDay);
           
-          setLoadingMessage('Fetching Tasks...');
-          const fetchedTasks = await window.ipcRenderer.invoke('data:tasks');
+          if (isInitial) {
+             setLoadingMessage('Fetching Tasks...');
+             const fetchedTasks = await window.ipcRenderer.invoke('data:tasks');
+             setTasks(fetchedTasks as AppTask[]);
+          }
           
-          setLoadingMessage('Updating Weather...');
-          const fetchedWeather = await window.ipcRenderer.invoke('weather:get', currentLocation.coords.lat, currentLocation.coords.lng);
+          if (isInitial) {
+             setLoadingMessage('Updating Weather...');
+             const fetchedWeather = await window.ipcRenderer.invoke('weather:get', currentLocation.coords.lat, currentLocation.coords.lng);
+             setWeather(fetchedWeather as WeatherData);
+          }
           
           // Note: Tides are NOT fetched here. Lazy loaded.
           
-          setLoadingMessage('Loading Settings...');
-          const fetchedSettings = await window.ipcRenderer.invoke('settings:get');
-          
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const hydratedEvents = (fetchedEvents as any[]).map((e: any) => ({
-              ...e,
-              start: new Date(e.start),
-              end: new Date(e.end)
-          }));
-
-          setEvents(hydratedEvents);
-          setTasks(fetchedTasks as AppTask[]);
-          setWeather(fetchedWeather as WeatherData);
-          setConfig(fetchedSettings as UserConfig);
+          if (isInitial) {
+             setLoadingMessage('Loading Settings...');
+             const fetchedSettings = await window.ipcRenderer.invoke('settings:get');
+             setConfig(fetchedSettings as UserConfig);
+          }
       } catch (err) {
           console.error("Failed to fetch data", err);
           setError("Failed to load calendar data.");
       } finally {
           setLoading(false);
       }
-  }, [weekOffset, monthOffset, viewMode, today, currentLocation, config.weekStartDay]);
+  }, [weekOffset, monthOffset, viewMode, today, currentLocation, config.weekStartDay, fetchEventsForMonth]);
 
   const fetchTides = useCallback(async () => {
     setIsTidesLoading(true);
@@ -132,10 +133,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   // Initial Data Load
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(() => fetchData(), 5 * 60 * 1000);
+    fetchData(true);
+  }, [fetchData]);
+
+  // Soft reload events on date change (uses cache)
+  useEffect(() => {
+    const representiveDateForFetch = viewMode === 'week'
+            ? getWeekStartDate(today, weekOffset, config.weekStartDay)
+            : addMonths(today, monthOffset);
+    fetchEventsForMonth(representiveDateForFetch, config.weekStartDay);
+  }, [weekOffset, monthOffset, viewMode, fetchEventsForMonth, today, config.weekStartDay]);
+
+  // Periodic global refresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+       const representiveDateForFetch = viewMode === 'week'
+            ? getWeekStartDate(today, weekOffset, config.weekStartDay)
+            : addMonths(today, monthOffset);
+       refreshEvents(representiveDateForFetch, config.weekStartDay);
+       
+       // Also background refresh other data
+       window.ipcRenderer.invoke('data:tasks').then(fetchedTasks => setTasks(fetchedTasks as AppTask[])).catch(console.error);
+       window.ipcRenderer.invoke('weather:get', currentLocation.coords.lat, currentLocation.coords.lng).then(fetchedWeather => setWeather(fetchedWeather as WeatherData)).catch(console.error);
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [weekOffset, monthOffset, viewMode, fetchData]);
+  }, [refreshEvents, viewMode, today, weekOffset, monthOffset, config.weekStartDay, currentLocation]);
 
   // Tides Lazy Load Effect
   useEffect(() => {
@@ -144,7 +166,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       }
   }, [fetchTides, hasTidesOpened]);
 
-  if (loading && events.length === 0 && !error) {
+  const isInitialLoading = (loading || isEventsLoading) && events.length === 0 && !error && !eventsError;
+  const currentError = error || eventsError;
+
+  if (isInitialLoading) {
       return (
           <div className="h-screen w-screen bg-white dark:bg-zinc-950 flex flex-col items-center justify-center text-zinc-500 gap-4 transition-colors duration-300">
               <RefreshCw className="animate-spin" size={48} />
@@ -163,7 +188,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 <button 
                     onClick={() => viewMode === 'week' ? setWeekOffset(prev => Math.max(0, prev - 1)) : setMonthOffset(prev => Math.max(0, prev - 1))}
                     disabled={viewMode === 'week' ? !canNavigateToPreviousWeek(weekOffset) : !canNavigateBackMonth(monthOffset)}
-                    className={`p-1.5 rounded-md transition-all ${(viewMode === 'week' ? !canNavigateToPreviousWeek(weekOffset) : !canNavigateBackMonth(monthOffset)) ? 'text-zinc-400 cursor-not-allowed' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
+                    className={`h-8 w-8 flex items-center justify-center rounded-md transition-all ${(viewMode === 'week' ? !canNavigateToPreviousWeek(weekOffset) : !canNavigateBackMonth(monthOffset)) ? 'text-zinc-400 cursor-not-allowed' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
                     title={viewMode === 'week' ? "Previous Week" : "Previous Month"}
                     data-testid="prev-week-button"
                     aria-label={viewMode === 'week' ? "Previous Week" : "Previous Month"}
@@ -172,21 +197,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </button>
                 
                 <button 
-                    className={`px-3 py-1 flex items-center gap-2 rounded-md transition-colors ${(viewMode === 'week' ? isCurrentWeek(weekOffset) : isCurrentMonth(today, monthOffset)) ? 'text-zinc-400 dark:text-zinc-500 cursor-default' : 'text-zinc-600 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
+                    className={`h-8 px-3 flex items-center gap-2 rounded-md transition-colors ${(viewMode === 'week' ? isCurrentWeek(weekOffset) : isCurrentMonth(today, monthOffset)) ? 'text-zinc-400 dark:text-zinc-500 cursor-default' : 'text-zinc-600 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}
                     onClick={() => { setWeekOffset(0); setMonthOffset(0); }}
                     title="Go to Today"
                     data-testid="today-button"
                     aria-label="Go to Today"
                 >
                     <Calendar size={14} className={(viewMode === 'week' ? isCurrentWeek(weekOffset) : isCurrentMonth(today, monthOffset)) ? 'text-family-cyan' : 'text-zinc-400 dark:text-zinc-500'} />
-                    <span className={`text-[11px] font-black uppercase tracking-[0.2em]`}>
+                    <span className={`text-[11px] font-black uppercase tracking-[0.2em] mt-[1px]`}>
                         {(viewMode === 'week' ? isCurrentWeek(weekOffset) : isCurrentMonth(today, monthOffset)) ? (viewMode === 'week' ? 'Current Week' : 'Current Month') : 'Back To Today'}
                     </span>
                 </button>
 
                 <button 
                     onClick={() => viewMode === 'week' ? setWeekOffset(prev => prev + 1) : setMonthOffset(prev => prev + 1)}
-                    className="p-1.5 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all"
+                    className="h-8 w-8 flex items-center justify-center rounded-md text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all"
                     title={viewMode === 'week' ? "Next Week" : "Next Month"}
                     data-testid="next-week-button"
                     aria-label={viewMode === 'week' ? "Next Week" : "Next Month"}
@@ -195,15 +220,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </button>
             </div>
 
-            <select
-                value={viewMode}
-                onChange={(e) => setViewMode(e.target.value as 'week' | 'month')}
-                className="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 outline-none hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-                aria-label="Switch View"
-            >
-                <option value="week">Weekly</option>
-                <option value="month">Monthly</option>
-            </select>
+            <div className="flex items-center bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-1 transition-colors duration-300">
+                <button
+                    onClick={() => setViewMode('week')}
+                    className={`px-3 h-8 rounded-md transition-all flex items-center justify-center ${viewMode === 'week' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm cursor-default' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50'}`}
+                    aria-pressed={viewMode === 'week'}
+                >
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em] mt-[1px]">Weekly</span>
+                </button>
+                <button
+                    onClick={() => setViewMode('month')}
+                    className={`px-3 h-8 rounded-md transition-all flex items-center justify-center ${viewMode === 'month' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm cursor-default' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50'}`}
+                    aria-pressed={viewMode === 'month'}
+                >
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em] mt-[1px]">Monthly</span>
+                </button>
+            </div>
         </div>
 
         <div className="flex flex-col items-center gap-1">
@@ -212,32 +244,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     ? (isCurrentWeek(weekOffset) ? format(today, 'EEEE, MMMM d') : `${format(days[0], 'MMM d')} - ${format(days[6], 'MMM d, yyyy')}`)
                     : format(addMonths(today, monthOffset), 'MMMM yyyy')}
             </div>
-            <AnimatePresence>
-                {loading && (
+            <motion.div 
+                animate={{ 
+                    opacity: (loading || isEventsLoading || isBackgroundLoading) ? 1 : 0,
+                    y: (loading || isEventsLoading || isBackgroundLoading) ? 0 : -5
+                }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col items-center w-full max-w-[200px] gap-1"
+                style={{ pointerEvents: 'none' }}
+            >
+                <div className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden" data-testid="loading-bar">
                     <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="flex flex-col items-center w-full max-w-[200px] gap-1"
-                    >
-                        <div className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden" data-testid="loading-bar">
-                            <motion.div 
-                                className="h-full bg-family-cyan"
-                                initial={{ width: "0%" }}
-                                animate={{ width: "100%" }}
-                                transition={{ 
-                                    duration: 2,
-                                    repeat: Infinity,
-                                    ease: "easeInOut"
-                                }}
-                            />
-                        </div>
-                        <span className="text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 animate-pulse">
-                            {loadingMessage}
-                        </span>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                        className="h-full bg-family-cyan"
+                        initial={{ width: "0%" }}
+                        animate={{ width: "100%" }}
+                        transition={{ 
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                        }}
+                    />
+                </div>
+                <span className="text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 animate-pulse">
+                    {isBackgroundLoading && !isEventsLoading && !loading ? 'Refreshing...' : (loadingMessage || 'Syncing...')}
+                </span>
+            </motion.div>
         </div>
         <div className="flex items-center gap-4">
              {weather && (
@@ -257,8 +288,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
              <UpdateNotification />
 
-             {loading && <RefreshCw size={16} className="animate-spin text-zinc-600" />}
-             {error && <span className="text-red-500 text-xs font-bold">{error}</span>}
+             {(loading || isEventsLoading || isBackgroundLoading) && (
+                 <div title={isBackgroundLoading && !isEventsLoading ? "Background Refreshing..." : "Loading..."} className="flex items-center">
+                    <RefreshCw size={16} className={`text-zinc-600 ${isBackgroundLoading && !isEventsLoading ? 'animate-pulse' : 'animate-spin'}`} />
+                 </div>
+             )}
+             {currentError && <span className="text-red-500 text-xs font-bold">{currentError}</span>}
              
              <button
                 onClick={() => setShowSettings(true)}
@@ -432,7 +467,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         {showSettings && (
             <SettingsModal 
                 onClose={() => setShowSettings(false)} 
-                onSave={fetchData}
+                onSave={() => fetchData(true)}
                 onLogout={onLogout}
             />
         )}

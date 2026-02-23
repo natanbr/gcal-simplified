@@ -9,6 +9,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 ### Calendar View
 
 - **7-Day View**: The calendar displays 7 days in a week view.
+  - **Data Fetching and Caching**: Events are always fetched and loaded a full month at a time and cached locally. Navigating between weeks within a cached month is instantaneous, while a background process verifies the data is up-to-date.
   - **Default View**: Shows the current week (7 days starting from today).
   - **Week Navigation**:
     - **Next Week Button**: Navigates forward to the next week, always starting from Monday.
@@ -17,6 +18,14 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     - **"Today" Button**: Quick navigation to return to the current week view.
   - **Week Start**: When navigating, weeks always start from Monday regardless of the current day.
     - Example: If today is Wednesday and user clicks "Next Week", the view shows Monday-Sunday of the following week.
+- **Monthly View**: The calendar also supports a full month view.
+  - **Grid Layout**: Displays a standard 6-week grid, typically 42 days, starting from the week that contains the 1st of the month.
+  - **View Toggle**: Users can switch between "Weekly" and "Monthly" views using a toggle in the header.
+  - **Month Navigation**:
+    - **Next Month**: Navigates forward to the next month.
+    - **Previous Month**: Navigates backward to the previous month.
+    - **Navigation Limit**: Cannot navigate to months before the current month.
+  - **Event Display**: Events in the monthly view are displayed as compact pill-shaped items spanning their respective days.
 - **Forecast Limitation**: Weather forecast data is only available and displayed for the current week (next 7 days from today). Future weeks beyond the current week will not show forecast data.
 - **Hourly Grid**: The layout is divided into vertical hour slots.
 - **Active Hours**:
