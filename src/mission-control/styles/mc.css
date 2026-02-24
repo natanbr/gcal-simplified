@@ -1,0 +1,215 @@
+/* ============================================================
+   Mission Control — Kid-Friendly Pastel Design Tokens
+   ⚠️  Imported ONLY from src/mission-control/MissionControl.tsx
+       Never imported by the parent calendar app.
+   ============================================================ */
+
+/* ---- Google Fonts ---- */
+@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap");
+
+/* ---- Color Tokens (Baby Pastel Palette) ---- */
+:root {
+  /* Backgrounds */
+  --mc-bg: #f0f4ff;
+  --mc-surface: #ffffff;
+  --mc-surface-raised: #fefefe;
+  --mc-border: rgba(150, 160, 220, 0.22);
+  --mc-border-bright: rgba(150, 160, 220, 0.45);
+
+  /* Pastel accent palette */
+  --mc-gold: #f7c948;
+  --mc-gold-dim: #e0a820;
+  --mc-amber: #ffb347;
+  --mc-red: #ff7b7b;
+  --mc-green: #6de89e;
+  --mc-blue: #89c4ff;
+  --mc-purple: #c5a8ff;
+  --mc-pink: #ffadd5;
+  --mc-mint: #a8f0df;
+
+  /* Text */
+  --mc-text: #3a3560;
+  --mc-text-muted: #8a87b8;
+  --mc-text-dim: #b8b5d8;
+
+  /* Coin */
+  --mc-coin-gold-light: #ffe880;
+  --mc-coin-gold-mid: #f7c948;
+  --mc-coin-gold-dark: #c99b10;
+
+  /* Shadows — softer, pastel-friendly */
+  --mc-depth-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 12px rgba(130, 120, 200, 0.18), 0 1px 3px rgba(130, 120, 200, 0.12);
+
+  --mc-inset-shadow:
+    0 2px 8px rgba(130, 120, 200, 0.12) inset,
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+
+  --mc-btn-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.8) inset, 0 4px 10px rgba(130, 120, 200, 0.2),
+    0 2px 4px rgba(130, 120, 200, 0.1);
+
+  --mc-btn-pressed-shadow:
+    0 0 0 rgba(255, 255, 255, 0.4) inset, 0 1px 3px rgba(130, 120, 200, 0.15);
+
+  /* Token / coin */
+  --mc-coin-shadow:
+    0 2px 0 var(--mc-coin-gold-dark) inset, 0 -1px 0 rgba(0, 0, 0, 0.08) inset,
+    0 3px 8px rgba(200, 155, 16, 0.35);
+}
+
+/* ---- Reset for MC root ---- */
+.mc-root {
+  font-family: "Nunito", system-ui, sans-serif;
+  background: linear-gradient(145deg, #eef2ff 0%, #f5f0ff 50%, #fff0f8 100%);
+  color: var(--mc-text);
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+}
+
+/* ---- Panel Surface ---- */
+.mc-panel {
+  background: var(--mc-surface);
+  border: 1.5px solid var(--mc-border);
+  border-radius: 20px;
+  box-shadow: var(--mc-depth-shadow);
+  position: relative;
+}
+
+/* Subtle top-edge highlight */
+.mc-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.95);
+  pointer-events: none;
+}
+
+/* ---- Inset Tray (Vault area) ---- */
+.mc-tray {
+  background: linear-gradient(180deg, #f3f0ff 0%, #ece9fc 100%);
+  border: 1.5px solid rgba(160, 150, 230, 0.2);
+  border-radius: 14px;
+  box-shadow: var(--mc-inset-shadow);
+}
+
+/* ---- 3D Button Base ---- */
+.mc-btn {
+  background: linear-gradient(180deg, #f8f6ff 0%, #ededfc 100%);
+  border: 1.5px solid var(--mc-border-bright);
+  border-radius: 12px;
+  box-shadow: var(--mc-btn-shadow);
+  cursor: pointer;
+  color: var(--mc-text);
+  font-weight: 700;
+  font-family: "Nunito", system-ui, sans-serif;
+  transition:
+    box-shadow 80ms ease,
+    transform 80ms ease;
+  transform: translateY(0px);
+}
+
+.mc-btn:active,
+.mc-btn.pressed {
+  box-shadow: var(--mc-btn-pressed-shadow);
+  transform: translateY(2px);
+}
+
+/* Variant overrides */
+.mc-btn-primary {
+  background: linear-gradient(180deg, #f7c948 0%, #f0b820 100%);
+  border-color: rgba(247, 201, 72, 0.6);
+  color: #5a3e00;
+}
+
+.mc-btn-danger {
+  background: linear-gradient(180deg, #ffb3b3 0%, #ff8585 100%);
+  border-color: rgba(255, 130, 130, 0.5);
+  color: #7a1010;
+}
+
+/* ---- Coin / Token ---- */
+.mc-coin {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 32%,
+    var(--mc-coin-gold-light),
+    var(--mc-coin-gold-mid) 38%,
+    var(--mc-coin-gold-dark) 82%
+  );
+  box-shadow: var(--mc-coin-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  font-size: 18px;
+}
+
+.mc-coin:active {
+  cursor: grabbing;
+}
+
+/* ---- Status Brow Bar ---- */
+.mc-brow {
+  background: rgba(255, 255, 255, 0.75);
+  border-bottom: 1.5px solid var(--mc-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ---- Hazard Shutter ---- */
+.mc-hazard {
+  background: repeating-linear-gradient(
+    -45deg,
+    #ffde7a 0px,
+    #ffde7a 8px,
+    #fff0c0 8px,
+    #fff0c0 16px
+  );
+  border-radius: inherit;
+}
+
+/* ---- Scrollbar hide ---- */
+.mc-root ::-webkit-scrollbar {
+  display: none;
+}
+.mc-root * {
+  scrollbar-width: none;
+}
+
+/* ---- Mission Overlay ---- */
+.mc-overlay {
+  font-family: "Nunito", system-ui, sans-serif;
+  color: var(--mc-text);
+  user-select: none;
+}
+
+.mc-overlay ::-webkit-scrollbar {
+  display: none;
+}
+.mc-overlay * {
+  scrollbar-width: none;
+}
+
+/* ---- Task Card ---- */
+.mc-task-card {
+  font-family: "Nunito", system-ui, sans-serif;
+  transition: box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.mc-task-card:not(:disabled):hover {
+  box-shadow: 0 6px 20px rgba(130, 120, 200, 0.2);
+}
+
+/* ---- Progress Bar ---- */
+.mc-progress-bar {
+  position: relative;
+}
+

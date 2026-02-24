@@ -1,221 +1,226 @@
 # Project Specification: "The Big Kid Command Center"
 
-**Status:** Final Specification
-**Role:** Project Manager / Tech Lead
-**Target User:** 5-year-old child (pre-reading, relies on icons/spatial audio)
+**Status:** Living Document — Active Development
+**Target User:** 5-year-old child (pre-reading, relies on icons/spatial cues)
 
 ---
 
 ## Architecture & Technical Guidelines
 
-### 1. Strict Application Isolation
+### Strict Application Isolation
 
-"Mission Control" is treated as an entirely separate external module or plugin within the repository. It has absolute minimal interaction with the main Calendar application.
+Mission Control is a self-contained module inside the repo. Zero contamination with the main Calendar app.
 
-- **Zero Contamination:** Components, hooks, and utilities will not be imported from the parent directory (`src/components/`, etc.).
-- **Independent Configuration:** Mission Control will have its own dedicated configuration state and settings view within its module. We won’t mix settings.
-
-### 2. Directory Structure
-
-To enforce this isolation, the application gets a dedicated domain envelope:
+- All components, hooks, stores, and types live under `src/mission-control/`
+- Entry point: `src/App.tsx?mc=1` → `<MissionControl />` (dev route)
+- State: React context + `useReducer` via `MCStoreProvider` (`useMCStore.tsx`)
+- Styling: isolated `mc.css` + inline styles only
+- Persistence: `localStorage` key `mc-state-v3`
 
 ```text
 src/
- └── mission-control/            <-- NEW: The isolated sandbox
-      ├── MissionControl.tsx     <-- The master entry component for the new app
-      ├── components/            <-- Pure UI: Vault, Goals, StatusBrow, DraggableToken
-      ├── hooks/                 <-- Logic: usePhysics, useMissionTimer, useEconomy
-      ├── store/                 <-- State: The Global Bank ledger, active missions
-      ├── styles/                <-- Any specific raw CSS or tailwind constants
-      ├── assets/                <-- Sound effects (.mp3)
-      └── types.ts               <-- Strict typings: MissionState, Token, Reward
+ └── mission-control/
+      ├── MissionControl.tsx       ← root layout component
+      ├── components/
+      │    ├── GlobalBank.tsx
+      │    ├── GoalPedestal.tsx
+      │    ├── MissionOverlay.tsx
+      │    └── DragLayer.tsx
+      ├── hooks/
+      │    ├── useMissionScheduler.ts
+      │    └── useLiveClock.ts
+      ├── store/
+      │    └── useMCStore.tsx
+      ├── styles/
+      │    └── mc.css
+      └── types.ts
 ```
 
-### 3. 2D Skeuomorphism
+---
 
-Instead of true WebGL/3D, we are executing a **2D Skeuomorphism** approach to give a 3D feeling:
+## Current Implementation State
 
-- **Depth:** Extreme CSS layering, heavy drop-shadows, inset-shadows, and gradients.
-- **Physics:** `framer-motion` handles drag gestures, spring animations, gravity simulations, and bouncy UI feedback rather than a rigid body engine.
-- **Imagery:** High-quality, standard vector icons (e.g., `lucide-react`) combined with rich styling.
+### ✅ Implemented & Working
+
+#### A. Global Bank (Vault)
+
+- Left column: animated coin tokens in a tray
+- `(+)` / `(-)` buttons to manually add/remove coins
+- Drag-and-drop tokens from bank to Goal Pedestals (hit-testing via DOMRect)
+- **Initial bank count: 3 coins** (default, resets on storage key change)
+
+#### B. Goal Pedestals (Savings Cases)
+
+- 3 display cases with states: `empty → selecting → active`
+- Reward picker with fixed coin costs (hardcoded, not configurable)
+- Vacuum button: transfers all bank coins into the case at once
+- Refund (trash lever): returns case coins to bank
+- **Consume** (reward used): permanently removes tokens — no refund
+- Case target count: 5 coins by default
+
+#### Official Reward Catalogue
+
+| Emoji | Reward            | Coins Required |
+| ----- | ----------------- | -------------- |
+| 🍿    | Movie + Popcorn   | 10             |
+| 🎬    | Show              | 10             |
+| 🔥    | Campfire          | 10             |
+| 🎮    | Game              | 6              |
+| 📖    | Extra Story       | 2              |
+| 💻    | Story with Points | 2              |
+
+#### C. Status Brow (Privileges)
+
+- Top bar: 4 privilege cards (Knife 🔪, Scissors ✂️, Fire 🔥, Garden 🌱)
+- Visual states: `active` / `suspended` (hazard overlay)
+- **Known issue: clicking cards does nothing — suspension popup not implemented yet** (see Backlog #5)
+
+#### D. Mission Overlay
+
+- Slides down from top (`y: -100% → 0`) when a mission is active
+- Header: phase emoji + title, large countdown timer (center), Hide / Reset buttons (right)
+- Task cards: horizontal flex row, `flex: 1 1 auto`, max 20% width each (up to 5 cards fill the bar)
+- Whining toggle card: compact 80px card pinned to the right of the task row
+  - Toggle on = −1 bonus star, shown as a small pill badge
+  - Resets when the mission resets
+- All-done screen: shows 🎉, final star count (pre-reduced by whining toggle), "Collect" button
+- Minimized pill: peeks from bottom, shows phase label and task progress (X/N)
+
+#### E. Mission Scheduler (`useMissionScheduler.ts`)
+
+- Polls every 30 seconds (+ immediate tick on mount)
+- Uses a `stateRef` pattern to always read fresh state (stale closure bug was fixed)
+- **Auto-trigger:** fires `SET_ACTIVE_MISSION` if current time is within `startsAt–endsAt` window and mission hasn't already been started today
+- **Auto-deactivate:** fires `SET_ACTIVE_MISSION: 'none'` only when `startedAt + durationMins` countdown expires — NOT based on `endsAt` wall-clock (prevents premature dismissal)
+- Task locking: locks tasks whose `locksAt` time has passed
+
+#### F. Mission Timer
+
+- `durationMins` computed from `(endsAt - startsAt)` when mission is activated via `SET_ACTIVE_MISSION`
+- `startedAt` = ISO timestamp of activation
+- Countdown in overlay uses `startedAt + durationMins` — works correctly for manual triggers at any time of day
+
+#### G. Current Default Mission Config
+
+| Mission | Starts At | Ends At | Duration |
+| ------- | --------- | ------- | -------- |
+| Morning | 06:00     | 06:30   | 30 min   |
+| Evening | 19:00     | 20:00   | 60 min   |
+
+**Evening tasks:**
+
+| Task     | Icon             | Locks At                          |
+| -------- | ---------------- | --------------------------------- |
+| Shower   | Droplets 🚿      | —                                 |
+| PJs      | Moon 🌙          | — _(see Backlog #4)_              |
+| Clean Up | Sparkles ✨      | — _(see Backlog #4)_              |
+| Teeth    | Smile 🦷         | — _(see Backlog #4)_              |
+| Book     | BookOpen 📖      | 19:50                             |
+| Talking  | MessageCircle 💬 | 20:00 _(see Backlog #4 — remove)_ |
+
+**Morning tasks:** T-Shirt (👕), Teeth (🦷)
+
+#### H. Hidden Parent Controls
+
+- **Emoji gesture on the phase emoji (🌙/☀️):**
+  - **Hold 600ms** → subtract 5 minutes from remaining time
+  - **Triple tap** → add 5 minutes _(currently unreliable — see Backlog #3)_
+- Manual mission triggers: ☀️ AM / 🌙 PM buttons in top bar
 
 ---
 
-## 1. Requirements & Core Components
+## Backlog (Prioritized)
 
-### A. The Global Bank (Vault)
+### 1. Bank Management Subscreen
 
-- **Location:** Center-left of the main stage.
-- **Component:** A highly textured 2D tray representing a vault, containing physical point tokens (coins).
-- **Manual Override:** A large `(+)` button sits atop the bank to manually add points outside of scheduled missions.
-- **Visual Logic:** Point counts are represented by actual stacks of animated coin divs. A "flick" or "drag" gesture moves tokens from the Bank to Goal Pedestals.
+- Clicking the Bank icon opens a hidden management popup
+- Options:
+  - Add coin (manual)
+  - Remove coin (manual)
+- Hidden from child (parent-only feature, accessed via tap on bank header/icon)
 
-### B. The Goal Pedestals (Savings Interface)
+### 2. Settings Screen
 
-- **Location:** Center-right of the main stage.
-- **Component:** 2–3 glass "Display Cases" acting as savings buckets.
-- **Workflow:**
-  - **Selection:** Tap a `(+)` on an empty case to choose a reward (e.g., Movie, Popcorn, Fire icon).
-  - **Funding:** Drag coins from the Bank to the case, or use the "Quick Transfer" (Vacuum) button to move all available funds.
-  - **Refund:** A "Red Trash Lever" on the case tilts it, tumbling all coins back into the main Bank.
+- Settings button on the Mission Control screen
+- Configurable options:
+  - **Morning mission:** scheduled trigger time (default 7:30 AM) + duration (default 30 min)
+  - **Evening mission:** scheduled trigger time (default 7:00 PM) + duration (default 60 min)
+  - **Privilege management** (see #5)
 
-### C. The Status Brow (Privileges)
+### 3. Mission Trigger & Timer Logic (Full Spec)
 
-- **Location:** Top of the screen.
-- **Component:** 4–5 backlit "License" cards (e.g., Knife, Scissors, Fire Tongs, Garden).
-- **Parental Control:** Clicking a card triggers a popup with suspension durations (1 Day, 3 Days, 1 Week).
-- **Visual State:** Suspended cards are covered by a yellow-and-black "Hazard" shutter with a red countdown timer.
+**Two trigger modes:**
 
-### D. Time-Locked Mission Hubs (The Overlays)
+**Manual:**
 
-- **Morning Mission (6:00 AM – 8:30 AM):** Focuses on T-shirt and Toothbrush tasks.
-- **Evening Mission (7:00 PM – 8:30 PM):** A "Race the Sun" sequence.
-  - **Tasks:** Shower, PJs, Cleanup, Toothbrushing.
-- **Logic-Based Rewards:**
-  - **Done by 7:30:** +1 Point.
-  - **Done by 7:40:** Standard routine (Book, Talking, Sitting).
-  - **Done by 7:50:** "Book" icon grays out.
-  - **Done by 8:00:** "Talking" icon grays out.
-  - **Done by 8:30:** System lockout.
+- Activated by ☀️ AM or 🌙 PM button
+- Starts a new mission immediately
+- Only one mission at a time — if one is already running, show the running one (don't reset)
+- Duration comes from settings (default: morning 30 min, evening 60 min)
 
----
+**Automatic:**
 
-## 2. UI/UX Specialist Input: Family-First Design
+- Triggers at scheduled times (configurable in settings, default: morning 7:30 AM, evening 7:00 PM)
+- Same behavior as manual once triggered
 
-### Layout Strategy: The "n-Shape" Console
+**Both modes:** mission panel stays visible until:
 
-The interface should mimic a physical dashboard, creating a sense of "Big Kid" responsibility. By framing the screen with the Status Brow and Side Docks, the center becomes a clear "work zone" for managing rewards.
+- Countdown timer reaches 0 (auto-close), OR
+- User taps "Hide" (min pill shows at bottom, tapping restores it)
 
-### Interactive Elements
+**Time adjustment gestures (current — triple-tap add is unreliable):**
 
-- **Action Buttons:** Every button must have "depth." A press should look like it physically sinks into the dashboard using state-driven `box-shadow` and `transform` properties.
-- **The "Vacuum" Effect:** When moving points to a goal, use a framer-motion sequence and sound to make the transfer feel powerful and irreversible.
-- **Automatic Transitions:** At 7:00 PM, the Evening Mission should not just "appear"—it should slide down from the top like a heavy mechanical plate over the interface.
+- Long press emoji → −5 min ✅ working
+- Triple tap → +5 min ⚠️ intermittent
 
-### Fun of Use
+**Proposed alternatives for time adjustment:**
 
-- **Tactile Physics:** `framer-motion` springs config should reflect weight. When a token is dropped into a chest, the chest div should animate a "shudder".
-- **Consequence Visualization:** Graded rewards (the Evening Mission) should feel like a game. As the time passes 7:40 PM, the "Book" icon shouldn't just vanish—it should be covered by a physical metal grate to show it's "locked" for the night.
+- Option A: Two long-press zones — left half of emoji = −5 min, right half = +5 min
+- Option B: Swipe left on emoji = −5 min, swipe right = +5 min
+- Option C: Two small overlay buttons (−5 / +5) that appear on first tap of emoji → _simplest to implement_
 
----
+### 4. Evening Mission Task Improvements
 
-## Phase 1: Core Engine & Physics Setup
+Icon replacements needed — find better Lucide icons:
 
-Before we build the vault, we need the "world" boundaries and interactions.
+| Task     | Current Icon  | Requested Change                      |
+| -------- | ------------- | ------------------------------------- |
+| PJs      | Moon 🌙       | Clothes/pajamas icon (e.g., `Shirt`?) |
+| Clean Up | Sparkles ✨   | Toys / blocks icon                    |
+| Teeth    | Smile 🦷      | Toothbrush icon                       |
+| Book     | BookOpen 📖   | Keep                                  |
+| Talking  | MessageCircle | **Remove this task**                  |
 
-### Scene Initialization
+**Add:** Bed / "Going to bed" task at the end
 
-- Create the layout using Tailwind CSS for the fixed "n-shape" interface.
-- Implement reusable CSS classes for ambient occlusion (inner shadows) and soft drop shadows to guarantee depth.
+### 5. Privilege Panel Improvements
 
-### The Token Physics (Framer Motion)
+**Current issues:**
 
-- Create a Token component wrapped in `<motion.div>`.
-- Configure `drag` constraints to the bounds of the screen/application space.
-- Add `whileDrag` and `whileTap` scaling properties to emphasize when a token is lifted.
+- Clicking privilege icons does nothing (suspension popup not implemented)
 
-### The "Sink" Interaction Button
+**Requested functionality:**
 
-- Create a reusable `Button3D` component. On active state (PointerDown), reduce the drop-shadow and translateY to make the button "press into" the screen.
+- Clicking a privilege icon opens a parental control popup with:
+  - Enable / Disable the privilege (hides it from the top bar if disabled)
+  - Suspension duration picker (multi-choice: 1 Day, 3 Days, 1 Week)
+  - _(Duration picker moves to Settings — remove from main screen)_
+- Suspended cards show: **"X days left"** or **"X hours left"** if < 1 day remaining
+- **Larger buttons** — easier to tap from a distance
+- **Larger top bar overall:**
+  - Larger ☀️ AM / 🌙 PM trigger buttons
+  - Larger clock display
 
----
+### 6. Future Ideas
 
-## Phase 2: The Global Bank (Vault)
-
-This is the "Source of Truth" for the app's economy.
-
-### The Vault Container
-
-- Build the visual frame of the Vault using layered divs to imply depth (e.g., a dark inset shadow to simulate the bottom of a tray).
-- Render a list of tokens based on the global state.
-
-### The Manual Override (+)
-
-- Place a large 3D button atop the tray.
-- **Logic:** `onClick` -> Updates global state. The new Token should animate falling in from the top using a framer-motion `initial={{ y: -50 }}` to `animate={{ y: 0 }}` with a spring bounce.
-
-### The Gesture Controller
-
-- Tokens must be individually draggable.
-- Use framer-motion's `onDragEnd` event to determine if the pointer is released over the bounding rect of a Goal Pedestal.
+- **Analog clock mode** — replace digital clock in top bar with a rendered analog clock face
 
 ---
 
-## Phase 3: Goal Pedestals (Savings Interface)
+## Design Principles
 
-This is where the user "spends" their work.
-
-### Display Case States
-
-- Create three renders for the case based on its state:
-  - **Empty:** shows `(+)` icon
-  - **Selecting:** Render standard `lucide-react` icons to pick a reward type.
-  - **Active:** Shows reward icon + tokens dropped in so far.
-
-### The Vacuum (Quick Transfer)
-
-- A button that updates the Token ownership in state from `Bank` to `TargetCase`.
-- Provide an overarching animation (using AnimatePresence or layout animations) pulling all tokens across the screen.
-
-### The Red Trash Lever
-
-- A toggle component mimicking a heavy lever.
-- **Logic:** Triggers a state flush from the Case back to the Bank. Visually animate the tokens popping out and falling back to the vault layout.
-
----
-
-## Phase 4: The Status Brow (Privileges)
-
-This acts as the "Notification Center" for what the kid is allowed to do.
-
-### The License Cards
-
-- Create a horizontal flex row at the top of the screen.
-- Each card component accepts a Status: `Active`, `Suspended`, or `Locked`.
-
-### Parental Popup
-
-- Create a hidden "Admin Overlay" (triggered by a long press, implementing a custom React hook for delays).
-- **Buttons:** "1 Day", "3 Days", "1 Week".
-
-### The Hazard Shutter
-
-- A `<motion.div>` that sits z-indexed above the card.
-- **Logic:** If Suspended, animate the shutter sliding down (height 0 -> 100%). Overlay a countdown timer.
-
----
-
-## Phase 5: Time-Locked Mission Hubs
-
-This is the "Logic Engine" of the app.
-
-### The Mechanical Plate Animation
-
-- Create an "Overlay" component.
-- Use framer-motion to slide it down `y: '-100%'` to `y: '0%'` with a heavy bounce transition.
-- **Trigger:** Hook comparing system clock to hardcoded constraints (6:00 AM and 7:00 PM).
-
-### The "Race the Sun" Logic
-
-- Create a `useMissionTimer` hook that tracks progression from 7:00 PM.
-- **7:30 PM Check:** If MissionsIncomplete, grant +1 point.
-- **7:50 PM Check:** Trigger a visual lock on the Book Icon component and disable interactions.
-- **8:00 PM Check:** Repeat for the Talking Icon.
-
-### The System Lockout
-
-- At 8:30 PM, trigger the final "Plate" state to cover the entire screen and disable pointers.
-
----
-
-## Phase 6: Final Polish & Audio
-
-### Assets
-
-- Utilize Lucide React icons configured with consistent stroke weights and coloring.
-- Source `.mp3` sound bites.
-
-### Audio Integration
-
-- Implement an audio player hook.
-- Play heavy sliding sounds during the Mission Hub drop, clinks for drops, and satisfying clicks for all 3D buttons.
+- **2D Skeuomorphism:** depth via CSS layering, heavy drop-shadows, inset shadows, gradients
+- **Physics feel:** `framer-motion` springs for drag, bouncy token drops, satisfying taps
+- **Kid-first:** large targets, icons > text, pastel palette, no punishing interactions
+- **Parent-first controls:** hidden gestures / tap zones for admin actions (no visible admin mode)
+- **Audio (future):** heavy slide sounds for overlay, clinks for token drops

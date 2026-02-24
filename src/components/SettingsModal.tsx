@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Save, Check, RefreshCw, Moon, Sun, Power, Calendar, LogOut, User, Settings, CheckSquare } from 'lucide-react';
+import { X, Save, Check, RefreshCw, Moon, Sun, Power, Calendar, LogOut, User, Settings, CheckSquare, Rocket } from 'lucide-react';
 import { CalendarSource, TaskListSource, UserConfig } from '../types';
 
 interface SettingsModalProps {
@@ -18,7 +18,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     const [taskLists, setTaskLists] = useState<TaskListSource[]>([]);
     const [config, setConfig] = useState<UserConfig>({ calendarIds: [], taskListIds: [] });
     const [isReconnecting, setIsReconnecting] = useState(false);
-    const [activeSection, setActiveSection] = useState<'account' | 'general' | 'calendars' | 'tasks'>('account');
+    const [activeSection, setActiveSection] = useState<'account' | 'general' | 'calendars' | 'tasks' | 'mission-control'>('account');
 
     const loadData = async () => {
         try {
@@ -132,6 +132,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
                         >
                             <CheckSquare size={18} className={activeSection === 'tasks' ? 'text-green-500' : ''} />
                             Task Lists ({taskLists.length})
+                        </button>
+
+                        {/* Divider before Mission Control */}
+                        <div className="my-2 border-t border-zinc-100 dark:border-zinc-800" />
+
+                        <button
+                            onClick={() => setActiveSection('mission-control')}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-left ${activeSection === 'mission-control' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'}`}
+                        >
+                            <Rocket size={18} className={activeSection === 'mission-control' ? 'text-amber-500' : ''} />
+                            Mission Control
                         </button>
                     </div>
 
@@ -429,6 +440,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
                                             </div>
                                         );
                                     })}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeSection === 'mission-control' && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                <div>
+                                    <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-1 flex items-center gap-2">
+                                        <Rocket size={20} className="text-amber-500" /> Mission Control
+                                    </h3>
+                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+                                        The Big Kid Command Center — token economy, goal pedestals, missions &amp; privileges.
+                                    </p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/10 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-6 flex items-center justify-between gap-6">
+                                    <div>
+                                        <div className="text-2xl mb-2">⭐🏆🎮</div>
+                                        <h4 className="font-bold text-zinc-800 dark:text-zinc-200 mb-1">Open Mission Control</h4>
+                                        <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-sm">
+                                            Switch to the full-screen kid dashboard. The calendar app will reload when you return.
+                                        </p>
+                                    </div>
+                                    <motion.button
+                                        data-testid="open-mission-control-btn"
+                                        whileTap={{ scale: 0.95 }}
+                                        whileHover={{ scale: 1.03 }}
+                                        onClick={() => { window.location.href = window.location.href.split('?')[0] + '?mc=1'; }}
+                                        className="px-8 py-4 rounded-2xl font-black text-base bg-gradient-to-b from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-amber-900 shadow-lg shadow-amber-400/30 transition-all flex items-center gap-3 whitespace-nowrap border border-amber-300"
+                                    >
+                                        <Rocket size={20} />
+                                        Launch!
+                                    </motion.button>
+                                </div>
+
+                                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 space-y-1">
+                                    <p className="text-xs text-zinc-400 font-mono">
+                                        💡 Direct URL: add <span className="text-amber-600 dark:text-amber-400 font-bold select-all">?mc=1</span> to the address bar.
+                                    </p>
+                                    <p className="text-xs text-zinc-400 font-mono">
+                                        🧪 Inside Mission Control, use the <span className="font-bold text-yellow-600 dark:text-yellow-400">☀️ AM</span> and <span className="font-bold text-purple-500">🌙 PM</span> buttons in the top bar to manually trigger a routine for testing.
+                                    </p>
                                 </div>
                             </div>
                         )}
