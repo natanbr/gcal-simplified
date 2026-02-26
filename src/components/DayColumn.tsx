@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { AppEvent, UserConfig } from '../types';
 import { EventCard } from './EventCard';
-import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { groupOverlappingEvents, calculateEventStyles } from '../utils/layout';
 import { areDayColumnPropsEqual } from '../utils/eventUtils';
 
@@ -20,10 +19,7 @@ interface DayColumnProps {
 export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, config, isToday, onEventClick }) => {
     const isWeekendDay = isWeekend(day);
 
-    // Filter standard events (non-holidays) for the layout
-    const standardEvents = useMemo(() => events.filter(e => !e.isHoliday), [events]);
-
-        const {
+    const {
         hourlyGroups,
         hours,
         startHour,
@@ -33,15 +29,13 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
         const endHour = config.activeHoursEnd ?? 21;
         const hours = Array.from({ length: endHour - startHour }, (_, idx) => startHour + idx);
 
-        const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour, day);
-
-        // Hourly events processing
-        const hourlyEvents = buckets.hourly.sort((a, b) => a.start.getTime() - b.start.getTime());
+        // Hourly events processing - events prop is now already filtered and partitioned
+        const hourlyEvents = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
 
         const hourlyGroups = groupOverlappingEvents(hourlyEvents);
 
         return { hourlyGroups, hours, startHour, endHour };
-    }, [standardEvents, config.activeHoursStart, config.activeHoursEnd, day]);
+    }, [events, config.activeHoursStart, config.activeHoursEnd]);
 
     return (
         <div
