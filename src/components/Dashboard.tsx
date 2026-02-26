@@ -65,6 +65,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return days.map(day => processedEvents.filter(e => isSameDay(e.start, day)));
   }, [processedEvents, days]);
 
+  const weekData = useMemo(() => {
+    return days.map((day, i) => {
+        const dayEvents = eventsByDay[i];
+        const holidays = dayEvents.filter(e => e.isHoliday);
+        const standardEvents = dayEvents.filter(e => !e.isHoliday);
+        const startHour = config.activeHoursStart ?? 7;
+        const endHour = config.activeHoursEnd ?? 21;
+
+        const { allDay, hourly } = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour, day);
+
+        const sortedAllDay = allDay.sort((a, b) => {
+            if (a.allDay && !b.allDay) return -1;
+            if (!a.allDay && b.allDay) return 1;
+            return a.start.getTime() - b.start.getTime();
+        });
+
+        return {
+            day,
+            holidays,
+            allDayEvents: sortedAllDay,
+            hourlyEvents: hourly
+        };
+    });
+  }, [days, eventsByDay, config.activeHoursStart, config.activeHoursEnd]);
+
   const currentLocation = useMemo(() => 
       MARINE_LOCATIONS.find(l => l.id === selectedLocationId) || MARINE_LOCATIONS[0], 
   [selectedLocationId]);
@@ -322,11 +347,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             
             {/* Day Headers Grid */}
             <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-200 dark:divide-zinc-800">
-                {days.map((day, i) => {
+                {weekData.map(({ day, holidays, allDayEvents }, i) => {
                     const isToday = isSameDay(day, today);
                     const isWeekendDay = isWeekend(day);
-                    const dayEvents = events.filter(e => isSameDay(e.start, day));
-                    const holidays = dayEvents.filter(e => e.isHoliday);
 
                     return (
                         <div key={i} className={`py-4 px-3 flex flex-col justify-center min-h-[100px] ${isToday ? 'bg-family-cyan/10 dark:bg-family-cyan/5' : isWeekendDay ? 'bg-family-orange/10 dark:bg-family-orange/5' : ''}`}>
@@ -376,25 +399,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                              
                              {/* All Day / Outside Active Hours Events */}
                              <div className="mt-2 w-full flex flex-col gap-1">
-                                 {(() => {
-                                     const startHour = config.activeHoursStart ?? 7;
-                                     const endHour = config.activeHoursEnd ?? 21;
-                                     // Filter out holidays first as they are shown above
-                                     const standardEvents = dayEvents.filter(e => !e.isHoliday);
-                                     const buckets = partitionEventsIntoHourlySlots(standardEvents, startHour, endHour, day);
-                                     
-                                     const allDayEvents = buckets.allDay.sort((a, b) => {
-                                         if (a.allDay && !b.allDay) return -1;
-                                         if (!a.allDay && b.allDay) return 1;
-                                         return a.start.getTime() - b.start.getTime();
-                                     });
-
-                                     return allDayEvents.map(event => (
-                                         <div key={event.id}>
-                                             <EventCard event={event} onEventClick={setSelectedEvent} />
-                                         </div>
-                                     ));
-                                 })()}
+                                 {allDayEvents.map(event => (
+                                     <div key={event.id}>
+                                         <EventCard event={event} onEventClick={setSelectedEvent} />
+                                     </div>
+                                 ))}
                              </div>
                         </div>
                     );
@@ -438,11 +447,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
              {/* Days Content Grid */}
              <div className="flex-1 grid grid-cols-7 divide-x divide-zinc-200 dark:divide-zinc-800 overflow-hidden transition-colors duration-300" data-testid="calendar-grid">
-                {days.map((day, i) => (
+                {weekData.map(({ day, hourlyEvents }) => (
                     <DayColumn
                         key={day.toISOString()}
                         day={day}
-                        events={eventsByDay[i]}
+                        events={hourlyEvents}
                         config={config}
                         isToday={isSameDay(day, today)}
                         onEventClick={setSelectedEvent}
