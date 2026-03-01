@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, powerMonitor } from 'electron'
+import { app, BrowserWindow, ipcMain, powerMonitor, session } from 'electron'
 import { exec } from 'node:child_process'
 import 'dotenv/config'
 // import { createRequire } from 'node:module'
@@ -79,6 +79,20 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(() => {
+  // Set up Content Security Policy
+  const csp = VITE_DEV_SERVER_URL
+    ? "default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' ws: http: https:;"
+    : "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';";
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    });
+  });
+
   createWindow()
 
   // IPC Handlers
