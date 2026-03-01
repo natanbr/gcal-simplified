@@ -33,11 +33,21 @@ const mocks = vi.hoisted(() => {
     getSystemIdleTime: vi.fn().mockReturnValue(0)
   };
 
+  // Session Mock
+  const mockSession = {
+    defaultSession: {
+      webRequest: {
+        onHeadersReceived: vi.fn()
+      }
+    }
+  };
+
   return {
     mockBrowserWindow,
     mockApp,
     mockIpcMain,
-    mockPowerMonitor
+    mockPowerMonitor,
+    mockSession
   };
 });
 
@@ -46,6 +56,7 @@ vi.mock('electron', () => ({
   BrowserWindow: mocks.mockBrowserWindow,
   ipcMain: mocks.mockIpcMain,
   powerMonitor: mocks.mockPowerMonitor,
+  session: mocks.mockSession,
 }));
 
 vi.mock('electron-updater', () => ({

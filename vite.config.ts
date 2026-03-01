@@ -10,6 +10,18 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
+      {
+        name: 'html-transform',
+        transformIndexHtml(html) {
+          if (mode === 'production') {
+            return html.replace(
+              '<head>',
+              `<head>\n    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';">`
+            );
+          }
+          return html;
+        }
+      },
       electron({
         main: {
           // Shortcut of `build.lib.entry`.
