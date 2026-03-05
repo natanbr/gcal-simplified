@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { format, isSameMonth, isSameDay } from 'date-fns';
 import { AppEvent } from '../types';
 import { getEventColorStyles } from '../utils/colorMapping';
@@ -18,6 +18,22 @@ export const MonthlyView: React.FC<MonthlyViewProps> = ({ days, events, onEventC
     const firstDay = days[0].getDay();
     const orderedDayNames = [...dayNames.slice(firstDay), ...dayNames.slice(0, firstDay)];
 
+    // Pre-calculate events per day to avoid O(35 * N) filtering and redundant Date object creation
+    const eventsByDayMap = useMemo(() => {
+        const map = new Map<string, AppEvent[]>();
+
+        events.forEach(event => {
+            const eventStart = new Date(event.start);
+            const dateStr = `${eventStart.getFullYear()}-${eventStart.getMonth()}-${eventStart.getDate()}`;
+            if (!map.has(dateStr)) {
+                map.set(dateStr, []);
+            }
+            map.get(dateStr)!.push(event);
+        });
+
+        return map;
+    }, [events]);
+
     return (
         <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-300">
             {/* Day Names Header */}
@@ -32,7 +48,8 @@ export const MonthlyView: React.FC<MonthlyViewProps> = ({ days, events, onEventC
             {/* Grid */}
             <div className="flex-1 grid grid-cols-7 grid-rows-5 divide-x divide-y divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800">
                 {days.map((day) => {
-                    const dayEvents = events.filter(e => isSameDay(new Date(e.start), day));
+                    const dateStr = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+                    const dayEvents = eventsByDayMap.get(dateStr) || [];
                     const isToday = isSameDay(day, currentDate);
                     const isCurrentMonth = isSameMonth(day, referenceDate);
 
