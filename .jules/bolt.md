@@ -12,3 +12,11 @@
 
 **Learning:** Found that `partitionEventsIntoHourlySlots` was creating an object map of events keyed by hour, but the consumer (`DayColumn`) only needed a flat list of overlapping events. The map structure was pure overhead.
 **Action:** When optimizing, verify if complex return structures from utility functions are actually consumed in that format. Flattening to arrays can save significant O(N) operations and object allocations.
+
+## 2024-10-31 - [Array Filtering in Loops]
+**Learning:** Calling `Array.prototype.filter` inside a `.map` loop over a fixed grid (like 35 days in `MonthlyView`) results in $O(G \times N)$ complexity (where G is grid size, N is events). Additionally, instantiating `new Date()` within this nested loop creates massive GC overhead.
+**Action:** When mapping over a grid, use `useMemo` to pre-calculate and group events into a `Map` keyed by a simplified string (e.g., `YYYY-MM-DD`). This reduces the render loop complexity to $O(N)$ and allows for $O(1)$ lookups, eliminating redundant object creation.
+
+## 2024-10-31 - [Defensive Runtime Types]
+**Learning:** Even if TypeScript types define a property as a `Date` (e.g., `AppEvent.start`), data passed from IPC or API responses may be raw ISO strings or numbers if not properly hydrated.
+**Action:** Always defensively wrap assumed Date objects in `new Date(value)` before invoking methods like `.getFullYear()` to prevent critical runtime crashes when processing external data.
