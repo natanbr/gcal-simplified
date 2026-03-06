@@ -16,7 +16,7 @@ import { GoalPedestal } from './components/GoalPedestal';
 import { MCSettingsOverlay } from './components/MCSettingsOverlay';
 import { PrivilegeCardButton } from './components/PrivilegeCardButton';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
-import { useLiveClock } from './hooks/useLiveClock';
+import { LiveClockDisplay } from './components/LiveClockDisplay';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
 interface MCLayoutProps {
@@ -26,7 +26,6 @@ interface MCLayoutProps {
 function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const state    = useMCState();
   const dispatch  = useMCDispatch();
-  const now = useLiveClock();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Refs to each pedestal DOM element for drop-zone hit testing
@@ -156,18 +155,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           >
             🌙 PM
           </button>
-          <span
-            data-testid="mc-clock"
-            style={{
-              color: 'var(--mc-text)',
-              fontSize: 22,
-              fontVariantNumeric: 'tabular-nums',
-              fontWeight: 900,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
+          <LiveClockDisplay />
         </div>
       </div>
 
