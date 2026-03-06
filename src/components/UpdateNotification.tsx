@@ -15,6 +15,24 @@ interface ProgressInfo {
     delta: number;
 }
 
+/**
+ * Compares two semver strings and returns true if `a` is strictly newer than `b`.
+ * Handles versions with or without a leading "0.0." prefix (e.g. "0.0.13" vs "13").
+ */
+function isNewerVersion(a: string, b: string): boolean {
+    const parse = (v: string) => v.split('.').map(Number);
+    const av = parse(a);
+    const bv = parse(b);
+    const len = Math.max(av.length, bv.length);
+    for (let i = 0; i < len; i++) {
+        const ai = av[i] ?? 0;
+        const bi = bv[i] ?? 0;
+        if (ai > bi) return true;
+        if (ai < bi) return false;
+    }
+    return false; // equal
+}
+
 export const UpdateNotification: React.FC = () => {
     const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -64,13 +82,25 @@ export const UpdateNotification: React.FC = () => {
             setTimeout(() => setError(null), 5000);
         });
 
-        // Trigger an immediate check when this component mounts
+        // Trigger an immediate check when this component mounts.
         // This solves the race condition if the initial check in main.ts
         // happened before the user logged in.
-        window.ipcRenderer.invoke('update:check').then((result: any) => {
+        // We also fetch the current running version so we can guard against
+        // showing the button for the version we just installed after a restart.
+        Promise.all([
+            window.ipcRenderer.invoke('update:check'),
+            window.ipcRenderer.invoke('app:info'),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ]).then(([result, appInfo]: [any, any]) => {
             if (result && result.updateInfo) {
-                console.log('Update check result:', result.updateInfo);
-                setUpdateAvailable(result.updateInfo);
+                const availableVersion: string = result.updateInfo.version;
+                const currentVersion: string = appInfo?.version ?? '';
+                console.log(`Update check: available=${availableVersion}, current=${currentVersion}`);
+                if (isNewerVersion(availableVersion, currentVersion)) {
+                    setUpdateAvailable(result.updateInfo);
+                } else {
+                    console.log('Available version is not newer than current; suppressing update button.');
+                }
             }
         }).catch(err => {
             console.error('Initial mount update check failed:', err);
