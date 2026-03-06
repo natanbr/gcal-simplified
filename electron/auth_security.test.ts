@@ -34,9 +34,9 @@ vi.mock('electron', () => ({
 vi.mock('electron-store', () => {
   return {
     default: class MockStore {
-        get = mocks.electronStoreInstance.get;
-        set = mocks.electronStoreInstance.set;
-        delete = mocks.electronStoreInstance.delete;
+      get = mocks.electronStoreInstance.get;
+      set = mocks.electronStoreInstance.set;
+      delete = mocks.electronStoreInstance.delete;
     }
   };
 });
@@ -46,9 +46,9 @@ vi.mock('googleapis', () => {
     google: {
       auth: {
         OAuth2: class {
-            generateAuthUrl = vi.fn().mockReturnValue('http://auth-url');
-            getToken = vi.fn().mockResolvedValue({ tokens: {} });
-            setCredentials = vi.fn();
+          generateAuthUrl = vi.fn().mockReturnValue('http://auth-url');
+          getToken = vi.fn().mockResolvedValue({ tokens: {} });
+          setCredentials = vi.fn();
         }
       }
     }
@@ -59,7 +59,7 @@ vi.mock('googleapis', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockServer: any = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  listen: vi.fn((port: any, host: any, cb: any) => {
+  listen: vi.fn((_port: any, _host: any, cb: any) => {
     if (cb) cb();
     return mockServer;
   }),
@@ -86,7 +86,7 @@ describe('AuthService Security', () => {
   it('should prevent reflected XSS in auth callback error handling', async () => {
     // Start auth flow to register the handler
     // Catch the rejection since we are simulating an error scenario
-    authService.startAuth().catch(() => {});
+    authService.startAuth().catch(() => { });
 
     // Get the captured request handler
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,7 +128,7 @@ describe('AuthService Security', () => {
 
     // Fail if neither condition is met
     if (!hasSafeContentType && !hasSanitizedBody) {
-        throw new Error('Response is vulnerable to XSS: Content-Type not set to text/plain AND body contains raw script tag.');
+      throw new Error('Response is vulnerable to XSS: Content-Type not set to text/plain AND body contains raw script tag.');
     }
   });
 });
