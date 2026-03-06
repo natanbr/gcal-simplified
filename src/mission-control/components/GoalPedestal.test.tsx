@@ -94,10 +94,14 @@ describe('GoalPedestal', () => {
         expect(screen.getByLabelText('Move needed coins to this goal')).toBeInTheDocument();
     });
 
-    it('disables the "All" button when bank is empty', () => {
+    it('visually disables the "All" button when bank is empty (cursor: not-allowed, reduced opacity)', () => {
         renderPedestal(activeCase, 0);
         const allBtn = screen.getByLabelText('Move needed coins to this goal');
-        expect(allBtn).toBeDisabled();
+        // Button3D applies visual-disabled state via CSS (cursor + opacity) rather than
+        // the native `disabled` attribute. Assert the visual indicators are present.
+        const style = (allBtn as HTMLElement).style;
+        expect(style.cursor).toBe('not-allowed');
+        expect(parseFloat(style.opacity)).toBeLessThan(1);
     });
 
     it('shows "Use!" button and not "All" when goal is complete', () => {

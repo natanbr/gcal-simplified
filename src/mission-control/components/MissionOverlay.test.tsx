@@ -4,8 +4,8 @@
 // ============================================================
 
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MCStoreProvider } from '../store/useMCStore.tsx';
 import { MissionOverlay } from './MissionOverlay';
 import { useMCDispatch } from '../store/useMCStore.tsx';
@@ -60,6 +60,11 @@ function renderOverlay(extra?: React.ReactNode) {
 describe('MissionOverlay', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        localStorage.clear();
+    });
+    afterEach(() => {
+        cleanup();
+        localStorage.clear();
     });
 
     it('does not render the overlay when no mission is active', () => {
@@ -135,10 +140,15 @@ describe('MissionOverlay', () => {
         await act(async () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
-        // Complete every morning task (tshirt, toothbrush)
-        const taskBtns = screen.queryAllByTestId(/^mc-task-card-/);
-        for (const btn of taskBtns) {
-            await act(async () => { fireEvent.click(btn); });
+        // Complete every morning task by clicking each active (non-disabled) task button.
+        // Morning mission currently has 4 tasks: tshirt, toothbrush, feed-dog, vitamin.
+        // Re-query before each click to get fresh references after re-renders.
+        const taskIds = ['tshirt', 'toothbrush', 'feed-dog', 'vitamin'];
+        for (const id of taskIds) {
+            const btn = screen.queryByTestId(`mc-task-card-${id}`);
+            if (btn && !(btn as HTMLButtonElement).disabled) {
+                await act(async () => { fireEvent.click(btn); });
+            }
         }
         expect(screen.getByTestId('mc-all-done')).toBeInTheDocument();
     });
@@ -148,9 +158,12 @@ describe('MissionOverlay', () => {
         await act(async () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
-        const taskBtns = screen.queryAllByTestId(/^mc-task-card-/);
-        for (const btn of taskBtns) {
-            await act(async () => { fireEvent.click(btn); });
+        const taskIds = ['tshirt', 'toothbrush', 'feed-dog', 'vitamin'];
+        for (const id of taskIds) {
+            const btn = screen.queryByTestId(`mc-task-card-${id}`);
+            if (btn && !(btn as HTMLButtonElement).disabled) {
+                await act(async () => { fireEvent.click(btn); });
+            }
         }
         await act(async () => {
             fireEvent.click(screen.getByTestId('mc-bonus-coin-btn'));

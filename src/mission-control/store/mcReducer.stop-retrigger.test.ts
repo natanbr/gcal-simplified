@@ -78,12 +78,13 @@ describe('CANCEL_MISSION — deactivates and fully resets', () => {
         expect(state.activeMission).toBe('none');
     });
 
-    it('clears startedAt (timer anchor only, not a guard)', () => {
+    it('preserves startedAt as a scheduler guard (prevents same-day re-trigger)', () => {
         const state = applyActions([
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
             { type: 'CANCEL_MISSION', missionPhase: 'morning' },
         ]);
-        expect(morningMission(state).startedAt).toBeUndefined();
+        // startedAt must survive CANCEL so the scheduler guard blocks same-day re-triggering.
+        expect(state.missions.find(m => m.phase === 'morning')!.startedAt).toBeDefined();
     });
 
     it('clears durationMins', () => {

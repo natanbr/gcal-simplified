@@ -63,14 +63,14 @@ describe('mcReducer — CANCEL_MISSION', () => {
         expect(isToday(morningMission(state).startedAt)).toBe(true);
     });
 
-    it('does NOT reset task progress', () => {
+    it('DOES reset task progress (so a re-triggered mission always starts clean)', () => {
         const taskId = morningMission(initialState).tasks[0].id;
         const state = applyActions([
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
             { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId },
             { type: 'CANCEL_MISSION', missionPhase: 'morning' },
         ]);
-        expect(morningMission(state).tasks[0].completed).toBe(true);
+        expect(morningMission(state).tasks[0].completed).toBe(false);
     });
 });
 

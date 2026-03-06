@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "@testing-library/jest-dom", "node"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": [
+    "src",
+    "electron",
+    "src/test/**/*",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
+}

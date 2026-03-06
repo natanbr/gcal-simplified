@@ -47,6 +47,7 @@
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/runner": "^3.2.4",
     "autoprefixer": "^10.4.24",
     "electron": "^40.4.1",
     "electron-builder": "^26.7.0",
@@ -61,7 +62,7 @@
     "vite": "^7.3.1",
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5",
-    "vitest": "^4.0.18"
+    "vitest": "^3.2.4"
   },
   "main": "dist-electron/main.js"
 }
