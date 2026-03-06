@@ -121,6 +121,21 @@ describe('CANCEL_MISSION — deactivates and fully resets', () => {
         expect(state.activeMission).toBe('morning');
         expect(morningMission(state).startedAt).toBeDefined();
     });
+
+    // ── RE-TRIGGER GUARD ─────────────────────────────────────────
+    // startedAt must survive cancel — it's the only signal the
+    // scheduler uses to know "this mission already ran".
+    // Without it, the scheduler sees activeMission='none' + within
+    // window → fires again within 15 seconds of every cancel.
+    it('preserves startedAt after cancel (scheduler re-trigger guard)', () => {
+        const state = applyActions([
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
+            { type: 'CANCEL_MISSION', missionPhase: 'morning' },
+        ]);
+        // startedAt must NOT be cleared — the scheduler checks it to
+        // prevent re-triggering the same mission after a stop/cancel.
+        expect(morningMission(state).startedAt).toBeDefined();
+    });
 });
 
 // ──────────────────────────────────────────────────────────────

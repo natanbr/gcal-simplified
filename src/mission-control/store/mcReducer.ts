@@ -253,8 +253,9 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
             };
 
         // Stop: deactivates the mission and resets all state.
-        // startedAt is cleared — it's a timer anchor only, not a scheduler guard.
-        // The scheduler may re-trigger if still within the time window (accepted behaviour).
+        // startedAt is intentionally preserved — the scheduler uses it as a guard
+        // to prevent re-triggering the same mission after a user stop/cancel.
+        // It is only cleared by SET_SETTINGS when the trigger time changes.
         case 'CANCEL_MISSION':
             return {
                 ...state,
@@ -264,7 +265,6 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                         ? {
                             ...m,
                             active: false,
-                            startedAt: undefined,
                             durationMins: undefined,
                             tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
                         }

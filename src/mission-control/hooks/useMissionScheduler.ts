@@ -42,12 +42,15 @@ export function useMissionScheduler(): void {
             // ── Activate scheduled missions ───────────────────────────────────────
             // Rule 1: only trigger if we're in the time window
             // Rule 2: don't start if a mission is already active
+            // Rule 3: don't re-trigger if this mission already has a startedAt
+            //         (startedAt is preserved through cancel/expiry — its presence
+            //          means the mission already ran this session)
             for (const m of s.missions) {
                 const start = timeToDate(m.startsAt);
                 const end = timeToDate(m.endsAt);
                 const withinWindow = now >= start && now < end;
 
-                if (withinWindow && s.activeMission === 'none') {
+                if (withinWindow && !m.startedAt && s.activeMission === 'none') {
                     dispatch({ type: 'SET_ACTIVE_MISSION', phase: m.phase as Exclude<MissionPhase, 'none'> });
                     return; // one mission at a time
                 }

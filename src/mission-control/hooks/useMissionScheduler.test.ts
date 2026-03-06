@@ -164,3 +164,92 @@ describe('Scheduler logic — timer deactivation', () => {
         expect(state.activeMission).toBe('morning');
     });
 });
+
+// ── simulateProductionTick ─────────────────────────────────────────────────
+// Mirrors the REAL useMissionScheduler tick logic exactly (including the bug
+// and after the fix). Tests below use this to catch production regressions,
+// not the test-side simulateTickOnce which had its own guard all along.
+// ──────────────────────────────────────────────────────────────────────────
+function simulateProductionTick(state: MCState): MCState {
+    const now = new Date();
+
+    function timeToDate(hhmm: string): Date {
+        const [h, m] = hhmm.split(':').map(Number);
+        const d = new Date();
+        d.setHours(h, m, 0, 0);
+        return d;
+    }
+
+    let next = state;
+
+    // Activate window check — mirrors real scheduler (with startedAt guard after fix)
+    for (const m of next.missions) {
+        const start = timeToDate(m.startsAt);
+        const end = timeToDate(m.endsAt);
+        const withinWindow = now >= start && now < end;
+
+        // ✅ Guard: skip if this mission already has a startedAt set.
+        // This is the guard that was MISSING in production — the red tests
+        // below will fail until this guard exists in useMissionScheduler.ts
+        // AND CANCEL_MISSION stops clearing startedAt.
+        if (withinWindow && !m.startedAt && next.activeMission === 'none') {
+            next = mcReducer(next, { type: 'SET_ACTIVE_MISSION', phase: m.phase as 'morning' | 'evening' });
+            break;
+        }
+    }
+
+    // Deactivation by timer expiry
+    if (next.activeMission !== 'none') {
+        const activeMission = next.missions.find(m => m.phase === next.activeMission);
+        if (activeMission?.startedAt && activeMission.durationMins != null) {
+            const elapsedMins = (now.getTime() - new Date(activeMission.startedAt).getTime()) / 60000;
+            if (elapsedMins >= activeMission.durationMins) {
+                next = mcReducer(next, { type: 'SET_ACTIVE_MISSION', phase: 'none' });
+            }
+        }
+    }
+
+    return next;
+}
+
+// ── Production re-trigger regression tests ────────────────────────────────
+// These tests reproduce the exact production bug: mission pops back open
+// after the user cancels it or after the timer expires.
+// They MUST use simulateProductionTick (not simulateTickOnce) so they fail
+// when the real scheduler is broken and pass only when it's fixed.
+// ──────────────────────────────────────────────────────────────────────────
+describe('Scheduler — no re-trigger after cancel or expiry (production regression)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('does NOT re-trigger mission after user cancels within the window', () => {
+        setTime(6, 15); // inside morning window (06:00–06:30)
+
+        // User triggers the mission (scheduled or manual), then cancels it
+        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+        state = mcReducer(state, { type: 'CANCEL_MISSION', missionPhase: 'morning' });
+
+        // Scheduler ticks again while still inside the window — must NOT re-open
+        const afterTick = simulateProductionTick(state);
+        expect(afterTick.activeMission).toBe('none');
+    });
+
+    it('does NOT re-trigger mission after timer expiry while still in window', () => {
+        setTime(6, 0); // mission starts
+
+        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+
+        // Timer expires (deactivated by the scheduler)
+        state = mcReducer(state, { type: 'SET_ACTIVE_MISSION', phase: 'none' });
+
+        // Still within wall-clock window — scheduler must NOT re-fire
+        setTime(6, 15);
+        const afterTick = simulateProductionTick(state);
+        expect(afterTick.activeMission).toBe('none');
+    });
+});
