@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { startOfMonth, startOfWeek, addDays } from 'date-fns';
-import { AppEvent } from '../types';
+import { AppEvent, SerializedAppEvent } from '../types';
 
 interface CacheEntry {
     events: AppEvent[];
@@ -58,10 +58,9 @@ export function useCalendarData() {
                 'data:events',
                 gridStart.toISOString(),
                 gridEnd.toISOString()
-            );
+            ) as SerializedAppEvent[];
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const hydratedEvents: AppEvent[] = (fetchedEvents as any[]).map((e: any) => ({
+            const hydratedEvents: AppEvent[] = fetchedEvents.map((e: SerializedAppEvent) => ({
                 ...e,
                 start: new Date(e.start),
                 end: new Date(e.end)

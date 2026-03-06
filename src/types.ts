@@ -11,6 +11,11 @@ export interface AppEvent {
     color?: string; // Hex color for calendar color inheritance
 }
 
+export type SerializedAppEvent = Omit<AppEvent, 'start' | 'end'> & {
+    start: string;
+    end: string;
+};
+
 export interface AppTask {
     id: string;
     title: string;
