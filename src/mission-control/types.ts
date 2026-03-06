@@ -19,8 +19,9 @@ export type RewardIcon =
     | 'show'
     | 'campfire'
     | 'game'
-    | 'extra-story'
-    | 'story-points';
+    | 'fishing'
+    | 'story-points'
+    | 'mystery-box';
 
 export type DisplayCaseStatus = 'empty' | 'selecting' | 'active';
 
@@ -70,10 +71,14 @@ export interface Mission {
     /** When the full lockout triggers */
     endsAt: string;
     durationMins?: number; // computed at trigger time
-    startedAt?: string;   // ISO timestamp when mission was triggered (manual or scheduled)
+    /** ISO timestamp when mission was triggered (manual or scheduled).
+     *  Also serves as the scheduler's "already ran today" guard.
+     *  Preserved on Stop so scheduler won't re-fire; cleared by SET_SETTINGS on time change. */
+    startedAt?: string;
     tasks: MissionTask[];
     active: boolean;
 }
+
 
 // --------------- Settings ---------------
 
@@ -107,6 +112,10 @@ export interface ResponsibilityTask {
     pointsRequired: number;
     pointsEarned: number;
     completedAt: string | null; // ISO timestamp when pointsEarned >= pointsRequired
+    /** Optional list of specific activity buttons to show instead of the generic +1 button */
+    activities?: { emoji: string; label: string }[];
+    /** Tokens added to the bank when the parent clicks "Claim & Start Over" */
+    tokenReward?: number;
 }
 
 // --------------- Root App State ---------------

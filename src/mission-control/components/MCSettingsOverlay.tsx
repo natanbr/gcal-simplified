@@ -56,8 +56,12 @@ function DurationStepper({
     value: number;
     onChange: (v: number) => void;
 }) {
+    const TEST_SECS = 10 / 60; // 10 seconds expressed as fractional minutes
     const steps = [5, 10, 15, 20, 30, 45, 60, 90, 120];
-    const pct = (value / 120) * 100;
+    const pct = (Math.min(value, 120) / 120) * 100;
+    const displayLabel = value === TEST_SECS
+        ? '10s'
+        : value >= 60 ? `${Math.floor(value / 60)}h${value % 60 > 0 ? ` ${value % 60}m` : ''}` : `${Math.round(value)}m`;
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -65,11 +69,33 @@ function DurationStepper({
                     {label}
                 </span>
                 <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--mc-text)', fontVariantNumeric: 'tabular-nums' }}>
-                    {value >= 60 ? `${Math.floor(value / 60)}h${value % 60 > 0 ? ` ${value % 60}m` : ''}` : `${value}m`}
+                    {displayLabel}
                 </span>
             </div>
             {/* Quick-pick chips */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {/* Dev test chip */}
+                <motion.button
+                    key="10s"
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => onChange(TEST_SECS)}
+                    title="10-second test timer"
+                    style={{
+                        background: value === TEST_SECS
+                            ? 'linear-gradient(180deg,#ff9a3c,#e67e22)'
+                            : 'rgba(255,200,100,0.2)',
+                        border: value === TEST_SECS ? '1.5px solid #e67e22' : '1.5px solid rgba(230,130,0,0.25)',
+                        borderRadius: 8,
+                        padding: '4px 10px',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: value === TEST_SECS ? '#fff' : '#b86000',
+                        cursor: 'pointer',
+                        fontFamily: "'Nunito', sans-serif",
+                    }}
+                >
+                    🔧 10s
+                </motion.button>
                 {steps.map(step => (
                     <motion.button
                         key={step}
@@ -97,10 +123,10 @@ function DurationStepper({
             {/* Slider */}
             <input
                 type="range"
-                min={5}
+                min={0}
                 max={120}
                 step={5}
-                value={value}
+                value={Math.round(value)}
                 onChange={e => onChange(Number(e.target.value))}
                 style={{ width: '100%', accentColor: '#a57dff' }}
             />

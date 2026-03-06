@@ -26,9 +26,10 @@ import { useCalendarData } from '../hooks/useCalendarData';
 
 interface DashboardProps {
   onLogout?: () => void;
+  onSwitchToMC?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState('sooke');
@@ -320,6 +321,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
              )}
              {currentError && <span className="text-red-500 text-xs font-bold">{currentError}</span>}
              
+             {onSwitchToMC && (
+               <button
+                 onClick={onSwitchToMC}
+                 className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all border border-zinc-200 dark:border-zinc-700/50 shadow-lg group"
+                 title="Open Command Center"
+                 data-testid="switch-to-mc-btn"
+               >
+                 <span>⭐</span>
+                 <span className="text-sm font-black text-zinc-900 dark:text-zinc-100 group-hover:text-black dark:group-hover:text-white">Command Center</span>
+               </button>
+             )}
+
              <button
                 onClick={() => setShowSettings(true)}
                 className="p-3 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-500 hover:text-black dark:hover:text-white transition-colors"

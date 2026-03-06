@@ -180,7 +180,15 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                             data-testid={`mc-responsibility-claim-${task.id}`}
                             whileTap={{ scale: 0.93, y: 2 }}
                             whileHover={{ scale: 1.03, y: -1 }}
-                            onClick={() => dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id })}
+                            onClick={() => {
+                                // Pay out tokens to the bank if this responsibility has a reward
+                                if (task.tokenReward) {
+                                    for (let i = 0; i < task.tokenReward; i++) {
+                                        dispatch({ type: 'ADD_TOKEN' });
+                                    }
+                                }
+                                dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id });
+                            }}
                             style={{
                                 background: 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
                                 border: '1.5px solid rgba(61,206,118,0.5)',
@@ -196,6 +204,44 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                         >
                             🎁 Claim & Start Over
                         </motion.button>
+                    </motion.div>
+                ) : task.activities && task.activities.length > 0 ? (
+                    /* Activity-specific buttons — one per sport */
+                    <motion.div
+                        key="activities"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        style={{ display: 'flex', gap: 8 }}
+                    >
+                        {task.activities.map(activity => (
+                            <motion.button
+                                key={activity.label}
+                                data-testid={`mc-responsibility-activity-${task.id}-${activity.label.toLowerCase()}`}
+                                whileTap={{ scale: 0.88, y: 2 }}
+                                whileHover={{ scale: 1.08, y: -2 }}
+                                onClick={() => dispatch({ type: 'ADD_RESPONSIBILITY_POINT', taskId: task.id })}
+                                title={`${activity.label} +1`}
+                                style={{
+                                    flex: 1,
+                                    background: 'linear-gradient(180deg, #ffe880 0%, #f7c948 100%)',
+                                    border: '1.5px solid rgba(247,201,72,0.6)',
+                                    borderRadius: 12,
+                                    padding: '10px 4px',
+                                    fontSize: 26,
+                                    cursor: 'pointer',
+                                    fontFamily: "'Nunito', sans-serif",
+                                    boxShadow: '0 3px 0 #c99b10',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                }}
+                            >
+                                <span>{activity.emoji}</span>
+                                <span style={{ fontSize: 9, fontWeight: 900, color: '#5a3e00' }}>+1</span>
+                            </motion.button>
+                        ))}
                     </motion.div>
                 ) : (
                     /* +1 point button */

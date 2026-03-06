@@ -26,6 +26,8 @@ const ICON_MAP: Record<string, string> = {
     MessageCircle: '💬',
     BedDouble:     '🛏️',
     MoonStar:      '🌙',
+    Dog:           '🐕',
+    Pill:          '💊',
 };
 const iconEmoji = (name: string) => ICON_MAP[name] ?? '⭐';
 
@@ -277,10 +279,18 @@ export function MissionOverlay() {
         return `${String(totalMins).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     })();
 
-    const handleBonusCoin = () => {
+    const handleBonusCoin = useCallback(() => {
         for (let i = 0; i < effectiveBonus; i++) dispatch({ type: 'ADD_TOKEN' });
-        setMinimized(true);
-    };
+        // Hard-stop the mission: full reset + cancelledAt guard so it won't re-appear
+        if (phase !== 'none') {
+            dispatch({ type: 'CANCEL_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> });
+        }
+    }, [dispatch, effectiveBonus, phase]);
+
+    // Auto-collect when timer expires with all tasks done
+    useEffect(() => {
+        if (timerExpired && allDone) handleBonusCoin();
+    }, [timerExpired, allDone, handleBonusCoin]);
 
     return (
         <>
@@ -391,7 +401,13 @@ export function MissionOverlay() {
 
                             {/* CENTER — timer (hero element) */}
                             <motion.span
-                                animate={timerCritical ? { scale: [1, 1.06, 1], color: ['#e74c3c', '#c0392b', '#e74c3c'] } : {}}
+                                animate={
+                                    allDone
+                                        ? {} // all done — no animation, stays green
+                                        : timerCritical
+                                        ? { scale: [1, 1.06, 1], color: ['#e74c3c', '#c0392b', '#e74c3c'] }
+                                        : {}
+                                }
                                 transition={{ repeat: Infinity, duration: 1 }}
                                 style={{
                                     fontSize: 42,
@@ -401,7 +417,13 @@ export function MissionOverlay() {
                                     lineHeight: 1,
                                     letterSpacing: '-0.02em',
                                     textAlign: 'center',
-                                    color: timerExpired ? '#e74c3c' : timerCritical ? '#e67e22' : 'var(--mc-text)',
+                                    color: allDone
+                                        ? '#27ae60'         // green — all tasks complete
+                                        : timerExpired
+                                        ? '#e74c3c'
+                                        : timerCritical
+                                        ? '#e67e22'
+                                        : 'var(--mc-text)',
                                 }}
                             >
                                 {timerDisplay}
@@ -453,7 +475,7 @@ export function MissionOverlay() {
                                     whileTap={{ scale: 0.88 }}
                                     whileHover={{ scale: 1.06 }}
                                     onClick={() => dispatch({ type: 'CANCEL_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> })}
-                                    title="Stop mission (won't re-trigger today)"
+                                    title="Stop mission — fully resets tasks and timer; scheduler may re-trigger"
                                     style={{
                                         background: 'rgba(255,220,220,0.7)',
                                         border: '1.5px solid rgba(220,100,100,0.35)',
@@ -482,7 +504,9 @@ export function MissionOverlay() {
                                         transition={{ duration: 1, ease: 'linear' }}
                                         style={{
                                             height: '100%',
-                                            background: timerCritical
+                                            background: allDone
+                                                ? 'linear-gradient(90deg,#27ae60,#2ecc71)'
+                                                : timerCritical
                                                 ? 'linear-gradient(90deg,#e74c3c,#c0392b)'
                                                 : `linear-gradient(90deg,${meta.accent},${meta.accent}bb)`,
                                         }}

@@ -8,12 +8,13 @@
 import type { RewardIcon } from './types';
 
 export const REWARDS: { id: RewardIcon; label: string; emoji: string; targetCount: number }[] = [
-    { id: 'movie-popcorn', label: 'Movie + Popcorn', emoji: '🍿', targetCount: 10 },
-    { id: 'show', label: 'Show', emoji: '🎬', targetCount: 10 },
-    { id: 'campfire', label: 'Campfire', emoji: '🔥', targetCount: 10 },
+    { id: 'story-points', label: 'Story w/ Points', emoji: '💻', targetCount: 3 },
     { id: 'game', label: 'Game', emoji: '🎮', targetCount: 6 },
-    { id: 'extra-story', label: 'Extra Story', emoji: '📖', targetCount: 2 },
-    { id: 'story-points', label: 'Story w/ Points', emoji: '💻', targetCount: 2 },
+    { id: 'show', label: 'Short Show', emoji: '🎬', targetCount: 8 },
+    { id: 'fishing', label: 'Fishing', emoji: '🎣', targetCount: 10 },
+    { id: 'movie-popcorn', label: 'Movie + Popcorn', emoji: '🍿', targetCount: 12 },
+    { id: 'campfire', label: 'Fire', emoji: '🔥', targetCount: 14 },
+    { id: 'mystery-box', label: 'Mystery Box', emoji: '❓', targetCount: 50 },
 ];
 
 export const REWARD_MAP = Object.fromEntries(

@@ -5,28 +5,28 @@
 // ⚠️  ISOLATION CONTRACT:
 //   - Does NOT import from parent app (../components, ../hooks, etc.)
 //   - CSS: imports ./styles/mc.css (isolated to this module)
-//   - State: uses MCStoreProvider (self-contained)
+//   - State: uses MCStoreProvider (provided by App.tsx — do not re-wrap here)
 // ============================================================
 
 import './styles/mc.css';
 import { useRef, useCallback, useState } from 'react';
-import { MCStoreProvider, useMCState, useMCDispatch } from './store/useMCStore.tsx';
-import { DragLayer } from './components/DragLayer';
+import { useMCState, useMCDispatch } from './store/useMCStore.tsx';
 import { GlobalBank } from './components/GlobalBank';
 import { GoalPedestal } from './components/GoalPedestal';
-import { MissionOverlay } from './components/MissionOverlay';
 import { MCSettingsOverlay } from './components/MCSettingsOverlay';
 import { PrivilegeCardButton } from './components/PrivilegeCardButton';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { useLiveClock } from './hooks/useLiveClock';
-import { useMissionScheduler } from './hooks/useMissionScheduler';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
-function MCLayout() {
+interface MCLayoutProps {
+  readonly onBackToCalendar?: () => void;
+}
+
+function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const state    = useMCState();
   const dispatch  = useMCDispatch();
   const now = useLiveClock();
-  useMissionScheduler();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Refs to each pedestal DOM element for drop-zone hit testing
@@ -58,8 +58,32 @@ function MCLayout() {
           flexShrink: 0,
         }}
       >
-        {/* Title + Settings */}
+        {/* Title + Back to Calendar + Settings */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {onBackToCalendar && (
+            <button
+              data-testid="mc-back-to-calendar-btn"
+              title="Back to Calendar"
+              onClick={onBackToCalendar}
+              style={{
+                background: 'rgba(100,180,255,0.15)',
+                border: '1.5px solid rgba(100,180,255,0.35)',
+                borderRadius: 10,
+                padding: '4px 12px',
+                fontSize: 13,
+                fontWeight: 900,
+                cursor: 'pointer',
+                lineHeight: 1,
+                color: 'var(--mc-text)',
+                fontFamily: "'Nunito',sans-serif",
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              ← Calendar
+            </button>
+          )}
           <span style={{
             fontSize: 15, fontWeight: 900, letterSpacing: '0.08em',
             color: 'var(--mc-text)', textTransform: 'uppercase',
@@ -91,7 +115,7 @@ function MCLayout() {
           ))}
         </div>
 
-        {/* Clock + Settings + Manual mission triggers */}
+        {/* Clock + Manual mission triggers */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Manual triggers */}
           <button
@@ -202,22 +226,18 @@ function MCLayout() {
         <ResponsibilityPanel />
       </div>
 
-      {/* ===== MISSION OVERLAY ===== */}
-      <MissionOverlay />
-
       {/* ===== SETTINGS ===== */}
       <MCSettingsOverlay open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
 
-// ── Public export — wraps everything in providers ─────────────────────────────
-export function MissionControl() {
-  return (
-    <MCStoreProvider>
-      <DragLayer>
-        <MCLayout />
-      </DragLayer>
-    </MCStoreProvider>
-  );
+// ── Public export — MCStoreProvider + DragLayer now live in App.tsx ───────────
+// MissionOverlay is also rendered at App level so it overlays any view.
+export interface MissionControlProps {
+  readonly onBackToCalendar?: () => void;
+}
+
+export function MissionControl({ onBackToCalendar }: MissionControlProps) {
+  return <MCLayout onBackToCalendar={onBackToCalendar} />;
 }

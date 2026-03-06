@@ -41,6 +41,8 @@ const defaultMissions: Mission[] = [
         tasks: [
             { id: 'tshirt', label: 'T-Shirt', icon: 'Shirt', completed: false, locksAt: null, locked: false },
             { id: 'toothbrush', label: 'Teeth', icon: 'Toothbrush', completed: false, locksAt: null, locked: false },
+            { id: 'feed-dog', label: 'Feed Dog', icon: 'Dog', completed: false, locksAt: null, locked: false },
+            { id: 'vitamin', label: 'Vitamin D', icon: 'Pill', completed: false, locksAt: null, locked: false },
         ],
     },
     {
@@ -69,6 +71,23 @@ const defaultResponsibilities: ResponsibilityTask[] = [
         pointsRequired: 3,
         pointsEarned: 0,
         completedAt: null,
+    },
+    {
+        id: 'activity',
+        label: 'Activity',
+        icon: '🏅',
+        pointIcon: '🏅',
+        description: 'Skating, Swimming or Karate — tap for each session',
+        rewardLabel: 'Great effort! ⭐',
+        pointsRequired: 3,
+        pointsEarned: 0,
+        completedAt: null,
+        activities: [
+            { emoji: '⛸️', label: 'Skating' },
+            { emoji: '🏊', label: 'Swimming' },
+            { emoji: '🥋', label: 'Karate' },
+        ],
+        tokenReward: 3,
     },
 ];
 
@@ -187,8 +206,8 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
             };
 
         case 'SET_ACTIVE_MISSION': {
-            // Timer expired — deactivate mission but KEEP startedAt so the
-            // scheduler's alreadyStartedToday guard blocks re-triggering.
+            // Timer expired — deactivate. Tasks are intentionally left as-is
+            // (they're reset when the mission re-triggers via SET_ACTIVE_MISSION).
             if (action.phase === 'none') {
                 return {
                     ...state,
@@ -196,7 +215,6 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                     missions: state.missions.map(m => ({
                         ...m,
                         active: false,
-                        // startedAt intentionally preserved — prevents same-day re-trigger
                         durationMins: undefined,
                     })),
                 };
@@ -207,11 +225,17 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                 activeMission: action.phase,
                 missions: state.missions.map(m => {
                     if (m.phase !== action.phase) return { ...m, active: false };
-                    // Compute duration from HH:MM difference, store startedAt
+                    // Every trigger is a fresh start: new timer, reset checklist.
                     const [sh, sm] = m.startsAt.split(':').map(Number);
                     const [eh, em] = m.endsAt.split(':').map(Number);
                     const durationMins = (eh * 60 + em) - (sh * 60 + sm);
-                    return { ...m, active: true, startedAt: now, durationMins: Math.max(5, durationMins) };
+                    return {
+                        ...m,
+                        active: true,
+                        startedAt: now,
+                        durationMins: Math.max(0, durationMins), // no minimum — allows sub-minute test durations
+                        tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
+                    };
                 }),
             };
         }
@@ -228,8 +252,9 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                 ),
             };
 
-        // Stop (cancel) the mission and prevent the scheduler re-triggering it
-        // today by preserving startedAt (so alreadyStartedToday stays true).
+        // Stop: deactivates the mission and resets all state.
+        // startedAt is cleared — it's a timer anchor only, not a scheduler guard.
+        // The scheduler may re-trigger if still within the time window (accepted behaviour).
         case 'CANCEL_MISSION':
             return {
                 ...state,
@@ -239,10 +264,9 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                         ? {
                             ...m,
                             active: false,
-                            // Keep startedAt — this is the guard that stops the scheduler
-                            // from re-firing the mission for the rest of the day.
-                            startedAt: m.startedAt ?? new Date().toISOString(),
+                            startedAt: undefined,
                             durationMins: undefined,
+                            tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
                         }
                         : m,
                 ),
@@ -282,7 +306,9 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
             return {
                 ...state,
                 settings: { ...state.settings, ...action.settings },
-                // Live-update mission startsAt/endsAt from settings so scheduler picks them up
+                // Live-update mission startsAt/endsAt from settings so scheduler picks them up.
+                // If the start time changes, clear startedAt, durationMins AND cancelledAt
+                // so the scheduler can re-trigger at the new time.
                 missions: state.missions.map(m => {
                     if (m.phase === 'morning') {
                         const dur = action.settings.morningDurationMins ?? state.settings.morningDurationMins;
@@ -290,7 +316,13 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                         const [h, min] = start.split(':').map(Number);
                         const endTotal = h * 60 + min + dur;
                         const endsAt = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
-                        return { ...m, startsAt: start, endsAt };
+                        const timeChanged = start !== state.settings.morningStartsAt;
+                        return {
+                            ...m,
+                            startsAt: start,
+                            endsAt,
+                            ...(timeChanged ? { startedAt: undefined, durationMins: undefined } : {}),
+                        };
                     }
                     if (m.phase === 'evening') {
                         const dur = action.settings.eveningDurationMins ?? state.settings.eveningDurationMins;
@@ -298,7 +330,13 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                         const [h, min] = start.split(':').map(Number);
                         const endTotal = h * 60 + min + dur;
                         const endsAt = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
-                        return { ...m, startsAt: start, endsAt };
+                        const timeChanged = start !== state.settings.eveningStartsAt;
+                        return {
+                            ...m,
+                            startsAt: start,
+                            endsAt,
+                            ...(timeChanged ? { startedAt: undefined, durationMins: undefined } : {}),
+                        };
                     }
                     return m;
                 }),

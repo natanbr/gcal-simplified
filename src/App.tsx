@@ -1,17 +1,24 @@
 import { useState, useEffect } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { LoginScreen } from './components/LoginScreen';
-
-// ── DEV-ONLY: Mission Control preview ──────────────────────────────────────
-// Navigate to the app with ?mc=1 in the URL to render Mission Control.
-// Rendered at the top level so the CalendarApp component (and its ipcRenderer
-// hooks) never mounts. Replace with the real switcher in a future phase.
 import { MissionControl } from './mission-control/MissionControl';
-const MC_DEV_MODE = new URLSearchParams(window.location.search).get('mc') === '1';
-// ─────────────────────────────────────────────────────────────────────────────
+import { MCStoreProvider } from './mission-control/store/useMCStore.tsx';
+import { DragLayer } from './mission-control/components/DragLayer';
+import { MissionOverlay } from './mission-control/components/MissionOverlay';
+import { useMissionScheduler } from './mission-control/hooks/useMissionScheduler';
 
-/** Calendar app — only mounted when NOT in MC dev mode */
-function CalendarApp() {
+// ── Scheduler hook — runs at App level so it works on both views ──────────────
+function MissionSchedulerBridge() {
+  useMissionScheduler();
+  return null;
+}
+
+// ── Calendar app — handles auth, renders Dashboard ────────────────────────────
+interface CalendarAppProps {
+  onSwitchToMC: () => void;
+}
+
+function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isChecking, setIsChecking] = useState<boolean>(true);
 
@@ -35,7 +42,6 @@ function CalendarApp() {
 
     checkAuth();
 
-    // Guard: ipcRenderer may be absent in plain-browser dev
     if (!window.ipcRenderer) return;
     const cleanup = window.ipcRenderer.on('auth:success', () => {
         setIsAuthenticated(true);
@@ -50,15 +56,36 @@ function CalendarApp() {
 
   return (
     <>
-      {isAuthenticated ? <Dashboard onLogout={() => setIsAuthenticated(false)} /> : <LoginScreen />}
+      {isAuthenticated
+        ? <Dashboard onLogout={() => setIsAuthenticated(false)} onSwitchToMC={onSwitchToMC} />
+        : <LoginScreen />}
     </>
   );
 }
 
-/** Top-level router — decides which app to render */
+// ── Top-level router ───────────────────────────────────────────────────────────
+// MCStoreProvider + DragLayer live HERE so the MC store and scheduler
+// keep running regardless of which view is active, and so MissionOverlay
+// can overlay the calendar view when a mission fires.
 function App() {
-  if (MC_DEV_MODE) return <MissionControl />;
-  return <CalendarApp />;
+  const [view, setView] = useState<'calendar' | 'mission-control'>('calendar');
+
+  return (
+    <MCStoreProvider>
+      <DragLayer>
+        {/* Scheduler always running */}
+        <MissionSchedulerBridge />
+
+        {/* Mission overlay always mounted — position:fixed, overlays any view */}
+        <MissionOverlay />
+
+        {/* View switch */}
+        {view === 'calendar'
+          ? <CalendarApp onSwitchToMC={() => setView('mission-control')} />
+          : <MissionControl onBackToCalendar={() => setView('calendar')} />}
+      </DragLayer>
+    </MCStoreProvider>
+  );
 }
 
 export default App;

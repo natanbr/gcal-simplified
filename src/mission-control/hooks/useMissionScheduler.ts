@@ -25,14 +25,6 @@ function timeToDate(hhmm: string): Date {
     return d;
 }
 
-/** Returns true if an ISO timestamp string was from today */
-function isToday(isoString: string): boolean {
-    const d = new Date(isoString);
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear()
-        && d.getMonth() === now.getMonth()
-        && d.getDate() === now.getDate();
-}
 
 export function useMissionScheduler(): void {
     const { state, dispatch } = useMCStore();
@@ -47,16 +39,15 @@ export function useMissionScheduler(): void {
             const s = stateRef.current;
             const now = new Date();
 
-            // ── Activate scheduled missions ─────────────────────────────────────
+            // ── Activate scheduled missions ───────────────────────────────────────
+            // Rule 1: only trigger if we're in the time window
+            // Rule 2: don't start if a mission is already active
             for (const m of s.missions) {
                 const start = timeToDate(m.startsAt);
                 const end = timeToDate(m.endsAt);
                 const withinWindow = now >= start && now < end;
 
-                // Already triggered today (manually or by scheduler) — skip
-                const alreadyStartedToday = m.startedAt && isToday(m.startedAt);
-
-                if (withinWindow && !alreadyStartedToday && s.activeMission !== m.phase) {
+                if (withinWindow && s.activeMission === 'none') {
                     dispatch({ type: 'SET_ACTIVE_MISSION', phase: m.phase as Exclude<MissionPhase, 'none'> });
                     return; // one mission at a time
                 }
