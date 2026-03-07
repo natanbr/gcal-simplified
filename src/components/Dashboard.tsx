@@ -342,9 +342,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                  <Settings size={20} />
              </button>
 
-             {config.sleepEnabled && (
-                 <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-600">Power Saving On</span>
-             )}
+
+
         </div>
       </div>
 
