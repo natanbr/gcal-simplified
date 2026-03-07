@@ -6,6 +6,7 @@ import { AppEvent } from '../types';
 import { 
   Trash2, Recycle, Waves, Users, Swords 
 } from 'lucide-react';
+import { getEventIconName } from '../utils/eventKeywordIcons';
 
 interface EventCardProps {
   event: AppEvent;
@@ -17,27 +18,18 @@ interface EventCardProps {
 import { getEventColorStyles } from '../utils/colorMapping';
 import { areEventCardPropsEqual } from '../utils/eventUtils';
 
-// Icon mapping for specific event types
+// Icon mapping for specific event types — keyword logic lives in eventKeywordIcons.ts
+const ICON_MAP = {
+  trash: <Trash2 size={20} className="opacity-80" />,
+  recycle: <Recycle size={20} className="opacity-80" />,
+  waves: <Waves size={20} className="opacity-80" />,
+  users: <Users size={20} className="opacity-80" />,
+  swords: <Swords size={20} className="opacity-80" />,
+} as const;
+
 const getEventIcon = (title: string, description?: string) => {
-  const text = `${title} ${description || ''}`.toLowerCase();
-  
-  if (text.includes('garbage') || text.includes('trash')) {
-    return <Trash2 size={20} className="opacity-80" />;
-  }
-  if (text.includes('recycle') || text.includes('recycling')) {
-    return <Recycle size={20} className="opacity-80" />;
-  }
-  if (text.includes('pool') || text.includes('swim')) {
-    return <Waves size={20} className="opacity-80" />;
-  }
-  if (text.includes('scout') || text.includes('scouting')) {
-    return <Users size={20} className="opacity-80" />;
-  }
-  if (text.includes('karate') || text.includes('martial')) {
-    return <Swords size={20} className="opacity-80" />;
-  }
-  
-  return null;
+  const name = getEventIconName(title, description);
+  return name ? ICON_MAP[name] : null;
 };
 
 export const EventCard: React.FC<EventCardProps> = memo(({ event, className, onClick, onEventClick }) => {

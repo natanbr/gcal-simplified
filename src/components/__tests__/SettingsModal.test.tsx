@@ -24,15 +24,13 @@ vi.mock('framer-motion', () => {
     };
 });
 
-// Mock lucide-react icons with explicit exports
-vi.mock('lucide-react', () => {
-    const icon = () => null;
-    return {
-        X: icon, Save: icon, Check: icon, RefreshCw: icon,
-        Moon: icon, Sun: icon, Power: icon, Calendar: icon, LogOut: icon,
-        User: icon, Settings: icon, CheckSquare: icon,
-    };
+// Mock lucide-react icons: pass through to the real module so any icon used
+// in SettingsModal is automatically available (avoids "No X export" errors).
+vi.mock('lucide-react', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('lucide-react')>();
+    return { ...actual };
 });
+
 
 const mockInvoke = vi.fn();
 

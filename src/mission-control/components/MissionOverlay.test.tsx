@@ -6,9 +6,9 @@
 import React from 'react';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MCStoreProvider } from '../store/useMCStore.tsx';
+import { MCStoreProvider, useMCDispatch } from '../store/useMCStore.tsx';
 import { MissionOverlay } from './MissionOverlay';
-import { useMCDispatch } from '../store/useMCStore.tsx';
+
 
 // ── Framer Motion is mocked so animations don't hang tests ───────────────────
 vi.mock('framer-motion', async () => {
@@ -171,3 +171,118 @@ describe('MissionOverlay', () => {
         expect(screen.queryByTestId('mc-mission-overlay')).not.toBeInTheDocument();
     });
 });
+
+// ── Whining toggle ────────────────────────────────────────────────────────────
+
+describe('MissionOverlay — whining toggle', () => {
+    beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
+    afterEach(() => { cleanup(); localStorage.clear(); });
+
+    async function triggerMorning() {
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+    }
+
+    it('whining button is visible when mission is active', async () => {
+        await triggerMorning();
+        expect(screen.getByTestId('mc-whining-btn')).toBeInTheDocument();
+    });
+
+    it('whining button shows "Whining?" text by default (not activated)', async () => {
+        await triggerMorning();
+        expect(screen.getByTestId('mc-whining-btn')).toHaveTextContent('Whining?');
+    });
+
+    it('clicking whining button toggles to "Whining!" state', async () => {
+        await triggerMorning();
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-whining-btn')); });
+        expect(screen.getByTestId('mc-whining-btn')).toHaveTextContent('Whining!');
+    });
+
+    it('clicking whining button again toggles back to "Whining?" state', async () => {
+        await triggerMorning();
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-whining-btn')); });
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-whining-btn')); });
+        expect(screen.getByTestId('mc-whining-btn')).toHaveTextContent('Whining?');
+    });
+
+    it('−1 badge is visible when whining is toggled on', async () => {
+        await triggerMorning();
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-whining-btn')); });
+        // The badge shows the text "−1"
+        expect(screen.getByTestId('mc-whining-btn').textContent).toContain('−1');
+    });
+
+    it('−1 badge is NOT visible when whining is toggled off', async () => {
+        await triggerMorning();
+        // Default state — badge should not appear
+        expect(screen.getByTestId('mc-whining-btn').textContent).not.toContain('−1');
+    });
+
+    it('whining state resets when the mission is cancelled and re-triggered', async () => {
+        function Controls() {
+            const dispatch = useMCDispatch();
+            return (
+                <>
+                    <button data-testid="trigger-btn2" onClick={() => dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'morning' })}>Trigger</button>
+                    <button data-testid="cancel-btn2"  onClick={() => dispatch({ type: 'CANCEL_MISSION', missionPhase: 'morning' })}>Cancel</button>
+                </>
+            );
+        }
+        render(<MCStoreProvider><Controls /><MissionOverlay /></MCStoreProvider>);
+
+        // Start mission and toggle whining on
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn2')); });
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-whining-btn')); });
+        expect(screen.getByTestId('mc-whining-btn')).toHaveTextContent('Whining!');
+
+        // Cancel mission (phase → 'none'), then re-trigger (phase → 'morning')
+        await act(async () => { fireEvent.click(screen.getByTestId('cancel-btn2')); });
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn2')); });
+
+        // Whining state should reset to off
+        expect(screen.getByTestId('mc-whining-btn')).toHaveTextContent('Whining?');
+    });
+});
+
+// ── Reset tasks button ─────────────────────────────────────────────────────────
+
+describe('MissionOverlay — reset tasks button', () => {
+    beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
+    afterEach(() => { cleanup(); localStorage.clear(); });
+
+    it('reset button is visible when mission is active', async () => {
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+        expect(screen.getByTestId('mc-reset-btn')).toBeInTheDocument();
+    });
+
+    it('clicking reset tasks clears completed task markers', async () => {
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+
+        // Complete the first morning task
+        const firstTask = screen.queryByTestId('mc-task-card-tshirt');
+        if (firstTask && !(firstTask as HTMLButtonElement).disabled) {
+            await act(async () => { fireEvent.click(firstTask); });
+        }
+
+        // Reset tasks
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-reset-btn')); });
+
+        // The task card should no longer be disabled (completed tasks are disabled)
+        const resetTask = screen.queryByTestId('mc-task-card-tshirt');
+        if (resetTask) {
+            expect((resetTask as HTMLButtonElement).disabled).toBe(false);
+        }
+    });
+
+    it('resetting tasks does NOT close the overlay', async () => {
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-reset-btn')); });
+        // Overlay must still be present
+        expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
+    });
+});
+

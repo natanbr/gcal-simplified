@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
+
 import { useLiveClock } from '../hooks/useLiveClock';
 import type { Mission } from '../types';
 
@@ -79,10 +81,13 @@ interface MissionDepletingBarProps {
     mission: Mission | null;
     allDone: boolean;
     accent: string;
+    /** Called when the user long-presses the bar. delta > 0 = add time, < 0 = reduce. */
+    onAdjust?: (deltaMinutes: number) => void;
 }
 
-export function MissionDepletingBar({ mission, allDone, accent }: MissionDepletingBarProps) {
+export function MissionDepletingBar({ mission, allDone, accent, onAdjust }: MissionDepletingBarProps) {
     const now = useLiveClock();
+    const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const remainingSecs = (() => {
         if (!mission || !mission.startedAt || mission.durationMins == null) return null;
@@ -95,12 +100,54 @@ export function MissionDepletingBar({ mission, allDone, accent }: MissionDepleti
 
     if (remainingSecs === null || timerExpired) return null;
 
-    const total = (mission?.durationMins ?? 0) * 60;
-    const pct   = total > 0 ? Math.max(0, Math.min(100, (remainingSecs / total) * 100)) : 0;
+    // ── Fixed pct calculation ────────────────────────────────────────────────
+    // BUG (old): pct = remainingSecs / (durationMins * 60)
+    //   → when durationMins changes, both numerator & denominator jump, causing
+    //     the bar to go the wrong direction (appears fuller after reducing time).
+    //
+    // FIX: pct = 1 - elapsed / totalMs, anchored on startedAt.
+    //   elapsed is stable regardless of durationMins adjustments, so the bar
+    //   correctly shows how much of the NEW total has been consumed already.
+    const totalMs  = (mission!.durationMins ?? 0) * 60 * 1000;
+    const elapsedMs = now.getTime() - new Date(mission!.startedAt!).getTime();
+    const pct = totalMs > 0 ? Math.max(0, Math.min(100, (1 - elapsedMs / totalMs) * 100)) : 0;
+
+    // ── Long-press handlers ──────────────────────────────────────────────────
+    const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!onAdjust) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const isLeftHalf = e.clientX < rect.left + rect.width / 2;
+        longPressRef.current = setTimeout(() => {
+            onAdjust(isLeftHalf ? -5 : 5);
+            longPressRef.current = null;
+        }, 600);
+    };
+
+    const handlePointerUp = () => {
+        if (longPressRef.current) {
+            clearTimeout(longPressRef.current);
+            longPressRef.current = null;
+        }
+    };
 
     return (
-        <div style={{ height: 42, background: 'rgba(160,150,230,0.18)', overflow: 'hidden', margin: '0 400px', borderRadius: 99 }}>
+        <div
+            data-testid="mc-timer-bar"
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            title="Long-press left half to reduce 5 min · Long-press right half to add 5 min"
+            style={{
+                height: 42,
+                background: 'rgba(160,150,230,0.18)',
+                overflow: 'hidden',
+                margin: '0 400px',
+                borderRadius: 99,
+                cursor: onAdjust ? 'pointer' : 'default',
+            }}
+        >
             <motion.div
+                data-testid="mc-bar-fill"
                 animate={{ width: `${pct}%` }}
                 transition={{ duration: 1, ease: 'linear' }}
                 style={{

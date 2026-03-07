@@ -5,7 +5,8 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch, useMission } from '../store/useMCStore.tsx';
 import { MissionTimerDisplay, MissionDepletingBar } from './MissionTimerDisplay';
@@ -202,37 +203,10 @@ export function MissionOverlay() {
     const phase   = state.activeMission;
     const mission = useMission(phase !== 'none' ? phase : 'morning');
 
-    // ── Emoji gesture state ─────────────────────────────────────────────────────
-    const tapCount      = useRef(0);
-    const tapTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    const handleEmojiPointerDown = useCallback(() => {
-        // Start long-press timer (−5 min)
-        longPressTimer.current = setTimeout(() => {
-            if (phase !== 'none')
-                dispatch({ type: 'ADJUST_MISSION_END', missionPhase: phase as Exclude<MissionPhase,'none'>, deltaMinutes: -5 });
-            tapCount.current = 0;
-        }, 600);
-    }, [dispatch, phase]);
-
-    const handleEmojiPointerUp = useCallback(() => {
-        if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-        }
-    }, []);
-
-    const handleEmojiClick = useCallback(() => {
-        // Cancel if long-press already fired
-        if (!longPressTimer.current) return;
-        tapCount.current += 1;
-        if (tapTimer.current) clearTimeout(tapTimer.current);
-        tapTimer.current = setTimeout(() => {
-            if (tapCount.current >= 3 && phase !== 'none')
-                dispatch({ type: 'ADJUST_MISSION_END', missionPhase: phase as Exclude<MissionPhase,'none'>, deltaMinutes: 5 });
-            tapCount.current = 0;
-        }, 700);
+    // ── Timer adjustment callback for the progress bar long-press ───────────────
+    const handleBarAdjust = useCallback((deltaMinutes: number) => {
+        if (phase !== 'none')
+            dispatch({ type: 'ADJUST_MISSION_END', missionPhase: phase as Exclude<MissionPhase,'none'>, deltaMinutes });
     }, [dispatch, phase]);
 
     // Auto-restore and reset penalty when a new mission starts
@@ -365,12 +339,7 @@ export function MissionOverlay() {
                                 <motion.span
                                     animate={{ rotate: [0, 12, -12, 0], scale: [1, 1.2, 1] }}
                                     transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
-                                    style={{ fontSize: 28, cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}
-                                    onPointerDown={handleEmojiPointerDown}
-                                    onPointerUp={handleEmojiPointerUp}
-                                    onPointerLeave={handleEmojiPointerUp}
-                                    onClick={handleEmojiClick}
-                                    title="Secret: tap 3× to add time, hold to reduce"
+                                    style={{ fontSize: 28, flexShrink: 0 }}
                                 >
                                     {meta.emoji}
                                 </motion.span>
@@ -455,11 +424,12 @@ export function MissionOverlay() {
                             </div>
                         </div>
 
-                        {/* ── Full-width depleting bar ── */}
+                        {/* ── Full-width depleting bar (long-press to adjust time) ── */}
                         <MissionDepletingBar
                             mission={mission}
                             allDone={allDone}
                             accent={meta.accent}
+                            onAdjust={handleBarAdjust}
                         />
 
                         {/* ── Tasks — horizontal scroll row ── */}

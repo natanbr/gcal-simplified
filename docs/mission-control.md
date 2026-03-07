@@ -86,6 +86,17 @@ src/
 - All-done screen: shows 🎉, final star count (pre-reduced by whining toggle), "Collect" button
 - Minimized pill: peeks from bottom, shows phase label and task progress (X/N)
 
+**Depleting progress bar** (full-width stripe below the header):
+
+- Fills from left to right; depletes as the mission runs.
+- Progress formula: `pct = 1 − elapsed / totalMs` (anchored on `startedAt`) — **NOT** `remainingSecs / totalMs`.
+  - The `startedAt`-anchored formula ensures the bar moves correctly even when `durationMins` is adjusted mid-mission.
+  - _Bug fixed (2025-03-06): old `remainingSecs/total` formula caused the bar to jump in the wrong direction after a reduce-time action._
+- **Long-press gesture (600ms)** to adjust remaining time while mission is active:
+  - Long-press the **left half** of the bar → subtract 5 minutes
+  - Long-press the **right half** of the bar → add 5 minutes
+  - The bar cursor shows `pointer` when `onAdjust` is set.
+
 #### E. Mission Scheduler (`useMissionScheduler.ts`)
 
 - Polls every 30 seconds (+ immediate tick on mount)
@@ -120,11 +131,12 @@ src/
 
 **Morning tasks:** T-Shirt (👕), Teeth (🦷)
 
-#### H. Hidden Parent Controls
+#### H. Parent Controls
 
-- **Emoji gesture on the phase emoji (🌙/☀️):**
-  - **Hold 600ms** → subtract 5 minutes from remaining time
-  - **Triple tap** → add 5 minutes _(currently unreliable — see Backlog #3)_
+- **Progress bar long-press gesture** (replaces old emoji gesture, removed 2025-03-06):
+  - **Long-press LEFT half (600ms)** → subtract 5 minutes from `durationMins`
+  - **Long-press RIGHT half (600ms)** → add 5 minutes to `durationMins`
+  - No secret interaction on the emoji anymore.
 - Manual mission triggers: ☀️ AM / 🌙 PM buttons in top bar
 
 ---
