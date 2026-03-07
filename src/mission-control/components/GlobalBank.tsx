@@ -209,6 +209,7 @@ export function GlobalBank({ cases, caseRects }: GlobalBankProps) {
                 gap: 10,
                 boxShadow: '0 8px 24px rgba(200,155,16,0.18)',
               }}
+              data-testid="mc-bank-admin-popup"
             >
               <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#b08a00' }}>
                 ⚙️ Bank Admin

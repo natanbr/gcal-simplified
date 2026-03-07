@@ -23,7 +23,9 @@
     "test": "npm run test:clean && npm run test:unit && npm run test:run",
     "test:ui": "npx playwright test --ui",
     "test:debug": "npx playwright test --debug",
-    "test:headed": "npx playwright test --headed"
+    "test:headed": "npx playwright test --headed",
+    "patch": "node patches/apply-patches.js",
+    "postinstall": "node patches/apply-patches.js"
   },
   "dependencies": {
     "clsx": "^2.1.1",

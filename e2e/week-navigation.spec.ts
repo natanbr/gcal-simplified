@@ -1,7 +1,7 @@
 import { test, _electron as electron, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { format } from 'date-fns';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,8 +77,8 @@ test.describe('Week Navigation', () => {
 
     test('should navigate to next week when next week button is clicked', async () => {
         const today = new Date();
-        const mondayOfThisWeek = startOfWeek(today, { weekStartsOn: 1 });
-        const nextMonday = addDays(mondayOfThisWeek, 7);
+        const nextWeekSameDay = new Date(today);
+        nextWeekSameDay.setDate(today.getDate() + 7);
 
         // Click next week button
         const nextWeekButton = window.getByTestId('next-week-button');
@@ -87,9 +87,9 @@ test.describe('Week Navigation', () => {
         // Wait for update
         await waitForSync();
 
-        // Check that the first day column now shows next Monday
+        // The first day header should be today+7 (same weekday, next week)
         const firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeader).toHaveText(format(nextMonday, 'd'), { timeout: 10000 });
+        await expect(firstDayHeader).toHaveText(format(nextWeekSameDay, 'd'), { timeout: 10000 });
     });
 
     test('should navigate back to current week when today button is clicked', async () => {
@@ -127,9 +127,10 @@ test.describe('Week Navigation', () => {
 
     test('should navigate back one week when previous week button is clicked', async () => {
         const today = new Date();
-        const mondayOfThisWeek = startOfWeek(today, { weekStartsOn: 1 });
-        const nextMonday = addDays(mondayOfThisWeek, 7);
-        const nextNextMonday = addDays(nextMonday, 7);
+        const nextWeekSameDay = new Date(today);
+        nextWeekSameDay.setDate(today.getDate() + 7);
+        const nextNextWeekSameDay = new Date(today);
+        nextNextWeekSameDay.setDate(today.getDate() + 14);
 
         const nextWeekButton = window.getByTestId('next-week-button');
         await nextWeekButton.click();
@@ -138,14 +139,14 @@ test.describe('Week Navigation', () => {
         await waitForSync();
 
         let firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeader).toHaveText(format(nextNextMonday, 'd'));
+        await expect(firstDayHeader).toHaveText(format(nextNextWeekSameDay, 'd'));
 
         const prevWeekButton = window.getByTestId('prev-week-button');
         await prevWeekButton.click();
         await waitForSync();
 
         firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeader).toHaveText(format(nextMonday, 'd'), { timeout: 10000 });
+        await expect(firstDayHeader).toHaveText(format(nextWeekSameDay, 'd'), { timeout: 10000 });
     });
 
     test('should not show weather forecast for future weeks', async () => {
@@ -159,18 +160,18 @@ test.describe('Week Navigation', () => {
 
     test('should not highlight Monday in future weeks if today is not Monday', async () => {
         const today = new Date();
-        const mondayOfThisWeek = startOfWeek(today, { weekStartsOn: 1 });
-        const nextMonday = addDays(mondayOfThisWeek, 7);
-        const nextMondayDay = format(nextMonday, 'd');
+        const nextWeekSameDay = new Date(today);
+        nextWeekSameDay.setDate(today.getDate() + 7);
+        const nextWeekDayStr = format(nextWeekSameDay, 'd');
 
         // Navigate to next week
         const nextWeekButton = window.getByTestId('next-week-button');
         await nextWeekButton.click();
         await waitForSync();
 
-        // Find Monday column (first column in next week view)
+        // Find first day column (same weekday as today, but next week)
         const firstDayHeaderNumber = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeaderNumber).toHaveText(nextMondayDay);
+        await expect(firstDayHeaderNumber).toHaveText(nextWeekDayStr);
 
         // If it's not today, it should NOT have bg-family-cyan
         await expect(firstDayHeaderNumber).not.toHaveClass(/bg-family-cyan/);

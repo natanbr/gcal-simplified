@@ -9,6 +9,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { format, addMonths } from 'date-fns';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +32,7 @@ test.describe('Monthly View', () => {
         test.skip(loginVisible as boolean, 'Login required — skipping monthly-view test');
 
         // Find and click the Monthly view toggle button
-        const monthlyBtn = page.getByRole('button', { name: /month/i });
+        const monthlyBtn = page.locator('[data-testid="monthly-view-toggle"]');
         await expect(monthlyBtn).toBeVisible({ timeout: 5000 });
         await monthlyBtn.click();
         await page.waitForTimeout(500);
@@ -42,9 +43,9 @@ test.describe('Monthly View', () => {
         // We expect either 35 or 42 cells depending on implementation
         expect(count).toBeGreaterThanOrEqual(28);
 
-        // Month label should be visible
+        // Month label should show current month
         const monthLabel = page.locator('[data-testid="month-label"]');
-        await expect(monthLabel).toBeVisible({ timeout: 3000 });
+        await expect(monthLabel).toContainText(format(new Date(), 'MMMM'), { timeout: 3000 });
 
         await app.close();
     });
@@ -60,30 +61,29 @@ test.describe('Monthly View', () => {
         test.skip(loginVisible as boolean, 'Login required — skipping monthly-view test');
 
         // Switch to monthly view
-        await page.getByRole('button', { name: /month/i }).click();
+        await page.locator('[data-testid="monthly-view-toggle"]').click();
         await page.waitForTimeout(500);
 
-        // Capture the current month label
+        const today = new Date();
         const monthLabel = page.locator('[data-testid="month-label"]');
-        const originalLabel = await monthLabel.textContent();
 
-        // Click next-month button
-        const nextBtn = page.locator('[data-testid="month-next-btn"]');
-        await expect(nextBtn).toBeVisible({ timeout: 3000 });
-        await nextBtn.click();
+        // Capture the current month label
+        const originalMonth = format(today, 'MMMM yyyy');
+        await expect(monthLabel).toContainText(originalMonth, { timeout: 3000 });
+
+        // Click next button (reused as next-month in month view)
+        await page.locator('[data-testid="next-week-button"]').click();
         await page.waitForTimeout(300);
 
-        // The label must have changed
-        const nextLabel = await monthLabel.textContent();
-        expect(nextLabel).not.toBe(originalLabel);
+        // The label must show next month
+        const nextMonth = format(addMonths(today, 1), 'MMMM yyyy');
+        await expect(monthLabel).toContainText(nextMonth, { timeout: 3000 });
 
-        // Click previous-month button to go back
-        const prevBtn = page.locator('[data-testid="month-prev-btn"]');
-        await prevBtn.click();
+        // Click previous button to go back
+        await page.locator('[data-testid="prev-week-button"]').click();
         await page.waitForTimeout(300);
 
-        const restoredLabel = await monthLabel.textContent();
-        expect(restoredLabel).toBe(originalLabel);
+        await expect(monthLabel).toContainText(originalMonth, { timeout: 3000 });
 
         await app.close();
     });
@@ -98,26 +98,26 @@ test.describe('Monthly View', () => {
         const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
         test.skip(loginVisible as boolean, 'Login required');
 
-        await page.getByRole('button', { name: /month/i }).click();
+        await page.locator('[data-testid="monthly-view-toggle"]').click();
         await page.waitForTimeout(500);
 
+        const today = new Date();
+        const currentMonthLabel = format(today, 'MMMM yyyy');
         const monthLabel = page.locator('[data-testid="month-label"]');
-        const currentLabel = await monthLabel.textContent();
 
         // Navigate away (next → next)
-        const nextBtn = page.locator('[data-testid="month-next-btn"]');
+        const nextBtn = page.locator('[data-testid="next-week-button"]');
         await nextBtn.click();
         await nextBtn.click();
         await page.waitForTimeout(300);
 
-        // Today button
-        const todayBtn = page.getByRole('button', { name: /today/i });
+        // Today button — in month view the button says "Back To Today"
+        const todayBtn = page.locator('[data-testid="today-button"]');
         await expect(todayBtn).toBeVisible({ timeout: 3000 });
         await todayBtn.click();
         await page.waitForTimeout(300);
 
-        const restoredLabel = await monthLabel.textContent();
-        expect(restoredLabel).toBe(currentLabel);
+        await expect(monthLabel).toContainText(currentMonthLabel, { timeout: 3000 });
 
         await app.close();
     });

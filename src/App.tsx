@@ -68,7 +68,10 @@ function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
 // keep running regardless of which view is active, and so MissionOverlay
 // can overlay the calendar view when a mission fires.
 function App() {
-  const [view, setView] = useState<'calendar' | 'mission-control'>('calendar');
+  const initialView = new URLSearchParams(window.location.search).get('mc') === '1'
+    ? 'mission-control'
+    : 'calendar';
+  const [view, setView] = useState<'calendar' | 'mission-control'>(initialView);
 
   return (
     <MCStoreProvider>

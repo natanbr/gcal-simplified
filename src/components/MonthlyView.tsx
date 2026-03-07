@@ -56,6 +56,7 @@ export const MonthlyView: React.FC<MonthlyViewProps> = ({ days, events, onEventC
                     return (
                         <div
                             key={day.toISOString()}
+                            data-testid={`month-day-${day.toISOString().slice(0, 10)}`}
                             className={`flex flex-col p-2 min-h-0 overflow-hidden transition-colors ${!isCurrentMonth ? 'bg-zinc-50/30 dark:bg-zinc-900/10' : ''} ${isToday ? 'bg-family-cyan/5 dark:bg-family-cyan/10' : ''}`}
                         >
                             <div className="flex justify-end mb-2">

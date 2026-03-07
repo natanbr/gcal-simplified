@@ -258,6 +258,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                     onClick={() => setViewMode('month')}
                     className={`px-3 h-8 rounded-md transition-all flex items-center justify-center ${viewMode === 'month' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm cursor-default' : 'text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50'}`}
                     aria-pressed={viewMode === 'month'}
+                    data-testid="monthly-view-toggle"
                 >
                     <span className="text-[11px] font-black uppercase tracking-[0.2em] mt-[1px]">Monthly</span>
                 </button>
@@ -265,7 +266,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
         </div>
 
         <div className="flex flex-col items-center gap-1">
-            <div className="text-2xl font-bold text-zinc-700 dark:text-zinc-300 transition-colors duration-300">
+            <div className="text-2xl font-bold text-zinc-700 dark:text-zinc-300 transition-colors duration-300"
+                data-testid="month-label"
+            >
                 {viewMode === 'week'
                     ? (isCurrentWeek(weekOffset) ? format(today, 'EEEE, MMMM d') : `${format(days[0], 'MMM d')} - ${format(days[6], 'MMM d, yyyy')}`)
                     : format(addMonths(today, monthOffset), 'MMMM yyyy')}

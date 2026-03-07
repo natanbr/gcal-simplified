@@ -14,7 +14,7 @@ import type { Page } from '@playwright/test';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
-const STORAGE_KEY = 'mc-state-v2';
+const STORAGE_KEY = 'mc-state-v4';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 

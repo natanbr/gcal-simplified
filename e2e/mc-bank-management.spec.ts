@@ -67,9 +67,10 @@ test.describe('Mission Control — Bank Management', () => {
         await gotoMC(page);
 
         await page.getByRole('button', { name: /Bank admin/i }).click();
-        await expect(page.getByText('+1')).toBeVisible({ timeout: 2000 });
-        await expect(page.getByText('+2')).toBeVisible();
-        await expect(page.getByText('−1')).toBeVisible();
+        const popup = page.locator('[data-testid="mc-bank-admin-popup"]');
+        await expect(popup.getByRole('button', { name: '+1' })).toBeVisible({ timeout: 2000 });
+        await expect(popup.getByRole('button', { name: '+2' })).toBeVisible();
+        await expect(popup.getByRole('button', { name: '−1' })).toBeVisible();
 
         await app.close();
     });

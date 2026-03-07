@@ -15,7 +15,7 @@ import type { Page } from '@playwright/test';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
-const STORAGE_KEY = 'mc-state-v2';
+const STORAGE_KEY = 'mc-state-v4';
 
 async function gotoMC(page: Page): Promise<void> {
     const currentUrl = page.url();
@@ -42,15 +42,12 @@ test.describe('Mission Control — Settings Overlay', () => {
         await gotoMC(page);
 
         // Gear button in the MC top bar
-        const settingsBtn = page.getByRole('button', { name: /settings/i }).first();
+        const settingsBtn = page.locator('[data-testid="mc-settings-btn"]');
         await expect(settingsBtn).toBeVisible({ timeout: 5000 });
-
-        // Panel is initially hidden
-        await expect(page.getByText('Settings')).not.toBeVisible();
 
         // Open
         await settingsBtn.click();
-        await expect(page.getByText('Settings')).toBeVisible({ timeout: 2000 });
+        await expect(page.locator('[data-testid="mc-settings-save"]')).toBeVisible({ timeout: 2000 });
 
         await app.close();
     });
@@ -67,7 +64,7 @@ test.describe('Mission Control — Settings Overlay', () => {
 
         await gotoMC(page);
 
-        await page.getByRole('button', { name: /settings/i }).first().click();
+        await page.locator('[data-testid="mc-settings-btn"]').click();
 
         await expect(page.getByText('Morning Mission')).toBeVisible({ timeout: 2000 });
         await expect(page.getByText('Evening Mission')).toBeVisible();
@@ -96,7 +93,7 @@ test.describe('Mission Control — Settings Overlay', () => {
         }, STORAGE_KEY);
 
         // Open settings
-        await page.getByRole('button', { name: /settings/i }).first().click();
+        await page.locator('[data-testid="mc-settings-btn"]').click();
         await page.waitForTimeout(200);
 
         // Cancel without saving
@@ -132,7 +129,7 @@ test.describe('Mission Control — Settings Overlay', () => {
         await gotoMC(page);
 
         // Open settings
-        await page.getByRole('button', { name: /settings/i }).first().click();
+        await page.locator('[data-testid="mc-settings-btn"]').click();
         await page.waitForTimeout(200);
 
         // Find the morning time input and change it

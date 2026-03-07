@@ -15,7 +15,7 @@ import type { Page } from '@playwright/test';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
-const STORAGE_KEY = 'mc-state-v2';
+const STORAGE_KEY = 'mc-state-v4';
 
 /**
  * Helper: Navigate the Electron window to MC mode and wait for it to settle.
@@ -56,13 +56,15 @@ async function injectActiveMission(page: Page, phase: 'morning' | 'evening' = 'm
                 active: boolean;
                 startsAt: string;
                 endsAt: string;
+                startedAt?: string;
+                durationMins?: number;
                 tasks: Array<Record<string, unknown>>;
             }
 
             const missions = (state['missions'] ?? []) as MissionRecord[];
             state['missions'] = missions.map(m =>
                 m.phase === targetPhase
-                    ? { ...m, active: true, startsAt, endsAt, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                    ? { ...m, active: true, startsAt, endsAt, startedAt: now.toISOString(), durationMins: 60, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
                     : { ...m, active: false },
             );
 
@@ -124,7 +126,7 @@ test.describe('Mission Control', () => {
         await expect(title).toHaveText('Morning Mission', { timeout: 5000 });
 
         // Progress bar present
-        await expect(page.locator('[data-testid="mc-progress-bar"]')).toBeVisible();
+        await expect(page.locator('[data-testid="mc-timer-bar"]')).toBeVisible();
 
         // At least one task card
         const taskCards = page.locator('[data-testid^="mc-task-card-"]');
