@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, powerMonitor, session } from 'electron'
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import 'dotenv/config'
 // import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -234,13 +234,17 @@ function turnOffScreen() {
     if (process.platform === 'win32') {
         // PowerShell command to turn off monitor via SendMessage(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2)
         const psCommand = '(Add-Type -MemberDefinition "[DllImport(\'user32.dll\')] public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);" -Name "Win32SendMessage" -Namespace Win32Functions -PassThru)::SendMessage(0xffff, 0x0112, 0xF170, 2)';
-        exec(`powershell -command "${psCommand}"`, (error) => {
+        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psCommand], (error) => {
              if (error) console.error('Failed to turn off screen:', error);
         });
     } else if (process.platform === 'darwin') {
-        exec('pmset displaysleepnow');
+        execFile('pmset', ['displaysleepnow'], (error) => {
+            if (error) console.error('Failed to turn off screen:', error);
+        });
     } else if (process.platform === 'linux') {
-        exec('xset dpms force off');
+        execFile('xset', ['dpms', 'force', 'off'], (error) => {
+            if (error) console.error('Failed to turn off screen:', error);
+        });
     }
 }
 
