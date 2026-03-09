@@ -1,7 +1,7 @@
-import { useLiveClock } from '../hooks/useLiveClock';
+import { useMinuteClock } from '../hooks/useMinuteClock';
 
 export function LiveClockDisplay() {
-  const now = useLiveClock();
+  const now = useMinuteClock();
   return (
     <span
       data-testid="mc-clock"
