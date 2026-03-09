@@ -53,10 +53,8 @@ export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDon
                     ? {
                         scale: [1, 1.06, 1],
                         color: ['#e74c3c', '#c0392b', '#e74c3c'],
-                        // ⚡ Bolt Performance: Place infinite transitions inside the animate object
-                        // to prevent Framer Motion from running a constant 60fps loop at the root level.
                         transition: { repeat: Infinity, duration: 1 }
-                    }
+                      }
                     : {}
             }
             style={{
@@ -151,11 +149,11 @@ export function MissionDepletingBar({ mission, allDone, accent, onAdjust }: Miss
                 cursor: onAdjust ? 'pointer' : 'default',
             }}
         >
-            <motion.div
+            <div
                 data-testid="mc-bar-fill"
-                animate={{ width: `${pct}%` }}
-                transition={{ duration: 1, ease: 'linear' }}
                 style={{
+                    width: `${pct}%`,
+                    transition: 'width 1s linear, background 1s ease',
                     height: '100%',
                     background: allDone
                         ? 'linear-gradient(90deg,#27ae60,#2ecc71)'
