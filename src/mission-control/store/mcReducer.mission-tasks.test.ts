@@ -162,6 +162,7 @@ describe('mcReducer — SET_ACTIVE_MISSION: tasks reset to clean state', () => {
         const state = applyActions([
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
             { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: MORNING_TASK_1 },
+            { type: 'CANCEL_MISSION', missionPhase: 'morning' },
             // Trigger again (simulate tomorrow re-activation path: SET_ACTIVE_MISSION always resets)
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
         ]);
@@ -175,6 +176,7 @@ describe('mcReducer — SET_ACTIVE_MISSION: tasks reset to clean state', () => {
         const state = applyActions([
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
             { type: 'LOCK_TASK', missionPhase: 'morning', taskId: MORNING_TASK_2 },
+            { type: 'CANCEL_MISSION', missionPhase: 'morning' },
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
         ]);
         morningMission(state).tasks.forEach(t => expect(t.locked).toBe(false));

@@ -14,11 +14,11 @@ import { mcReducer, initialState } from './mcReducer';
 
 // ---- Persistence ----
 
+import { REWARD_MAP } from '../rewardCatalogue';
+
 const STORAGE_KEY = 'mc-state-v4'; // bumped: added settings field
 
-const VALID_REWARD_IDS = new Set([
-    'movie-popcorn', 'show', 'campfire', 'game', 'extra-story', 'story-points',
-]);
+const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 
 function loadPersistedState(): MCState {
     try {
