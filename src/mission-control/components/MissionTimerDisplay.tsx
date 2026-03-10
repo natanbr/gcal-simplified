@@ -50,10 +50,15 @@ export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDon
                 allDone
                     ? {} // all done — no animation, stays green
                     : timerCritical
-                    ? { scale: [1, 1.06, 1], color: ['#e74c3c', '#c0392b', '#e74c3c'] }
+                    ? {
+                        scale: [1, 1.06, 1],
+                        color: ['#e74c3c', '#c0392b', '#e74c3c'],
+                        // ⚡ Bolt Performance: Place infinite transitions inside the animate object
+                        // to prevent Framer Motion from running a constant 60fps loop at the root level.
+                        transition: { repeat: Infinity, duration: 1 }
+                    }
                     : {}
             }
-            transition={{ repeat: Infinity, duration: 1 }}
             style={{
                 fontSize: 42,
                 fontWeight: 900,
