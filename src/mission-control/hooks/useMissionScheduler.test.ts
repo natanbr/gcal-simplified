@@ -113,17 +113,6 @@ describe('Scheduler logic — no re-trigger guard', () => {
         vi.useRealTimers();
     });
 
-    it('does not re-trigger a mission that was already started today', () => {
-        setTime(6, 15);
-        // Manually start and cancel the mission (startedAt gets set today)
-        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
-        state = mcReducer(state, { type: 'CANCEL_MISSION', missionPhase: 'morning' });
-
-        // Tick within the window — should NOT re-activate
-        const afterTick = simulateTickOnce(state);
-        expect(afterTick.activeMission).toBe('none');
-    });
-
     it('does not re-trigger after timer expiry', () => {
         setTime(6, 15);
         let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
@@ -165,44 +154,42 @@ describe('Scheduler logic — timer deactivation', () => {
     });
 });
 
-// ── simulateProductionTick ─────────────────────────────────────────────────
-// Mirrors the REAL useMissionScheduler tick logic exactly (including the bug
-// and after the fix). Tests below use this to catch production regressions,
-// not the test-side simulateTickOnce which had its own guard all along.
+// ── simulateTickOnce ─────────────────────────────────────────────────────────────
+// For testing the pure functionality of exactly matching the time.
 // ──────────────────────────────────────────────────────────────────────────
-function simulateProductionTick(state: MCState): MCState {
-    const now = new Date();
+function getMsUntilNextTime(now: Date, hhmm: string): number {
+    const [h, m] = hhmm.split(':').map(Number);
+    const target = new Date(now.getTime());
+    target.setHours(h, m, 0, 0);
 
-    function timeToDate(hhmm: string): Date {
-        const [h, m] = hhmm.split(':').map(Number);
-        const d = new Date();
-        d.setHours(h, m, 0, 0);
-        return d;
+    if (target.getTime() <= now.getTime()) {
+        target.setDate(target.getDate() + 1);
     }
 
+    return target.getTime() - now.getTime();
+}
+
+function simulateExactTrigger(state: MCState, currentSimulatedTime: Date): MCState {
     let next = state;
 
-    // Activate window check — mirrors real scheduler (with startedAt guard after fix)
+    // Simulate exact trigger matching
     for (const m of next.missions) {
-        const start = timeToDate(m.startsAt);
-        const end = timeToDate(m.endsAt);
-        const withinWindow = now >= start && now < end;
+        if (m.phase === 'none') continue;
 
-        // ✅ Guard: skip if this mission already has a startedAt set.
-        // This is the guard that was MISSING in production — the red tests
-        // below will fail until this guard exists in useMissionScheduler.ts
-        // AND CANCEL_MISSION stops clearing startedAt.
-        if (withinWindow && !m.startedAt && next.activeMission === 'none') {
-            next = mcReducer(next, { type: 'SET_ACTIVE_MISSION', phase: m.phase as 'morning' | 'evening' });
-            break;
+        // Did we hit the exact start time?
+        const [h, min] = m.startsAt.split(':').map(Number);
+        if (currentSimulatedTime.getHours() === h && currentSimulatedTime.getMinutes() === min) {
+            if (next.activeMission === 'none') {
+                next = mcReducer(next, { type: 'SET_ACTIVE_MISSION', phase: m.phase as 'morning' | 'evening' });
+            }
         }
     }
 
-    // Deactivation by timer expiry
+    // Deactivation by timer expiry (still polled)
     if (next.activeMission !== 'none') {
         const activeMission = next.missions.find(m => m.phase === next.activeMission);
         if (activeMission?.startedAt && activeMission.durationMins != null) {
-            const elapsedMins = (now.getTime() - new Date(activeMission.startedAt).getTime()) / 60000;
+            const elapsedMins = (currentSimulatedTime.getTime() - new Date(activeMission.startedAt).getTime()) / 60000;
             if (elapsedMins >= activeMission.durationMins) {
                 next = mcReducer(next, { type: 'SET_ACTIVE_MISSION', phase: 'none' });
             }
@@ -212,13 +199,7 @@ function simulateProductionTick(state: MCState): MCState {
     return next;
 }
 
-// ── Production re-trigger regression tests ────────────────────────────────
-// These tests reproduce the exact production bug: mission pops back open
-// after the user cancels it or after the timer expires.
-// They MUST use simulateProductionTick (not simulateTickOnce) so they fail
-// when the real scheduler is broken and pass only when it's fixed.
-// ──────────────────────────────────────────────────────────────────────────
-describe('Scheduler — no re-trigger after cancel or expiry (production regression)', () => {
+describe('Exact Scheduler logic — activation', () => {
     beforeEach(() => {
         vi.useFakeTimers();
     });
@@ -227,29 +208,85 @@ describe('Scheduler — no re-trigger after cancel or expiry (production regress
         vi.useRealTimers();
     });
 
-    it('does NOT re-trigger mission after user cancels within the window', () => {
-        setTime(6, 15); // inside morning window (06:00–06:30)
-
-        // User triggers the mission (scheduled or manual), then cancels it
-        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
-        state = mcReducer(state, { type: 'CANCEL_MISSION', missionPhase: 'morning' });
-
-        // Scheduler ticks again while still inside the window — must NOT re-open
-        const afterTick = simulateProductionTick(state);
-        expect(afterTick.activeMission).toBe('none');
+    it('activates the morning mission at the exact time', () => {
+        // Morning default: 06:00
+        const d = new Date();
+        d.setHours(6, 0, 0, 0);
+        setTime(6, 0);
+        const state = simulateExactTrigger(initialState, d);
+        expect(state.activeMission).toBe('morning');
     });
 
-    it('does NOT re-trigger mission after timer expiry while still in window', () => {
-        setTime(6, 0); // mission starts
+    it('activates the evening mission at the exact time', () => {
+        // Evening default: 19:00
+        const d = new Date();
+        d.setHours(19, 0, 0, 0);
+        setTime(19, 0);
+        const state = simulateExactTrigger(initialState, d);
+        expect(state.activeMission).toBe('evening');
+    });
+
+    it('does not activate a minute before', () => {
+        const d = new Date();
+        d.setHours(5, 59, 0, 0);
+        setTime(5, 59);
+        const state = simulateExactTrigger(initialState, d);
+        expect(state.activeMission).toBe('none');
+    });
+});
+
+describe('Scheduler logic — no overlap', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('does not overlap if another mission is active', () => {
+        const d = new Date();
+        d.setHours(19, 0, 0, 0);
+        setTime(19, 0);
 
         let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
 
-        // Timer expires (deactivated by the scheduler)
-        state = mcReducer(state, { type: 'SET_ACTIVE_MISSION', phase: 'none' });
+        const afterTick = simulateExactTrigger(state, d);
+        // Should STILL be morning, even though Evening triggered!
+        expect(afterTick.activeMission).toBe('morning');
+    });
+});
 
-        // Still within wall-clock window — scheduler must NOT re-fire
+describe('Scheduler logic — timer deactivation', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('deactivates mission when durationMins has elapsed since startedAt', () => {
+        setTime(6, 0);
+        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+
+        // Advance time past durationMins (30 min default)
+        const d = new Date();
+        d.setHours(6, 31, 0, 0);
+        setTime(6, 31);
+        state = simulateExactTrigger(state, d);
+        expect(state.activeMission).toBe('none');
+    });
+
+    it('keeps mission active if duration has not elapsed', () => {
+        setTime(6, 0);
+        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+
+        // 15 minutes in — still within 30m window
+        const d = new Date();
+        d.setHours(6, 15, 0, 0);
         setTime(6, 15);
-        const afterTick = simulateProductionTick(state);
-        expect(afterTick.activeMission).toBe('none');
+        state = simulateExactTrigger(state, d);
+        expect(state.activeMission).toBe('morning');
     });
 });

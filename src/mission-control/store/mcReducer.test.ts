@@ -55,12 +55,12 @@ describe('mcReducer — CANCEL_MISSION', () => {
         expect(morningMission(state).active).toBe(false);
     });
 
-    it('PRESERVES startedAt so the scheduler cannot re-trigger today', () => {
+    it('clears startedAt (scheduler no longer guards with it)', () => {
         const state = applyActions([
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
             { type: 'CANCEL_MISSION', missionPhase: 'morning' },
         ]);
-        expect(isToday(morningMission(state).startedAt)).toBe(true);
+        expect(morningMission(state).startedAt).toBeUndefined();
     });
 
     it('DOES reset task progress (so a re-triggered mission always starts clean)', () => {
@@ -111,14 +111,7 @@ describe('mcReducer — RESET_MISSION', () => {
 // ──────────────────────────────────────────────────────────────
 
 describe('mcReducer — SET_ACTIVE_MISSION:none (timer expiry)', () => {
-    it('preserves startedAt so scheduler cannot re-trigger', () => {
-        const state = applyActions([
-            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
-            { type: 'SET_ACTIVE_MISSION', phase: 'none' }, // simulated timer expiry
-        ]);
-        expect(isToday(morningMission(state).startedAt)).toBe(true);
-    });
-
+    // the timer expiry logic no longer needs to preserve startedAt
     it('sets activeMission to none', () => {
         const state = applyActions([
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
@@ -129,54 +122,18 @@ describe('mcReducer — SET_ACTIVE_MISSION:none (timer expiry)', () => {
 });
 
 // ──────────────────────────────────────────────────────────────
-// Race condition: the exact user-reported flow
+// SET_ACTIVE_MISSION overlap guard
 // ──────────────────────────────────────────────────────────────
 
-describe('mcReducer — race condition: open morning → cancel → open evening → cancel', () => {
-    it('morning.startedAt is still set after the full flow (scheduler blocked)', () => {
-        // This is the exact sequence the user reported causing the ghost re-trigger:
-        // 1. Click morning  2. Click cancel  3. Click evening  4. Click cancel
+describe('mcReducer — SET_ACTIVE_MISSION overlap rejection', () => {
+    it('ignores new triggers if a mission is already running', () => {
         const state = applyActions([
             { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
-            { type: 'CANCEL_MISSION', missionPhase: 'morning' },
-            { type: 'SET_ACTIVE_MISSION', phase: 'evening' },
-            { type: 'CANCEL_MISSION', missionPhase: 'evening' },
+            { type: 'SET_ACTIVE_MISSION', phase: 'evening' }, // This should be ignored
         ]);
 
-        // Morning must have startedAt set — this is what blocks the scheduler
-        expect(isToday(morningMission(state).startedAt)).toBe(true);
-        // Evening must also have startedAt set
-        expect(isToday(eveningMission(state).startedAt)).toBe(true);
-        // Nothing active
-        expect(state.activeMission).toBe('none');
-        // Both missions inactive
-        expect(morningMission(state).active).toBe(false);
+        expect(state.activeMission).toBe('morning'); // Evening was rejected
         expect(eveningMission(state).active).toBe(false);
     });
-
-    it('alreadyStartedToday guard is true for morning after full flow', () => {
-        const state = applyActions([
-            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
-            { type: 'CANCEL_MISSION', missionPhase: 'morning' },
-            { type: 'SET_ACTIVE_MISSION', phase: 'evening' },
-            { type: 'CANCEL_MISSION', missionPhase: 'evening' },
-        ]);
-
-        const morning = morningMission(state);
-        // Simulates the scheduler's alreadyStartedToday check
-        const alreadyStartedToday = morning.startedAt && isToday(morning.startedAt);
-        expect(alreadyStartedToday).toBeTruthy();
-    });
-
-    it('old RESET_MISSION (before fix) would have cleared startedAt — proving the bug existed', () => {
-        // Demonstrate what the OLD behavior produced: clearing startedAt on reset
-        // made alreadyStartedToday = false → scheduler re-fired.
-        // With the new RESET_MISSION, startedAt is preserved.
-        const state = applyActions([
-            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
-            { type: 'RESET_MISSION', missionPhase: 'morning' }, // new: only resets tasks
-        ]);
-        // startedAt must be present after a reset (regression guard)
-        expect(morningMission(state).startedAt).toBeDefined();
-    });
 });
+
