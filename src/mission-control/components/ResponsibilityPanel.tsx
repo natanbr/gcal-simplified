@@ -82,8 +82,12 @@ function ResponsibilityCard({ task }: TaskCardProps) {
             {/* Shimmer on complete */}
             {isComplete && (
                 <motion.div
-                    animate={{ x: ['-120%', '120%'] }}
-                    transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut', repeatDelay: 1 }}
+                    animate={{
+                        x: ['-120%', '120%'],
+                        // ⚡ Bolt Performance: Place infinite transitions inside the animate object
+                        // to prevent Framer Motion from running a constant 60fps loop at the root level.
+                        transition: { repeat: Infinity, duration: 2.2, ease: 'easeInOut', repeatDelay: 1 }
+                    }}
                     style={{
                         position: 'absolute',
                         inset: 0,
@@ -97,10 +101,18 @@ function ResponsibilityCard({ task }: TaskCardProps) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <motion.span
                     animate={isComplete
-                        ? { rotate: [0, -10, 10, 0], scale: [1, 1.15, 1] }
-                        : { scale: [1, 1.04, 1] }
+                        ? {
+                            rotate: [0, -10, 10, 0],
+                            scale: [1, 1.15, 1],
+                            // ⚡ Bolt Performance: Place infinite transitions inside the animate object
+                            // to prevent Framer Motion from running a constant 60fps loop at the root level.
+                            transition: { repeat: Infinity, duration: 1.6, ease: 'easeInOut' }
+                        }
+                        : {
+                            scale: [1, 1.04, 1],
+                            transition: { repeat: Infinity, duration: 4, ease: 'easeInOut' }
+                        }
                     }
-                    transition={{ repeat: Infinity, duration: isComplete ? 1.6 : 4, ease: 'easeInOut' }}
                     style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}
                 >
                     {task.icon}

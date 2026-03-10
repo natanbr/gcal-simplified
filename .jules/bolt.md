@@ -1,3 +1,6 @@
 ## 2024-05-18 - Isolated High-Frequency Hook Updates
 **Learning:** `useLiveClock` updates state every 1000ms. Placing it at the root of a globally mounted, always-present component like `MissionOverlay` or `MissionControl` forces the entire component tree to re-render every second, causing significant background CPU usage even when the component is hidden.
 **Action:** Extract high-frequency hooks into small, dedicated leaf components (like `MissionTimerDisplay` or `LiveClockDisplay`) so that only a tiny fraction of the DOM and React tree re-renders on each tick. Use absolute timeouts (`setTimeout(..., endMs - Date.now())`) for auto-resolving delayed logic instead of constantly checking a live clock state variable.
+## 2024-05-18 - Framer Motion Infinite Loops Background CPU Usage
+**Learning:** In Framer Motion, placing an infinite loop (e.g., `transition: { repeat: Infinity }`) strictly at the root level of a motion component forces the browser to run a continuous 60fps loop, even when the animation might be visually static or conditionally disabled. This causes unnecessary high background CPU usage.
+**Action:** Always place infinite transitions inside conditional `animate` objects instead of using the top-level `transition` prop. This ensures the loop only runs when the animation is actively triggered.
