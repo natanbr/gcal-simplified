@@ -23,7 +23,10 @@ export const MonthlyView: React.FC<MonthlyViewProps> = ({ days, events, onEventC
         const map = new Map<string, AppEvent[]>();
 
         events.forEach(event => {
-            const eventStart = new Date(event.start);
+            // ⚡ Bolt Performance: Prevent O(N) redundant Date object allocations per render
+            // event.start is typically already a Date object, but we wrap it defensively
+            // to handle string edge cases gracefully if data bypassing hydration ever arrives.
+            const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
             const dateStr = `${eventStart.getFullYear()}-${eventStart.getMonth()}-${eventStart.getDate()}`;
             if (!map.has(dateStr)) {
                 map.set(dateStr, []);
