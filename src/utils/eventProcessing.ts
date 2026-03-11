@@ -9,8 +9,10 @@ export const splitMultiDayEvents = (events: AppEvent[]): AppEvent[] => {
     const processedEvents: AppEvent[] = [];
 
     events.forEach(event => {
-        const start = new Date(event.start);
-        const end = new Date(event.end);
+        // ⚡ Bolt Performance: Defensive wrapper instead of always constructing new objects.
+        // Saves memory and CPU when processing lists of pre-hydrated events.
+        const start = event.start instanceof Date ? event.start : new Date(event.start);
+        const end = event.end instanceof Date ? event.end : new Date(event.end);
 
         if (isSameDay(start, end)) {
             processedEvents.push(event);
@@ -62,8 +64,9 @@ export const getEventsForDay = (events: AppEvent[], day: Date): AppEvent[] => {
     const dayEvents: AppEvent[] = [];
 
     events.forEach(event => {
-        const eventStart = new Date(event.start);
-        const eventEnd = new Date(event.end);
+        // ⚡ Bolt Performance: Prevent redundant Date allocations for O(N) operations
+        const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
+        const eventEnd = event.end instanceof Date ? event.end : new Date(event.end);
 
         // Check for overlap
         // Using getTime() for numeric comparison

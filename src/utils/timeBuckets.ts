@@ -51,11 +51,12 @@ export const partitionEventsIntoHourlySlots = (
             // Note: We use the event's start date to clearer active hours.
             // Since the events passed here are already single-day segments (from Dashboard),
             // we can safely assume they belong to the day they are being rendered on.
-            const dayStart = new Date(event.start);
+            const eventStartObj = event.start instanceof Date ? event.start : new Date(event.start);
+            const dayStart = new Date(eventStartObj);
             dayStart.setHours(startHour, 0, 0, 0);
             currentStartLimit = dayStart.getTime();
 
-            const dayEnd = new Date(event.start);
+            const dayEnd = new Date(eventStartObj);
             dayEnd.setHours(endHour, 0, 0, 0);
             currentEndLimit = dayEnd.getTime();
         }
