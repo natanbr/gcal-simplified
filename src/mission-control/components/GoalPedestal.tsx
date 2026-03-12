@@ -4,12 +4,16 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch } from '../store/useMCStore.tsx';
 import { Button3D } from './Button3D';
+import { Token } from './Token';
 import type { DisplayCase, RewardIcon } from '../types';
 import { REWARDS, REWARD_MAP } from '../rewardCatalogue';
+
+let _caseTokenIdCounter = 0;
+const newCaseTokenId = (caseId: number) => `ct-${caseId}-${_caseTokenIdCounter++}`;
 
 // ── Confetti particle ─────────────────────────────────────────────────────────
 const CONFETTI_COLORS = ['#f7c948', '#ff8fcc', '#89c4ff', '#a8f0df', '#c5a8ff', '#ffb347'];
@@ -44,7 +48,7 @@ function Confetti({ active }: { active: boolean }) {
   if (!active || particles.length === 0) return null;
 
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 10 }}>
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 10, borderRadius: 'inherit' }}>
       {particles.map(p => (
         <motion.div
           key={p.id}
@@ -71,7 +75,7 @@ function Confetti({ active }: { active: boolean }) {
 }
 
 // ── Token slot row — matches bank coin size ────────────────────────────────────
-function TokenSlots({ filled, total }: { filled: number; total: number }) {
+function TokenSlots({ filled, total, tokens, exitingIds, onDrop, onDragStateChange }: { filled: number; total: number; tokens: {id: string}[], exitingIds: Set<string>, onDrop: (id: string, x: number, y: number) => boolean, onDragStateChange: (isDragging: boolean) => void }) {
   // Only overlap the placeholder tokens if there are more than 30 total.
   // We'll stack them horizontally with negative margin to fit 16 per row.
   const isLarge = total > 30;
@@ -87,37 +91,43 @@ function TokenSlots({ filled, total }: { filled: number; total: number }) {
       maxWidth: '100%',
     }}>
       {Array.from({ length: total }, (_, i) => {
+        const token = i < tokens.length ? tokens[i] : null;
         const isFilled = i < filled;
+        const isExiting = token ? exitingIds.has(token.id) : false;
+
         return (
           <motion.div
             key={i}
             initial={false}
-            animate={isFilled
-              ? { scale: [1.3, 1], opacity: 1 }
-              : { scale: 0.88, opacity: 1 }}
+            animate={{ scale: isFilled ? 1 : 0.88, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 420, damping: 18 }}
             style={{
               width: 40,
               height: 40,
               borderRadius: '50%',
-              background: isFilled
-                ? 'radial-gradient(circle at 35% 32%, #ffe880, #f7c948 38%, #c99b10 82%)'
-                : isLarge ? 'rgba(255,255,255,0.85)' : 'transparent',
-              border: isFilled
-                ? '2px solid rgba(200,154,16,0.5)'
-                : '2.5px dashed rgba(160,150,230,0.5)',
-              boxShadow: isFilled
-                ? '0 2px 0 #c99b10 inset, 0 4px 10px rgba(200,155,16,0.35)'
-                : 'none',
+              background: isLarge ? 'rgba(255,255,255,0.85)' : 'transparent',
+              border: '2.5px dashed rgba(160,150,230,0.5)',
+              boxShadow: 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: 18,
               marginLeft: isLarge && i % maxPerRow !== 0 ? -18 : 0,
-              zIndex: i,
             }}
           >
-            {isFilled ? '⭐' : null}
+            <AnimatePresence>
+              {isFilled && token && !isExiting && (
+                <motion.div
+                  key={token.id}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+                >
+                  <Token id={token.id} onDrop={onDrop} onDragStateChange={onDragStateChange} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         );
       })}
@@ -128,15 +138,98 @@ function TokenSlots({ filled, total }: { filled: number; total: number }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 interface GoalPedestalProps {
   case_: DisplayCase;
+  cases: DisplayCase[];
   innerRef?: (el: HTMLDivElement | null) => void;
   bankCount: number;
+  layoutRects: { bank: DOMRect | null; cases: Record<number, DOMRect | null> };
 }
 
-export function GoalPedestal({ case_, innerRef, bankCount }: GoalPedestalProps) {
+export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }: GoalPedestalProps) {
   const dispatch = useMCDispatch();
   const [isSelecting, setIsSelecting] = useState(false);
   const [leverTilted, setLeverTilted] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  
+  // Track dragging so we can elevate the z-index (delayed lower so spring-back isn't clipped)
+  const [isDragging, setIsDragging] = useState(false);
+  const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleDragStateChange = useCallback((dragging: boolean) => {
+    if (dragging) {
+      if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current);
+      setIsDragging(true);
+    } else {
+      dragTimeoutRef.current = setTimeout(() => setIsDragging(false), 500);
+    }
+  }, []);
+
+  const [caseTokens, setCaseTokens] = useState<{id: string}[]>(() => 
+    Array.from({ length: case_.tokenCount }, () => ({ id: newCaseTokenId(case_.id) }))
+  );
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
+
+  // Sync token length
+  const prevCount = useRef(case_.tokenCount);
+  useEffect(() => {
+    const diff = case_.tokenCount - prevCount.current;
+    prevCount.current = case_.tokenCount;
+    if (diff === 0) return;
+    if (diff > 0) {
+      setCaseTokens(prev => [...prev, ...Array.from({ length: diff }, () => ({ id: newCaseTokenId(case_.id) }))]);
+    } else {
+      setCaseTokens(prev => prev.slice(0, Math.max(0, prev.length + diff)));
+    }
+  }, [case_.tokenCount, case_.id]);
+
+  const handleTokenDrop = useCallback((tokenId: string, x: number, y: number): boolean => {
+    if (!layoutRects) return false;
+    
+    // Check if dropped on Bank
+    if (layoutRects.bank && x >= layoutRects.bank.left && x <= layoutRects.bank.right && y >= layoutRects.bank.top && y <= layoutRects.bank.bottom) {
+      setExitingIds(prev => new Set(prev).add(tokenId));
+      setTimeout(() => {
+        dispatch({ type: 'MOVE_TOKEN', from: case_.id, to: 'bank' });
+        setCaseTokens(prev => prev.filter(t => t.id !== tokenId));
+        prevCount.current = Math.max(0, prevCount.current - 1);
+        setExitingIds(prev => {
+          const next = new Set(prev);
+          next.delete(tokenId);
+          return next;
+        });
+      }, 280);
+      return true;
+    }
+
+    // Check if dropped on another active Case
+    const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
+      if (!rect) return false;
+      const targetCaseId = Number.parseInt(id);
+      if (targetCaseId === case_.id) return false;
+      
+      const targetCase = cases.find(c => c.id === targetCaseId);
+      if (!targetCase || targetCase.status !== 'active') return false;
+
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    });
+
+    if (hit) {
+      const targetCaseId = Number.parseInt(hit[0]);
+      setExitingIds(prev => new Set(prev).add(tokenId));
+      setTimeout(() => {
+        dispatch({ type: 'MOVE_TOKEN', from: case_.id, to: targetCaseId });
+        setCaseTokens(prev => prev.filter(t => t.id !== tokenId));
+        prevCount.current = Math.max(0, prevCount.current - 1);
+        setExitingIds(prev => {
+          const next = new Set(prev);
+          next.delete(tokenId);
+          return next;
+        });
+      }, 280);
+      return true;
+    }
+
+    return false;
+  }, [case_.id, cases, layoutRects, dispatch]);
 
   const reward = case_.reward ? REWARD_MAP[case_.reward] : null;
   const isComplete = case_.status === 'active' && case_.tokenCount >= case_.targetCount;
@@ -194,7 +287,8 @@ export function GoalPedestal({ case_, innerRef, bankCount }: GoalPedestalProps) 
         padding: isEmptyIdle ? '10px 8px' : '10px 8px',
         minHeight: 180,
         position: 'relative',
-        overflow: 'hidden',
+        zIndex: isDragging ? 50 : 1, // Elevate when dragging
+        overflow: 'visible', // Must be visible so dragged token isn't clipped
         borderRadius: 20,
         // Empty idle: dashed border, no background
         background: isEmptyIdle
@@ -359,7 +453,7 @@ export function GoalPedestal({ case_, innerRef, bankCount }: GoalPedestalProps) 
               {case_.tokenCount} / {case_.targetCount}
             </span>
 
-            <TokenSlots filled={case_.tokenCount} total={case_.targetCount} />
+            <TokenSlots filled={case_.tokenCount} total={case_.targetCount} tokens={caseTokens} exitingIds={exitingIds} onDrop={handleTokenDrop} onDragStateChange={handleDragStateChange} />
 
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: 5, marginTop: 'auto', width: '100%' }}>

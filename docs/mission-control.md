@@ -47,6 +47,7 @@ src/
 - Left column: animated coin tokens in a tray
 - `(+)` / `(-)` buttons to manually add/remove coins
 - Drag-and-drop tokens from bank to Goal Pedestals (hit-testing via DOMRect)
+- Tokens can be dragged back from Goal Pedestals to the Global Bank
 - **Initial bank count: 3 coins** (default, resets on storage key change)
 
 #### B. Goal Pedestals (Savings Cases)
@@ -55,6 +56,7 @@ src/
 - Reward picker with fixed coin costs (hardcoded, not configurable)
 - Vacuum button: transfers all bank coins into the case at once
 - Refund (trash lever): returns case coins to bank
+- Tokens can be moved individually between active pedestals via drag-and-drop
 - **Consume** (reward used): permanently removes tokens — no refund
 - Case target count: 5 coins by default
 

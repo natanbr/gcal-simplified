@@ -134,6 +134,44 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
             };
         }
 
+        case 'MOVE_TOKEN': {
+            // Source Validation
+            if (action.from === 'bank' && state.bankCount <= 0) return state;
+            if (typeof action.from === 'number') {
+                const sourceCase = state.cases.find(c => c.id === action.from);
+                if (!sourceCase || sourceCase.tokenCount <= 0) return state;
+            }
+
+            // Target Validation
+            if (typeof action.to === 'number') {
+                const targetCase = state.cases.find(c => c.id === action.to);
+                if (!targetCase || targetCase.status !== 'active') return state;
+            }
+
+            let newBankCount = state.bankCount;
+            let newCases = state.cases;
+
+            // Decrement source
+            if (action.from === 'bank') {
+                newBankCount -= 1;
+            } else {
+                newCases = newCases.map(c => c.id === action.from ? { ...c, tokenCount: Math.max(0, c.tokenCount - 1) } : c);
+            }
+
+            // Increment target
+            if (action.to === 'bank') {
+                newBankCount += 1;
+            } else {
+                newCases = newCases.map(c => c.id === action.to ? { ...c, tokenCount: c.tokenCount + 1 } : c);
+            }
+
+            return {
+                ...state,
+                bankCount: newBankCount,
+                cases: newCases,
+            };
+        }
+
         case 'VACUUM_TO_CASE': {
             if (state.bankCount === 0) return state;
             const vacuumTarget = state.cases.find(c => c.id === action.caseId);

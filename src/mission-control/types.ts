@@ -6,6 +6,11 @@
 
 export type TokenId = string;
 
+export interface LayoutRects {
+    bank: DOMRect | null;
+    cases: Record<number, DOMRect | null>;
+}
+
 export interface MCToken {
     id: TokenId;
     /** Which container owns this token */
@@ -139,6 +144,7 @@ export type MCAction =
     | { type: 'REMOVE_TOKEN' }
     | { type: 'SELECT_CASE'; caseId: number; reward: RewardIcon; targetCount: number }
     | { type: 'DEPOSIT_TO_CASE'; caseId: number; amount: number }
+    | { type: 'MOVE_TOKEN'; from: 'bank' | number; to: 'bank' | number }
     | { type: 'VACUUM_TO_CASE'; caseId: number }
     | { type: 'REFUND_CASE'; caseId: number }
     | { type: 'SET_PRIVILEGE_STATUS'; cardId: string; status: PrivilegeStatus; suspendedUntil: string | null }

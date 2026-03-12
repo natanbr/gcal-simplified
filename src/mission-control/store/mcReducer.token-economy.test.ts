@@ -140,6 +140,57 @@ describe('mcReducer — DEPOSIT_TO_CASE', () => {
     });
 });
 
+// ── MOVE_TOKEN ──────────────────────────────────────────────────────────────
+
+describe('mcReducer — MOVE_TOKEN', () => {
+    const activeState: MCState = {
+        ...initialState,
+        bankCount: 5,
+        cases: initialState.cases.map(c => {
+            if (c.id === 0) return { ...c, status: 'active', reward: 'game', tokenCount: 2, targetCount: 5 };
+            if (c.id === 1) return { ...c, status: 'active', reward: 'movie-popcorn', tokenCount: 0, targetCount: 5 };
+            return c;
+        }),
+    };
+
+    it('moves a token from bank to case', () => {
+        const state = mcReducer(activeState, { type: 'MOVE_TOKEN', from: 'bank', to: 0 });
+        expect(state.bankCount).toBe(4);
+        expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(3);
+    });
+
+    it('moves a token from case to bank', () => {
+        const state = mcReducer(activeState, { type: 'MOVE_TOKEN', from: 0, to: 'bank' });
+        expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(1);
+        expect(state.bankCount).toBe(6);
+    });
+
+    it('moves a token from case to case', () => {
+        const state = mcReducer(activeState, { type: 'MOVE_TOKEN', from: 0, to: 1 });
+        expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(1);
+        expect(state.cases.find(c => c.id === 1)!.tokenCount).toBe(1);
+    });
+
+    it('does nothing if source is bank and bank is empty', () => {
+        const broke = { ...activeState, bankCount: 0 };
+        const state = mcReducer(broke, { type: 'MOVE_TOKEN', from: 'bank', to: 0 });
+        expect(state.bankCount).toBe(0);
+        expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(2);
+    });
+
+    it('does nothing if source is a case and case is empty', () => {
+        const state = mcReducer(activeState, { type: 'MOVE_TOKEN', from: 1, to: 0 });
+        expect(state.cases.find(c => c.id === 1)!.tokenCount).toBe(0);
+        expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(2);
+    });
+
+    it('does nothing if target is a case and case is not active', () => {
+        const state = mcReducer(activeState, { type: 'MOVE_TOKEN', from: 0, to: 2 });
+        expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(2);
+        expect(state.cases.find(c => c.id === 2)!.tokenCount).toBe(0);
+    });
+});
+
 // ── VACUUM_TO_CASE ──────────────────────────────────────────────────────────
 
 describe('mcReducer — VACUUM_TO_CASE', () => {

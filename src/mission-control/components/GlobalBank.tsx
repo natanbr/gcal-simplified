@@ -23,13 +23,28 @@ const newId = () => `bt-${_idCounter++}`;
 interface GlobalBankProps {
   /** The current list of display cases — used for drop validation */
   cases: DisplayCase[];
-  /** Bounding rects of each case element, keyed by caseId */
-  caseRects: Record<number, DOMRect | null>;
+  /** Bounding rects for the bank and cases */
+  layoutRects: { bank: DOMRect | null; cases: Record<number, DOMRect | null> };
+  /** Ref for the bank element to update layoutRects.bank */
+  innerRef?: (el: HTMLDivElement | null) => void;
 }
 
-export function GlobalBank({ cases, caseRects }: GlobalBankProps) {
+export function GlobalBank({ cases, layoutRects, innerRef }: GlobalBankProps) {
   const state = useMCState();
   const dispatch = useMCDispatch();
+
+  // Track dragging to elevate the Bank's z-index
+  const [isDragging, setIsDragging] = useState(false);
+  const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleDragStateChange = useCallback((dragging: boolean) => {
+    if (dragging) {
+      if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current);
+      setIsDragging(true);
+    } else {
+      dragTimeoutRef.current = setTimeout(() => setIsDragging(false), 500);
+    }
+  }, []);
 
   // ------------------------------------------------------------------
   // Stable token list — keeps identity across re-renders so framer-motion
@@ -68,7 +83,7 @@ export function GlobalBank({ cases, caseRects }: GlobalBankProps) {
   const handleTokenDrop = useCallback(
     (tokenId: string, x: number, y: number): boolean => {
       // Find the first ACTIVE case whose rect contains the drop point
-      const hit = Object.entries(caseRects).find(([id, rect]) => {
+      const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
         if (!rect) return false;
         const caseId = Number.parseInt(id);
         const targetCase = cases.find(c => c.id === caseId);
@@ -88,7 +103,7 @@ export function GlobalBank({ cases, caseRects }: GlobalBankProps) {
       setExitingIds(prev => new Set(prev).add(tokenId));
 
       setTimeout(() => {
-        dispatch({ type: 'DEPOSIT_TO_CASE', caseId, amount: 1 });
+        dispatch({ type: 'MOVE_TOKEN', from: 'bank', to: caseId });
         setBankTokens(prev => prev.filter(t => t.id !== tokenId));
         prevBankCount.current = Math.max(0, prevBankCount.current - 1);
         setExitingIds(prev => {
@@ -100,7 +115,7 @@ export function GlobalBank({ cases, caseRects }: GlobalBankProps) {
 
       return true; // consumed — Token will NOT spring back
     },
-    [cases, caseRects, dispatch],
+    [cases, layoutRects, dispatch],
   );
 
 
@@ -131,6 +146,7 @@ export function GlobalBank({ cases, caseRects }: GlobalBankProps) {
   // ------------------------------------------------------------------
   return (
     <div
+      ref={innerRef}
       className="mc-panel"
       style={{
         flex: '0 0 240px',
@@ -139,6 +155,7 @@ export function GlobalBank({ cases, caseRects }: GlobalBankProps) {
         gap: 12,
         padding: 16,
         background: '#f8f6ff',
+        zIndex: isDragging ? 50 : 1, // Ascend during drag so token passes over pedestals
       }}
     >
       {/* ── Header (tap to open admin popup) ── */}
@@ -298,6 +315,7 @@ export function GlobalBank({ cases, caseRects }: GlobalBankProps) {
                 <Token
                   id={token.id}
                   onDrop={handleTokenDrop}
+                  onDragStateChange={handleDragStateChange}
                 />
               </motion.div>
             );

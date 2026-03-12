@@ -15,11 +15,15 @@ interface TokenProps {
    * Return `false` / undefined to reject — token springs back to origin.
    */
   onDrop?: (id: string, x: number, y: number) => boolean;
+  /**
+   * Emits true when drag starts, false when drag ends.
+   */
+  onDragStateChange?: (isDragging: boolean) => void;
 }
 
 const SPRING = { type: 'spring' as const, stiffness: 320, damping: 26 };
 
-export function Token({ id, onDrop }: TokenProps) {
+export function Token({ id, onDrop, onDragStateChange }: TokenProps) {
   const boundsRef = useDragBounds();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -48,7 +52,9 @@ export function Token({ id, onDrop }: TokenProps) {
       }}
       whileTap={{ scale: 0.94 }}
       transition={SPRING}
+      onDragStart={() => onDragStateChange?.(true)}
       onDragEnd={(_event, info) => {
+        onDragStateChange?.(false);
         const consumed = onDrop?.(id, info.point.x, info.point.y);
         if (!consumed) {
           // Not deposited — spring coin back to its slot in the tray

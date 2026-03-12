@@ -29,13 +29,20 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Refs to each pedestal DOM element for drop-zone hit testing
+  const bankRef = useRef<HTMLDivElement | null>(null);
   const pedestalRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const caseRects = useRef<Record<number, DOMRect | null>>({});
+  
+  // Single ref holding both bank and case rects so they can be passed without restickying
+  const layoutRects = useRef<{ bank: DOMRect | null; cases: Record<number, DOMRect | null> }>({
+    bank: null,
+    cases: {},
+  });
 
   // Refresh DOMRect measurements whenever a token drag starts or ends
   const refreshRects = useCallback(() => {
+    layoutRects.current.bank = bankRef.current ? bankRef.current.getBoundingClientRect() : null;
     for (const [id, el] of Object.entries(pedestalRefs.current)) {
-      caseRects.current[Number.parseInt(id)] = el ? el.getBoundingClientRect() : null;
+      layoutRects.current.cases[Number.parseInt(id)] = el ? el.getBoundingClientRect() : null;
     }
   }, []);
 
@@ -173,7 +180,8 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
         {/* ── LEFT: Global Bank ── */}
         <GlobalBank
           cases={state.cases}
-          caseRects={caseRects.current}
+          layoutRects={layoutRects.current}
+          innerRef={el => { bankRef.current = el; }}
         />
 
         {/* ── CENTER: Goal Pedestals (2 columns × 2 rows) ── */}
@@ -191,8 +199,10 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
                 <GoalPedestal
                   key={c.id}
                   case_={c}
+                  cases={state.cases}
                   bankCount={state.bankCount}
                   innerRef={el => { pedestalRefs.current[c.id] = el; }}
+                  layoutRects={layoutRects.current}
                 />
               ))}
             </div>
@@ -202,8 +212,10 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
                 <GoalPedestal
                   key={c.id}
                   case_={c}
+                  cases={state.cases}
                   bankCount={state.bankCount}
                   innerRef={el => { pedestalRefs.current[c.id] = el; }}
+                  layoutRects={layoutRects.current}
                 />
               ))}
             </div>
