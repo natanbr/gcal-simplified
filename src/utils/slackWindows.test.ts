@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateSlackWindows, SlackWindow } from './slackWindows';
+import { calculateSlackWindows } from './slackWindows';
 
 describe('Slack Tide Window Calculation', () => {
     it('should calculate slack window boundaries correctly', () => {

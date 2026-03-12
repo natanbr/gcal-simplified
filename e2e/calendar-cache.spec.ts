@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { test, _electron as electron, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,7 +54,8 @@ test.describe('Calendar Caching and Background Loading', () => {
 
         // It might show the pulse
         const refreshIcon = window.locator('svg.animate-pulse');
-        const isPulseVisible = await refreshIcon.isVisible().catch(() => false);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const isPulseVisible = await refreshIcon.isVisible().catch(() => false);
 
         const spinIcon = window.locator('svg.animate-spin');
         const isSpinVisible = await spinIcon.isVisible().catch(() => false);

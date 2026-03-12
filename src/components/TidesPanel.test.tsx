@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { TidesPanel } from './WeatherDashboard';
+import { TidesPanel } from './TidesPanel';
 import { WeatherData, TideData } from '../types';
 import { addHours, startOfDay, format } from 'date-fns';
 

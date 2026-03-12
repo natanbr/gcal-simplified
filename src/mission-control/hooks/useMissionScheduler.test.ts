@@ -157,6 +157,7 @@ describe('Scheduler logic — timer deactivation', () => {
 // ── simulateTickOnce ─────────────────────────────────────────────────────────────
 // For testing the pure functionality of exactly matching the time.
 // ──────────────────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getMsUntilNextTime(now: Date, hhmm: string): number {
     const [h, m] = hhmm.split(':').map(Number);
     const target = new Date(now.getTime());
@@ -249,7 +250,7 @@ describe('Scheduler logic — no overlap', () => {
         d.setHours(19, 0, 0, 0);
         setTime(19, 0);
 
-        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+        const state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
 
         const afterTick = simulateExactTrigger(state, d);
         // Should STILL be morning, even though Evening triggered!

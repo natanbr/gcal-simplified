@@ -46,7 +46,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     useEffect(() => {
 
         loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+// eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleSave = async () => {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { test, _electron as electron, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

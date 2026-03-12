@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act } from '@testing-library/react';
 import { useCalendarData } from './useCalendarData';
 import { vi, describe, it, expect, beforeEach } from 'vitest';

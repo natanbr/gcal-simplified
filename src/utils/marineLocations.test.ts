@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
 import { MARINE_LOCATIONS } from './marineLocations';
 import stations from '../../stations.json';

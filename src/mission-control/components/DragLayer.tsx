@@ -36,6 +36,7 @@ export function DragLayer({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useDragBounds(): React.RefObject<HTMLDivElement | null> {
   const ctx = useContext(DragLayerContext);
   if (!ctx) throw new Error('useDragBounds must be used within <DragLayer>');
