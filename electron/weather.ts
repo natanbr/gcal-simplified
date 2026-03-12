@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { WeatherData, TideData } from '../src/types';
 import stations from '../stations.json';
 
@@ -171,7 +172,7 @@ export class WeatherService {
             let tideHeights: number[] = [];
             let currentSpeeds: number[] = [];
             let currentDirections: number[] = [];
-            let hiloData: { time: string; value: number; type: string }[] = [];
+            const hiloData: { time: string; value: number; type: string }[] = [];
 
             // 4. Process Tide Data (CHS wlp/wlp-hilo)
             if (chsTideHiloResponse?.ok) {

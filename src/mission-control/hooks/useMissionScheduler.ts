@@ -88,6 +88,7 @@ export function useMissionScheduler(): void {
             timeouts.forEach(clearTimeout);
             timeouts.clear();
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         state.settings.morningStartsAt,
         state.settings.eveningStartsAt,
@@ -114,6 +115,7 @@ export function useMissionScheduler(): void {
         // it doesn't trigger anything, just automatically closes it when time is up.
         const id = setInterval(tick, 15_000);
         return () => clearInterval(id);
+
     }, [dispatch]);
 }
 

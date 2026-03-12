@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
@@ -5,7 +6,7 @@ import React from 'react';
 // Mock must be defined before imports that use it, OR rely on hoisting.
 // We'll trust hoisting but define it clearly.
 // Using explicit any for children as per original file style
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 vi.mock('./SideDrawer', () => ({
     SideDrawer: ({ isOpen, children }: { isOpen: boolean, children: any }) => {
         // Render children directly if open
@@ -37,11 +38,11 @@ describe('WeatherDashboard', () => {
         };
         const mockTasks: any[] = [];
 
-        // @ts-ignore
+        // @ts-expect-error test mock
         render(<WeatherDashboard 
-            // @ts-ignore
+            // @ts-expect-error test mock
             weather={mockWeather} 
-            // @ts-ignore
+            // @ts-expect-error test mock
             tides={mockTides} 
             tasks={mockTasks}
             currentLocationId="sooke"
@@ -67,9 +68,9 @@ describe('WeatherDashboard', () => {
             hourly: { time: [], temperature_2m: [], precipitation_probability: [], weather_code: [] }
         };
 
-        // @ts-ignore
+        // @ts-expect-error test mock
         render(<WeatherDashboard 
-            // @ts-ignore
+            // @ts-expect-error test mock
             weather={mockWeather} 
             tides={null} // Simulate initial lazy load state
             tasks={[]}
@@ -100,12 +101,12 @@ describe('WeatherDashboard', () => {
             { id: '2', title: 'Test Task 2', status: 'completed' }
         ];
 
-        // @ts-ignore
+        // @ts-expect-error test mock
         render(<WeatherDashboard 
-            // @ts-ignore
+            // @ts-expect-error test mock
             weather={mockWeather} 
             tides={null}
-            // @ts-ignore
+            // @ts-expect-error test mock
             tasks={mockTasks}
             currentLocationId="sooke"
             onLocationChange={() => {}}

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // ============================================================
 // Mission Control — Isolated State Store
 // Uses React Context + useReducer. No external library.
