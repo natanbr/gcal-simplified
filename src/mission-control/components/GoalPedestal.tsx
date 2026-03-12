@@ -72,13 +72,19 @@ function Confetti({ active }: { active: boolean }) {
 
 // ── Token slot row — matches bank coin size ────────────────────────────────────
 function TokenSlots({ filled, total }: { filled: number; total: number }) {
+  // Only overlap the placeholder tokens if there are more than 30 total.
+  // We'll stack them horizontally with negative margin to fit 16 per row.
+  const isLarge = total > 30;
+  const maxPerRow = isLarge ? 16 : 8;
+
   return (
     <div style={{
       display: 'flex',
       flexWrap: 'wrap',
-      gap: 6,
+      gap: isLarge ? '6px 0' : 6,
       justifyContent: 'center',
       padding: '6px 4px',
+      maxWidth: '100%',
     }}>
       {Array.from({ length: total }, (_, i) => {
         const isFilled = i < filled;
@@ -96,10 +102,10 @@ function TokenSlots({ filled, total }: { filled: number; total: number }) {
               borderRadius: '50%',
               background: isFilled
                 ? 'radial-gradient(circle at 35% 32%, #ffe880, #f7c948 38%, #c99b10 82%)'
-                : 'transparent',
+                : isLarge ? 'rgba(255,255,255,0.85)' : 'transparent',
               border: isFilled
                 ? '2px solid rgba(200,154,16,0.5)'
-                : '2.5px dashed rgba(160,150,230,0.3)',
+                : '2.5px dashed rgba(160,150,230,0.5)',
               boxShadow: isFilled
                 ? '0 2px 0 #c99b10 inset, 0 4px 10px rgba(200,155,16,0.35)'
                 : 'none',
@@ -107,6 +113,8 @@ function TokenSlots({ filled, total }: { filled: number; total: number }) {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: 18,
+              marginLeft: isLarge && i % maxPerRow !== 0 ? -18 : 0,
+              zIndex: i,
             }}
           >
             {isFilled ? '⭐' : null}
