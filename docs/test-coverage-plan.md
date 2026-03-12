@@ -97,7 +97,27 @@ Covers `MCSettingsOverlay.tsx` — zero tests.
 - Renders with current morning/evening startsAt and duration values
 - Changing morning start time dispatches SET_SETTINGS
 - Changing evening duration dispatches SET_SETTINGS
+- Toggling "Put on cream" dispatches SET_SETTINGS with `creamTaskEnabled`
+- Changing cream target days dispatches SET_SETTINGS with `creamTaskDaysTarget`
 - Closing the overlay hides it
+
+---
+
+## Phase 5b — Mission Control: Cream Target Logic (Unit) ⏳ Priority: Medium
+
+Covers new reducer logic for the dynamic "Put on Cream" evening routine task.
+
+### Files to create/extend
+
+- Extend `src/mission-control/store/mcReducer.settings.test.ts` (or create if missing)
+- Extend `src/mission-control/store/mcReducer.mission-tasks.test.ts`
+
+### Cases
+
+- `SET_SETTINGS` enabling cream injects it into the `evening` tasks array before 'bed'
+- `SET_SETTINGS` updating cream target resets `creamTaskDaysLeft`
+- `COMPLETE_TASK` on 'cream' decrements `creamTaskDaysLeft`
+- `COMPLETE_TASK` on 'cream' auto-toggles `creamTaskEnabled: false` when days reach 0 and removes the task
 
 ---
 
@@ -143,6 +163,23 @@ Covers `weekNavigation.ts` + `colorMapping.ts` gaps.
 
 ---
 
+## Phase 9 — Mission Control: Token Drag and Drop (E2E) ⏳ Priority: Low
+
+Covers the complex drag-and-drop interactions for moving tokens between the `GlobalBank` and `GoalPedestal` components. Unit tests for the store actions (`MOVE_TOKEN`) are already complete resulting in 100% logic coverage, but E2E is needed to guarantee visual layer behavior.
+
+### Files to create
+
+- `e2e/mc-token-movement.spec.ts`
+
+### Cases
+
+- Drag a token from the bank to an active goal card (verify token count in both decreases and increases).
+- Drag a token from an active goal card back to the bank.
+- Drag a token from one active goal card to another active goal card.
+- Verify tokens correctly spring back if dropped outside a valid drop target.
+
+---
+
 ## Status Tracking
 
 | Phase | Status  | Files                                                                       |
@@ -155,6 +192,7 @@ Covers `weekNavigation.ts` + `colorMapping.ts` gaps.
 | 6     | ✅ Done | `GlobalBank.test.tsx`                                                       |
 | 7     | ✅ Done | `monthly-view.spec.ts`, `mc-bank-management.spec.ts`, `mc-settings.spec.ts` |
 | 8     | ✅ Done | `colorMapping.test.ts` — all 11 colorIds + priority/fallback                |
+| 9     | ⏳ Pending | `mc-token-movement.spec.ts` (E2E drag-and-drop tests) |
 
 ### Final unit test count: 397 ✅ (0 failures)
 

@@ -96,6 +96,10 @@ export interface MCSettings {
     eveningStartsAt: string;
     /** Evening mission duration in minutes */
     eveningDurationMins: number;
+    /** Optional evening routine add-on for putting on cream */
+    creamTaskEnabled: boolean;
+    /** How many days the cream routine is required for */
+    creamTaskDaysTarget: number;
 }
 
 export const DEFAULT_SETTINGS: MCSettings = {
@@ -103,6 +107,8 @@ export const DEFAULT_SETTINGS: MCSettings = {
     morningDurationMins: 30,
     eveningStartsAt: '19:00',
     eveningDurationMins: 60,
+    creamTaskEnabled: false,
+    creamTaskDaysTarget: 7,
 };
 
 // --------------- Responsibilities ---------------
@@ -134,6 +140,8 @@ export interface MCState {
     activeMission: MissionPhase;
     startedAt?: string; // ISO timestamp when the app was loaded/started
     settings: MCSettings;
+    /** Tracks remaining days for the cream task (-1 means indefinite/disabled but internal UI logic manages this) */
+    creamTaskDaysLeft: number;
     responsibilities: ResponsibilityTask[];
 }
 

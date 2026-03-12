@@ -13,6 +13,7 @@ import type {
     PrivilegeCard,
     Mission,
     ResponsibilityTask,
+    MCSettings,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 
@@ -98,12 +99,13 @@ export const initialState: MCState = {
     missions: defaultMissions,
     activeMission: 'none',
     settings: DEFAULT_SETTINGS,
+    creamTaskDaysLeft: 0,
     responsibilities: defaultResponsibilities,
 };
 
 // ---- Reducer ----
 
-export function mcReducer(state: MCState, action: MCAction): MCState {
+function _mcReducer(state: MCState, action: MCAction): MCState {
     switch (action.type) {
         case 'ADD_TOKEN':
             return { ...state, bankCount: state.bankCount + 1 };
@@ -213,20 +215,27 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                 ),
             };
 
-        case 'COMPLETE_TASK':
-            return {
-                ...state,
-                missions: state.missions.map(m =>
-                    m.phase === action.missionPhase
-                        ? {
-                            ...m,
-                            tasks: m.tasks.map(t =>
-                                t.id === action.taskId ? { ...t, completed: true } : t,
-                            ),
-                        }
-                        : m,
-                ),
-            };
+        case 'COMPLETE_TASK': {
+            const nextState = { ...state };
+            if (action.taskId === 'cream') {
+                nextState.creamTaskDaysLeft = Math.max(0, state.creamTaskDaysLeft - 1);
+            }
+            nextState.missions = nextState.missions.map(m =>
+                m.phase === action.missionPhase
+                    ? {
+                        ...m,
+                        tasks: m.tasks.map(t =>
+                            t.id === action.taskId ? { ...t, completed: true } : t,
+                        ),
+                    }
+                    : m,
+            );
+            // Auto-disable if today was the last day
+            if (action.taskId === 'cream' && nextState.creamTaskDaysLeft === 0) {
+                 nextState.settings = { ...nextState.settings, creamTaskEnabled: false };
+            }
+            return nextState;
+        }
 
         case 'LOCK_TASK':
             return {
@@ -344,10 +353,22 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
             };
         }
 
-        case 'SET_SETTINGS':
+        case 'SET_SETTINGS': {
+            const nextSettings = { ...state.settings, ...action.settings };
+            let nextDaysLeft = state.creamTaskDaysLeft;
+            
+            if (action.settings.creamTaskEnabled && !state.settings.creamTaskEnabled) {
+                // Just enabled — start fresh
+                nextDaysLeft = nextSettings.creamTaskDaysTarget;
+            } else if (action.settings.creamTaskDaysTarget !== undefined && action.settings.creamTaskDaysTarget !== state.settings.creamTaskDaysTarget) {
+                 // Target changed, reset current progress
+                 nextDaysLeft = action.settings.creamTaskDaysTarget;
+            }
+
             return {
                 ...state,
-                settings: { ...state.settings, ...action.settings },
+                settings: nextSettings,
+                creamTaskDaysLeft: nextDaysLeft,
                 // Live-update mission startsAt/endsAt from settings so scheduler picks them up.
                 // If the start time changes, clear startedAt, durationMins AND cancelledAt
                 // so the scheduler can re-trigger at the new time.
@@ -383,6 +404,7 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
                     return m;
                 }),
             };
+        }
 
         case 'ADD_RESPONSIBILITY_POINT': {
             const now = new Date().toISOString();
@@ -415,4 +437,59 @@ export function mcReducer(state: MCState, action: MCAction): MCState {
         default:
             return state;
     }
+}
+
+// ---- Task Injection Sync ----
+// Safely adds/removes/updates the Cream routine in the evening active missions array.
+function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: number): Mission[] {
+    return missions.map(m => {
+        if (m.phase !== 'evening') return m;
+        
+        const hasCream = m.tasks.some(t => t.id === 'cream');
+        const shouldHaveCream = settings.creamTaskEnabled && daysLeft > 0;
+        const expectedLabel = `Cream (${daysLeft}d left)`;
+        
+        if (shouldHaveCream && !hasCream) {
+            // Inject before bed
+            const bedIndex = m.tasks.findIndex(t => t.id === 'bed');
+            const newTasks = [...m.tasks];
+            const creamTask = {
+                id: 'cream',
+                label: expectedLabel,
+                icon: 'Droplet',
+                completed: false,
+                locksAt: null,
+                locked: false
+            };
+            if (bedIndex !== -1) newTasks.splice(bedIndex, 0, creamTask);
+            else newTasks.push(creamTask);
+            return { ...m, tasks: newTasks };
+        } else if (!shouldHaveCream && hasCream) {
+            // Remove it
+            return { ...m, tasks: m.tasks.filter(t => t.id !== 'cream') };
+        } else if (hasCream && shouldHaveCream) {
+            // Ensure label is updated
+            const needUpdate = m.tasks.some(t => t.id === 'cream' && t.label !== expectedLabel);
+            if (needUpdate) {
+                return {
+                    ...m,
+                    tasks: m.tasks.map(t => t.id === 'cream' ? { ...t, label: expectedLabel } : t)
+                };
+            }
+        }
+        return m;
+    });
+}
+
+// Wrapper ensures invariants are always synced after *any* dispatch
+export function mcReducer(state: MCState, action: MCAction): MCState {
+    const nextState = _mcReducer(state, action);
+    if (
+        nextState.missions !== state.missions || 
+        nextState.settings !== state.settings || 
+        nextState.creamTaskDaysLeft !== state.creamTaskDaysLeft
+    ) {
+        nextState.missions = syncCreamTask(nextState.missions, nextState.settings, nextState.creamTaskDaysLeft);
+    }
+    return nextState;
 }

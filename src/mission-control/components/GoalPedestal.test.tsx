@@ -7,6 +7,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MCStoreProvider } from '../store/useMCStore.tsx';
 import { GoalPedestal } from './GoalPedestal';
+import { DragLayer } from './DragLayer';
 import type { DisplayCase } from '../types';
 
 // Mock framer-motion so animations don't block
@@ -53,7 +54,9 @@ const completedCase: DisplayCase = {
 function renderPedestal(case_: DisplayCase, bankCount = 3) {
     return render(
         <MCStoreProvider>
-            <GoalPedestal case_={case_} bankCount={bankCount} />
+            <DragLayer>
+                <GoalPedestal case_={case_} bankCount={bankCount} />
+            </DragLayer>
         </MCStoreProvider>
     );
 }

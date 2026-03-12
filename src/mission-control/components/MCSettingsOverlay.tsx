@@ -246,6 +246,73 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                             <DurationStepper label="Duration" value={draft.eveningDurationMins} onChange={v => set('eveningDurationMins', v)} />
                         </section>
 
+                        {/* Routine Add-ons */}
+                        <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                <span style={{ fontSize: 18 }}>🧴</span>
+                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Routine Add-ons</span>
+                            </div>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--mc-text)' }}>"Put on Cream" (Evening)</span>
+                                <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => set('creamTaskEnabled', !draft.creamTaskEnabled)}
+                                    style={{
+                                        width: 48, height: 26,
+                                        borderRadius: 99,
+                                        background: draft.creamTaskEnabled ? '#6de89e' : 'rgba(160,150,230,0.2)',
+                                        border: 'none',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    <motion.div
+                                        animate={{ x: draft.creamTaskEnabled ? 22 : 2 }}
+                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                        style={{
+                                            width: 22, height: 22,
+                                            borderRadius: '50%',
+                                            background: '#fff',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                            position: 'absolute', top: 2, left: 0,
+                                        }}
+                                    />
+                                </motion.button>
+                            </div>
+
+                            <AnimatePresence>
+                                {draft.creamTaskEnabled && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        style={{ overflow: 'hidden' }}
+                                    >
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                                <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
+                                                    Days Required
+                                                </span>
+                                                <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--mc-text)', fontVariantNumeric: 'tabular-nums' }}>
+                                                    {draft.creamTaskDaysTarget}
+                                                </span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={1}
+                                                max={30}
+                                                step={1}
+                                                value={draft.creamTaskDaysTarget}
+                                                onChange={e => set('creamTaskDaysTarget', Number(e.target.value))}
+                                                style={{ width: '100%', accentColor: '#6de89e' }}
+                                            />
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </section>
+
                         {/* Save */}
                         <motion.button
                             data-testid="mc-settings-save"

@@ -19,6 +19,7 @@ const ICON_MAP: Record<string, string> = {
     Smile:         '🦷',
     Toothbrush:    '🪥',
     Droplets:      '🚿',
+    Droplet:       '💧',
     Moon:          '🌙',
     Layers:        '👘',   // PJs / clothes
     ToyBrick:      '🧸',   // cleanup / blocks

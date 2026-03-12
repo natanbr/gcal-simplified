@@ -107,6 +107,11 @@ describe('MCSettingsOverlay — default values', () => {
         await renderAndOpen();
         expect(screen.getAllByText(/🔧 10s/).length).toBeGreaterThanOrEqual(1);
     });
+
+    it('shows "Put on Cream" toggle', async () => {
+        await renderAndOpen();
+        expect(screen.getByText(/"Put on Cream"/)).toBeInTheDocument();
+    });
 });
 
 // ── Duration chips ────────────────────────────────────────────────────────────
@@ -163,6 +168,44 @@ describe('MCSettingsOverlay — save', () => {
         expect(screen.queryByText('Settings')).not.toBeInTheDocument();
         // Store should have the new start time
         expect(capturedPhase).toBe('07:30');
+    });
+
+    it('clicking Save dispatches SET_SETTINGS for cream task toggles', async () => {
+        let capturedEnabled: boolean | undefined;
+
+        function TestRig() {
+            const [open, setOpen] = useState(false);
+            return (
+                <MCStoreProvider>
+                    <StateReader onState={s => { capturedEnabled = s.settings.creamTaskEnabled; }} />
+                    <button data-testid="open-btn" onClick={() => setOpen(true)}>Open</button>
+                    <MCSettingsOverlay open={open} onClose={() => setOpen(false)} />
+                </MCStoreProvider>
+            );
+        }
+
+        render(<TestRig />);
+        await openPanel();
+
+        // The default state is creamTaskEnabled = false. Find the toggle button.
+        // It's the button closest to "Put on Cream" text.
+        const creamText = screen.getByText(/"Put on Cream"/);
+        const creamContainer = creamText.parentElement!;
+        const toggleBtn = creamContainer.querySelector('button')!;
+        
+        await act(async () => {
+            fireEvent.click(toggleBtn);
+            // also verify that the slider appears by finding "Days Required"
+        });
+        
+        expect(screen.getByText(/Days Required/)).toBeInTheDocument();
+
+        // Save
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('mc-settings-save'));
+        });
+
+        expect(capturedEnabled).toBe(true);
     });
 
     it('clicking Cancel does NOT update the store', async () => {

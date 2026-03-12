@@ -125,11 +125,12 @@ src/
 | Task     | Icon             | Locks At                          |
 | -------- | ---------------- | --------------------------------- |
 | Shower   | Droplets 🚿      | —                                 |
+| Cream    | Droplets 🧴      | _(Optional, drops off when days reach 0)_ |
 | PJs      | Moon 🌙          | — _(see Backlog #4)_              |
 | Clean Up | Sparkles ✨      | — _(see Backlog #4)_              |
 | Teeth    | Smile 🦷         | — _(see Backlog #4)_              |
 | Book     | BookOpen 📖      | 19:50                             |
-| Talking  | MessageCircle 💬 | 20:00 _(see Backlog #4 — remove)_ |
+| Bed      | BedDouble 🛏️     | —                                 |
 
 **Morning tasks:** T-Shirt (👕), Teeth (🦷)
 
@@ -159,6 +160,7 @@ src/
 - Configurable options:
   - **Morning mission:** scheduled trigger time (default 7:30 AM) + duration (default 30 min)
   - **Evening mission:** scheduled trigger time (default 7:00 PM) + duration (default 60 min)
+  - **Routine Add-ons:** Toggle for "Put on cream" (evening task), with configurable days required logic.
   - **Privilege management** (see #5)
 
 ### 3. Mission Trigger & Timer Logic (Full Spec)
