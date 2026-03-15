@@ -9,7 +9,7 @@ import { EventCard } from './EventCard';
 import { MonthlyView } from './MonthlyView';
 import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
 import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
-import { WeatherDashboard } from './WeatherDashboard';
+import { WeatherDashboard } from '../features/weather/components/WeatherDashboard';
 import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
 import { getMonthViewDates, isCurrentMonth, canNavigateBackMonth } from '../utils/monthUtils';
