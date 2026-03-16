@@ -45,18 +45,8 @@ export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDon
     }, [timerExpired, allDone, onTimerExpiredWithAllDone]);
 
     return (
-        <motion.span
-            animate={
-                allDone
-                    ? {} // all done — no animation, stays green
-                    : timerCritical
-                    ? {
-                        scale: [1, 1.06, 1],
-                        color: ['#e74c3c', '#c0392b', '#e74c3c'],
-                        transition: { repeat: Infinity, duration: 1 }
-                      }
-                    : {}
-            }
+        <span
+            className={(!allDone && timerCritical && !timerExpired) ? "animate-mc-timer-critical" : ""}
             style={{
                 fontSize: 42,
                 fontWeight: 900,
@@ -65,6 +55,7 @@ export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDon
                 lineHeight: 1,
                 letterSpacing: '-0.02em',
                 textAlign: 'center',
+                display: 'inline-block',
                 color: allDone
                     ? '#27ae60'         // green — all tasks complete
                     : timerExpired
@@ -75,7 +66,7 @@ export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDon
             }}
         >
             {timerDisplay}
-        </motion.span>
+        </span>
     );
 }
 

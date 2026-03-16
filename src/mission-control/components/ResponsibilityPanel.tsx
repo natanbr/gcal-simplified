@@ -81,13 +81,8 @@ function ResponsibilityCard({ task }: TaskCardProps) {
         >
             {/* Shimmer on complete */}
             {isComplete && (
-                <motion.div
-                    animate={{
-                        x: ['-120%', '120%'],
-                        // ⚡ Bolt Performance: Place infinite transitions inside the animate object
-                        // to prevent Framer Motion from running a constant 60fps loop at the root level.
-                        transition: { repeat: Infinity, duration: 2.2, ease: 'easeInOut', repeatDelay: 1 }
-                    }}
+                <div
+                    className="animate-mc-shimmer"
                     style={{
                         position: 'absolute',
                         inset: 0,
@@ -99,24 +94,12 @@ function ResponsibilityCard({ task }: TaskCardProps) {
 
             {/* Header row: icon + label + status badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <motion.span
-                    animate={isComplete
-                        ? {
-                            rotate: [0, -10, 10, 0],
-                            scale: [1, 1.15, 1],
-                            // ⚡ Bolt Performance: Place infinite transitions inside the animate object
-                            // to prevent Framer Motion from running a constant 60fps loop at the root level.
-                            transition: { repeat: Infinity, duration: 1.6, ease: 'easeInOut' }
-                        }
-                        : {
-                            scale: [1, 1.04, 1],
-                            transition: { repeat: Infinity, duration: 4, ease: 'easeInOut' }
-                        }
-                    }
-                    style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}
+                <span
+                    className={isComplete ? "animate-mc-bounce-rotate" : "animate-mc-pulse-slow"}
+                    style={{ fontSize: 28, lineHeight: 1, flexShrink: 0, display: 'inline-block' }}
                 >
                     {task.icon}
-                </motion.span>
+                </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                         fontSize: 13,

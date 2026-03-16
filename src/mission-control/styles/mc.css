@@ -213,3 +213,67 @@
   position: relative;
 }
 
+
+/* ---- Performance Optimized Animations ---- */
+/* ⚡ Bolt Performance: Hardware-accelerated CSS animations replacing JS-driven Framer Motion infinite loops */
+
+@keyframes mc-shimmer {
+  0% { transform: translateX(-120%); }
+  50% { transform: translateX(120%); }
+  100% { transform: translateX(120%); }
+}
+.animate-mc-shimmer {
+  animation: mc-shimmer 2.2s ease-in-out infinite;
+  animation-delay: 1s;
+}
+
+@keyframes mc-pulse-slow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.animate-mc-pulse-slow {
+  animation: mc-pulse-slow 4s ease-in-out infinite;
+}
+
+@keyframes mc-bounce-rotate {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.15) rotate(-10deg); }
+  75% { transform: scale(1.15) rotate(10deg); }
+}
+.animate-mc-bounce-rotate {
+  animation: mc-bounce-rotate 1.6s ease-in-out infinite;
+}
+
+@keyframes mc-bounce-rotate-large {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.2) rotate(12deg); }
+  75% { transform: scale(1.2) rotate(-12deg); }
+}
+.animate-mc-bounce-rotate-large {
+  animation: mc-bounce-rotate-large 4s ease-in-out infinite;
+}
+
+@keyframes mc-pedestal-complete {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.2) rotate(-6deg); }
+  75% { transform: scale(1.2) rotate(6deg); }
+}
+.animate-mc-pedestal-complete {
+  animation: mc-pedestal-complete 1.4s ease-in-out infinite;
+}
+
+@keyframes mc-pedestal-active {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.animate-mc-pedestal-active {
+  animation: mc-pedestal-active 3s ease-in-out infinite;
+}
+
+@keyframes mc-timer-critical {
+  0%, 100% { transform: scale(1); color: #e74c3c; }
+  50% { transform: scale(1.06); color: #c0392b; }
+}
+.animate-mc-timer-critical {
+  animation: mc-timer-critical 1s infinite;
+}
