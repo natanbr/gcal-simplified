@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, powerMonitor, session } from 'electron'
 import { execFile } from 'node:child_process'
 import 'dotenv/config'
-// import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { autoUpdater } from 'electron-updater'
@@ -9,7 +8,6 @@ import { authService } from './auth'
 import { apiService } from './api'
 import { weatherService } from './weather'
 
-// const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
