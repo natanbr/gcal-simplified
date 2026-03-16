@@ -120,8 +120,21 @@ app.whenReady().then(() => {
     let end: Date;
 
     if (timeMin && timeMax) {
-      start = new Date(timeMin);
-      end = new Date(timeMax);
+      // 🛡️ Sentinel: Validate IPC boundary inputs to prevent RangeError crashes downstream
+      // Ensure that inputs are actually strings and can be parsed into valid dates
+      if (typeof timeMin !== 'string' || typeof timeMax !== 'string') {
+        throw new Error('timeMin and timeMax must be strings');
+      }
+
+      const parsedStart = new Date(timeMin);
+      const parsedEnd = new Date(timeMax);
+
+      if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+        throw new Error('Invalid date strings provided for timeMin or timeMax');
+      }
+
+      start = parsedStart;
+      end = parsedEnd;
     } else {
       // Default: Fetch next 10 days starting from the beginning of today
       start = new Date();

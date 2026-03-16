@@ -12,3 +12,7 @@
 **Vulnerability:** The OAuth2 callback handler echoed the `error` parameter back to the user without sanitization or setting a safe Content-Type, allowing script execution via XSS if the user visited a malicious localhost link.
 **Learning:** Local servers created for OAuth flows are susceptible to XSS if they serve user input. Browsers treat localhost responses just like any other web server response.
 **Prevention:** Always set `Content-Type: text/plain` (or sanitize HTML) for dynamic responses in local servers. Never trust query parameters, even on localhost.
+## 2025-03-15 - [IPC Input Validation for Date Strings]
+**Vulnerability:** The `data:events` IPC handler parsed `timeMin` and `timeMax` directly with `new Date()` without verifying their string type or the validity of the resulting timestamp.
+**Learning:** If invalid inputs are sent over IPC, creating a `Date` object results in `Invalid Date`. Downstream logic invoking `toISOString()` on these objects throws a `RangeError`, potentially crashing the main process or leading to denial-of-service conditions.
+**Prevention:** Always validate IPC boundary inputs by checking types and verifying that `isNaN(date.getTime())` is false before passing `Date` objects further down the application stack.
