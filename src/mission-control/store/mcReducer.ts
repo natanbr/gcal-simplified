@@ -12,6 +12,7 @@ import type {
     DisplayCase,
     PrivilegeCard,
     Mission,
+    MissionTask,
     ResponsibilityTask,
     MCSettings,
 } from '../types';
@@ -218,7 +219,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         case 'COMPLETE_TASK': {
             const nextState = { ...state };
             if (action.taskId === 'cream') {
-                nextState.creamTaskDaysLeft = Math.max(0, state.creamTaskDaysLeft - 1);
+                const schedule = state.settings.creamTaskSchedule ?? 'evening';
+                const dec = schedule === 'both' ? 0.5 : 1;
+                nextState.creamTaskDaysLeft = Math.max(0, state.creamTaskDaysLeft - dec);
             }
             nextState.missions = nextState.missions.map(m =>
                 m.phase === action.missionPhase
@@ -440,20 +443,28 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
 }
 
 // ---- Task Injection Sync ----
-// Safely adds/removes/updates the Cream routine in the evening active missions array.
+// Safely adds/removes/updates the Cream routine in the active missions arrays.
 function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: number): Mission[] {
     return missions.map(m => {
-        if (m.phase !== 'evening') return m;
+        const isEvening = m.phase === 'evening';
+        const isMorning = m.phase === 'morning';
+        const schedule = settings.creamTaskSchedule ?? 'evening';
+        
+        let shouldHaveCreamInPhase = false;
+        if (settings.creamTaskEnabled && daysLeft > 0) {
+             if (schedule === 'both' && (isMorning || isEvening)) shouldHaveCreamInPhase = true;
+             else if (schedule === 'morning' && isMorning) shouldHaveCreamInPhase = true;
+             else if (schedule === 'evening' && isEvening) shouldHaveCreamInPhase = true;
+        }
         
         const hasCream = m.tasks.some(t => t.id === 'cream');
-        const shouldHaveCream = settings.creamTaskEnabled && daysLeft > 0;
-        const expectedLabel = `Cream (${daysLeft}d left)`;
+        const expectedLabel = `Cream (${Math.ceil(daysLeft)}d left)`;
         
-        if (shouldHaveCream && !hasCream) {
-            // Inject before bed
+        if (shouldHaveCreamInPhase && !hasCream) {
+            // Inject before bed for evening, or at the end for morning
             const bedIndex = m.tasks.findIndex(t => t.id === 'bed');
             const newTasks = [...m.tasks];
-            const creamTask = {
+            const creamTask: MissionTask = {
                 id: 'cream',
                 label: expectedLabel,
                 icon: 'Droplet',
@@ -464,10 +475,10 @@ function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: numb
             if (bedIndex !== -1) newTasks.splice(bedIndex, 0, creamTask);
             else newTasks.push(creamTask);
             return { ...m, tasks: newTasks };
-        } else if (!shouldHaveCream && hasCream) {
+        } else if (!shouldHaveCreamInPhase && hasCream) {
             // Remove it
             return { ...m, tasks: m.tasks.filter(t => t.id !== 'cream') };
-        } else if (hasCream && shouldHaveCream) {
+        } else if (hasCream && shouldHaveCreamInPhase) {
             // Ensure label is updated
             const needUpdate = m.tasks.some(t => t.id === 'cream' && t.label !== expectedLabel);
             if (needUpdate) {

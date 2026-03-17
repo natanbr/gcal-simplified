@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMCDispatch } from '../store/useMCStore.tsx';
+import { useMCDispatch, useMCState } from '../store/useMCStore';
 import { Button3D } from './Button3D';
 import { Token } from './Token';
 import type { DisplayCase, RewardIcon } from '../types';
@@ -363,7 +363,13 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
             </span>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-              {REWARDS.map(r => (
+              {REWARDS.filter(r => {
+                  const config = useMCState().settings.rewardConfigs?.[r.id];
+                  return config ? config.enabled : true;
+                }).map(r => {
+                const config = useMCState().settings.rewardConfigs?.[r.id];
+                const displayTargetCount = config ? config.targetCount : r.targetCount;
+                return (
                 <motion.button
                   key={r.id}
                   whileTap={{ scale: 0.88 }}
@@ -389,10 +395,10 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
                     background: 'rgba(247,201,72,0.22)', borderRadius: 6,
                     padding: '2px 6px', border: '1px solid rgba(247,201,72,0.4)',
                   }}>
-                    {r.targetCount} ⭐
+                    {displayTargetCount} ⭐
                   </span>
                 </motion.button>
-              ))}
+              );})}
             </div>
 
             <button

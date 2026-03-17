@@ -26,7 +26,8 @@ export type RewardIcon =
     | 'game'
     | 'fishing'
     | 'story-points'
-    | 'mystery-box';
+    | 'mystery-box'
+    | 'bow-arrow';
 
 export type DisplayCaseStatus = 'empty' | 'selecting' | 'active';
 
@@ -100,6 +101,10 @@ export interface MCSettings {
     creamTaskEnabled: boolean;
     /** How many days the cream routine is required for */
     creamTaskDaysTarget: number;
+    /** When the cream task should be scheduled */
+    creamTaskSchedule?: 'morning' | 'evening' | 'both';
+    /** Custom token costs and enablement state for rewards */
+    rewardConfigs?: Record<string, { enabled: boolean; targetCount: number }>;
 }
 
 export const DEFAULT_SETTINGS: MCSettings = {
@@ -109,6 +114,8 @@ export const DEFAULT_SETTINGS: MCSettings = {
     eveningDurationMins: 60,
     creamTaskEnabled: false,
     creamTaskDaysTarget: 7,
+    creamTaskSchedule: 'evening',
+    rewardConfigs: {},
 };
 
 // --------------- Responsibilities ---------------
