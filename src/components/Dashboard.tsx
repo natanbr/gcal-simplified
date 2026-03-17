@@ -162,6 +162,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
     fetchData(true);
   }, [fetchData]);
 
+  // Listen for login success (e.g., from reconnect in Settings) to refetch data
+  useEffect(() => {
+    if (!window.ipcRenderer) return;
+    const cleanup = window.ipcRenderer.on('auth:success', () => {
+        fetchData(true);
+    });
+    return () => cleanup();
+  }, [fetchData]);
+
   // Soft reload events on date change (uses cache)
   useEffect(() => {
     const representiveDateForFetch = viewMode === 'week'
