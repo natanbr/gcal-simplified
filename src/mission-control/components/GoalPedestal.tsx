@@ -146,6 +146,7 @@ interface GoalPedestalProps {
 
 export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }: GoalPedestalProps) {
   const dispatch = useMCDispatch();
+  const state = useMCState();
   const [isSelecting, setIsSelecting] = useState(false);
   const [leverTilted, setLeverTilted] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -363,11 +364,13 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
             </span>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-              {REWARDS.filter(r => {
-                  const config = useMCState().settings.rewardConfigs?.[r.id];
-                  return config ? config.enabled : true;
+              {REWARDS.filter(() => {
+                  return true; // we will check rewards using the state accessed before the return
                 }).map(r => {
-                const config = useMCState().settings.rewardConfigs?.[r.id];
+                const config = state.settings.rewardConfigs?.[r.id];
+                const isEnabled = config ? config.enabled : true;
+                if (!isEnabled) return null;
+
                 const displayTargetCount = config ? config.targetCount : r.targetCount;
                 return (
                 <motion.button

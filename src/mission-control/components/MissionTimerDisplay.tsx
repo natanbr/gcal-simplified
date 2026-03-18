@@ -9,9 +9,10 @@ interface MissionTimerDisplayProps {
     mission: Mission | null;
     allDone: boolean;
     onTimerExpiredWithAllDone: () => void;
+    onTimerExpiredInfo?: () => void;
 }
 
-export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDone }: MissionTimerDisplayProps) {
+export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDone, onTimerExpiredInfo }: MissionTimerDisplayProps) {
     const now = useLiveClock();
 
     const remainingSecs = (() => {
@@ -39,10 +40,11 @@ export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDon
 
     // Auto-collect when timer expires with all tasks done
     useEffect(() => {
-        if (timerExpired && allDone) {
-            onTimerExpiredWithAllDone();
+        if (timerExpired) {
+            if (allDone) onTimerExpiredWithAllDone();
+            else if (onTimerExpiredInfo) onTimerExpiredInfo();
         }
-    }, [timerExpired, allDone, onTimerExpiredWithAllDone]);
+    }, [timerExpired, allDone, onTimerExpiredWithAllDone, onTimerExpiredInfo]);
 
     return (
         <motion.span
@@ -132,6 +134,14 @@ export function MissionDepletingBar({ mission, allDone, accent, onAdjust }: Miss
             longPressRef.current = null;
         }
     };
+
+    useEffect(() => {
+        return () => {
+            if (longPressRef.current) {
+                clearTimeout(longPressRef.current);
+            }
+        };
+    }, []);
 
     return (
         <div

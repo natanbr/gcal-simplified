@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import '@testing-library/jest-dom';
 import { MCStoreProvider, useMCState } from '../store/useMCStore.tsx';
 import { MCSettingsOverlay } from './MCSettingsOverlay';
 import { DEFAULT_SETTINGS } from '../types';
@@ -110,6 +111,7 @@ describe('MCSettingsOverlay — default values', () => {
 
     it('shows "Put on Cream" toggle', async () => {
         await renderAndOpen();
+        await act(async () => { fireEvent.click(screen.getByText(/Missions Tasks/)); });
         expect(screen.getByText(/"Put on Cream"/)).toBeInTheDocument();
     });
 });
@@ -186,6 +188,8 @@ describe('MCSettingsOverlay — save', () => {
 
         render(<TestRig />);
         await openPanel();
+
+        await act(async () => { fireEvent.click(screen.getByText(/Missions Tasks/)); });
 
         // The default state is creamTaskEnabled = false. Find the toggle button.
         // It's the button closest to "Put on Cream" text.

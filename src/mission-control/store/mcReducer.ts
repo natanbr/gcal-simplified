@@ -102,6 +102,7 @@ export const initialState: MCState = {
     settings: DEFAULT_SETTINGS,
     creamTaskDaysLeft: 0,
     responsibilities: defaultResponsibilities,
+    activityLogs: [],
 };
 
 // ---- Reducer ----
@@ -110,6 +111,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
     switch (action.type) {
         case 'ADD_TOKEN':
             return { ...state, bankCount: state.bankCount + 1 };
+
+        case 'ADD_TOKENS':
+            return { ...state, bankCount: state.bankCount + action.amount };
 
         case 'REMOVE_TOKEN':
             return { ...state, bankCount: Math.max(0, state.bankCount - 1) };
@@ -303,27 +307,42 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? { ...m, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
-                        : m,
-                ),
+                        ? { ...m, active: true, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        : m
+                )
             };
 
-        // Stop: deactivates the mission and resets all state.
         case 'CANCEL_MISSION':
             return {
                 ...state,
                 activeMission: 'none',
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? {
-                            ...m,
-                            active: false,
-                            startedAt: undefined, // Cleared on cancel now that it isn't used as a guard
-                            durationMins: undefined,
-                            tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
-                        }
-                        : m,
-                ),
+                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        : m
+                )
+            };
+
+        case 'COMPLETE_MISSION_ROUTINE':
+            return {
+                ...state,
+                activeMission: 'none',
+                bankCount: state.bankCount + action.bonusTokens,
+                missions: state.missions.map(m =>
+                    m.phase === action.missionPhase
+                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        : m
+                )
+            };
+
+        case 'MARK_MISSION_TIMEOUT':
+            return {
+                ...state,
+                missions: state.missions.map(m =>
+                    m.phase === action.missionPhase
+                        ? { ...m, loggedTimeoutAt: new Date().toISOString() }
+                        : m
+                )
             };
 
         case 'ADJUST_MISSION_END': {
@@ -427,15 +446,35 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             };
         }
 
-        case 'RESET_RESPONSIBILITY':
+        case 'RESET_RESPONSIBILITY': {
+            const addedBank = action.claimTokens ? state.bankCount + action.claimTokens : state.bankCount;
             return {
                 ...state,
+                bankCount: addedBank,
                 responsibilities: state.responsibilities.map(r =>
                     r.id === action.taskId
                         ? { ...r, pointsEarned: 0, completedAt: null }
-                        : r,
-                ),
+                        : r
+                )
             };
+        }
+
+        case 'ADD_LOG': {
+            const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+            const nowTime = new Date().getTime();
+            
+            // 1. Add new log to the front
+            // 2. Filter out anything older than 7 days based on timestamp
+            const filteredLogs = [action.log, ...(state.activityLogs || [])].filter(log => {
+                const logTime = new Date(log.timestamp).getTime();
+                return (nowTime - logTime) <= SEVEN_DAYS_MS;
+            });
+
+            return {
+                ...state,
+                activityLogs: filteredLogs
+            };
+        }
 
         default:
             return state;

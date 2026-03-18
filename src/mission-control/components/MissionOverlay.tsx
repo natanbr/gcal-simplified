@@ -210,6 +210,13 @@ export function MissionOverlay() {
             dispatch({ type: 'ADJUST_MISSION_END', missionPhase: phase as Exclude<MissionPhase,'none'>, deltaMinutes });
     }, [dispatch, phase]);
 
+
+    const handleTimerExpiredInfo = useCallback(() => {
+        if (mission && !mission.loggedTimeoutAt && phase !== 'none') {
+            dispatch({ type: 'MARK_MISSION_TIMEOUT', missionPhase: phase as Exclude<MissionPhase, 'none'> });
+        }
+    }, [dispatch, mission, phase]);
+
     // Auto-restore and reset penalty when a new mission starts
     useEffect(() => {
         if (phase !== 'none') {
@@ -228,11 +235,7 @@ export function MissionOverlay() {
     const effectiveBonus = whiningDetected ? Math.max(0, BONUS_BASE - 1) : BONUS_BASE;
 
     const handleBonusCoin = useCallback(() => {
-        for (let i = 0; i < effectiveBonus; i++) dispatch({ type: 'ADD_TOKEN' });
-        // Hard-stop the mission: full reset + cancelledAt guard so it won't re-appear
-        if (phase !== 'none') {
-            dispatch({ type: 'CANCEL_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> });
-        }
+        dispatch({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase as Exclude<MissionPhase, 'none'>, bonusTokens: effectiveBonus });
     }, [dispatch, effectiveBonus, phase]);
 
     // Auto-collect when timer expires with all tasks done
@@ -364,6 +367,7 @@ export function MissionOverlay() {
                                 mission={mission}
                                 allDone={allDone}
                                 onTimerExpiredWithAllDone={handleBonusCoin}
+                                onTimerExpiredInfo={handleTimerExpiredInfo}
                             />
 
                             {/* RIGHT — Hide + Reset Tasks + Stop */}
