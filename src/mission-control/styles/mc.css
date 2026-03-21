@@ -213,3 +213,75 @@
   position: relative;
 }
 
+
+/* ============================================================
+   Performance Optimizations
+   Replaces Framer Motion repeat: Infinity to avoid JS thread overhead
+   ============================================================ */
+
+/* 1. Responsibility Panel Shimmer */
+@keyframes mc-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+.mc-anim-shimmer {
+  animation: mc-shimmer 2.2s ease-in-out infinite;
+  animation-delay: 1s; /* rough approximation of repeatDelay */
+}
+
+/* 2. Responsibility Panel Icon Complete */
+@keyframes mc-icon-complete {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-10deg) scale(1.15); }
+  75% { transform: rotate(10deg) scale(1.15); }
+}
+.mc-anim-icon-complete {
+  animation: mc-icon-complete 1.6s ease-in-out infinite;
+}
+
+/* 3. Responsibility Panel Icon Pulse (In Progress) */
+@keyframes mc-icon-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.mc-anim-icon-pulse {
+  animation: mc-icon-pulse 4s ease-in-out infinite;
+}
+
+/* 4. Timer Critical (MissionTimerDisplay) */
+@keyframes mc-timer-critical {
+  0%, 100% { transform: scale(1); color: #e74c3c; }
+  50% { transform: scale(1.06); color: #c0392b; }
+}
+.mc-anim-timer-critical {
+  animation: mc-timer-critical 1s infinite;
+}
+
+/* 5. Mission Overlay Emoji */
+@keyframes mc-mission-emoji {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(12deg) scale(1.2); }
+  75% { transform: rotate(-12deg) scale(1.2); }
+}
+.mc-anim-mission-emoji {
+  animation: mc-mission-emoji 4s ease-in-out infinite;
+}
+
+/* 6. Goal Pedestal Complete Emoji */
+@keyframes mc-pedestal-complete {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-6deg) scale(1.2); }
+  75% { transform: rotate(6deg) scale(1.2); }
+}
+.mc-anim-pedestal-complete {
+  animation: mc-pedestal-complete 1.4s ease-in-out infinite;
+}
+
+/* 7. Goal Pedestal Idle Emoji */
+@keyframes mc-pedestal-idle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.mc-anim-pedestal-idle {
+  animation: mc-pedestal-idle 3s ease-in-out infinite;
+}
