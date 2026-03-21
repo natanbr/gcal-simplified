@@ -217,6 +217,7 @@
 /* ============================================================
    Performance Optimizations
    Replaces Framer Motion repeat: Infinity to avoid JS thread overhead
+   These animations are finite, repeating for about ~15 seconds to stabilize.
    ============================================================ */
 
 /* 1. Responsibility Panel Shimmer */
@@ -225,8 +226,10 @@
   100% { transform: translateX(120%); }
 }
 .mc-anim-shimmer {
-  animation: mc-shimmer 2.2s ease-in-out infinite;
-  animation-delay: 1s; /* rough approximation of repeatDelay */
+  /* roughly 6 times * 2.2s = ~13s */
+  animation: mc-shimmer 2.2s ease-in-out 6;
+  animation-delay: 1s;
+  animation-fill-mode: forwards;
 }
 
 /* 2. Responsibility Panel Icon Complete */
@@ -236,7 +239,9 @@
   75% { transform: rotate(10deg) scale(1.15); }
 }
 .mc-anim-icon-complete {
-  animation: mc-icon-complete 1.6s ease-in-out infinite;
+  /* 9 times * 1.6s = ~14.4s */
+  animation: mc-icon-complete 1.6s ease-in-out 9;
+  animation-fill-mode: forwards;
 }
 
 /* 3. Responsibility Panel Icon Pulse (In Progress) */
@@ -245,7 +250,9 @@
   50% { transform: scale(1.04); }
 }
 .mc-anim-icon-pulse {
-  animation: mc-icon-pulse 4s ease-in-out infinite;
+  /* 4 times * 4s = 16s */
+  animation: mc-icon-pulse 4s ease-in-out 4;
+  animation-fill-mode: forwards;
 }
 
 /* 4. Timer Critical (MissionTimerDisplay) */
@@ -254,7 +261,9 @@
   50% { transform: scale(1.06); color: #c0392b; }
 }
 .mc-anim-timer-critical {
-  animation: mc-timer-critical 1s infinite;
+  /* 15 times * 1s = 15s */
+  animation: mc-timer-critical 1s 15;
+  animation-fill-mode: forwards;
 }
 
 /* 5. Mission Overlay Emoji */
@@ -264,7 +273,9 @@
   75% { transform: rotate(-12deg) scale(1.2); }
 }
 .mc-anim-mission-emoji {
-  animation: mc-mission-emoji 4s ease-in-out infinite;
+  /* 4 times * 4s = 16s */
+  animation: mc-mission-emoji 4s ease-in-out 4;
+  animation-fill-mode: forwards;
 }
 
 /* 6. Goal Pedestal Complete Emoji */
@@ -274,7 +285,9 @@
   75% { transform: rotate(6deg) scale(1.2); }
 }
 .mc-anim-pedestal-complete {
-  animation: mc-pedestal-complete 1.4s ease-in-out infinite;
+  /* 10 times * 1.4s = 14s */
+  animation: mc-pedestal-complete 1.4s ease-in-out 10;
+  animation-fill-mode: forwards;
 }
 
 /* 7. Goal Pedestal Idle Emoji */
@@ -283,5 +296,7 @@
   50% { transform: scale(1.05); }
 }
 .mc-anim-pedestal-idle {
-  animation: mc-pedestal-idle 3s ease-in-out infinite;
+  /* 5 times * 3s = 15s */
+  animation: mc-pedestal-idle 3s ease-in-out 5;
+  animation-fill-mode: forwards;
 }

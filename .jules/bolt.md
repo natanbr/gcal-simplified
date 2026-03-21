@@ -7,7 +7,3 @@
 ## 2026-03-11 - Prevent Redundant Date Allocations
 **Learning:** High-frequency event processing functions and hooks like `eventsByDayMap` in `MonthlyView.tsx` and `splitMultiDayEvents` were calling `new Date(event.start)` inside large O(N) loops. This unnecessarily creates new object instances since `event.start` is already typed and usually instantiated as a `Date` object in this application (via hydration in `useCalendarData.ts`), causing unnecessary background CPU overhead and garbage collection pauses when processing large datasets or re-rendering.
 **Action:** Defensively wrap potential date string properties with `event.start instanceof Date ? event.start : new Date(event.start)` to reuse existing memory references while preserving safety for unhydrated data. Doing this reduces memory churn significantly.
-
-## 2026-03-21 - [Performance] Migrating Framer Motion infinite loops to CSS animations
-**Learning:** Using Framer Motion's `repeat: Infinity` for simple continuous animations (like pulsing or shimmering) is very detrimental to performance, as it calculates every frame in JavaScript and clogs the main thread, leading to 100% CPU usage.
-**Action:** Always prefer hardware-accelerated CSS animations (`@keyframes`) for looping UI effects. Convert `<motion.div>` loops to standard HTML tags (`<span>`, `<div>`) with a `className` bound to CSS animations. For `<span>` elements using CSS transforms, remember to set `display: 'inline-block'` to ensure the transform applies properly.
