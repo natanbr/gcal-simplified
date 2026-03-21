@@ -430,24 +430,12 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
               alignItems: 'center', gap: 5, width: '100%',
             }}
           >
-            <motion.span
-              animate={isComplete
-                ? {
-                    scale: [1, 1.2, 1],
-                    rotate: [0, -6, 6, 0],
-                    // ⚡ Bolt Performance: Place infinite transitions inside the animate object
-                    // to prevent Framer Motion from running a constant 60fps loop at the root level.
-                    transition: { repeat: Infinity, duration: 1.4, ease: 'easeInOut' }
-                  }
-                : {
-                    scale: [1, 1.05, 1],
-                    transition: { repeat: Infinity, duration: 3, ease: 'easeInOut' }
-                  }
-              }
-              style={{ fontSize: 32, lineHeight: 1, marginTop: 2 }}
+            <span
+              className={isComplete ? "mc-anim-pedestal-complete" : "mc-anim-pedestal-idle"}
+              style={{ fontSize: 32, lineHeight: 1, marginTop: 2, display: 'inline-block' }}
             >
               {reward.emoji}
-            </motion.span>
+            </span>
 
             <span style={{
               fontSize: 11,

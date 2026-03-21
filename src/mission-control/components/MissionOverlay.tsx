@@ -340,18 +340,12 @@ export function MissionOverlay() {
                         }}>
                             {/* LEFT — emoji + title */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <motion.span
-                                    animate={{
-                                        rotate: [0, 12, -12, 0],
-                                        scale: [1, 1.2, 1],
-                                        // ⚡ Bolt Performance: Place infinite transitions inside the animate object
-                                        // to prevent Framer Motion from running a constant 60fps loop at the root level.
-                                        transition: { repeat: Infinity, duration: 4, ease: 'easeInOut' }
-                                    }}
-                                    style={{ fontSize: 28, flexShrink: 0 }}
+                                <span
+                                    className="mc-anim-mission-emoji"
+                                    style={{ fontSize: 28, flexShrink: 0, display: 'inline-block' }}
                                 >
                                     {meta.emoji}
-                                </motion.span>
+                                </span>
                                 <div>
                                     <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
                                         It's time for your
