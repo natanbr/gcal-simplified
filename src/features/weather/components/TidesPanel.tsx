@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { TideData, WeatherData } from '../../../types';
-import { format, addHours, parseISO, isSameDay } from 'date-fns';
+import { format, addDays, parseISO, isSameDay } from 'date-fns';
 import { calculateSlackWindows } from '../../../utils/slackWindows';
 import { interpolateExtremeTime } from '../../../utils/tideMath';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -146,14 +146,13 @@ export const TidesPanel: React.FC<{
         }
         
         const now = new Date();
-        const futureLimit = addHours(now, 48);
+        const futureLimit = addDays(now, 7);
         return eventsList
             .filter(e => {
                 const d = parseISO(e.time);
                 return d >= now && d <= futureLimit;
             })
-            .sort((a, b) => parseISO(a.time).getTime() - parseISO(b.time).getTime())
-            .slice(0, 20); 
+            .sort((a, b) => parseISO(a.time).getTime() - parseISO(b.time).getTime());
     }, [tides]);
 
     // Calculate slack windows for spearfishing
@@ -175,17 +174,16 @@ export const TidesPanel: React.FC<{
         });
         
         // Get sunrise/sunset for safety filterng
-        const todayIndex = 0; // Today's sunrise/sunset
-        const sunrise = weather.daily.sunrise[todayIndex] ? new Date(weather.daily.sunrise[todayIndex]) : undefined;
-        const sunset = weather.daily.sunset[todayIndex] ? new Date(weather.daily.sunset[todayIndex]) : undefined;
+        const sunrises = weather.daily.sunrise;
+        const sunsets = weather.daily.sunset;
         
-        return calculateSlackWindows(times, speeds, tideHeights, slackIndices, sunrise, sunset);
+        return calculateSlackWindows(times, speeds, tideHeights, slackIndices, sunrises, sunsets);
     }, [tides, events, weather.daily.sunrise, weather.daily.sunset]);
 
 
 
     const now = new Date();
-    const futureSlackWindows = slackWindows.filter(w => parseISO(w.slackTime) >= now).slice(0, 5);
+    const futureSlackWindows = slackWindows.filter(w => parseISO(w.slackTime) >= now);
 
     return (
          <div className="space-y-6 relative min-h-[400px]">
@@ -334,8 +332,8 @@ export const TidesPanel: React.FC<{
 
             {/* Combined Events Table */}
             <div data-testid="marine-events-section">
-                <h3 className="text-zinc-500 dark:text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Marine Events (Next 48h)</h3>
-                <div className="bg-zinc-50 dark:bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700/50" data-testid="tides-events-table">
+                <h3 className="text-zinc-500 dark:text-zinc-400 font-bold uppercase text-xs tracking-widest mb-4">Marine Events (Next 7 Days)</h3>
+                <div className="bg-zinc-50 dark:bg-zinc-800/30 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700/50 max-h-[600px] overflow-y-auto" data-testid="tides-events-table">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-zinc-100 dark:bg-zinc-900/50 text-zinc-500 dark:text-zinc-500 text-xs uppercase font-bold text-center">
                             <tr>
