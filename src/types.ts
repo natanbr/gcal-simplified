@@ -61,6 +61,7 @@ export interface WeatherData {
         windGusts?: number;
     };
     daily: {
+        time: string[];
         sunrise: string[];
         sunset: string[];
         weather_code: number[];
