@@ -394,22 +394,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                                      </div>
                                  </div>
 
-                                 {/* Weather Column - Only show for current week forecast */}
-                                 {isCurrentWeek(weekOffset) && weather && weather.daily && weather.daily.weather_code && weather.daily.weather_code[i] !== undefined && (
-                                    <div className="flex flex-col items-center gap-1 translate-y-5" data-testid="weather-forecast-container">
-                                        <div className="scale-150">
-                                            {getWeatherIcon(weather.daily.weather_code[i])}
-                                        </div>
-                                        {weather.daily.temperature_2m_max && (
-                                            <div
-                                                className="text-[13px] font-black text-blue-500/80 dark:text-blue-400/80 font-mono"
-                                                data-testid="day-header-temp-range"
-                                            >
-                                                {Math.round(weather.daily.temperature_2m_max[i])}-{Math.round(weather.daily.temperature_2m_min[i])}
+                                 {/* Weather Column - Show if we have forecast data for this day */}
+                                 {(() => {
+                                     if (!weather?.daily?.weather_code || !weather?.daily?.time) return null;
+                                     const dayStr = format(day, 'yyyy-MM-dd');
+                                     const weatherIndex = weather.daily.time.findIndex(t => t.startsWith(dayStr));
+
+                                     if (weatherIndex !== -1 && weather.daily.weather_code[weatherIndex] !== undefined) {
+                                         return (
+                                            <div className="flex flex-col items-center gap-1 translate-y-5" data-testid="weather-forecast-container">
+                                                <div className="scale-150">
+                                                    {getWeatherIcon(weather.daily.weather_code[weatherIndex])}
+                                                </div>
+                                                {weather.daily.temperature_2m_max && (
+                                                    <div
+                                                        className="text-[13px] font-black text-blue-500/80 dark:text-blue-400/80 font-mono"
+                                                        data-testid="day-header-temp-range"
+                                                    >
+                                                        {Math.round(weather.daily.temperature_2m_max[weatherIndex])}-{Math.round(weather.daily.temperature_2m_min[weatherIndex])}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                 )}
+                                         );
+                                     }
+                                     return null;
+                                 })()}
                              </div>
 
                              {/* Holidays */}
