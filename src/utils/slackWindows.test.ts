@@ -101,10 +101,10 @@ describe('Slack Tide Window Calculation', () => {
         const slackIndices = [0, 2, 4, 6]; // Slacks at 06:00, 08:00, 18:00, 20:00
 
         // Sunrise at 07:30, sunset at 17:30
-        const sunrise = new Date('2026-02-05T07:30:00');
-        const sunset = new Date('2026-02-05T17:30:00');
+        const sunrises = ['2026-02-05T07:30:00'];
+        const sunsets = ['2026-02-05T17:30:00'];
 
-        const windows = calculateSlackWindows(times, speeds, tideHeights, slackIndices, sunrise, sunset);
+        const windows = calculateSlackWindows(times, speeds, tideHeights, slackIndices, sunrises, sunsets);
 
         // Should only include windows at 08:00 (after sunrise) and exclude 06:00, 18:00, 20:00
         expect(windows.length).toBeLessThan(slackIndices.length);
@@ -112,8 +112,8 @@ describe('Slack Tide Window Calculation', () => {
         // Verify all returned windows are during daylight
         windows.forEach(window => {
             const windowTime = new Date(window.slackTime);
-            expect(windowTime.getTime()).toBeGreaterThanOrEqual(sunrise.getTime());
-            expect(windowTime.getTime()).toBeLessThanOrEqual(sunset.getTime());
+            expect(windowTime.getTime()).toBeGreaterThanOrEqual(new Date(sunrises[0]).getTime());
+            expect(windowTime.getTime()).toBeLessThanOrEqual(new Date(sunsets[0]).getTime());
         });
     });
 });

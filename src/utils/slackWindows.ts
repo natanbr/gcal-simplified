@@ -19,8 +19,8 @@ export function calculateSlackWindows(
     speeds: number[],
     tideHeights: number[],
     slackIndices: number[],
-    sunrise?: Date,
-    sunset?: Date
+    sunrises?: string[],
+    sunsets?: string[]
 ): SlackWindow[] {
     const SLACK_THRESHOLD = 0.5; // knots
     const windows: SlackWindow[] = [];
@@ -87,10 +87,23 @@ export function calculateSlackWindows(
     }
 
     // Filter out windows during dark hours if sunrise/sunset provided
-    if (sunrise && sunset) {
+    if (sunrises && sunsets && sunrises.length > 0 && sunsets.length > 0) {
         return windows.filter(window => {
             const windowTime = parseISO(window.slackTime);
-            return windowTime >= sunrise && windowTime <= sunset;
+            // Find the corresponding sunrise/sunset for the window's day
+            const windowDayString = formatDate(windowTime, 'yyyy-MM-dd');
+
+            // Find sunrise for this day
+            const sunriseStr = sunrises.find(s => s.startsWith(windowDayString));
+            // Find sunset for this day
+            const sunsetStr = sunsets.find(s => s.startsWith(windowDayString));
+
+            if (!sunriseStr || !sunsetStr) return true; // Keep if no data for this day
+
+            const sunriseTime = parseISO(sunriseStr);
+            const sunsetTime = parseISO(sunsetStr);
+
+            return windowTime >= sunriseTime && windowTime <= sunsetTime;
         });
     }
 

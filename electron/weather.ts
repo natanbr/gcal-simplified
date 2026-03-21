@@ -85,7 +85,7 @@ export class WeatherService {
         // 1. Define Time Range
         const now = new Date();
         const start = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-        const end = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+        const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
         // 2. Identify Stations by Code
         const allStations = stations as Station[];
@@ -126,6 +126,7 @@ export class WeatherService {
         omUrl.searchParams.append('longitude', lng.toString());
         omUrl.searchParams.append('hourly', 'wave_height,wave_period,swell_wave_height,swell_wave_period,ocean_current_velocity,ocean_current_direction,sea_surface_temperature');
         omUrl.searchParams.append('timezone', 'America/Vancouver');
+        omUrl.searchParams.append('forecast_days', '8'); // 8 days to ensure we cover the full 7 days from 'now'
 
         // CHS Tide URLs
         const chsTideUrl = tideStationId ? `${CHS_API_BASE}/stations/${tideStationId}/data?time-series-code=wlp&from=${start}&to=${end}` : '';
