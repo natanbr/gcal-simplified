@@ -16,3 +16,8 @@
 **Vulnerability:** The `data:events` IPC handler parsed `timeMin` and `timeMax` directly with `new Date()` without verifying their string type or the validity of the resulting timestamp.
 **Learning:** If invalid inputs are sent over IPC, creating a `Date` object results in `Invalid Date`. Downstream logic invoking `toISOString()` on these objects throws a `RangeError`, potentially crashing the main process or leading to denial-of-service conditions.
 **Prevention:** Always validate IPC boundary inputs by checking types and verifying that `isNaN(date.getTime())` is false before passing `Date` objects further down the application stack.
+
+## 2025-03-15 - [Unauthorized Window Creation in Electron]
+**Vulnerability:** The main Electron window's `webContents` did not implement a `setWindowOpenHandler` handler, allowing potentially unauthorized opening of new browser windows (`window.open`) from the renderer process.
+**Learning:** By default, Electron permits `window.open` requests, which can open unrestricted secondary windows exposing vulnerabilities if the renderer script is compromised or injected (e.g. bypassing sandboxes, executing malicious scripts).
+**Prevention:** Always implement `setWindowOpenHandler` on `webContents` to return `{ action: 'deny' }` for unneeded scenarios, preventing unauthorized new windows.

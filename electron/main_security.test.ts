@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
   mockBrowserWindow.prototype.webContents = {
     on: vi.fn(),
     send: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
   };
   // Static method
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,5 +128,20 @@ describe('Main Process Security Configuration', () => {
     expect(config.webPreferences.contextIsolation).toBe(true);
     expect(config.webPreferences.nodeIntegration).toBe(false);
     expect(config.webPreferences.sandbox).toBe(true);
+  });
+
+  it('should deny unauthorized window creation via setWindowOpenHandler', async () => {
+    // Import main.ts to trigger the logic
+    await import('./main');
+
+    // Wait briefly for the promise resolution in main.ts
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const mockWebContents = mocks.mockBrowserWindow.prototype.webContents;
+    expect(mockWebContents.setWindowOpenHandler).toHaveBeenCalled();
+
+    const handler = mockWebContents.setWindowOpenHandler.mock.calls[0][0];
+    const result = handler({ url: 'https://malicious.com' });
+    expect(result).toEqual({ action: 'deny' });
   });
 });
