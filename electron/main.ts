@@ -45,6 +45,11 @@ function createWindow() {
   // Maximize window for better visibility
   win.maximize()
 
+  // 🛡️ Sentinel: Prevent unauthorized window creation
+  win.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' }
+  })
+
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
