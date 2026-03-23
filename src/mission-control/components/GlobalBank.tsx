@@ -124,11 +124,9 @@ export function GlobalBank({ cases, layoutRects, innerRef }: GlobalBankProps) {
   // Add / Remove coin handlers
   // ------------------------------------------------------------------
   const handleAddCoin = useCallback((amount = 1) => {
-    for (let i = 0; i < amount; i++) {
-      dispatch({ type: 'ADD_TOKEN' });
-      setBankTokens(prev => [...prev, { id: newId() }]);
-      prevBankCount.current += 1;
-    }
+    dispatch({ type: 'ADD_TOKENS', amount, source: 'manual' });
+    setBankTokens(prev => [...prev, ...Array.from({ length: amount }, () => ({ id: newId() }))]);
+    prevBankCount.current += amount;
   }, [dispatch]);
 
   const handleRemoveCoin = useCallback(() => {

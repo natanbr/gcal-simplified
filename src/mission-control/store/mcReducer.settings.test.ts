@@ -4,14 +4,18 @@
 
 import { describe, it, expect } from 'vitest';
 import { mcReducer, initialState } from './mcReducer';
-import type { MCState, MissionPhase } from '../types';
+import type { MCState } from '../types';
 
 function eveningMission(state: MCState) {
     return state.missions.find(m => m.phase === 'evening')!;
 }
 
+function morningMission(state: MCState) {
+    return state.missions.find(m => m.phase === 'morning')!;
+}
+
 describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
-    it('enabling cream task dynamically injects it into evening mission', () => {
+    it('enabling cream task dynamically injects it into evening mission by default', () => {
         expect(eveningMission(initialState).tasks.some(t => t.id === 'cream')).toBe(false);
 
         const state = mcReducer(initialState, {
@@ -28,10 +32,33 @@ describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
         expect(creamTask?.label).toBe('Cream (5d left)');
     });
 
-    it('disabling cream task dynamically removes it', () => {
+    it('enabling cream task for morning schedule injects it into morning mission', () => {
+        expect(morningMission(initialState).tasks.some(t => t.id === 'cream')).toBe(false);
+
+        const state = mcReducer(initialState, {
+            type: 'SET_SETTINGS',
+            settings: { creamTaskEnabled: true, creamTaskDaysTarget: 5, creamTaskSchedule: 'morning' }
+        });
+
+        expect(state.settings.creamTaskEnabled).toBe(true);
+        expect(morningMission(state).tasks.some(t => t.id === 'cream')).toBe(true);
+        expect(eveningMission(state).tasks.some(t => t.id === 'cream')).toBe(false);
+    });
+
+    it('enabling cream task for both schedules injects it into both missions', () => {
+        const state = mcReducer(initialState, {
+            type: 'SET_SETTINGS',
+            settings: { creamTaskEnabled: true, creamTaskDaysTarget: 5, creamTaskSchedule: 'both' }
+        });
+
+        expect(morningMission(state).tasks.some(t => t.id === 'cream')).toBe(true);
+        expect(eveningMission(state).tasks.some(t => t.id === 'cream')).toBe(true);
+    });
+
+    it('disabling cream task dynamically removes it from both missions', () => {
         let state = mcReducer(initialState, {
             type: 'SET_SETTINGS',
-            settings: { creamTaskEnabled: true, creamTaskDaysTarget: 5 }
+            settings: { creamTaskEnabled: true, creamTaskDaysTarget: 5, creamTaskSchedule: 'both' }
         });
         
         state = mcReducer(state, {
@@ -39,10 +66,11 @@ describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
             settings: { creamTaskEnabled: false }
         });
 
+        expect(morningMission(state).tasks.some(t => t.id === 'cream')).toBe(false);
         expect(eveningMission(state).tasks.some(t => t.id === 'cream')).toBe(false);
     });
 
-    it('completing cream task decrements creamTaskDaysLeft and updates label', () => {
+    it('completing cream task decrements creamTaskDaysLeft and updates label (evening only)', () => {
         let state = mcReducer(initialState, {
             type: 'SET_SETTINGS',
             settings: { creamTaskEnabled: true, creamTaskDaysTarget: 3 }
@@ -59,6 +87,33 @@ describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
         expect(state.creamTaskDaysLeft).toBe(2);
         const creamTask = eveningMission(state).tasks.find(t => t.id === 'cream');
         expect(creamTask?.label).toBe('Cream (2d left)');
+    });
+
+    it('completing cream task in both schedule decrements by 0.5', () => {
+        let state = mcReducer(initialState, {
+            type: 'SET_SETTINGS',
+            settings: { creamTaskEnabled: true, creamTaskDaysTarget: 3, creamTaskSchedule: 'both' }
+        });
+
+        expect(state.creamTaskDaysLeft).toBe(3);
+
+        state = mcReducer(state, {
+            type: 'COMPLETE_TASK',
+            missionPhase: 'morning',
+            taskId: 'cream'
+        });
+
+        expect(state.creamTaskDaysLeft).toBe(2.5);
+        expect(morningMission(state).tasks.find(t => t.id === 'cream')?.label).toBe('Cream (3d left)');
+
+        state = mcReducer(state, {
+            type: 'COMPLETE_TASK',
+            missionPhase: 'evening',
+            taskId: 'cream'
+        });
+
+        expect(state.creamTaskDaysLeft).toBe(2);
+        expect(eveningMission(state).tasks.find(t => t.id === 'cream')?.label).toBe('Cream (2d left)');
     });
 
     it('completing cream task on final day auto-disables the setting', () => {

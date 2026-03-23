@@ -10,6 +10,7 @@ import type { RewardIcon } from './types';
 export const REWARDS: { id: RewardIcon; label: string; emoji: string; targetCount: number }[] = [
     { id: 'story-points', label: 'Story w/ Points', emoji: '💻', targetCount: 3 },
     { id: 'game', label: 'Game', emoji: '🎮', targetCount: 6 },
+    { id: 'bow-arrow', label: 'Bow & Arrow', emoji: '🏹', targetCount: 4 },
     { id: 'show', label: 'Short Show', emoji: '🎬', targetCount: 8 },
     { id: 'fishing', label: 'Fishing', emoji: '🎣', targetCount: 10 },
     { id: 'movie-popcorn', label: 'Movie + Popcorn', emoji: '🍿', targetCount: 12 },

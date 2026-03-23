@@ -26,7 +26,8 @@ export type RewardIcon =
     | 'game'
     | 'fishing'
     | 'story-points'
-    | 'mystery-box';
+    | 'mystery-box'
+    | 'bow-arrow';
 
 export type DisplayCaseStatus = 'empty' | 'selecting' | 'active';
 
@@ -76,10 +77,9 @@ export interface Mission {
     /** When the full lockout triggers */
     endsAt: string;
     durationMins?: number; // computed at trigger time
-    /** ISO timestamp when mission was triggered (manual or scheduled).
-     *  Also serves as the scheduler's "already ran today" guard.
-     *  Preserved on Stop so scheduler won't re-fire; cleared by SET_SETTINGS on time change. */
     startedAt?: string;
+    /** Tracks if we already logged the timeout so it doesn't log on remount */
+    loggedTimeoutAt?: string;
     tasks: MissionTask[];
     active: boolean;
 }
@@ -100,6 +100,10 @@ export interface MCSettings {
     creamTaskEnabled: boolean;
     /** How many days the cream routine is required for */
     creamTaskDaysTarget: number;
+    /** When the cream task should be scheduled */
+    creamTaskSchedule?: 'morning' | 'evening' | 'both';
+    /** Custom token costs and enablement state for rewards */
+    rewardConfigs?: Record<string, { enabled: boolean; targetCount: number }>;
 }
 
 export const DEFAULT_SETTINGS: MCSettings = {
@@ -109,6 +113,8 @@ export const DEFAULT_SETTINGS: MCSettings = {
     eveningDurationMins: 60,
     creamTaskEnabled: false,
     creamTaskDaysTarget: 7,
+    creamTaskSchedule: 'evening',
+    rewardConfigs: {},
 };
 
 // --------------- Responsibilities ---------------
@@ -129,6 +135,16 @@ export interface ResponsibilityTask {
     tokenReward?: number;
 }
 
+export interface ActivityLogEntry {
+    id: string;
+    timestamp: string; // ISO String
+    icon: string; // lucide icon name or emoji
+    message: string;
+    delta?: number; // e.g., +2, -1
+    type: 'manual' | 'system' | 'mission' | 'reward' | 'responsibility'; // for filtering / styling
+    colorKey?: 'morning' | 'evening' | 'recycling' | 'activity' | 'bank' | 'system';
+}
+
 // --------------- Root App State ---------------
 
 export interface MCState {
@@ -143,12 +159,14 @@ export interface MCState {
     /** Tracks remaining days for the cream task (-1 means indefinite/disabled but internal UI logic manages this) */
     creamTaskDaysLeft: number;
     responsibilities: ResponsibilityTask[];
+    activityLogs: ActivityLogEntry[];
 }
 
 // --------------- Action Discriminated Union ---------------
 
 export type MCAction =
     | { type: 'ADD_TOKEN' }
+    | { type: 'ADD_TOKENS'; amount: number; source: 'manual' | 'mission' | 'responsibility'; label?: string }
     | { type: 'REMOVE_TOKEN' }
     | { type: 'SELECT_CASE'; caseId: number; reward: RewardIcon; targetCount: number }
     | { type: 'DEPOSIT_TO_CASE'; caseId: number; amount: number }
@@ -161,9 +179,11 @@ export type MCAction =
     | { type: 'SET_ACTIVE_MISSION'; phase: MissionPhase }
     | { type: 'RESET_MISSION'; missionPhase: MissionPhase }
     | { type: 'CANCEL_MISSION'; missionPhase: MissionPhase }
+    | { type: 'COMPLETE_MISSION_ROUTINE'; missionPhase: MissionPhase; bonusTokens: number }
+    | { type: 'MARK_MISSION_TIMEOUT'; missionPhase: MissionPhase }
     | { type: 'ADJUST_MISSION_END'; missionPhase: MissionPhase; deltaMinutes: number }
     | { type: 'CONSUME_CASE'; caseId: number }
     | { type: 'SET_SETTINGS'; settings: Partial<MCSettings> }
     | { type: 'ADD_RESPONSIBILITY_POINT'; taskId: string }
-    | { type: 'RESET_RESPONSIBILITY'; taskId: string };
-
+    | { type: 'RESET_RESPONSIBILITY'; taskId: string; claimTokens?: number }
+    | { type: 'ADD_LOG'; log: ActivityLogEntry };

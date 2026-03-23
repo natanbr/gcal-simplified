@@ -34,6 +34,7 @@ export class ApiService {
     }
 
     async getCalendars() {
+        if (!authService.isAuthenticated()) return [];
         const auth = authService.getAuthClient();
         const calendar = google.calendar({ version: 'v3', auth });
         const res = await calendar.calendarList.list();
@@ -46,6 +47,7 @@ export class ApiService {
     }
 
     async getTaskLists() {
+        if (!authService.isAuthenticated()) return [];
         const auth = authService.getAuthClient();
         const service = google.tasks({ version: 'v1', auth });
         const res = await service.tasklists.list();
@@ -57,6 +59,7 @@ export class ApiService {
     }
 
     async getEvents(timeMin: Date, timeMax: Date): Promise<AppEvent[]> {
+        if (!authService.isAuthenticated()) return [];
         const auth = authService.getAuthClient();
         const calendar = google.calendar({ version: 'v3', auth });
 
@@ -171,6 +174,7 @@ export class ApiService {
     }
 
     async getTasks(): Promise<AppTask[]> {
+        if (!authService.isAuthenticated()) return [];
         const auth = authService.getAuthClient();
         const service = google.tasks({ version: 'v1', auth });
 

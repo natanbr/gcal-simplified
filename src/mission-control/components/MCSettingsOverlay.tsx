@@ -7,8 +7,9 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMCState, useMCDispatch } from '../store/useMCStore.tsx';
+import { useMCState, useMCDispatch } from '../store/useMCStore';
 import type { MCSettings } from '../types';
+import { REWARDS } from '../rewardCatalogue';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
 
     // Local draft — only committed on "Save"
     const [draft, setDraft] = useState<MCSettings>(() => state.settings);
+    const [activeTab, setActiveTab] = useState<'time' | 'tasks' | 'rewards'>('time');
 
     // Reset draft whenever the panel opens
     const handleOpen = () => setDraft(state.settings);
@@ -163,7 +165,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
     return (
         <AnimatePresence onExitComplete={() => {}}>
             {open && (
-                /* Backdrop — also acts as the centering flex container */
+                /* Backdrop */
                 <motion.div
                     key="settings-backdrop"
                     initial={{ opacity: 0 }}
@@ -178,9 +180,10 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        padding: 24,
                     }}
                 >
-                    {/* Panel — centered by parent flex, stops propagation so panel clicks don't close */}
+                    {/* Main Panel — Use grid to divide Sidebar and Content */}
                     <motion.div
                         key="settings-panel"
                         initial={{ opacity: 0, scale: 0.94, y: -24 }}
@@ -190,22 +193,20 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                         onAnimationStart={() => { if (open) handleOpen(); }}
                         onClick={e => e.stopPropagation()}
                         style={{
-                            width: 'min(480px, 90vw)',
-                            maxHeight: '85vh',
-                            overflowY: 'auto',
+                            width: 'min(760px, 95vw)',
+                            height: 'min(640px, 85vh)',
                             background: 'linear-gradient(160deg,#f8f6ff,#f0ecff)',
                             border: '1.5px solid rgba(160,150,230,0.35)',
                             borderRadius: 24,
-                            padding: '24px 28px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 24,
                             boxShadow: '0 24px 64px rgba(100,80,200,0.2)',
                             fontFamily: "'Nunito', sans-serif",
+                            overflow: 'hidden',
                         }}
                     >
                         {/* Header */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid rgba(160,150,230,0.2)', background: 'rgba(255,255,255,0.4)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span style={{ fontSize: 22 }}>⚙️</span>
                                 <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--mc-text)' }}>Settings</span>
@@ -226,114 +227,261 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                             </motion.button>
                         </div>
 
-                        {/* Morning Mission */}
-                        <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
-                                <span style={{ fontSize: 18 }}>☀️</span>
-                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Morning Mission</span>
-                            </div>
-                            <TimeInput label="Auto-trigger at" value={draft.morningStartsAt} onChange={v => set('morningStartsAt', v)} />
-                            <DurationStepper label="Duration" value={draft.morningDurationMins} onChange={v => set('morningDurationMins', v)} />
-                        </section>
-
-                        {/* Evening Mission */}
-                        <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
-                                <span style={{ fontSize: 18 }}>🌙</span>
-                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Evening Mission</span>
-                            </div>
-                            <TimeInput label="Auto-trigger at" value={draft.eveningStartsAt} onChange={v => set('eveningStartsAt', v)} />
-                            <DurationStepper label="Duration" value={draft.eveningDurationMins} onChange={v => set('eveningDurationMins', v)} />
-                        </section>
-
-                        {/* Routine Add-ons */}
-                        <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
-                                <span style={{ fontSize: 18 }}>🧴</span>
-                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Routine Add-ons</span>
-                            </div>
-                            
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--mc-text)' }}>"Put on Cream" (Evening)</span>
-                                <motion.button
-                                    whileTap={{ scale: 0.9 }}
-                                    onClick={() => set('creamTaskEnabled', !draft.creamTaskEnabled)}
+                        {/* Layout: Sidebar + Content */}
+                        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                            {/* Sidebar */}
+                            <div style={{ width: 180, borderRight: '1px solid rgba(160,150,230,0.2)', display: 'flex', flexDirection: 'column', padding: 12, gap: 4, background: 'rgba(255,255,255,0.2)' }}>
+                                <button
+                                    onClick={() => setActiveTab('time')}
                                     style={{
-                                        width: 48, height: 26,
-                                        borderRadius: 99,
-                                        background: draft.creamTaskEnabled ? '#6de89e' : 'rgba(160,150,230,0.2)',
-                                        border: 'none',
-                                        position: 'relative',
-                                        cursor: 'pointer',
+                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
+                                        background: activeTab === 'time' ? 'rgba(165,125,255,0.15)' : 'transparent',
+                                        color: activeTab === 'time' ? '#8050e0' : 'var(--mc-text-muted)',
                                     }}
                                 >
-                                    <motion.div
-                                        animate={{ x: draft.creamTaskEnabled ? 22 : 2 }}
-                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                        style={{
-                                            width: 22, height: 22,
-                                            borderRadius: '50%',
-                                            background: '#fff',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                            position: 'absolute', top: 2, left: 0,
-                                        }}
-                                    />
-                                </motion.button>
+                                    🕒 Missions Time
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('tasks')}
+                                    style={{
+                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
+                                        background: activeTab === 'tasks' ? 'rgba(165,125,255,0.15)' : 'transparent',
+                                        color: activeTab === 'tasks' ? '#8050e0' : 'var(--mc-text-muted)',
+                                    }}
+                                >
+                                    🧴 Missions Tasks
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('rewards')}
+                                    style={{
+                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
+                                        background: activeTab === 'rewards' ? 'rgba(165,125,255,0.15)' : 'transparent',
+                                        color: activeTab === 'rewards' ? '#8050e0' : 'var(--mc-text-muted)',
+                                    }}
+                                >
+                                    🎁 Rewards
+                                </button>
                             </div>
 
-                            <AnimatePresence>
-                                {draft.creamTaskEnabled && (
-                                    <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        style={{ overflow: 'hidden' }}
-                                    >
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                                <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
-                                                    Days Required
-                                                </span>
-                                                <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--mc-text)', fontVariantNumeric: 'tabular-nums' }}>
-                                                    {draft.creamTaskDaysTarget}
-                                                </span>
+                            {/* Content Area */}
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+                                {activeTab === 'time' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                                        {/* Morning Mission */}
+                                        <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                                <span style={{ fontSize: 18 }}>☀️</span>
+                                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Morning Mission</span>
                                             </div>
-                                            <input
-                                                type="range"
-                                                min={1}
-                                                max={30}
-                                                step={1}
-                                                value={draft.creamTaskDaysTarget}
-                                                onChange={e => set('creamTaskDaysTarget', Number(e.target.value))}
-                                                style={{ width: '100%', accentColor: '#6de89e' }}
-                                            />
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </section>
+                                            <TimeInput label="Auto-trigger at" value={draft.morningStartsAt} onChange={v => set('morningStartsAt', v)} />
+                                            <DurationStepper label="Duration" value={draft.morningDurationMins} onChange={v => set('morningDurationMins', v)} />
+                                        </section>
 
-                        {/* Save */}
-                        <motion.button
-                            data-testid="mc-settings-save"
-                            whileTap={{ scale: 0.95, y: 2 }}
-                            whileHover={{ scale: 1.02 }}
-                            onClick={save}
-                            style={{
-                                background: 'linear-gradient(180deg,#b8a0ff,#9370ff)',
-                                border: '1.5px solid rgba(160,100,255,0.5)',
-                                borderRadius: 16,
-                                padding: '14px 0',
-                                fontSize: 15,
-                                fontWeight: 900,
-                                color: '#fff',
-                                cursor: 'pointer',
-                                boxShadow: '0 4px 0 #7040cc, 0 6px 20px rgba(120,80,255,0.3)',
-                                fontFamily: "'Nunito', sans-serif",
-                            }}
-                        >
-                            ✅ Save Settings
-                        </motion.button>
+                                        {/* Evening Mission */}
+                                        <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                                <span style={{ fontSize: 18 }}>🌙</span>
+                                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Evening Mission</span>
+                                            </div>
+                                            <TimeInput label="Auto-trigger at" value={draft.eveningStartsAt} onChange={v => set('eveningStartsAt', v)} />
+                                            <DurationStepper label="Duration" value={draft.eveningDurationMins} onChange={v => set('eveningDurationMins', v)} />
+                                        </section>
+                                    </div>
+                                )}
+
+                                {activeTab === 'tasks' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                                        {/* Routine Add-ons */}
+                                        <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                                <span style={{ fontSize: 18 }}>🧴</span>
+                                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Routine Add-ons</span>
+                                            </div>
+
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--mc-text)' }}>"Put on Cream"</span>
+                                                <motion.button
+                                                    whileTap={{ scale: 0.9 }}
+                                                    onClick={() => set('creamTaskEnabled', !draft.creamTaskEnabled)}
+                                                    style={{
+                                                        width: 48, height: 26,
+                                                        borderRadius: 99,
+                                                        background: draft.creamTaskEnabled ? '#6de89e' : 'rgba(160,150,230,0.2)',
+                                                        border: 'none',
+                                                        position: 'relative',
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    <motion.div
+                                                        animate={{ x: draft.creamTaskEnabled ? 22 : 2 }}
+                                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                                        style={{
+                                                            width: 22, height: 22,
+                                                            borderRadius: '50%',
+                                                            background: '#fff',
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                                            position: 'absolute', top: 2, left: 0,
+                                                        }}
+                                                    />
+                                                </motion.button>
+                                            </div>
+
+                                            <AnimatePresence>
+                                                {draft.creamTaskEnabled && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: 'auto' }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        style={{ overflow: 'hidden' }}
+                                                    >
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 4 }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                                <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
+                                                                    Schedule
+                                                                </span>
+                                                                <select
+                                                                    value={draft.creamTaskSchedule ?? 'evening'}
+                                                                    onChange={e => set('creamTaskSchedule', e.target.value as 'morning' | 'evening' | 'both')}
+                                                                    style={{
+                                                                        fontFamily: "'Nunito', sans-serif",
+                                                                        fontSize: 16, fontWeight: 700,
+                                                                        padding: '8px 12px',
+                                                                        borderRadius: 10,
+                                                                        border: '1.5px solid rgba(130,120,200,0.25)',
+                                                                        background: 'rgba(255,255,255,0.8)',
+                                                                        color: 'var(--mc-text)',
+                                                                        outline: 'none',
+                                                                    }}
+                                                                >
+                                                                    <option value="morning">Morning Only</option>
+                                                                    <option value="evening">Evening Only</option>
+                                                                    <option value="both">Twice a Day</option>
+                                                                </select>
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                                                    <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
+                                                                        Days Required
+                                                                    </span>
+                                                                    <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--mc-text)', fontVariantNumeric: 'tabular-nums' }}>
+                                                                        {draft.creamTaskDaysTarget}
+                                                                    </span>
+                                                                </div>
+                                                                <input
+                                                                    type="range"
+                                                                    min={1}
+                                                                    max={30}
+                                                                    step={1}
+                                                                    value={draft.creamTaskDaysTarget}
+                                                                    onChange={e => set('creamTaskDaysTarget', Number(e.target.value))}
+                                                                    style={{ width: '100%', accentColor: '#6de89e' }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </section>
+                                    </div>
+                                )}
+
+                                {activeTab === 'rewards' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                            <span style={{ fontSize: 18 }}>🎁</span>
+                                            <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Reward Settings</span>
+                                        </div>
+                                        <p style={{ fontSize: 12, color: 'var(--mc-text-muted)'}}>Enable/disable rewards and set custom token targets.</p>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            {REWARDS.map(r => {
+                                                const config = draft.rewardConfigs?.[r.id] ?? { enabled: true, targetCount: r.targetCount };
+                                                return (
+                                                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.6)', padding: '10px 14px', borderRadius: 12, border: '1px solid rgba(160,150,230,0.2)' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 140 }}>
+                                                            <span style={{ fontSize: 20 }}>{r.emoji}</span>
+                                                            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--mc-text)' }}>{r.label}</span>
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--mc-text-muted)' }}>Tokens:</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    max={100}
+                                                                    value={config.targetCount}
+                                                                    onChange={e => {
+                                                                        const val = Math.max(1, Number(e.target.value));
+                                                                        set('rewardConfigs', { ...draft.rewardConfigs, [r.id]: { ...config, targetCount: val } });
+                                                                    }}
+                                                                    style={{
+                                                                        width: 50, padding: '4px 8px', borderRadius: 8, border: '1.5px solid rgba(160,150,230,0.3)',
+                                                                        fontFamily: "'Nunito', sans-serif", fontSize: 14, fontWeight: 800, color: 'var(--mc-text)',
+                                                                        textAlign: 'center', outline: 'none', background: 'white'
+                                                                    }}
+                                                                />
+                                                            </div>
+
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.9 }}
+                                                                onClick={() => {
+                                                                    set('rewardConfigs', { ...draft.rewardConfigs, [r.id]: { ...config, enabled: !config.enabled } });
+                                                                }}
+                                                                style={{
+                                                                    width: 44, height: 24,
+                                                                    borderRadius: 99,
+                                                                    background: config.enabled ? '#a57dff' : 'rgba(160,150,230,0.2)',
+                                                                    border: 'none',
+                                                                    position: 'relative',
+                                                                    cursor: 'pointer',
+                                                                }}
+                                                            >
+                                                                <motion.div
+                                                                    animate={{ x: config.enabled ? 20 : 2 }}
+                                                                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                                                    style={{
+                                                                        width: 20, height: 20,
+                                                                        borderRadius: '50%',
+                                                                        background: '#fff',
+                                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                                                        position: 'absolute', top: 2, left: 0,
+                                                                    }}
+                                                                />
+                                                            </motion.button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer / Save */}
+                        <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(160,150,230,0.2)', background: 'rgba(255,255,255,0.4)', display: 'flex', justifyContent: 'flex-end' }}>
+                            <motion.button
+                                data-testid="mc-settings-save"
+                                whileTap={{ scale: 0.95, y: 2 }}
+                                whileHover={{ scale: 1.02 }}
+                                onClick={save}
+                                style={{
+                                    background: 'linear-gradient(180deg,#b8a0ff,#9370ff)',
+                                    border: '1.5px solid rgba(160,100,255,0.5)',
+                                    borderRadius: 12,
+                                    padding: '10px 24px',
+                                    fontSize: 15,
+                                    fontWeight: 900,
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 0 #7040cc, 0 6px 12px rgba(120,80,255,0.3)',
+                                    fontFamily: "'Nunito', sans-serif",
+                                    display: 'flex', alignItems: 'center', gap: 6,
+                                }}
+                            >
+                                ✅ Save Settings
+                            </motion.button>
+                        </div>
                     </motion.div>
                 </motion.div>
             )}

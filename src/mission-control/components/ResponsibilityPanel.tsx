@@ -82,7 +82,7 @@ function ResponsibilityCard({ task }: TaskCardProps) {
             {/* Shimmer on complete */}
             {isComplete && (
                 <div
-                    className="animate-mc-shimmer"
+                    className="mc-anim-shimmer"
                     style={{
                         position: 'absolute',
                         inset: 0,
@@ -95,7 +95,7 @@ function ResponsibilityCard({ task }: TaskCardProps) {
             {/* Header row: icon + label + status badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span
-                    className={isComplete ? "animate-mc-bounce-rotate" : "animate-mc-pulse-slow"}
+                    className={isComplete ? "mc-anim-icon-complete" : "mc-anim-icon-pulse"}
                     style={{ fontSize: 28, lineHeight: 1, flexShrink: 0, display: 'inline-block' }}
                 >
                     {task.icon}
@@ -176,13 +176,7 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                             whileTap={{ scale: 0.93, y: 2 }}
                             whileHover={{ scale: 1.03, y: -1 }}
                             onClick={() => {
-                                // Pay out tokens to the bank if this responsibility has a reward
-                                if (task.tokenReward) {
-                                    for (let i = 0; i < task.tokenReward; i++) {
-                                        dispatch({ type: 'ADD_TOKEN' });
-                                    }
-                                }
-                                dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id });
+                                dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id, claimTokens: task.tokenReward });
                             }}
                             style={{
                                 background: 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',

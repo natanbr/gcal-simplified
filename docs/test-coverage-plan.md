@@ -180,6 +180,24 @@ Covers the complex drag-and-drop interactions for moving tokens between the `Glo
 
 ---
 
+## Phase 10 — Performance Profiling & React Effects (Unit) ⏳ Priority: High
+
+Covers explicit verification of effect cleanups and memory leak preventions in custom hooks and UI components that leverage timers.
+
+### Files to create
+
+- `src/mission-control/hooks/useLiveClock.test.ts`
+- `src/mission-control/hooks/useMinuteClock.test.ts`
+- `src/mission-control/components/MissionTimerDisplay.test.tsx` (new tests)
+
+### Cases
+
+- `useLiveClock` must clear its internal `setInterval` when the hook unmounts.
+- `useMinuteClock` must clear its recursive `setTimeout` when the hook unmounts.
+- `MissionTimerDisplay` must clear its long-press `setTimeout` if unmounted mid-press to prevent state updates on unmounted components.
+
+---
+
 ## Status Tracking
 
 | Phase | Status  | Files                                                                       |
@@ -193,7 +211,8 @@ Covers the complex drag-and-drop interactions for moving tokens between the `Glo
 | 7     | ✅ Done | `monthly-view.spec.ts`, `mc-bank-management.spec.ts`, `mc-settings.spec.ts` |
 | 8     | ✅ Done | `colorMapping.test.ts` — all 11 colorIds + priority/fallback                |
 | 9     | ⏳ Pending | `mc-token-movement.spec.ts` (E2E drag-and-drop tests) |
+| 10    | ✅ Done | `useLiveClock`, `useMinuteClock`, `MissionTimerDisplay` memory leak checks |
 
-### Final unit test count: 397 ✅ (0 failures)
+### Final unit test count: 400 ✅ (0 failures)
 
 ### E2E tests added: 3 new spec files (9 new tests, run against built Electron app)

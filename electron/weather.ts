@@ -41,7 +41,7 @@ export class WeatherService {
         url.searchParams.append('hourly', 'temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m');
         url.searchParams.append('daily', 'sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min');
         url.searchParams.append('timezone', 'auto');
-        url.searchParams.append('forecast_days', '7');
+        url.searchParams.append('forecast_days', '16');
 
         try {
             const response = await fetch(url.toString());
@@ -57,6 +57,7 @@ export class WeatherService {
                     windGusts: data.current.wind_gusts_10m
                 },
                 daily: {
+                    time: data.daily.time,
                     sunrise: data.daily.sunrise,
                     sunset: data.daily.sunset,
                     weather_code: data.daily.weather_code,
@@ -85,7 +86,7 @@ export class WeatherService {
         // 1. Define Time Range
         const now = new Date();
         const start = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-        const end = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+        const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
         // 2. Identify Stations by Code
         const allStations = stations as Station[];
@@ -126,6 +127,7 @@ export class WeatherService {
         omUrl.searchParams.append('longitude', lng.toString());
         omUrl.searchParams.append('hourly', 'wave_height,wave_period,swell_wave_height,swell_wave_period,ocean_current_velocity,ocean_current_direction,sea_surface_temperature');
         omUrl.searchParams.append('timezone', 'America/Vancouver');
+        omUrl.searchParams.append('forecast_days', '8'); // 8 days to ensure we cover the full 7 days from 'now'
 
         // CHS Tide URLs
         const chsTideUrl = tideStationId ? `${CHS_API_BASE}/stations/${tideStationId}/data?time-series-code=wlp&from=${start}&to=${end}` : '';

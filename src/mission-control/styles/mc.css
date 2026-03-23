@@ -214,66 +214,89 @@
 }
 
 
-/* ---- Performance Optimized Animations ---- */
-/* ⚡ Bolt Performance: Hardware-accelerated CSS animations replacing JS-driven Framer Motion infinite loops */
+/* ============================================================
+   Performance Optimizations
+   Replaces Framer Motion repeat: Infinity to avoid JS thread overhead
+   These animations are finite, repeating for about ~15 seconds to stabilize.
+   ============================================================ */
 
+/* 1. Responsibility Panel Shimmer */
 @keyframes mc-shimmer {
   0% { transform: translateX(-120%); }
-  50% { transform: translateX(120%); }
   100% { transform: translateX(120%); }
 }
-.animate-mc-shimmer {
-  animation: mc-shimmer 2.2s ease-in-out infinite;
+.mc-anim-shimmer {
+  /* roughly 6 times * 2.2s = ~13s */
+  animation: mc-shimmer 2.2s ease-in-out 6;
   animation-delay: 1s;
+  animation-fill-mode: forwards;
 }
 
-@keyframes mc-pulse-slow {
+/* 2. Responsibility Panel Icon Complete */
+@keyframes mc-icon-complete {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-10deg) scale(1.15); }
+  75% { transform: rotate(10deg) scale(1.15); }
+}
+.mc-anim-icon-complete {
+  /* 9 times * 1.6s = ~14.4s */
+  animation: mc-icon-complete 1.6s ease-in-out 9;
+  animation-fill-mode: forwards;
+}
+
+/* 3. Responsibility Panel Icon Pulse (In Progress) */
+@keyframes mc-icon-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
 }
-.animate-mc-pulse-slow {
-  animation: mc-pulse-slow 4s ease-in-out infinite;
+.mc-anim-icon-pulse {
+  /* 4 times * 4s = 16s */
+  animation: mc-icon-pulse 4s ease-in-out 4;
+  animation-fill-mode: forwards;
 }
 
-@keyframes mc-bounce-rotate {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  25% { transform: scale(1.15) rotate(-10deg); }
-  75% { transform: scale(1.15) rotate(10deg); }
-}
-.animate-mc-bounce-rotate {
-  animation: mc-bounce-rotate 1.6s ease-in-out infinite;
-}
-
-@keyframes mc-bounce-rotate-large {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  25% { transform: scale(1.2) rotate(12deg); }
-  75% { transform: scale(1.2) rotate(-12deg); }
-}
-.animate-mc-bounce-rotate-large {
-  animation: mc-bounce-rotate-large 4s ease-in-out infinite;
-}
-
-@keyframes mc-pedestal-complete {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  25% { transform: scale(1.2) rotate(-6deg); }
-  75% { transform: scale(1.2) rotate(6deg); }
-}
-.animate-mc-pedestal-complete {
-  animation: mc-pedestal-complete 1.4s ease-in-out infinite;
-}
-
-@keyframes mc-pedestal-active {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-.animate-mc-pedestal-active {
-  animation: mc-pedestal-active 3s ease-in-out infinite;
-}
-
+/* 4. Timer Critical (MissionTimerDisplay) */
 @keyframes mc-timer-critical {
   0%, 100% { transform: scale(1); color: #e74c3c; }
   50% { transform: scale(1.06); color: #c0392b; }
 }
-.animate-mc-timer-critical {
-  animation: mc-timer-critical 1s infinite;
+.mc-anim-timer-critical {
+  /* 15 times * 1s = 15s */
+  animation: mc-timer-critical 1s 15;
+  animation-fill-mode: forwards;
+}
+
+/* 5. Mission Overlay Emoji */
+@keyframes mc-mission-emoji {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(12deg) scale(1.2); }
+  75% { transform: rotate(-12deg) scale(1.2); }
+}
+.mc-anim-mission-emoji {
+  /* 4 times * 4s = 16s */
+  animation: mc-mission-emoji 4s ease-in-out 4;
+  animation-fill-mode: forwards;
+}
+
+/* 6. Goal Pedestal Complete Emoji */
+@keyframes mc-pedestal-complete {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-6deg) scale(1.2); }
+  75% { transform: rotate(6deg) scale(1.2); }
+}
+.mc-anim-pedestal-complete {
+  /* 10 times * 1.4s = 14s */
+  animation: mc-pedestal-complete 1.4s ease-in-out 10;
+  animation-fill-mode: forwards;
+}
+
+/* 7. Goal Pedestal Idle Emoji */
+@keyframes mc-pedestal-idle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.mc-anim-pedestal-idle {
+  /* 5 times * 3s = 15s */
+  animation: mc-pedestal-idle 3s ease-in-out 5;
+  animation-fill-mode: forwards;
 }

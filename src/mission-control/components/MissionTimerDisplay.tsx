@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import React from 'react';
-import { motion } from 'framer-motion';
 
 import { useLiveClock } from '../hooks/useLiveClock';
 import type { Mission } from '../types';
@@ -9,19 +8,32 @@ interface MissionTimerDisplayProps {
     mission: Mission | null;
     allDone: boolean;
     onTimerExpiredWithAllDone: () => void;
+    onTimerExpiredInfo?: () => void;
 }
 
-export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDone }: MissionTimerDisplayProps) {
+export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDone, onTimerExpiredInfo }: MissionTimerDisplayProps) {
     const now = useLiveClock();
 
-    const remainingSecs = (() => {
-        if (!mission || !mission.startedAt || mission.durationMins == null) return null;
-        const endMs = new Date(mission.startedAt).getTime() + mission.durationMins * 60 * 1000;
-        return Math.floor((endMs - now.getTime()) / 1000);
-    })();
+    // ⚡ Bolt Performance: Memoize parsing of mission.startedAt to avoid new Date() allocations every second
+    const startMs = useMemo(() => {
+        if (!mission?.startedAt) return null;
+        return mission.startedAt instanceof Date ? mission.startedAt.getTime() : new Date(mission.startedAt).getTime();
+    }, [mission?.startedAt]);
 
-    const timerExpired = remainingSecs !== null && remainingSecs <= 0;
-    const timerCritical = remainingSecs !== null && remainingSecs > 0 && remainingSecs < 5 * 60; // < 5 min
+    // ⚡ Bolt Performance: Consolidate timer metric calculations inside useMemo
+    const timerMetrics = (() => {
+        if (startMs === null || mission?.durationMins == null) {
+            return { remainingSecs: null, timerExpired: false, timerCritical: false };
+        }
+        const endMs = startMs + mission.durationMins * 60 * 1000;
+        const remaining = Math.floor((endMs - now.getTime()) / 1000);
+        return {
+            remainingSecs: remaining,
+            timerExpired: remaining <= 0,
+            timerCritical: remaining > 0 && remaining < 5 * 60,
+        };
+    })();
+    const { remainingSecs, timerExpired, timerCritical } = timerMetrics;
     const timerDisplay = (() => {
         if (remainingSecs === null) return '--:--';
         if (timerExpired) return "Time's up! \uD83D\uDD14";
@@ -39,14 +51,15 @@ export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDon
 
     // Auto-collect when timer expires with all tasks done
     useEffect(() => {
-        if (timerExpired && allDone) {
-            onTimerExpiredWithAllDone();
+        if (timerExpired) {
+            if (allDone) onTimerExpiredWithAllDone();
+            else if (onTimerExpiredInfo) onTimerExpiredInfo();
         }
-    }, [timerExpired, allDone, onTimerExpiredWithAllDone]);
+    }, [timerExpired, allDone, onTimerExpiredWithAllDone, onTimerExpiredInfo]);
 
     return (
         <span
-            className={(!allDone && timerCritical && !timerExpired) ? "animate-mc-timer-critical" : ""}
+            className={!allDone && timerCritical ? "mc-anim-timer-critical" : ""}
             style={{
                 fontSize: 42,
                 fontWeight: 900,
@@ -83,28 +96,40 @@ export function MissionDepletingBar({ mission, allDone, accent, onAdjust }: Miss
     const now = useLiveClock();
     const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const remainingSecs = (() => {
-        if (!mission || !mission.startedAt || mission.durationMins == null) return null;
-        const endMs = new Date(mission.startedAt).getTime() + mission.durationMins * 60 * 1000;
-        return Math.floor((endMs - now.getTime()) / 1000);
+    // ⚡ Bolt Performance: Memoize parsing of mission.startedAt to avoid new Date() allocations every second
+    const startMs = useMemo(() => {
+        if (!mission?.startedAt) return null;
+        return mission.startedAt instanceof Date ? mission.startedAt.getTime() : new Date(mission.startedAt).getTime();
+    }, [mission?.startedAt]);
+
+    // ⚡ Bolt Performance: Consolidate timer metric calculations
+    const timerMetrics = (() => {
+        if (startMs === null || mission?.durationMins == null) {
+            return { remainingSecs: null, timerExpired: false, timerCritical: false, pct: 0 };
+        }
+        const endMs = startMs + mission.durationMins * 60 * 1000;
+        const remaining = Math.floor((endMs - now.getTime()) / 1000);
+
+        // ── Fixed pct calculation ────────────────────────────────────────────────
+        // BUG (old): pct = remainingSecs / (durationMins * 60)
+        //   → when durationMins changes, both numerator & denominator jump, causing
+        //     the bar to go the wrong direction (appears fuller after reducing time).
+        //
+        // FIX: pct = 1 - elapsed / totalMs, anchored on startedAt.
+        //   elapsed is stable regardless of durationMins adjustments, so the bar
+        //   correctly shows how much of the NEW total has been consumed already.
+        const totalMs = mission.durationMins * 60 * 1000;
+        const elapsedMs = now.getTime() - startMs;
+        const pctValue = totalMs > 0 ? Math.max(0, Math.min(100, (1 - elapsedMs / totalMs) * 100)) : 0;
+
+        return {
+            remainingSecs: remaining,
+            timerExpired: remaining <= 0,
+            timerCritical: remaining > 0 && remaining < 5 * 60,
+            pct: pctValue
+        };
     })();
-
-    const timerExpired = remainingSecs !== null && remainingSecs <= 0;
-    const timerCritical = remainingSecs !== null && remainingSecs > 0 && remainingSecs < 5 * 60; // < 5 min
-
-    if (remainingSecs === null || timerExpired) return null;
-
-    // ── Fixed pct calculation ────────────────────────────────────────────────
-    // BUG (old): pct = remainingSecs / (durationMins * 60)
-    //   → when durationMins changes, both numerator & denominator jump, causing
-    //     the bar to go the wrong direction (appears fuller after reducing time).
-    //
-    // FIX: pct = 1 - elapsed / totalMs, anchored on startedAt.
-    //   elapsed is stable regardless of durationMins adjustments, so the bar
-    //   correctly shows how much of the NEW total has been consumed already.
-    const totalMs  = (mission!.durationMins ?? 0) * 60 * 1000;
-    const elapsedMs = now.getTime() - new Date(mission!.startedAt!).getTime();
-    const pct = totalMs > 0 ? Math.max(0, Math.min(100, (1 - elapsedMs / totalMs) * 100)) : 0;
+    const { remainingSecs, timerExpired, timerCritical, pct } = timerMetrics;
 
     // ── Long-press handlers ──────────────────────────────────────────────────
     const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -123,6 +148,16 @@ export function MissionDepletingBar({ mission, allDone, accent, onAdjust }: Miss
             longPressRef.current = null;
         }
     };
+
+    useEffect(() => {
+        return () => {
+            if (longPressRef.current) {
+                clearTimeout(longPressRef.current);
+            }
+        };
+    }, []);
+
+    if (remainingSecs === null || timerExpired) return null;
 
     return (
         <div

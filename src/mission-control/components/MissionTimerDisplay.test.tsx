@@ -76,6 +76,7 @@ function makeMission(overrides: Partial<Mission> = {}): Mission {
         startsAt: '10:00',
         startedAt,
         durationMins: 30,
+        active: true,
         tasks: [],
         ...overrides,
     };
@@ -228,6 +229,38 @@ describe('MissionDepletingBar — long-press gesture (onAdjust)', () => {
         await act(async () => { vi.advanceTimersByTime(300); });
         fireEvent.pointerLeave(bar);
         await act(async () => { vi.advanceTimersByTime(600); });
+
+        expect(onAdjust).not.toHaveBeenCalled();
+        vi.useRealTimers();
+    });
+
+    it('clears long-press adjustment timeout when component unmounts mid-press to prevent memory leaks', async () => {
+        vi.useFakeTimers();
+        const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+        const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+        const onAdjust = vi.fn();
+
+        const { unmount } = render(<BarWrapper mission={makeMission()} onAdjust={onAdjust} />);
+
+        const bar = screen.getByTestId('mc-timer-bar');
+        mockBarRect(bar);
+
+        // Start long press
+        fireEvent.pointerDown(bar, { clientX: 50 });
+
+        // Verify timeout was set
+        expect(setTimeoutSpy).toHaveBeenCalled();
+
+        // Unmount BEFORE the 600ms longpress timeout triggers
+        unmount();
+
+        // Should have called clearTimeout to prevent state update on unmounted component
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+
+        // Fast forward time just in case... mockAdjust should NOT be called since timeout was cleared
+        await act(async () => {
+            vi.advanceTimersByTime(1000);
+        });
 
         expect(onAdjust).not.toHaveBeenCalled();
         vi.useRealTimers();

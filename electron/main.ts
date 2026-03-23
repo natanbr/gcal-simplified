@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, powerMonitor, session } from 'electron'
 import { execFile } from 'node:child_process'
 import 'dotenv/config'
-// import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { autoUpdater } from 'electron-updater'
@@ -9,7 +8,6 @@ import { authService } from './auth'
 import { apiService } from './api'
 import { weatherService } from './weather'
 
-// const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
@@ -46,6 +44,11 @@ function createWindow() {
 
   // Maximize window for better visibility
   win.maximize()
+
+  // 🛡️ Sentinel: Prevent unauthorized window creation
+  win.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' }
+  })
 
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
@@ -122,8 +125,21 @@ app.whenReady().then(() => {
     let end: Date;
 
     if (timeMin && timeMax) {
-      start = new Date(timeMin);
-      end = new Date(timeMax);
+      // 🛡️ Sentinel: Validate IPC boundary inputs to prevent RangeError crashes downstream
+      // Ensure that inputs are actually strings and can be parsed into valid dates
+      if (typeof timeMin !== 'string' || typeof timeMax !== 'string') {
+        throw new Error('timeMin and timeMax must be strings');
+      }
+
+      const parsedStart = new Date(timeMin);
+      const parsedEnd = new Date(timeMax);
+
+      if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+        throw new Error('Invalid date strings provided for timeMin or timeMax');
+      }
+
+      start = parsedStart;
+      end = parsedEnd;
     } else {
       // Default: Fetch next 10 days starting from the beginning of today
       start = new Date();

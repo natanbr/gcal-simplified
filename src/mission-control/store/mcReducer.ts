@@ -12,6 +12,7 @@ import type {
     DisplayCase,
     PrivilegeCard,
     Mission,
+    MissionTask,
     ResponsibilityTask,
     MCSettings,
 } from '../types';
@@ -101,6 +102,7 @@ export const initialState: MCState = {
     settings: DEFAULT_SETTINGS,
     creamTaskDaysLeft: 0,
     responsibilities: defaultResponsibilities,
+    activityLogs: [],
 };
 
 // ---- Reducer ----
@@ -109,6 +111,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
     switch (action.type) {
         case 'ADD_TOKEN':
             return { ...state, bankCount: state.bankCount + 1 };
+
+        case 'ADD_TOKENS':
+            return { ...state, bankCount: state.bankCount + action.amount };
 
         case 'REMOVE_TOKEN':
             return { ...state, bankCount: Math.max(0, state.bankCount - 1) };
@@ -218,7 +223,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         case 'COMPLETE_TASK': {
             const nextState = { ...state };
             if (action.taskId === 'cream') {
-                nextState.creamTaskDaysLeft = Math.max(0, state.creamTaskDaysLeft - 1);
+                const schedule = state.settings.creamTaskSchedule ?? 'evening';
+                const dec = schedule === 'both' ? 0.5 : 1;
+                nextState.creamTaskDaysLeft = Math.max(0, state.creamTaskDaysLeft - dec);
             }
             nextState.missions = nextState.missions.map(m =>
                 m.phase === action.missionPhase
@@ -300,27 +307,42 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? { ...m, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
-                        : m,
-                ),
+                        ? { ...m, active: true, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        : m
+                )
             };
 
-        // Stop: deactivates the mission and resets all state.
         case 'CANCEL_MISSION':
             return {
                 ...state,
                 activeMission: 'none',
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? {
-                            ...m,
-                            active: false,
-                            startedAt: undefined, // Cleared on cancel now that it isn't used as a guard
-                            durationMins: undefined,
-                            tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
-                        }
-                        : m,
-                ),
+                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        : m
+                )
+            };
+
+        case 'COMPLETE_MISSION_ROUTINE':
+            return {
+                ...state,
+                activeMission: 'none',
+                bankCount: state.bankCount + action.bonusTokens,
+                missions: state.missions.map(m =>
+                    m.phase === action.missionPhase
+                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        : m
+                )
+            };
+
+        case 'MARK_MISSION_TIMEOUT':
+            return {
+                ...state,
+                missions: state.missions.map(m =>
+                    m.phase === action.missionPhase
+                        ? { ...m, loggedTimeoutAt: new Date().toISOString() }
+                        : m
+                )
             };
 
         case 'ADJUST_MISSION_END': {
@@ -424,15 +446,35 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             };
         }
 
-        case 'RESET_RESPONSIBILITY':
+        case 'RESET_RESPONSIBILITY': {
+            const addedBank = action.claimTokens ? state.bankCount + action.claimTokens : state.bankCount;
             return {
                 ...state,
+                bankCount: addedBank,
                 responsibilities: state.responsibilities.map(r =>
                     r.id === action.taskId
                         ? { ...r, pointsEarned: 0, completedAt: null }
-                        : r,
-                ),
+                        : r
+                )
             };
+        }
+
+        case 'ADD_LOG': {
+            const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+            const nowTime = new Date().getTime();
+
+            // 1. Add new log to the front
+            // 2. Filter out anything older than 7 days based on timestamp
+            const filteredLogs = [action.log, ...(state.activityLogs || [])].filter(log => {
+                const logTime = new Date(log.timestamp).getTime();
+                return (nowTime - logTime) <= SEVEN_DAYS_MS;
+            });
+
+            return {
+                ...state,
+                activityLogs: filteredLogs
+            };
+        }
 
         default:
             return state;
@@ -440,20 +482,28 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
 }
 
 // ---- Task Injection Sync ----
-// Safely adds/removes/updates the Cream routine in the evening active missions array.
+// Safely adds/removes/updates the Cream routine in the active missions arrays.
 function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: number): Mission[] {
     return missions.map(m => {
-        if (m.phase !== 'evening') return m;
+        const isEvening = m.phase === 'evening';
+        const isMorning = m.phase === 'morning';
+        const schedule = settings.creamTaskSchedule ?? 'evening';
+
+        let shouldHaveCreamInPhase = false;
+        if (settings.creamTaskEnabled && daysLeft > 0) {
+             if (schedule === 'both' && (isMorning || isEvening)) shouldHaveCreamInPhase = true;
+             else if (schedule === 'morning' && isMorning) shouldHaveCreamInPhase = true;
+             else if (schedule === 'evening' && isEvening) shouldHaveCreamInPhase = true;
+        }
         
         const hasCream = m.tasks.some(t => t.id === 'cream');
-        const shouldHaveCream = settings.creamTaskEnabled && daysLeft > 0;
-        const expectedLabel = `Cream (${daysLeft}d left)`;
+        const expectedLabel = `Cream (${Math.ceil(daysLeft)}d left)`;
         
-        if (shouldHaveCream && !hasCream) {
-            // Inject before bed
+        if (shouldHaveCreamInPhase && !hasCream) {
+            // Inject before bed for evening, or at the end for morning
             const bedIndex = m.tasks.findIndex(t => t.id === 'bed');
             const newTasks = [...m.tasks];
-            const creamTask = {
+            const creamTask: MissionTask = {
                 id: 'cream',
                 label: expectedLabel,
                 icon: 'Droplet',
@@ -464,10 +514,10 @@ function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: numb
             if (bedIndex !== -1) newTasks.splice(bedIndex, 0, creamTask);
             else newTasks.push(creamTask);
             return { ...m, tasks: newTasks };
-        } else if (!shouldHaveCream && hasCream) {
+        } else if (!shouldHaveCreamInPhase && hasCream) {
             // Remove it
             return { ...m, tasks: m.tasks.filter(t => t.id !== 'cream') };
-        } else if (hasCream && shouldHaveCream) {
+        } else if (hasCream && shouldHaveCreamInPhase) {
             // Ensure label is updated
             const needUpdate = m.tasks.some(t => t.id === 'cream' && t.label !== expectedLabel);
             if (needUpdate) {

@@ -91,7 +91,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
             <motion.div 
                 initial={{ scale: 0.95 }} 
                 animate={{ scale: 1 }}
-                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden transition-colors duration-300"
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden transition-colors duration-300"
             >
                 {/* Header */}
                 <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-900 transition-colors duration-300">

@@ -9,7 +9,7 @@ import { EventCard } from './EventCard';
 import { MonthlyView } from './MonthlyView';
 import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
 import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
-import { WeatherDashboard } from './WeatherDashboard';
+import { WeatherDashboard } from '../features/weather/components/WeatherDashboard';
 import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
 import { getMonthViewDates, isCurrentMonth, canNavigateBackMonth } from '../utils/monthUtils';
@@ -63,7 +63,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   const processedEvents = useMemo(() => splitMultiDayEvents(events), [events]);
 
   const eventsByDay = useMemo(() => {
-    return days.map(day => processedEvents.filter(e => isSameDay(e.start, day)));
+    // ⚡ Bolt Performance: Replace O(Days * N) filtering with O(N) Map lookup.
+    // Also prevents redundant Date object allocations for each event during filtering.
+    const map = new Map<string, AppEvent[]>();
+
+    processedEvents.forEach(event => {
+      const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
+      const dateStr = `${eventStart.getFullYear()}-${eventStart.getMonth()}-${eventStart.getDate()}`;
+      if (!map.has(dateStr)) {
+          map.set(dateStr, []);
+      }
+      map.get(dateStr)!.push(event);
+    });
+
+    return days.map(day => {
+      const dateStr = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+      return map.get(dateStr) || [];
+    });
   }, [processedEvents, days]);
 
   const weekData = useMemo(() => {
@@ -160,6 +176,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   // Initial Data Load
   useEffect(() => {
     fetchData(true);
+  }, [fetchData]);
+
+  // Listen for login success (e.g., from reconnect in Settings) to refetch data
+  useEffect(() => {
+    if (!window.ipcRenderer) return;
+    const cleanup = window.ipcRenderer.on('auth:success', () => {
+        fetchData(true);
+    });
+    return () => cleanup();
   }, [fetchData]);
 
   // Soft reload events on date change (uses cache)
@@ -385,22 +410,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                                      </div>
                                  </div>
 
-                                 {/* Weather Column - Only show for current week forecast */}
-                                 {isCurrentWeek(weekOffset) && weather && weather.daily && weather.daily.weather_code && weather.daily.weather_code[i] !== undefined && (
-                                    <div className="flex flex-col items-center gap-1 translate-y-5" data-testid="weather-forecast-container">
-                                        <div className="scale-150">
-                                            {getWeatherIcon(weather.daily.weather_code[i])}
-                                        </div>
-                                        {weather.daily.temperature_2m_max && (
-                                            <div
-                                                className="text-[13px] font-black text-blue-500/80 dark:text-blue-400/80 font-mono"
-                                                data-testid="day-header-temp-range"
-                                            >
-                                                {Math.round(weather.daily.temperature_2m_max[i])}-{Math.round(weather.daily.temperature_2m_min[i])}
+                                 {/* Weather Column - Show if we have forecast data for this day */}
+                                 {(() => {
+                                     if (!weather?.daily?.weather_code || !weather?.daily?.time) return null;
+                                     const dayStr = format(day, 'yyyy-MM-dd');
+                                     const weatherIndex = weather.daily.time.findIndex(t => t.startsWith(dayStr));
+
+                                     if (weatherIndex !== -1 && weather.daily.weather_code[weatherIndex] !== undefined) {
+                                         return (
+                                            <div className="flex flex-col items-center gap-1 translate-y-5" data-testid="weather-forecast-container">
+                                                <div className="scale-150">
+                                                    {getWeatherIcon(weather.daily.weather_code[weatherIndex])}
+                                                </div>
+                                                {weather.daily.temperature_2m_max && (
+                                                    <div
+                                                        className="text-[13px] font-black text-blue-500/80 dark:text-blue-400/80 font-mono"
+                                                        data-testid="day-header-temp-range"
+                                                    >
+                                                        {Math.round(weather.daily.temperature_2m_max[weatherIndex])}-{Math.round(weather.daily.temperature_2m_min[weatherIndex])}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                 )}
+                                         );
+                                     }
+                                     return null;
+                                 })()}
                              </div>
 
                              {/* Holidays */}

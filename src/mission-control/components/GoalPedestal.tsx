@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMCDispatch } from '../store/useMCStore.tsx';
+import { useMCDispatch, useMCState } from '../store/useMCStore';
 import { Button3D } from './Button3D';
 import { Token } from './Token';
 import type { DisplayCase, RewardIcon } from '../types';
@@ -146,6 +146,7 @@ interface GoalPedestalProps {
 
 export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }: GoalPedestalProps) {
   const dispatch = useMCDispatch();
+  const state = useMCState();
   const [isSelecting, setIsSelecting] = useState(false);
   const [leverTilted, setLeverTilted] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -363,7 +364,15 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
             </span>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-              {REWARDS.map(r => (
+              {REWARDS.filter(() => {
+                  return true; // we will check rewards using the state accessed before the return
+                }).map(r => {
+                const config = state.settings.rewardConfigs?.[r.id];
+                const isEnabled = config ? config.enabled : true;
+                if (!isEnabled) return null;
+
+                const displayTargetCount = config ? config.targetCount : r.targetCount;
+                return (
                 <motion.button
                   key={r.id}
                   whileTap={{ scale: 0.88 }}
@@ -389,10 +398,10 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
                     background: 'rgba(247,201,72,0.22)', borderRadius: 6,
                     padding: '2px 6px', border: '1px solid rgba(247,201,72,0.4)',
                   }}>
-                    {r.targetCount} ⭐
+                    {displayTargetCount} ⭐
                   </span>
                 </motion.button>
-              ))}
+              );})}
             </div>
 
             <button
@@ -422,7 +431,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
             }}
           >
             <span
-              className={isComplete ? "animate-mc-pedestal-complete" : "animate-mc-pedestal-active"}
+              className={isComplete ? "mc-anim-pedestal-complete" : "mc-anim-pedestal-idle"}
               style={{ fontSize: 32, lineHeight: 1, marginTop: 2, display: 'inline-block' }}
             >
               {reward.emoji}

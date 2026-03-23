@@ -17,6 +17,7 @@ import { MCSettingsOverlay } from './components/MCSettingsOverlay';
 import { PrivilegeCardButton } from './components/PrivilegeCardButton';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { LiveClockDisplay } from './components/LiveClockDisplay';
+import { ActivityLogView } from './components/ActivityLogView';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
 interface MCLayoutProps {
@@ -74,16 +75,16 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
               style={{
                 background: 'rgba(100,180,255,0.15)',
                 border: '1.5px solid rgba(100,180,255,0.35)',
-                borderRadius: 10,
-                padding: '4px 12px',
-                fontSize: 13,
+                borderRadius: 14,
+                padding: '7px 16px',
+                fontSize: 15,
                 fontWeight: 900,
                 cursor: 'pointer',
-                lineHeight: 1,
                 color: 'var(--mc-text)',
                 fontFamily: "'Nunito',sans-serif",
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: 5,
               }}
             >
@@ -96,6 +97,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           }}>
             ⭐ Command Center
           </span>
+          <ActivityLogView />
           <button
             data-testid="mc-settings-btn"
             title="Settings"
@@ -103,11 +105,13 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
             style={{
               background: 'rgba(160,150,230,0.15)',
               border: '1.5px solid rgba(160,150,230,0.3)',
-              borderRadius: 10,
-              padding: '4px 8px',
+              borderRadius: 14,
+              padding: '7px 16px',
               fontSize: 15,
               cursor: 'pointer',
-              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             ⚙️

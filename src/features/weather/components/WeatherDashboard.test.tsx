@@ -6,7 +6,7 @@ import React from 'react';
 // We'll trust hoisting but define it clearly.
 // Using explicit any for children as per original file style
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-vi.mock('./SideDrawer', () => ({
+vi.mock('../../../components/SideDrawer', () => ({
     SideDrawer: ({ isOpen, children }: { isOpen: boolean, children: any }) => {
         // Render children directly if open
         return isOpen ? <div data-testid="drawer-content">{children}</div> : null;
