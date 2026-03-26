@@ -62,9 +62,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
 
   const processedEvents = useMemo(() => splitMultiDayEvents(events), [events]);
 
-  const eventsByDay = useMemo(() => {
-    // ⚡ Bolt Performance: Replace O(Days * N) filtering with O(N) Map lookup.
-    // Also prevents redundant Date object allocations for each event during filtering.
+  const eventsByDayMap = useMemo(() => {
+    // ⚡ Bolt Performance: Memoize the Map creation so it only rebuilds when
+    // processedEvents (the month's data) changes, not when the user navigates
+    // between weeks within the same month (which only changes 'days').
     const map = new Map<string, AppEvent[]>();
 
     processedEvents.forEach(event => {
@@ -76,11 +77,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
       map.get(dateStr)!.push(event);
     });
 
+    return map;
+  }, [processedEvents]);
+
+  const eventsByDay = useMemo(() => {
+    // ⚡ Bolt Performance: O(Days) lookup instead of O(N) filtering.
     return days.map(day => {
       const dateStr = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
-      return map.get(dateStr) || [];
+      return eventsByDayMap.get(dateStr) || [];
     });
-  }, [processedEvents, days]);
+  }, [eventsByDayMap, days]);
 
   const weekData = useMemo(() => {
     return days.map((day, i) => {
