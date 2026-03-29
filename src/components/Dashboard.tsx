@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { addDays, addMonths, format, isSameDay, isWeekend } from 'date-fns';
 import { SettingsModal } from './SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, AlignLeft } from 'lucide-react';
-import { SideDrawer } from './SideDrawer';
+import { RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { EventDetailDrawer } from './EventDetailDrawer';
 import { DayColumn } from './DayColumn';
 import { EventCard } from './EventCard';
 import { MonthlyView } from './MonthlyView';
@@ -18,7 +18,6 @@ import { useTheme } from '../hooks/useTheme';
 import { useCurrentDate } from '../hooks/useCurrentDate';
 import { UpdateNotification } from './UpdateNotification';
 import { splitMultiDayEvents } from '../utils/eventProcessing';
-import { getEventTitleStyle } from '../utils/colorMapping';
 
 const DAYS_TO_SHOW = 7;
 
@@ -110,10 +109,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   const currentLocation = useMemo(() => 
       MARINE_LOCATIONS.find(l => l.id === selectedLocationId) || MARINE_LOCATIONS[0], 
   [selectedLocationId]);
-
-  const titleStyle = useMemo(() => 
-      selectedEvent ? getEventTitleStyle(selectedEvent.colorId, selectedEvent.color) : {}, 
-  [selectedEvent]);
 
   const fetchData = useCallback(async (isInitial: boolean = false) => {
       setLoading(true);
@@ -531,69 +526,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
         )}
       </AnimatePresence>
 
-      <SideDrawer
-        isOpen={!!selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-        title="Event Details"
-      >
-            {selectedEvent && (
-                <div className="space-y-8">
-                    <div>
-                        <h3 
-                            className={`text-3xl font-black leading-tight mb-2 ${titleStyle.className || ''}`}
-                            style={titleStyle.style}
-                        >
-                            {selectedEvent.title}
-                        </h3>
-                        <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400 font-medium">
-                            <Clock size={18} className="text-family-cyan" />
-                            <span>
-                                {selectedEvent.allDay
-                                    ? 'All Day'
-                                    : `${format(selectedEvent.start, 'EEEE, MMMM d')} • ${format(selectedEvent.start, 'HH:mm')} - ${format(selectedEvent.end, 'HH:mm')}`
-                                }
-                            </span>
-                        </div>
-                    </div>
-
-                    {selectedEvent.location && (
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-xs">
-                                <MapPin size={16} className="text-family-orange" />
-                                <span>Location</span>
-                            </div>
-                            <div className="text-zinc-400 bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/30">
-                                {selectedEvent.location}
-                            </div>
-                        </div>
-                    )}
-
-                    {selectedEvent.description && (
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-xs">
-                                <AlignLeft size={16} className="text-family-cyan" />
-                                <span>Description</span>
-                            </div>
-                            <div className="text-zinc-400 bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/30 whitespace-pre-wrap leading-relaxed">
-                                {selectedEvent.description}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Meta info */}
-                    <div className="pt-8 border-t border-zinc-800 flex flex-wrap gap-4">
-                        <div className="px-3 py-1 rounded-full bg-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest">
-                            ID: {selectedEvent.id.substring(0, 8)}...
-                        </div>
-                        {selectedEvent.isHoliday && (
-                            <div className="px-3 py-1 rounded-full bg-family-orange/20 text-family-orange text-[10px] font-black uppercase tracking-widest">
-                                Public Holiday
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-      </SideDrawer>
+      <EventDetailDrawer selectedEvent={selectedEvent} onClose={() => setSelectedEvent(null)} />
     </div>
   );
 };
