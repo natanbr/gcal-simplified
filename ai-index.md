@@ -33,6 +33,9 @@ Generic, pure functions used across multiple domains.
 ---
 
 ## 🛠️ Execution Commands
-* **Type Check**: `npm run tsc`
+* **Type Check**: `npx tsc --noEmit`
 * **Linting**: `npm run lint`
-* **Unit Tests**: `npm run test:unit`
+* **Unit Tests**: `npm run test:unit` (Vitest, 438 tests across 45 files)
+* **E2E Tests**: `npm run test:run` (Playwright, 43 tests — requires built Electron app)
+* **Coverage**: `npx vitest run --coverage` (requires `@vitest/coverage-v8@3.2.4`)
+* **Release**: `npm run release` — bumps patch, builds, publishes to GitHub Releases (see `/release` workflow)
