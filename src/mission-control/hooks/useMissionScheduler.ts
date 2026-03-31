@@ -48,8 +48,9 @@ export function useMissionScheduler(): void {
                     dispatch({ type: 'SET_ACTIVE_MISSION', phase });
                 }
 
-                // Schedule the next day's occurrence! (wait 1s to ensure math rolls over securely)
-                setTimeout(() => schedulePhase(phase, hhmm), 1000);
+                // Schedule the next day's occurrence — tracked so cleanup catches it
+                const nextId = setTimeout(() => schedulePhase(phase, hhmm), 1000);
+                timeouts.add(nextId);
             }, ms);
             timeouts.add(id);
         }
@@ -68,8 +69,9 @@ export function useMissionScheduler(): void {
                     dispatch({ type: 'LOCK_TASK', missionPhase, taskId });
                 }
 
-                // Schedule next day's lock (wait 1s to ensure math rolls over)
-                setTimeout(() => scheduleTaskLock(missionPhase, taskId, locksAtHhmm), 1000);
+                // Schedule next day's lock — tracked so cleanup catches it
+                const nextId = setTimeout(() => scheduleTaskLock(missionPhase, taskId, locksAtHhmm), 1000);
+                timeouts.add(nextId);
             }, ms);
             timeouts.add(id);
         }

@@ -103,7 +103,7 @@ Covers `MCSettingsOverlay.tsx` — zero tests.
 
 ---
 
-## Phase 5b — Mission Control: Cream Target Logic (Unit) ⏳ Priority: Medium
+## Phase 5b — Mission Control: Cream Target Logic (Unit) ✅ Priority: Medium
 
 Covers new reducer logic for the dynamic "Put on Cream" evening routine task.
 
@@ -200,19 +200,42 @@ Covers explicit verification of effect cleanups and memory leak preventions in c
 
 ## Status Tracking
 
-| Phase | Status  | Files                                                                       |
-| ----- | ------- | --------------------------------------------------------------------------- |
-| 1     | ✅ Done | `weekNavigation.test.ts`, `monthUtils.test.ts`                              |
-| 2     | ✅ Done | `eventKeywordIcons.ts`, `eventKeywordIcons.test.ts`                         |
-| 3     | ✅ Done | `mcReducer.mission-tasks.test.ts`                                           |
-| 4     | ✅ Done | `MissionOverlay.test.tsx` — whining toggle + reset button                   |
-| 5     | ✅ Done | `MCSettingsOverlay.test.tsx`                                                |
-| 6     | ✅ Done | `GlobalBank.test.tsx`                                                       |
-| 7     | ✅ Done | `monthly-view.spec.ts`, `mc-bank-management.spec.ts`, `mc-settings.spec.ts` |
-| 8     | ✅ Done | `colorMapping.test.ts` — all 11 colorIds + priority/fallback                |
-| 9     | ⏳ Pending | `mc-token-movement.spec.ts` (E2E drag-and-drop tests) |
-| 10    | ✅ Done | `useLiveClock`, `useMinuteClock`, `MissionTimerDisplay` memory leak checks |
+| Phase | Status     | Files                                                                       |
+| ----- | ---------- | --------------------------------------------------------------------------- |
+| 1     | ✅ Done    | `weekNavigation.test.ts`, `monthUtils.test.ts`                              |
+| 2     | ✅ Done    | `eventKeywordIcons.ts`, `eventKeywordIcons.test.ts`                         |
+| 3     | ✅ Done    | `mcReducer.mission-tasks.test.ts`                                           |
+| 4     | ✅ Done    | `MissionOverlay.test.tsx` — whining toggle + reset button                   |
+| 5     | ✅ Done    | `MCSettingsOverlay.test.tsx`                                                |
+| 5b    | ✅ Done    | `mcReducer.settings.test.ts` — cream task inject/remove/decrement/auto-off  |
+| 6     | ✅ Done    | `GlobalBank.test.tsx`                                                       |
+| 7     | ✅ Done    | `monthly-view.spec.ts`, `mc-bank-management.spec.ts`, `mc-settings.spec.ts` |
+| 8     | ✅ Done    | `colorMapping.test.ts` — all 11 colorIds + priority/fallback                |
+| 9     | ⏳ Pending | `mc-token-movement.spec.ts` (E2E drag-and-drop tests)                       |
+| 10    | ✅ Done    | `useLiveClock`, `useMinuteClock`, `MissionTimerDisplay` memory leak checks  |
 
-### Final unit test count: 400 ✅ (0 failures)
+### Unit test count: **438 ✅ (0 failures)** across 45 test files
 
 ### E2E tests added: 3 new spec files (9 new tests, run against built Electron app)
+
+---
+
+## Coverage Summary (v8, `src/` only)
+
+> Run: `npx vitest run --coverage` (requires `@vitest/coverage-v8@3.2.4` to match vitest version)
+
+| Area                          | Stmts | Branch | Funcs | Notes                                          |
+| ----------------------------- | ----- | ------ | ----- | ---------------------------------------------- |
+| `src/utils/`                  | ~97%  | ~92%   | ~96%  | Near-complete; `colorMapping`, `eventKeywordIcons` at 100% |
+| `src/mission-control/store/`  | ~94%  | ~84%   | 100%  | Reducer 97.8%, store wrapper 83%               |
+| `src/mission-control/hooks/`  | 100%  | 100%   | 100%  | `useLiveClock`, `useMinuteClock` fully covered |
+| `src/mission-control/components/` | ~85% | ~84% | ~65% | Some views (e.g. `AchievementView`) at 0% — no tests yet |
+| `src/hooks/`                  | ~98%  | ~87%   | 100%  | `useCurrentDate`, `useTheme` well covered      |
+| `electron/`                   | ~46%  | ~73%   | 50%   | `weather.ts` 95%, `api.ts` 0% (untestable in jsdom) |
+
+### Uncovered / partially covered files to watch
+
+- `src/mission-control/components/AchievementView.tsx` — 0% (no tests)
+- `src/mission-control/hooks/useScheduler.ts` — 0% stmts (logic covered via reducer tests)
+- `src/mock/events.ts` — 0% stmts (fixture file, acceptable)
+- `electron/api.ts` — 0% (requires Electron IPC, not unit-testable)

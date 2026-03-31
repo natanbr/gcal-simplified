@@ -55,13 +55,21 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
              return target && target.reward ? { id, timestamp: now, icon: '🎁', message: `Used reward: ${target.reward}`, type: 'reward', colorKey: 'system' } : null;
         }
         case 'SET_ACTIVE_MISSION':
-             return action.phase === 'none' 
-                ? null
-                : { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started`, type: 'mission', colorKey: action.phase };
+            if (action.phase === 'none') {
+                // Scheduler-driven expiry — record which phase just timed out so
+                // parents can see it in the activity log.
+                const timedOutPhase = state.activeMission;
+                if (timedOutPhase === 'none') return null; // already inactive, nothing to log
+                const phaseLabel = timedOutPhase === 'morning' ? 'Morning' : 'Evening';
+                return { id, timestamp: now, icon: '🕐', message: `${phaseLabel} mission expired`, type: 'mission', colorKey: timedOutPhase };
+            }
+            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started`, type: 'mission', colorKey: action.phase };
         case 'CANCEL_MISSION':
              return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
         case 'MARK_MISSION_TIMEOUT':
-             return { id, timestamp: now, icon: '⏰', message: `Mission time out!`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
+             // Suppressed: SET_ACTIVE_MISSION phase:'none' now logs the expiry event with full
+             // phase context. Logging here too would produce a duplicate entry.
+             return null;
         case 'COMPLETE_MISSION_ROUTINE':
              return { id, timestamp: now, icon: '🎉', message: `${action.missionPhase === 'morning' ? 'Morning' : 'Evening'} mission completed`, delta: +action.bonusTokens, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
         case 'COMPLETE_TASK': {

@@ -387,13 +387,26 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                  nextDaysLeft = action.settings.creamTaskDaysTarget;
             }
 
+            // If the start time of the currently-active mission changes, we must also
+            // deactivate it — otherwise durationMins is wiped but active stays true,
+            // making the expiry check `durationMins != null` permanently false (hung mission).
+            const mornTimeChanged =
+                (action.settings.morningStartsAt ?? state.settings.morningStartsAt) !== state.settings.morningStartsAt;
+            const evenTimeChanged =
+                (action.settings.eveningStartsAt ?? state.settings.eveningStartsAt) !== state.settings.eveningStartsAt;
+            const activeIsBeingRescheduled =
+                (state.activeMission === 'morning' && mornTimeChanged) ||
+                (state.activeMission === 'evening' && evenTimeChanged);
+
             return {
                 ...state,
                 settings: nextSettings,
                 creamTaskDaysLeft: nextDaysLeft,
+                // Deactivate root if the running mission's start time was changed
+                ...(activeIsBeingRescheduled ? { activeMission: 'none' as const } : {}),
                 // Live-update mission startsAt/endsAt from settings so scheduler picks them up.
-                // If the start time changes, clear startedAt, durationMins AND cancelledAt
-                // so the scheduler can re-trigger at the new time.
+                // If the start time changes, clear startedAt, durationMins, and active
+                // so the scheduler can re-trigger at the new time without getting stuck.
                 missions: state.missions.map(m => {
                     if (m.phase === 'morning') {
                         const dur = action.settings.morningDurationMins ?? state.settings.morningDurationMins;
@@ -401,12 +414,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         const [h, min] = start.split(':').map(Number);
                         const endTotal = h * 60 + min + dur;
                         const endsAt = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
-                        const timeChanged = start !== state.settings.morningStartsAt;
                         return {
                             ...m,
                             startsAt: start,
                             endsAt,
-                            ...(timeChanged ? { startedAt: undefined, durationMins: undefined } : {}),
+                            ...(mornTimeChanged ? { startedAt: undefined, durationMins: undefined, active: false } : {}),
                         };
                     }
                     if (m.phase === 'evening') {
@@ -415,12 +427,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         const [h, min] = start.split(':').map(Number);
                         const endTotal = h * 60 + min + dur;
                         const endsAt = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
-                        const timeChanged = start !== state.settings.eveningStartsAt;
                         return {
                             ...m,
                             startsAt: start,
                             endsAt,
-                            ...(timeChanged ? { startedAt: undefined, durationMins: undefined } : {}),
+                            ...(evenTimeChanged ? { startedAt: undefined, durationMins: undefined, active: false } : {}),
                         };
                     }
                     return m;
