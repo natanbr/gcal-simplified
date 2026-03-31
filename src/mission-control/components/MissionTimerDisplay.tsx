@@ -17,7 +17,7 @@ export function MissionTimerDisplay({ mission, allDone, onTimerExpiredWithAllDon
     // ⚡ Bolt Performance: Memoize parsing of mission.startedAt to avoid new Date() allocations every second
     const startMs = useMemo(() => {
         if (!mission?.startedAt) return null;
-        return mission.startedAt instanceof Date ? mission.startedAt.getTime() : new Date(mission.startedAt).getTime();
+        return new Date(mission.startedAt).getTime();
     }, [mission?.startedAt]);
 
     // ⚡ Bolt Performance: Consolidate timer metric calculations inside useMemo
@@ -99,7 +99,7 @@ export function MissionDepletingBar({ mission, allDone, accent, onAdjust }: Miss
     // ⚡ Bolt Performance: Memoize parsing of mission.startedAt to avoid new Date() allocations every second
     const startMs = useMemo(() => {
         if (!mission?.startedAt) return null;
-        return mission.startedAt instanceof Date ? mission.startedAt.getTime() : new Date(mission.startedAt).getTime();
+        return new Date(mission.startedAt).getTime();
     }, [mission?.startedAt]);
 
     // ⚡ Bolt Performance: Consolidate timer metric calculations
