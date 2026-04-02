@@ -9,6 +9,18 @@
   }
 }
 
+/* Animations */
+@keyframes sweep {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+.animate-sweep {
+  animation: sweep 2s ease-in-out infinite;
+}
+.animate-sweep-fast {
+  animation: sweep 1.5s ease-in-out infinite;
+}
+
 /* Custom scrollbar hiding for clean UI */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
