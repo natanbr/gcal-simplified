@@ -312,12 +312,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                     <motion.div 
                         className="h-full bg-family-cyan"
                         initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ 
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                        }}
+                        /* ⚡ Bolt Performance: Infinite animations (repeat: Infinity) cause high CPU usage
+                           if placed on the top-level transition. By wrapping the animation definition
+                           in a conditional block that only triggers while loading, we save significant
+                           background resources. */
+                        animate={
+                            (loading || isEventsLoading || isBackgroundLoading)
+                                ? { width: ["0%", "100%", "0%"] }
+                                : { width: "0%" }
+                        }
+                        transition={
+                            (loading || isEventsLoading || isBackgroundLoading)
+                                ? { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                                : {}
+                        }
                     />
                 </div>
                 <span className="text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 animate-pulse">

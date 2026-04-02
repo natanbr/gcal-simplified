@@ -241,8 +241,12 @@ export const TidesPanel: React.FC<{
                          <motion.div 
                              className="h-full bg-family-cyan"
                              initial={{ width: "0%" }}
-                             animate={{ width: "100%" }}
-                             transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                             /* ⚡ Bolt Performance: Infinite animations (repeat: Infinity) cause high CPU usage
+                                if placed on the top-level transition. By wrapping the animation definition
+                                in a conditional block that only triggers while loading, we save significant
+                                background resources. */
+                             animate={loading ? { width: ["0%", "100%", "0%"] } : { width: "0%" }}
+                             transition={loading ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
                          />
                      </div>
                      <span className="text-xs font-black uppercase tracking-widest text-family-cyan animate-pulse">Updating Marine Data...</span>
