@@ -90,8 +90,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   const weekData = useMemo(() => {
     return days.map((day, i) => {
         const dayEvents = eventsByDay[i];
-        const holidays = dayEvents.filter(e => e.isHoliday);
-        const standardEvents = dayEvents.filter(e => !e.isHoliday);
+
+        // ⚡ Bolt Performance: Replace multiple O(N) array filters with a single O(N) for...of loop
+        const holidays: AppEvent[] = [];
+        const standardEvents: AppEvent[] = [];
+        for (const e of dayEvents) {
+            if (e.isHoliday) holidays.push(e);
+            else standardEvents.push(e);
+        }
+
         const startHour = config.activeHoursStart ?? 7;
         const endHour = config.activeHoursEnd ?? 21;
 
