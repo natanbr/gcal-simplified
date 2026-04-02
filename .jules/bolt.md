@@ -11,3 +11,15 @@
 ## 2026-03-12 - Replacing O(Days * N) filtering with O(N) Map lookups
 **Learning:** Computing day-by-day segments for events using `days.map(day => events.filter(e => isSameDay(e.start, day)))` introduces O(Days * N) complexity and heavily hits date library utilities like `date-fns`'s `isSameDay`. In `Dashboard.tsx`, this caused significant overhead during React renders when managing many events.
 **Action:** Replace `isSameDay` filtering loops with an O(N) Hash Map approach. First iterate through the events once to group them by a date string key (`YYYY-MM-DD`), avoiding redundant date instantiations per event using defensive wrapping (`event.start instanceof Date ? event.start : new Date(event.start)`). Then, map over the days and look up the pre-grouped events from the map in O(1) time.
+
+## 2024-05-18 - Optimized Array Partitioning
+**Learning:** Using multiple `.filter()` calls to partition an array into subsets (e.g., separating holidays from standard events) iterates over the array multiple times, causing unnecessary CPU overhead during high-frequency renders like week navigation.
+**Action:** Replace multiple `.filter()` calls with a single `for...of` loop when partitioning arrays into mutually exclusive buckets. This reduces the time complexity from O(K * N) to O(N), where K is the number of subsets, providing a measurable performance improvement.
+
+## 2024-05-18 - Avoid Micro-Optimizations in List Filtering
+**Learning:** Replacing small array `.filter()` calls (e.g., filtering 5-20 events per day) with a single `for...of` loop is a micro-optimization with no measurable real-world performance impact and slightly degrades readability.
+**Action:** Focus optimizations on rendering performance (e.g., memoization) or heavy data processing. Do not optimize small array operations unless they are proven to be a bottleneck.
+
+## 2024-05-18 - Memoize List Items in Monthly Views
+**Learning:** Rendering many list items (e.g., events in a monthly calendar grid) inside a parent component that frequently updates (e.g., due to `currentDate` changes or background ticks) forces a full re-render of every item and its expensive inner logic (like color style calculations).
+**Action:** Extract list items into standalone `React.memo` components, especially when their props (like `event` and `onEventClick`) remain stable. This ensures the items only re-render when their specific data changes, significantly reducing CPU overhead during view navigation or background updates.

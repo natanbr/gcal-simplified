@@ -11,6 +11,31 @@ interface MonthlyViewProps {
   referenceDate: Date; // The month we are currently viewing
 }
 
+// ⚡ Bolt Performance: Memoize the MonthlyEventItem to prevent re-rendering all
+// events in the month view when parent component state (like currentDate) changes,
+// significantly reducing CPU overhead during view switches or background updates.
+const MonthlyEventItem = React.memo(({ event, onEventClick }: { event: AppEvent, onEventClick: (event: AppEvent) => void }) => {
+    // ⚡ Bolt Performance: Memoize the expensive color style calculation
+    const { style, className } = useMemo(() =>
+        getEventColorStyles(event.title, event.description, event.colorId, event.color),
+    [event.title, event.description, event.colorId, event.color]);
+
+    return (
+        <button
+            onClick={() => onEventClick(event)}
+            className="w-full flex items-center gap-2 group text-left outline-none"
+        >
+            <div
+                className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm group-hover:scale-125 transition-transform ${!style?.backgroundColor ? className.split(' ')[0] : ''}`}
+                style={style?.backgroundColor ? { backgroundColor: style.backgroundColor } : {}}
+            />
+            <span className="text-[11px] font-bold truncate text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors uppercase tracking-tight">
+                {event.title}
+            </span>
+        </button>
+    );
+});
+
 export const MonthlyView: React.FC<MonthlyViewProps> = ({ days, events, onEventClick, currentDate, referenceDate }) => {
     // Day names header
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -75,30 +100,7 @@ export const MonthlyView: React.FC<MonthlyViewProps> = ({ days, events, onEventC
                             </div>
 
                             <div className="flex-1 overflow-y-auto space-y-1.5 no-scrollbar">
-                                {dayEvents.map(event => {
-                                    const { style, className } = getEventColorStyles(event.title, event.description, event.colorId, event.color);
-
-                                    // Use the background color for the bullet point
-                                    // If style.backgroundColor is missing (Tailwind class used), we might need a fallback or parse it
-                                    // But usually getEventColorStyles returns style for custom colors.
-                                    // For Google colors, it returns className with bg-xxx.
-
-                                    return (
-                                        <button
-                                            key={event.id}
-                                            onClick={() => onEventClick(event)}
-                                            className="w-full flex items-center gap-2 group text-left outline-none"
-                                        >
-                                            <div
-                                                className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm group-hover:scale-125 transition-transform ${!style?.backgroundColor ? className.split(' ')[0] : ''}`}
-                                                style={style?.backgroundColor ? { backgroundColor: style.backgroundColor } : {}}
-                                            />
-                                            <span className="text-[11px] font-bold truncate text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors uppercase tracking-tight">
-                                                {event.title}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
+                                {dayEvents.map(event => <MonthlyEventItem key={event.id} event={event} onEventClick={onEventClick} />)}
                             </div>
                         </div>
                     );
