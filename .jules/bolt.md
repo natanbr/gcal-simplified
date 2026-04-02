@@ -11,3 +11,7 @@
 ## 2026-03-12 - Replacing O(Days * N) filtering with O(N) Map lookups
 **Learning:** Computing day-by-day segments for events using `days.map(day => events.filter(e => isSameDay(e.start, day)))` introduces O(Days * N) complexity and heavily hits date library utilities like `date-fns`'s `isSameDay`. In `Dashboard.tsx`, this caused significant overhead during React renders when managing many events.
 **Action:** Replace `isSameDay` filtering loops with an O(N) Hash Map approach. First iterate through the events once to group them by a date string key (`YYYY-MM-DD`), avoiding redundant date instantiations per event using defensive wrapping (`event.start instanceof Date ? event.start : new Date(event.start)`). Then, map over the days and look up the pre-grouped events from the map in O(1) time.
+
+## 2024-05-18 - Avoid Multiple Array Filters
+**Learning:** In `src/components/Dashboard.tsx`, the `weekData` memo was executing `.filter()` twice on the same `dayEvents` array (once for holidays, once for standard events). This effectively loops over the data twice (`2*O(N)`).
+**Action:** Replace multiple `.filter()` calls with a single `for...of` loop or a `reduce()` that partitions the array in a single pass. This improves performance, especially during render cycles that execute this logic repeatedly.
