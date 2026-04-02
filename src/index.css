@@ -17,3 +17,13 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ⚡ Bolt Performance: Hardware-accelerated CSS loading bar to replace JS Framer Motion */
+@keyframes loading-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-loading-slide {
+  animation: loading-slide 2s infinite ease-in-out;
+}

@@ -237,13 +237,9 @@ export const TidesPanel: React.FC<{
 
             {loading && (
                  <div className="absolute inset-0 z-30 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm flex flex-col items-center justify-center space-y-4">
-                     <div className="w-48 h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                         <motion.div 
-                             className="h-full bg-family-cyan"
-                             initial={{ width: "0%" }}
-                             animate={{ width: "100%" }}
-                             transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                         />
+                     <div className="w-48 h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden relative">
+                         {/* ⚡ Bolt Performance: Replace Framer Motion with CSS keyframe animation for continuous loop */}
+                         <div className="h-full w-full bg-family-cyan animate-loading-slide absolute left-0 top-0" />
                      </div>
                      <span className="text-xs font-black uppercase tracking-widest text-family-cyan animate-pulse">Updating Marine Data...</span>
                  </div>
