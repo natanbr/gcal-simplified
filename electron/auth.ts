@@ -45,14 +45,12 @@ export class AuthService {
                 store.set('isEncrypted', true);
             } catch (error) {
                 console.error('Failed to encrypt tokens', error);
-                // Fallback to unencrypted
-                store.set('tokens', tokens);
-                store.set('isEncrypted', false);
+                throw new Error('Token encryption failed. Refusing to store unencrypted tokens.');
             }
         } else {
-            // Fallback for systems without safeStorage support
-            store.set('tokens', tokens);
-            store.set('isEncrypted', false);
+            // Prevent unencrypted token storage
+            console.error('Encryption not available. Tokens will not be stored.');
+            throw new Error('Encryption not available. Refusing to store unencrypted tokens.');
         }
     }
 
@@ -71,9 +69,12 @@ export class AuthService {
                 console.error('Failed to decrypt tokens', e);
                 return null;
             }
-        } else if (typeof stored === 'object') {
-            // Unencrypted object (legacy or fallback)
-            return stored as Credentials;
+        }
+
+        // We no longer accept unencrypted legacy or fallback tokens.
+        if (typeof stored === 'object') {
+            console.warn('Ignoring unencrypted token object for security reasons.');
+            return null;
         }
 
         return null;

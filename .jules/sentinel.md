@@ -21,3 +21,7 @@
 **Vulnerability:** The main Electron window's `webContents` did not implement a `setWindowOpenHandler` handler, allowing potentially unauthorized opening of new browser windows (`window.open`) from the renderer process.
 **Learning:** By default, Electron permits `window.open` requests, which can open unrestricted secondary windows exposing vulnerabilities if the renderer script is compromised or injected (e.g. bypassing sandboxes, executing malicious scripts).
 **Prevention:** Always implement `setWindowOpenHandler` on `webContents` to return `{ action: 'deny' }` for unneeded scenarios, preventing unauthorized new windows.
+## 2024-05-24 - Secure Storage Fallback
+**Vulnerability:** OAuth tokens could be stored and loaded in plaintext if `safeStorage.isEncryptionAvailable()` returned false or if `safeStorage.encryptString()` failed.
+**Learning:** Fallback mechanisms for secure operations (like storage encryption) can lead to silent downgrades in security, leaving sensitive data exposed at rest. It's safer to deny functionality and throw an error than to fallback to insecure defaults.
+**Prevention:** Always enforce strict encryption requirements for sensitive data like OAuth credentials. Never implement plaintext storage fallbacks, and validate that loaded data is properly encrypted before use.
