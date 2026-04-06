@@ -1,14 +1,16 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useLiveClock } from './useLiveClock';
+import { useLiveClock, _resetLiveClockForTesting } from './useLiveClock';
 
 describe('useLiveClock', () => {
     beforeEach(() => {
+        _resetLiveClockForTesting();
         vi.useFakeTimers();
     });
 
     afterEach(() => {
         vi.useRealTimers();
+        _resetLiveClockForTesting();
         vi.restoreAllMocks();
     });
 
