@@ -6,6 +6,7 @@ import { MCStoreProvider } from './mission-control/store/useMCStore.tsx';
 import { DragLayer } from './mission-control/components/DragLayer';
 import { MissionOverlay } from './mission-control/components/MissionOverlay';
 import { useMissionScheduler } from './mission-control/hooks/useMissionScheduler';
+import { MarineConditions } from './marine-conditions/MarineConditions';
 
 // ── Scheduler hook — runs at App level so it works on both views ──────────────
 function MissionSchedulerBridge() {
@@ -16,9 +17,10 @@ function MissionSchedulerBridge() {
 // ── Calendar app — handles auth, renders Dashboard ────────────────────────────
 interface CalendarAppProps {
   onSwitchToMC: () => void;
+  onSwitchToMarine: () => void;
 }
 
-function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
+function CalendarApp({ onSwitchToMC, onSwitchToMarine }: CalendarAppProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isChecking, setIsChecking] = useState<boolean>(true);
 
@@ -57,7 +59,7 @@ function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
   return (
     <>
       {isAuthenticated
-        ? <Dashboard onLogout={() => setIsAuthenticated(false)} onSwitchToMC={onSwitchToMC} />
+        ? <Dashboard onLogout={() => setIsAuthenticated(false)} onSwitchToMC={onSwitchToMC} onSwitchToMarine={onSwitchToMarine} />
         : <LoginScreen />}
     </>
   );
@@ -67,11 +69,15 @@ function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
 // MCStoreProvider + DragLayer live HERE so the MC store and scheduler
 // keep running regardless of which view is active, and so MissionOverlay
 // can overlay the calendar view when a mission fires.
+type View = 'calendar' | 'mission-control' | 'marine-conditions';
+
 function App() {
-  const initialView = new URLSearchParams(window.location.search).get('mc') === '1'
-    ? 'mission-control'
-    : 'calendar';
-  const [view, setView] = useState<'calendar' | 'mission-control'>(initialView);
+  const params = new URLSearchParams(window.location.search);
+  const initialView: View =
+    params.get('mc') === '1' ? 'mission-control' :
+    params.get('marine') === '1' ? 'marine-conditions' :
+    'calendar';
+  const [view, setView] = useState<View>(initialView);
 
   return (
     <MCStoreProvider>
@@ -83,9 +89,16 @@ function App() {
         <MissionOverlay />
 
         {/* View switch */}
-        {view === 'calendar'
-          ? <CalendarApp onSwitchToMC={() => setView('mission-control')} />
-          : <MissionControl onBackToCalendar={() => setView('calendar')} />}
+        {view === 'calendar' ? (
+          <CalendarApp
+            onSwitchToMC={() => setView('mission-control')}
+            onSwitchToMarine={() => setView('marine-conditions')}
+          />
+        ) : view === 'mission-control' ? (
+          <MissionControl onBackToCalendar={() => setView('calendar')} />
+        ) : (
+          <MarineConditions onBackToCalendar={() => setView('calendar')} />
+        )}
       </DragLayer>
     </MCStoreProvider>
   );

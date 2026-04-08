@@ -7,13 +7,12 @@ import { EventDetailDrawer } from './EventDetailDrawer';
 import { DayColumn } from './DayColumn';
 import { EventCard } from './EventCard';
 import { MonthlyView } from './MonthlyView';
-import { AppEvent, AppTask, WeatherData, TideData, UserConfig } from '../types';
+import { AppEvent, AppTask, WeatherData, UserConfig } from '../types';
 import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { WeatherDashboard } from '../features/weather/components/WeatherDashboard';
 import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
 import { getMonthViewDates, isCurrentMonth, canNavigateBackMonth } from '../utils/monthUtils';
-import { MARINE_LOCATIONS } from '../utils/marineLocations';
 import { useTheme } from '../hooks/useTheme';
 import { useCurrentDate } from '../hooks/useCurrentDate';
 import { UpdateNotification } from './UpdateNotification';
@@ -26,20 +25,14 @@ import { useCalendarData } from '../hooks/useCalendarData';
 interface DashboardProps {
   onLogout?: () => void;
   onSwitchToMC?: () => void;
+  onSwitchToMarine?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC, onSwitchToMarine }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
-  const [selectedLocationId, setSelectedLocationId] = useState('sooke');
-  
   const [tasks, setTasks] = useState<AppTask[]>([]);
   const [weather, setWeather] = useState<WeatherData | null>(null);
-  
-  // Tides State
-  const [tides, setTides] = useState<TideData | null>(null);
-  const [isTidesLoading, setIsTidesLoading] = useState(false);
-  const [hasTidesOpened, setHasTidesOpened] = useState(false);
   
   const [config, setConfig] = useState<UserConfig>({ calendarIds: [], taskListIds: [] });
   const [loading, setLoading] = useState(true);
@@ -112,9 +105,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
     });
   }, [days, eventsByDay, config.activeHoursStart, config.activeHoursEnd]);
 
-  const currentLocation = useMemo(() => 
-      MARINE_LOCATIONS.find(l => l.id === selectedLocationId) || MARINE_LOCATIONS[0], 
-  [selectedLocationId]);
 
   const fetchData = useCallback(async (isInitial: boolean = false) => {
       setLoading(true);
@@ -138,7 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
           
           if (isInitial) {
              setLoadingMessage('Updating Weather...');
-             const fetchedWeather = await window.ipcRenderer.invoke('weather:get', currentLocation.coords.lat, currentLocation.coords.lng);
+             const fetchedWeather = await window.ipcRenderer.invoke('weather:get', 48.37, -123.72);
              setWeather(fetchedWeather as WeatherData);
           }
           
@@ -155,24 +145,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
       } finally {
           setLoading(false);
       }
-  }, [weekOffset, monthOffset, viewMode, today, currentLocation, config.weekStartDay, fetchEventsForMonth]);
+  }, [weekOffset, monthOffset, viewMode, today, config.weekStartDay, fetchEventsForMonth]);
 
-  const fetchTides = useCallback(async () => {
-    setIsTidesLoading(true);
-    try {
-        const fetchedTides = await window.ipcRenderer.invoke('tides:get', 
-            currentLocation.tideStation, 
-            currentLocation.currentStation, 
-            currentLocation.coords.lat, 
-            currentLocation.coords.lng
-        );
-        setTides(fetchedTides as TideData);
-    } catch (err) {
-        console.error("Failed to fetch tides", err);
-    } finally {
-        setIsTidesLoading(false);
-    }
-  }, [currentLocation]);
 
   // Initial Data Load
   useEffect(() => {
@@ -206,17 +180,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
        
        // Also background refresh other data
        window.ipcRenderer.invoke('data:tasks').then(fetchedTasks => setTasks(fetchedTasks as AppTask[])).catch(console.error);
-       window.ipcRenderer.invoke('weather:get', currentLocation.coords.lat, currentLocation.coords.lng).then(fetchedWeather => setWeather(fetchedWeather as WeatherData)).catch(console.error);
+       window.ipcRenderer.invoke('weather:get', 48.37, -123.72).then(fetchedWeather => setWeather(fetchedWeather as WeatherData)).catch(console.error);
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [refreshEvents, viewMode, today, weekOffset, monthOffset, config.weekStartDay, currentLocation]);
+  }, [refreshEvents, viewMode, today, weekOffset, monthOffset, config.weekStartDay]);
 
-  // Tides Lazy Load Effect
-  useEffect(() => {
-      if (hasTidesOpened) {
-          fetchTides();
-      }
-  }, [fetchTides, hasTidesOpened]);
 
   const isInitialLoading = (loading || isEventsLoading) && events.length === 0 && !error && !eventsError;
   const currentError = error || eventsError;
@@ -327,17 +295,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
         </div>
         <div className="flex items-center gap-4">
              {weather && (
-                <WeatherDashboard 
-                  weather={weather} 
-                  tides={tides} 
+                <WeatherDashboard
+                  weather={weather}
                   tasks={tasks}
-                  currentLocationId={selectedLocationId}
-                  onLocationChange={setSelectedLocationId}
-                  isTidesLoading={isTidesLoading}
-                  onTidesActive={() => {
-                      setHasTidesOpened(true);
-                      if (!tides) fetchTides();
-                  }}
+                  onSwitchToMarine={onSwitchToMarine}
                 />
              )}
 

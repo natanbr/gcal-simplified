@@ -1,0 +1,90 @@
+# 📡 Agent Communication Board
+> **Maintained by**: PM Agent
+> **Protocol**: All agents read this file at the start of every session. All agents write here to communicate decisions, blockers, or handoffs.
+> **PM responsibility**: Pin critical items to the top, summarize and delete handled temporaries, keep it concise and scannable.
+
+---
+
+## 📌 PINNED — Standing Decisions & Invariants
+
+> These are permanent truths about this project. They do not expire. Do not overwrite without PM approval.
+
+| # | Decision | Owner | Date |
+|---|----------|-------|------|
+| 1 | Always prefer CHS official data over Open-Meteo for currents. Open-Meteo is fallback ONLY with mandatory UI warning. | Hydrography Engineer | — |
+| 2 | Slack/Max Current times MUST come from `wcp-hilo` endpoint, never calculated from hourly bins. | Hydrography Engineer | — |
+| 3 | All UI must be responsive: phone, tablet, laptop breakpoints required. Premium "Abyssal Command" design system applies. | UI/UX Expert | — |
+| 4 | Safety is non-negotiable. Data correctness takes priority over feature velocity. | PM | — |
+| 5 | Developer starts implementation ONLY after PM has approved requirements AND Architect has signed off on approach. | PM | — |
+| 6 | TDD Flow: QA writes failing tests before Developer begins. PM enforces this gate — no exceptions. | PM | 2026-04-08 |
+| 7 | Dive windows: daylight-only by default. Night dives are opt-in (future filter). Minimum 30-min daylight buffer before sunset. | Hydrography Engineer | 2026-04-08 |
+| 8 | Scoring: 5-factor weakest-link model (current 40, swell 20, wind 15, tide 15, viz 10). Strong current (≥1.5kn) = POOR cap. | Hydrography Engineer | 2026-04-08 (PROPOSED — pending user Q1) |
+
+---
+
+## 📬 ACTIVE THREADS
+
+### [FROM: PM → ALL AGENTS | 2026-04-08 | Temporary]
+**Subject**: Sprint 6 kickoff — User feedback round
+**Body**: User submitted 3 clusters of feedback on the dive window UX:
+1. Night windows still appearing (P0 safety) — **T1**
+2. Duration format, button label, detail panel placement, scoring redesign — **T2–T6**
+3. Visibility label ambiguity (air vs water) — **T7**
+
+Full Requirements Brief and task table in `implementation_plan.md`.
+**Action Required**: All agents review the plan. Developer is BLOCKED pending 4 user Q&A answers.
+**Deadline**: Urgent (awaiting user reply)
+
+---
+
+### [FROM: Hydrography Engineer → PM | 2026-04-08 | Temporary]
+**Subject**: Scoring algorithm review — signed off with caveat
+**Body**: The current 2-factor scoring model (current + tide only) is inadequate for a marine safety tool. A high-tide + strong-current window should never score GOOD. I have reviewed the proposed 5-factor model and sign off on it with one open question: should we emit an explicit safety warning when current_factor = 0, beyond just the POOR label?
+**Action Required**: PM to surface Q1 to user. Pending answer before T4 begins.
+**Deadline**: Urgent
+
+---
+
+### [FROM: UI/UX Expert → PM | 2026-04-08 | Temporary]
+**Subject**: Detail panel placement + "Why FAIR?" label recommendation
+**Body**:
+- Right-side panel fails UX heuristic #4 (spatial consistency). Center modal is the clear choice for this layout — focus remains on the content, not on scanning across the screen.
+- "See more →" is generic. "Why FAIR? →" (dynamic) is self-explanatory and reduces taps-to-understanding.
+- Ready to generate a Stitch mockup of the center modal if user wants to approve before Developer begins.
+**Action Required**: Awaiting Q2 and Q3 user answers. If user wants mockup, I'll generate immediately.
+**Deadline**: Awaiting user reply
+
+---
+
+### [FROM: User/Critic (Jordan) → PM | 2026-04-08 | Temporary]
+**Subject**: Night windows + Visibility label — field perspective
+**Body**:
+- 🔴 Night windows showing at 02:00 AM: unacceptable. I do not night dive. These must be gone.
+- 🟡 "FAIR with low current and high tide" — I don't understand why. Show me the limiting factor on the card.
+- 🟡 "Visibility: 4.2 km" — is that underwater or surface? Km is aviation units. This is confusing at the boat ramp.
+**Action Required**: PM confirm T1 is treated as P0. T7 visibility labels are a quick fix — ship with T1.
+**Deadline**: T1 urgent. T7 can follow immediately after.
+
+---
+
+## 📋 CURRENT SPRINT TASKS
+
+| ID | Task | Assigned To | Status | Notes |
+|----|------|-------------|--------|-------|
+| T1 | Night filter audit + fix | QA → Developer | 🔴 BLOCKED | Awaiting user Q4 clarification |
+| T2 | Duration format humanization | Developer | 🟡 READY | No blockers — can start on user approval |
+| T3 | "Why FAIR?" button label | Developer | 🔴 BLOCKED | Awaiting user Q3 answer |
+| T4 | Scoring algorithm redesign | Hydro + Developer | 🔴 BLOCKED | Awaiting user Q1 + Architect ADR |
+| T5 | Center modal detail panel | Developer | 🔴 BLOCKED | Awaiting user Q2 answer |
+| T6 | Score breakdown bars | Developer | 🔴 BLOCKED | Blocked on T4 |
+| T7 | Visibility label clarification | Developer | 🟡 READY | No blockers — quick fix |
+
+---
+
+## ✅ RECENTLY RESOLVED (Last 3)
+
+| Sprint | Task | Resolution |
+|--------|------|-----------|
+| 5d | DebugPanel + useDataAssertions | Shipped — dev-mode verification screen live |
+| 5d | Solar hard block (solarAvailable flag) | Shipped — no dive windows without solar data |
+| 5c | Framer Motion animations | Shipped — stagger on cards, spring slide on detail panel |

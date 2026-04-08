@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SideDrawer } from '../../../components/SideDrawer';
-import { WeatherData, TideData, AppTask } from '../../../types';
+import { WeatherData, AppTask } from '../../../types';
 import {
     Anchor,
     Sun,
@@ -9,38 +9,21 @@ import {
 import { getWeatherIcon } from '../../../utils/weatherIcons';
 
 import { WeatherPanel } from './WeatherPanel';
-import { TidesPanel } from './TidesPanel';
 import { TasksPanel } from './TasksPanel';
 
 interface WeatherDashboardProps {
     weather: WeatherData;
-    tides: TideData | null;
     tasks: AppTask[];
-    currentLocationId: string;
-    onLocationChange: (id: string) => void;
-    isTidesLoading: boolean;
-    onTidesActive: () => void;
+    onSwitchToMarine?: () => void;
 }
 
 export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
     weather,
-    tides,
     tasks,
-    currentLocationId,
-    onLocationChange,
-    isTidesLoading,
-    onTidesActive
+    onSwitchToMarine,
 }) => {
     const [isWeatherOpen, setWeatherOpen] = useState(false);
-    const [isTidesOpen, setTidesOpen] = useState(false);
     const [isTasksOpen, setTasksOpen] = useState(false);
-
-    // Trigger data check when Tides panel opens
-    React.useEffect(() => {
-        if (isTidesOpen) {
-            onTidesActive();
-        }
-    }, [isTidesOpen, onTidesActive]);
 
     return (
         <>
@@ -57,15 +40,13 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
                 </button>
 
                 <button
-                    onClick={() => {
-                        setTidesOpen(true);
-                    }}
+                    onClick={() => onSwitchToMarine?.()}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all border border-zinc-200 dark:border-zinc-700/50 shadow-lg group"
                     data-testid="tides-button"
                 >
                     <Anchor className="text-blue-500 dark:text-blue-400" size={16} />
                     <span className="text-sm font-black text-zinc-900 dark:text-zinc-100 group-hover:text-black dark:group-hover:text-white">
-                        Tides
+                        Marine
                     </span>
                 </button>
 
@@ -92,20 +73,6 @@ export const WeatherDashboard: React.FC<WeatherDashboardProps> = ({
                 title={<span className="flex items-center gap-2"><Sun className="text-yellow-500" /> Weather Forecast</span>}
             >
                 <WeatherPanel weather={weather} />
-            </SideDrawer>
-
-            <SideDrawer
-                isOpen={isTidesOpen}
-                onClose={() => setTidesOpen(false)}
-                title={<span className="flex items-center gap-2"><Anchor className="text-blue-500" /> Marine Conditions</span>}
-            >
-                <TidesPanel
-                    tides={tides}
-                    weather={weather}
-                    locationId={currentLocationId}
-                    onLocationChange={onLocationChange}
-                    loading={isTidesLoading}
-                />
             </SideDrawer>
 
             <SideDrawer
