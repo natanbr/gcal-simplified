@@ -83,6 +83,8 @@ export interface TideData {
     location?: string;
     station?: string;
     water_temperature?: number;
+    sunrise?: string[];       // ISO strings per day (from OM daily)
+    sunset?: string[];        // ISO strings per day (from OM daily)
     hourly: {
         time: string[];
         tide_height: number[];

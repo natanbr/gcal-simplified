@@ -155,6 +155,7 @@ export class WeatherService {
         omUrl.searchParams.append('latitude', lat.toString());
         omUrl.searchParams.append('longitude', lng.toString());
         omUrl.searchParams.append('hourly', 'wave_height,wave_period,swell_wave_height,swell_wave_period,ocean_current_velocity,ocean_current_direction,sea_surface_temperature');
+        omUrl.searchParams.append('daily', 'sunrise,sunset');
         omUrl.searchParams.append('timezone', 'America/Vancouver');
         omUrl.searchParams.append('forecast_days', '8'); // 8 days to ensure we cover the full 7 days from 'now'
 
@@ -254,42 +255,39 @@ export class WeatherService {
             }
 
             if (chsTideResponse?.ok && hourlyTime.length > 0) {
+                // Continuous wlp series available
                 try {
                     const data = await chsTideResponse.json() as { eventDate: string; value: number }[];
                     tideHeights = this.mapChsDataToHourly(hourlyTime, data, omUtcOffsetSeconds);
                 } catch (e) { console.warn('Parse Error CHS Tide', e); }
+            } else if (chsTideHiloResponse?.ok && hourlyTime.length > 0) {
+                // wlp continuous unavailable (HTTP 400 / operating:false) — interpolate from hilo events
+                try {
+                    const hiloRaw = await chsTideHiloResponse.json() as { eventDate: string; value: number }[];
+                    tideHeights = this.interpolateTideHeightsFromHilo(hourlyTime, hiloRaw, omUtcOffsetSeconds);
+                } catch (e) { console.warn('Parse Error CHS Tide Hilo (heights)', e); }
             }
 
             // 5. Process Current Data (CHS wcp/wcp-hilo OR Open-Meteo fallback)
             let isModeledData = false;
 
             if (shouldUseChsCurrents && chsCurrentResponse?.ok && chsCurrentHiloResponse?.ok) {
-                // CHS Path
+                // CHS Path — both continuous series AND events available
                 try {
                     // Current Extremes (Slack, Max Flood, Max Ebb)
                     const hiloRaw = await chsCurrentHiloResponse.json() as { eventDate: string; value: number; qualifier?: string }[];
                     const currentEvents = hiloRaw.map(h => {
                         const val = h.value;
                         let type = 'Slack Water';
-
-                        // Check distinct qualifier (wcp1-events uses this)
                         if (h.qualifier === 'EXTREMA_EBB') type = 'Max Ebb';
                         else if (h.qualifier === 'EXTREMA_FLOOD') type = 'Max Flood';
                         else if (h.qualifier === 'SLACK') type = 'Slack Water';
-                        else if (Math.abs(val) > 0.1) {
-                            // Fallback to sign-based check if qualifier missing
-                            type = val > 0 ? 'Max Flood' : 'Max Ebb';
-                        }
-
-                        return {
-                            time: h.eventDate,
-                            value: val,
-                            type: type
-                        };
+                        else if (Math.abs(val) > 0.1) type = val > 0 ? 'Max Flood' : 'Max Ebb';
+                        return { time: h.eventDate, value: val, type };
                     });
                     hiloData.push(...currentEvents);
 
-                    // Current Speed Series
+                    // Current Speed Series (continuous 15-min data)
                     const seriesRaw = await chsCurrentResponse.json() as { eventDate: string; value: number }[];
                     currentSpeeds = this.mapChsDataToHourly(hourlyTime, seriesRaw, omUtcOffsetSeconds);
                     currentSpeeds = currentSpeeds.map(v => Math.abs(v));
@@ -304,21 +302,44 @@ export class WeatherService {
                         }
                     }
 
-                    // Validation: Check for high speed flows if this is likely a major pass
-                    // Check if station is Race Passage or Active Pass (major flows)
-                    // If max speed < 2.0kn, data is suspect.
+                    // Sanity check for major passes
                     const isMajorPass = currentStation?.officialName.includes('Race') || currentStation?.officialName.includes('Active');
-
                     if (isMajorPass) {
                         const maxSpeed = Math.max(...currentSpeeds);
-                        if (maxSpeed < 2.0 && maxSpeed > -1) { // -Infinity check
+                        if (maxSpeed < 2.0 && maxSpeed > -1) {
                             console.warn(`CHS Current Data Suspect: Max speed ${maxSpeed}kn < 2.0kn for ${currentStation?.officialName}. Falling back.`);
-                            isModeledData = true; // Trigger fallback
+                            isModeledData = true;
                         }
                     }
-
                 } catch (e) {
                     console.warn('Parse Error CHS Currents', e);
+                    isModeledData = true;
+                }
+            } else if (shouldUseChsCurrents && chsCurrentHiloResponse?.ok) {
+                // Events-only path: wcsp1 continuous series unavailable (e.g. HTTP 400, station operating:false).
+                // Reconstruct hourly speeds via sinusoidal interpolation from Slack/Max events.
+                // This is the standard NOAA "Tidal Current Method" used for predicted-only stations.
+                try {
+                    const hiloRaw = await chsCurrentHiloResponse.json() as { eventDate: string; value: number; qualifier?: string }[];
+
+                    // Build current hilo events for timeline display
+                    const currentEvents = hiloRaw.map(h => {
+                        const val = h.value;
+                        let type = 'Slack Water';
+                        if (h.qualifier === 'EXTREMA_EBB') type = 'Max Ebb';
+                        else if (h.qualifier === 'EXTREMA_FLOOD') type = 'Max Flood';
+                        else if (h.qualifier === 'SLACK') type = 'Slack Water';
+                        else if (Math.abs(val) > 0.1) type = val > 0 ? 'Max Flood' : 'Max Ebb';
+                        return { time: h.eventDate, value: val, type };
+                    });
+                    hiloData.push(...currentEvents);
+
+                    // Sinusoidal interpolation: Slack→Max→Slack follows a half-cosine curve
+                    currentSpeeds = this.interpolateCurrentsFromEvents(hourlyTime, hiloRaw, omUtcOffsetSeconds);
+
+                    console.info(`CHS Events-Only Interpolation for ${currentStation?.officialName}: max=${Math.max(...currentSpeeds).toFixed(2)}kn from ${hiloRaw.length} events`);
+                } catch (e) {
+                    console.warn('Parse Error CHS Current Hilo (events-only path):', e);
                     isModeledData = true;
                 }
             } else {
@@ -340,15 +361,21 @@ export class WeatherService {
 
             return {
                 location: `Lat: ${lat.toFixed(2)}, Lng: ${lng.toFixed(2)}`,
-                station: isModeledData ? "Modeled Data (Warning)" : `${tideStation?.officialName || 'Unknown'} (Tides) & ${currentStation?.officialName || 'Unknown'} (Currents)`,
+                station: isModeledData ? "Modeled Data (Warning)" : `${currentStation?.officialName || tideStation?.officialName || 'Unknown'} (Tides: ${tideStation?.officialName || tideStationCode})`,
                 water_temperature: omData.hourly?.sea_surface_temperature?.[0] || 9.5,
                 sources: [
                     { name: "Open-Meteo", details: "Waves, Temp" },
-                    { name: "CHS Tides", details: `Station ${tideStation?.code || tideStationCode}` },
+                    { name: "CHS Tides", details: tideStation?.officialName
+                        ? `${tideStation.officialName} (${tideStation.code || tideStationCode})`
+                        : `Station ${tideStationCode}` },
                     shouldUseChsCurrents && !isModeledData
-                        ? { name: "CHS Currents", details: `Station ${currentStation?.code || currentStationCode}` }
+                        ? { name: "CHS Currents", details: currentStation?.officialName
+                            ? `${currentStation.officialName} (${currentStation.code || currentStationCode})`
+                            : `Station ${currentStationCode}` }
                         : { name: "Weather Model", details: "Warning: Modeled open-ocean data. Not accurate for channels/passes." }
                 ],
+                sunrise: omData.daily?.sunrise || [],
+                sunset: omData.daily?.sunset || [],
                 hourly: {
                     time: hourlyTime,
                     tide_height: tideHeights,
@@ -360,6 +387,7 @@ export class WeatherService {
                 hilo: hiloData
             };
 
+
         } catch (error) {
             console.warn('Error fetching tides:', error);
             // Return empty structure or safe fallback
@@ -367,7 +395,61 @@ export class WeatherService {
         }
     }
 
+    /**
+     * Sinusoidal interpolation of hourly current speeds from Slack/Max event predictions.
+     *
+     * CHS wcp1-events provides: Slack Water (speed≈0), Max Ebb (negative), Max Flood (positive).
+     * Between any two consecutive events, the current speed follows a half-cosine curve:
+     *   speed(t) = peakSpeed × cos(π × (t - tPeak) / halfPeriod)
+     *
+     * This matches the NOAA Tidal Current Method and produces physically correct values
+     * for tidal channels like Race Passage where only event-based predictions are available.
+     */
+    private interpolateCurrentsFromEvents(
+        hourlyTime: string[],
+        events: { eventDate: string; value: number; qualifier?: string }[],
+        utcOffsetSeconds = 0
+    ): number[] {
+        if (events.length < 2) return hourlyTime.map(() => 0);
+
+        // Parse and sort events by time (CHS eventDate is always UTC)
+        const sorted = events.map(e => ({
+            time: new Date(e.eventDate).getTime(),
+            value: e.value, // Negative = Ebb, Positive = Flood, ~0 = Slack
+        })).sort((a, b) => a.time - b.time);
+
+        // Convert OM hourly times to UTC (same as parseTimeToMs)
+        const hourlyMs = hourlyTime.map(t => this.parseTimeToMs(t, utcOffsetSeconds));
+
+        return hourlyMs.map(t => {
+            // Find the two bracketing events: prev ≤ t ≤ next
+            let prevIdx = 0;
+            for (let i = 0; i < sorted.length - 1; i++) {
+                if (sorted[i].time <= t) prevIdx = i;
+                else break;
+            }
+            const nextIdx = Math.min(prevIdx + 1, sorted.length - 1);
+
+            if (prevIdx === nextIdx) return Math.abs(sorted[prevIdx].value);
+
+            const prev = sorted[prevIdx];
+            const next = sorted[nextIdx];
+            const span = next.time - prev.time;
+            if (span === 0) return Math.abs(prev.value);
+
+            // Fraction through the interval [0..1]
+            const frac = (t - prev.time) / span;
+
+            // Sinusoidal interpolation: speed = |start + (end-start) × sin²(π/2 × frac)
+            // Using the half-cosine form: value = start + (end - start) × (1 - cos(π × frac)) / 2
+            const interpolated = prev.value + (next.value - prev.value) * (1 - Math.cos(Math.PI * frac)) / 2;
+
+            return Math.abs(interpolated);
+        });
+    }
+
     private mapChsDataToHourly(hourlyTime: string[], chsData: { eventDate: string; value: number }[], utcOffsetSeconds = 0): number[] {
+
         if (chsData.length === 0) {
             return hourlyTime.map(() => 0);
         }
@@ -407,6 +489,51 @@ export class WeatherService {
                 return closest.value;
             }
             return 0;
+        });
+    }
+
+    /**
+     * Sinusoidal interpolation of hourly tide heights from High/Low tide event predictions.
+     *
+     * Uses the standard half-cosine formula:
+     *   height(t) = (H + L) / 2 + (H - L) / 2 × cos(π × frac)
+     *
+     * Where H and L alternate as High/Low in sequence, and frac ∈ [0,1] is the
+     * position within the interval [prevEvent..nextEvent].
+     * This matches standard tide table interpolation and produces smooth, accurate heights.
+     */
+    private interpolateTideHeightsFromHilo(
+        hourlyTime: string[],
+        hiloEvents: { eventDate: string; value: number }[],
+        utcOffsetSeconds = 0
+    ): number[] {
+        if (hiloEvents.length < 2) return hourlyTime.map(() => 0);
+
+        const sorted = hiloEvents.map(e => ({
+            time: new Date(e.eventDate).getTime(),
+            value: e.value
+        })).sort((a, b) => a.time - b.time);
+
+        const hourlyMs = hourlyTime.map(t => this.parseTimeToMs(t, utcOffsetSeconds));
+
+        return hourlyMs.map(t => {
+            // Find bracketing events
+            let prevIdx = 0;
+            for (let i = 0; i < sorted.length - 1; i++) {
+                if (sorted[i].time <= t) prevIdx = i;
+                else break;
+            }
+            const nextIdx = Math.min(prevIdx + 1, sorted.length - 1);
+            if (prevIdx === nextIdx) return sorted[prevIdx].value;
+
+            const prev = sorted[prevIdx];
+            const next = sorted[nextIdx];
+            const span = next.time - prev.time;
+            if (span === 0) return prev.value;
+
+            const frac = (t - prev.time) / span;
+            // Standard tide interpolation: cosine between consecutive High/Low
+            return (prev.value + next.value) / 2 + (prev.value - next.value) / 2 * Math.cos(Math.PI * frac);
         });
     }
 

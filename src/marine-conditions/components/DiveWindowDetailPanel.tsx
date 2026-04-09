@@ -81,9 +81,9 @@ export const DiveWindowDetailPanel: React.FC<Props> = ({ window: w, snapshot, on
                         key="detail-panel"
                         className="marine-detail-modal"
                         data-testid="dive-detail-panel"
-                        initial={{ opacity: 0, scale: 0.94, y: 12 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                        initial={{ opacity: 0, x: 60 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 60 }}
                         transition={{ type: 'spring', damping: 30, stiffness: 380, mass: 0.7 }}
                     >
                 {/* ── Header ─────────────────────────────────────────────────── */}

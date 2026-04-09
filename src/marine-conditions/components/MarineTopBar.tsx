@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ActivityProfile } from '../types';
+import { LocationSelector } from './LocationSelector';
 
 interface Props {
     activity: ActivityProfile;
@@ -7,11 +8,12 @@ interface Props {
     onBack: () => void;
     onGuide: () => void;
     onDebug?: () => void;
-    locationName: string;
+    locationId: string;
+    onLocationChange: (id: string) => void;
 }
 
 export const MarineTopBar: React.FC<Props> = ({
-    activity, onActivityChange, onBack, onGuide, onDebug, locationName,
+    activity, onActivityChange, onBack, onGuide, onDebug, locationId, onLocationChange,
 }) => {
     return (
         <div
@@ -54,8 +56,8 @@ export const MarineTopBar: React.FC<Props> = ({
                 Back
             </button>
 
-            {/* Title + location */}
-            <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Title + inline location selector */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{
                     fontSize: 15,
                     fontWeight: 700,
@@ -63,20 +65,15 @@ export const MarineTopBar: React.FC<Props> = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
+                    flexShrink: 0,
                 }}>
                     <span style={{ color: 'var(--mc-cyan)', fontSize: 16 }}>⚓</span>
                     Marine Conditions
-                    <span style={{
-                        fontSize: 11,
-                        color: 'var(--mc-text-dim)',
-                        fontWeight: 500,
-                        letterSpacing: '0.06em',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}>
-                        — {locationName}
-                    </span>
+                </div>
+                <span style={{ color: 'var(--mc-border-bright)', fontSize: 12, flexShrink: 0 }}>›</span>
+                {/* Compact location selector — replaces the static "— Location" text */}
+                <div style={{ flexShrink: 0 }}>
+                    <LocationSelector locationId={locationId} onSelect={onLocationChange} compact />
                 </div>
             </div>
 

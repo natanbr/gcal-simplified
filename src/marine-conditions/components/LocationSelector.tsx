@@ -5,9 +5,11 @@ import type { MarineLocation } from '../types';
 interface Props {
     locationId: string;
     onSelect: (id: string) => void;
+    /** Compact mode: inline trigger with no label — for embedding in the top bar */
+    compact?: boolean;
 }
 
-export const LocationSelector: React.FC<Props> = ({ locationId, onSelect }) => {
+export const LocationSelector: React.FC<Props> = ({ locationId, onSelect, compact }) => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
@@ -27,8 +29,40 @@ export const LocationSelector: React.FC<Props> = ({ locationId, onSelect }) => {
 
     return (
         <div style={{ position: 'relative' }} data-testid="location-selector">
-            {/* Trigger */}
-            <button
+            {/* Trigger — compact (top-bar) vs full-card */}
+            {compact ? (
+                <button
+                    data-testid="location-selector-trigger"
+                    onClick={() => setOpen(o => !o)}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 10px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid var(--mc-border)',
+                        borderRadius: 20,
+                        cursor: 'pointer',
+                        color: 'var(--mc-text)',
+                        fontFamily: 'Inter, system-ui, sans-serif',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        transition: 'border-color 150ms, background 150ms',
+                        whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--mc-border-bright)'; e.currentTarget.style.background = 'rgba(68,216,241,0.08)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--mc-border)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                >
+                    <span style={{ fontSize: 13 }}>📍</span>
+                    <span>{current.name}</span>
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none"
+                        style={{ transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 200ms', color: 'var(--mc-text-muted)' }}
+                    >
+                        <path d="M2.5 4.5L7 9L11.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                </button>
+            ) : (
+                <button
                 data-testid="location-selector-trigger"
                 onClick={() => setOpen(o => !o)}
                 style={{
@@ -67,12 +101,13 @@ export const LocationSelector: React.FC<Props> = ({ locationId, onSelect }) => {
                     <path d="M2.5 4.5L7 9L11.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
+            )}
 
             {/* Dropdown */}
             {open && (
                 <>
                     <div
-                        style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                        style={{ position: 'fixed', inset: 0, zIndex: 199 }}
                         onClick={() => setOpen(false)}
                     />
                     <div
@@ -81,11 +116,11 @@ export const LocationSelector: React.FC<Props> = ({ locationId, onSelect }) => {
                             position: 'absolute',
                             top: 'calc(100% + 6px)',
                             left: 0,
-                            right: 0,
+                            minWidth: compact ? 280 : '100%',
                             background: '#161d2b',
                             border: '1px solid var(--mc-border-bright)',
                             borderRadius: 12,
-                            zIndex: 100,
+                            zIndex: 200,
                             overflow: 'hidden',
                             boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
                         }}

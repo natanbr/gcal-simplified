@@ -262,4 +262,79 @@ describe('WeatherService - Marine Data', () => {
         expect(result.hourly.current_speed?.[1]).toBeCloseTo(3.9, 1);
         expect(result.hourly.current_speed?.[2]).toBeCloseTo(2.8, 1);
     });
+
+    it('should interpolate hourly speeds from wcp1-events when wcsp1 returns HTTP 400 (events-only station)', async () => {
+        // Regression test for Race Passage (operating:false) where:
+        // - wcsp1 continuous series → HTTP 400 (not available for predicted-only stations)
+        // - wcp1-events prediction events → HTTP 200 with Slack/Max Ebb/Max Flood
+        // Expected: sinusoidal interpolation produces correct speed range, NOT Open-Meteo fallback
+
+        // 1. Open-Meteo — naive PDT strings + UTC offset
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                utc_offset_seconds: -25200, // PDT = UTC-7
+                hourly: {
+                    time: [
+                        '2026-04-08T00:00', '2026-04-08T01:00', '2026-04-08T02:00',
+                        '2026-04-08T03:00', '2026-04-08T04:00', '2026-04-08T05:00',
+                        '2026-04-08T06:00', '2026-04-08T07:00', '2026-04-08T08:00',
+                        '2026-04-08T09:00', '2026-04-08T10:00', '2026-04-08T11:00',
+                        '2026-04-08T12:00', '2026-04-08T13:00', '2026-04-08T14:00',
+                        '2026-04-08T15:00', '2026-04-08T16:00', '2026-04-08T17:00',
+                        '2026-04-08T18:00', '2026-04-08T19:00', '2026-04-08T20:00',
+                    ],
+                    ocean_current_velocity: Array(21).fill(0.3), // Low OM fallback — should NOT be used
+                    ocean_current_direction: Array(21).fill(180),
+                    swell_wave_height: Array(21).fill(0.5),
+                    sea_surface_temperature: [9.4]
+                }
+            })
+        });
+
+        // 2. CHS Tide wlp
+        fetchMock.mockResolvedValueOnce({ ok: true, json: async () => [] });
+        // 3. CHS Tide wlp-hilo
+        fetchMock.mockResolvedValueOnce({ ok: true, json: async () => [] });
+
+        // 4. CHS Current wcsp1 → HTTP 400 (the actual Race Passage scenario)
+        fetchMock.mockResolvedValueOnce({ ok: false, status: 400 });
+
+        // 5. CHS wcp1-events → HTTP 200 with real Apr 8 events (BW Dave verified)
+        // PDT times converted to UTC (+7h):
+        //   Slack   05:38 PDT = 12:38 UTC
+        //   Max Ebb 11:43 PDT = 18:43 UTC  (-4.5kn)
+        //   Slack   15:54 PDT = 22:54 UTC
+        //   Max Flood 19:12 PDT = 02:12+1 UTC (+3.8kn)
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ([
+                { eventDate: '2026-04-08T00:11:00Z', value: -2.7, qualifier: 'EXTREMA_EBB' },   // 01:11 PDT Max Ebb
+                { eventDate: '2026-04-08T12:38:00Z', value: 0.0,  qualifier: 'SLACK' },          // 05:38 PDT Slack
+                { eventDate: '2026-04-08T18:43:00Z', value: -4.5, qualifier: 'EXTREMA_EBB' },   // 11:43 PDT Max Ebb
+                { eventDate: '2026-04-08T22:54:00Z', value: 0.0,  qualifier: 'SLACK' },          // 15:54 PDT Slack
+            ])
+        });
+
+        // 6. CHS Direction → not ok (no direction data)
+        fetchMock.mockResolvedValueOnce({ ok: false });
+
+        const result = await service.getTides('07020', '07040');
+
+        // Key assertion: NOT using Open-Meteo modeled data
+        expect(result.station).not.toContain('Modeled Data (Warning)');
+        expect(result.station).toContain('Race Passage');
+
+        // Verify interpolated max speed is in the correct tidal range (3-5kn) not OM range (0.3kn)
+        const maxSpeed = Math.max(...(result.hourly.current_speed || []));
+        expect(maxSpeed).toBeGreaterThan(2.0);   // Must exceed suspect threshold
+        expect(maxSpeed).toBeLessThan(6.0);       // Physically reasonable for Race Passage
+
+        // Hour 11 PDT = index 11 = near Max Ebb (11:43 PDT) → should be close to 4.5kn
+        expect(result.hourly.current_speed?.[11]).toBeGreaterThan(3.0);
+
+        // Hour 05 PDT = index 5 = near Slack (05:38 PDT) → should be near 0
+        expect(result.hourly.current_speed?.[5]).toBeLessThan(1.5);
+    });
 });

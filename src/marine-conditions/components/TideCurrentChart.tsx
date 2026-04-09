@@ -230,8 +230,9 @@ export const TideCurrentChart: React.FC<Props> = ({
                             x1={band.x1}
                             x2={band.x2}
                             yAxisId="tide"
-                            fill="rgba(0, 0, 0, 0.38)"
-                            stroke="none"
+                            fill="rgba(0, 0, 0, 0.62)"
+                            stroke="rgba(0, 0, 0, 0.4)"
+                            strokeWidth={1}
                             ifOverflow="hidden"
                         />
                     ))}

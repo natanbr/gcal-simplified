@@ -16,7 +16,6 @@ import { BestWindowsPanel }       from './components/BestWindowsPanel';
 import { TideCurrentChart }       from './components/TideCurrentChart';
 import { MarineEventsTable }      from './components/MarineEventsTable';
 import { ConditionsPanel }        from './components/ConditionsPanel';
-import { LocationSelector }       from './components/LocationSelector';
 import { GuidePanel }             from './components/GuidePanel';
 import { LoadingOverlay }         from './components/LoadingOverlay';
 import { DataSourcesFooter }      from './components/DataSourcesFooter';
@@ -120,8 +119,9 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
         tides:    state.data,
         events,
         coords:   location.coords,
-        sunrises: weather?.daily.sunrise,
-        sunsets:  weather?.daily.sunset,
+        // Prefer marine-fetched sunrise/sunset (now included in TideData); fall back to land weather prop
+        sunrises: state.data?.sunrise ?? weather?.daily.sunrise,
+        sunsets:  state.data?.sunset  ?? weather?.daily.sunset,
         snapshot: {
             swellHeight:   snapshot.swellHeight,
             windSpeed:     snapshot.windSpeed,
@@ -151,7 +151,8 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                 onBack={onBackToCalendar}
                 onGuide={openGuide}
                 onDebug={process.env.NODE_ENV === 'development' ? () => setDebugOpen(true) : undefined}
-                locationName={location.name}
+                locationId={settings.locationId}
+                onLocationChange={id => updateSettings({ locationId: id })}
             />
 
             {/* ── Suspect data banner (non-blocking) ────────────────────────── */}
@@ -226,8 +227,8 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                                     events={events}
                                     diveWindows={diveWindows}
                                     isLoading={isLoading}
-                                    sunrises={weather?.daily.sunrise}
-                                    sunsets={weather?.daily.sunset}
+                                    sunrises={state.data?.sunrise ?? weather?.daily.sunrise}
+                                    sunsets={state.data?.sunset ?? weather?.daily.sunset}
                                 />
                             </ChartErrorBoundary>
                         </div>
@@ -242,17 +243,13 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                     </div>
                 </div>
 
-                {/* ── Right: Conditions + Location ─────────────────────────── */}
+                {/* ── Right: Conditions ─────────────────────────────────────── */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, overflow: 'hidden' }}>
                     <ConditionsPanel
                         snapshot={snapshot}
                         isLoading={isLoading}
                         stationName={location.currentStation}
                         isSuspect={state.isSuspect}
-                    />
-                    <LocationSelector
-                        locationId={settings.locationId}
-                        onSelect={id => updateSettings({ locationId: id })}
                     />
                 </div>
             </div>
@@ -283,8 +280,8 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                     assertions={assertions}
                     locationName={location.name}
                     solarAvailable={solarAvailable}
-                    sunrises={weather?.daily.sunrise}
-                    sunsets={weather?.daily.sunset}
+                    sunrises={state.data?.sunrise ?? weather?.daily.sunrise}
+                    sunsets={state.data?.sunset ?? weather?.daily.sunset}
                     coords={location.coords}
                 />
             )}
