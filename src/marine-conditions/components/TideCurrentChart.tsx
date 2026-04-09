@@ -11,22 +11,26 @@ import {
     ReferenceLine,
     ReferenceArea,
 } from 'recharts';
-import { format } from 'date-fns';
+import { format, startOfDay, addDays } from 'date-fns';
 import { parseSafe } from '../utils/dateUtils';
 import { cosineTideFromHilo } from '../utils/tideMath';
+import { SLACK_THRESHOLD } from '../config';
 import type { TideData, MarineEvent, DiveWindow } from '../types';
-
-/** Current speed below which we consider it a "slack" dive window (knots) */
-const SLACK_KN = 1.0;
 
 interface Props {
     tides: TideData | null;
     events: MarineEvent[];
     diveWindows: DiveWindow[];
     isLoading: boolean;
+    /** Sunrise timestamps from weather daily (e.g. "2026-04-08T06:12") */
+    sunrises?: string[];
+    /** Sunset timestamps from weather daily (e.g. "2026-04-08T20:05") */
+    sunsets?: string[];
 }
 
-export const TideCurrentChart: React.FC<Props> = ({ tides, events, diveWindows, isLoading }) => {
+export const TideCurrentChart: React.FC<Props> = ({
+    tides, events, diveWindows, isLoading, sunrises, sunsets,
+}) => {
     const data = useMemo(() => {
         if (!tides?.hourly) return [];
 
@@ -69,8 +73,8 @@ export const TideCurrentChart: React.FC<Props> = ({ tides, events, diveWindows, 
             });
         }
 
-        // Thin to every 3rd point for readability (keeps ~56 points over 7 days)
-        return points.filter((_, i) => i % 3 === 0);
+        // T10: 1h resolution — include every data point (was every 3rd)
+        return points;
     }, [tides]);
 
     // Pre-compute dive window time ranges for the tooltip lookup
@@ -90,6 +94,60 @@ export const TideCurrentChart: React.FC<Props> = ({ tides, events, diveWindows, 
             .slice(0, 14),
         [events]
     );
+
+    // T9: Day separator lines — one at midnight of each day in the 7-day window
+    const daySeparators = useMemo(() => {
+        if (!data.length) return [];
+        const first = parseSafe(data[0].time);
+        const last  = parseSafe(data[data.length - 1].time);
+        if (!first.getTime() || !last.getTime()) return [];
+
+        const separators: { time: string; label: string }[] = [];
+        let cursor = startOfDay(addDays(first, 1)); // start from the next midnight after first point
+        while (cursor <= last) {
+            const key = data.find(d => parseSafe(d.time) >= cursor)?.time;
+            if (key) {
+                separators.push({
+                    time: key,
+                    label: format(cursor, 'EEE, MMM d'),
+                });
+            }
+            cursor = addDays(cursor, 1);
+        }
+        return separators;
+    }, [data]);
+
+    // T11: Night overlay bands — derive sunset→nextSunrise pairs from solar data
+    const nightBands = useMemo(() => {
+        if (!sunsets?.length || !sunrises?.length || !data.length) return [];
+
+        // A5: Pre-compute ms timestamps once — O(n) instead of O(n×bands) parseSafe calls
+        const timeMs = data.map(d => parseSafe(d.time).getTime());
+
+        const sunriseMsList = sunrises.map(s => parseSafe(s).getTime());
+
+        const bands: { x1: string; x2: string }[] = [];
+
+        for (let i = 0; i < sunsets.length; i++) {
+            const sunsetMs  = parseSafe(sunsets[i]).getTime();
+            if (!sunsetMs) continue;
+
+            // Find the next sunrise after this sunset
+            const sunriseMs = sunriseMsList.find(ms => ms > sunsetMs);
+            if (!sunriseMs) continue;
+
+            // Snap to nearest chart data points using pre-computed ms array
+            const x1Idx = timeMs.findIndex(ms => ms >= sunsetMs);
+            const x2Idx = [...timeMs].reverse().findIndex(ms => ms <= sunriseMs);
+            const x2RealIdx = x2Idx === -1 ? -1 : data.length - 1 - x2Idx;
+
+            if (x1Idx === -1 || x2RealIdx === -1 || x1Idx === x2RealIdx) continue;
+
+            bands.push({ x1: data[x1Idx].time, x2: data[x2RealIdx].time });
+        }
+
+        return bands;
+    }, [sunsets, sunrises, data]);
 
     if (isLoading || data.length === 0) {
         const hasNoHilo = !isLoading && tides && (!tides.hilo || tides.hilo.length === 0);
@@ -165,6 +223,19 @@ export const TideCurrentChart: React.FC<Props> = ({ tides, events, diveWindows, 
                         unit="kn"
                     />
 
+                    {/* ── T11: Night overlay bands (sunset → sunrise) ─────────── */}
+                    {nightBands.map((band, idx) => (
+                        <ReferenceArea
+                            key={`night-${idx}`}
+                            x1={band.x1}
+                            x2={band.x2}
+                            yAxisId="tide"
+                            fill="rgba(0, 0, 0, 0.38)"
+                            stroke="none"
+                            ifOverflow="hidden"
+                        />
+                    ))}
+
                     {/* ── Dive window bands: highlight actual windowStart→windowEnd ── */}
                     {diveWindowRanges.map(w => {
                         const startKey = data.find(d => parseSafe(d.time).getTime() >= w.start)?.time;
@@ -188,7 +259,7 @@ export const TideCurrentChart: React.FC<Props> = ({ tides, events, diveWindows, 
                     {/* Slack threshold line on current axis */}
                     <ReferenceLine
                         yAxisId="current"
-                        y={SLACK_KN}
+                        y={SLACK_THRESHOLD}
                         stroke="rgba(78,222,163,0.25)"
                         strokeDasharray="6 3"
                         strokeWidth={1}
@@ -210,6 +281,25 @@ export const TideCurrentChart: React.FC<Props> = ({ tides, events, diveWindows, 
                             stroke="rgba(78,222,163,0.45)"
                             strokeDasharray="4 4"
                             strokeWidth={1}
+                        />
+                    ))}
+
+                    {/* ── T9: Day separator lines + date labels ────────────────── */}
+                    {daySeparators.map(sep => (
+                        <ReferenceLine
+                            key={`day-${sep.time}`}
+                            x={sep.time}
+                            yAxisId="tide"
+                            stroke="rgba(232,238,247,0.18)"
+                            strokeWidth={1}
+                            label={{
+                                value: sep.label,
+                                position: 'insideTopLeft',
+                                fontSize: 9,
+                                fill: 'rgba(232,238,247,0.55)',
+                                fontFamily: 'Inter',
+                                fontWeight: 600,
+                            }}
                         />
                     ))}
 

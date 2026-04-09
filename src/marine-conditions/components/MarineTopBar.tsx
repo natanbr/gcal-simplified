@@ -6,11 +6,12 @@ interface Props {
     onActivityChange: (a: ActivityProfile) => void;
     onBack: () => void;
     onGuide: () => void;
+    onDebug?: () => void;
     locationName: string;
 }
 
 export const MarineTopBar: React.FC<Props> = ({
-    activity, onActivityChange, onBack, onGuide, locationName,
+    activity, onActivityChange, onBack, onGuide, onDebug, locationName,
 }) => {
     return (
         <div
@@ -114,6 +115,40 @@ export const MarineTopBar: React.FC<Props> = ({
             >
                 ?
             </button>
+
+            {/* Debug Panel — dev only */}
+            {onDebug && (
+                <button
+                    data-testid="marine-debug-btn"
+                    onClick={onDebug}
+                    style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        border: '1px solid rgba(255,185,95,0.4)',
+                        background: 'transparent',
+                        color: 'rgba(255,185,95,0.85)',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'background 150ms, box-shadow 150ms',
+                        flexShrink: 0,
+                    }}
+                    onMouseEnter={e => {
+                        e.currentTarget.style.background = 'rgba(255,185,95,0.12)';
+                        e.currentTarget.style.boxShadow = '0 0 10px rgba(255,185,95,0.2)';
+                    }}
+                    onMouseLeave={e => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.boxShadow = 'none';
+                    }}
+                    title="Data Verification (Debug)"
+                >
+                    🔬
+                </button>
+            )}
         </div>
     );
 };

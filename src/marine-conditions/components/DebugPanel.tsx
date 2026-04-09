@@ -13,7 +13,7 @@
  * This is intentionally verbose — it's a hydrographic audit tool, not a
  * production UI.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { TideData, DiveWindow, MarineConditionsSnapshot } from '../types';
 import type { AssertionResult } from '../hooks/useDataAssertions';
 import { parseSafe } from '../utils/dateUtils';
@@ -170,6 +170,16 @@ export const DebugPanel: React.FC<Props> = ({
     const todaySunrise = sunrises?.[0];
     const todaySunset  = sunsets?.[0];
 
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => {
+        if (!tides) return;
+        const payload = JSON.stringify(tides, null, 2);
+        navigator.clipboard.writeText(payload).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -218,18 +228,31 @@ export const DebugPanel: React.FC<Props> = ({
                             {locationName} · Dev mode only · All raw + derived values
                         </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                        <div style={{ textAlign: 'right' }}>
-                            <div style={{
-                                fontSize: 11, fontWeight: 700,
-                                color: assertions.passed ? PASS_COLOR : FAIL_COLOR,
-                            }}>
-                                {assertions.passed ? '✅ All assertions passed' : `❌ ${assertions.warnings.length} assertion(s) failed`}
-                            </div>
-                            <div style={{ fontSize: 10, color: DIM_COLOR }}>
-                                {windows.length} windows · {speeds.length} hourly pts · {hilo.length} hilo events
-                            </div>
-                        </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button
+                            onClick={handleCopy}
+                            disabled={!tides}
+                            title={`Copy raw TideData JSON for ${locationName}`}
+                            style={{
+                                background: copied
+                                    ? 'rgba(78,222,163,0.15)'
+                                    : 'rgba(68,216,241,0.1)',
+                                border: `1px solid ${copied ? 'rgba(78,222,163,0.5)' : 'rgba(68,216,241,0.3)'}`,
+                                borderRadius: 8,
+                                color: copied ? '#4edea3' : '#44d8f1',
+                                padding: '6px 14px',
+                                cursor: tides ? 'pointer' : 'default',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                opacity: tides ? 1 : 0.4,
+                                transition: 'all 200ms',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                            }}
+                        >
+                            {copied ? '✓ Copied!' : '⬇ Copy Raw JSON'}
+                        </button>
                         <button
                             onClick={onClose}
                             style={{

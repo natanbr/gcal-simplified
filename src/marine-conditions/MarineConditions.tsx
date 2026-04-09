@@ -23,6 +23,7 @@ import { DataSourcesFooter }      from './components/DataSourcesFooter';
 import { DataErrorState }         from './components/DataErrorState';
 import { DiveWindowDetailPanel }  from './components/DiveWindowDetailPanel';
 import { DebugPanel }             from './components/DebugPanel';
+import { ChartErrorBoundary }     from './components/ChartErrorBoundary';
 
 // Utils
 import { getLocationById }     from './utils/marineLocations';
@@ -149,27 +150,9 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                 onActivityChange={setActivity}
                 onBack={onBackToCalendar}
                 onGuide={openGuide}
+                onDebug={process.env.NODE_ENV === 'development' ? () => setDebugOpen(true) : undefined}
                 locationName={location.name}
             />
-
-            {/* Dev-mode debug button */}
-            {process.env.NODE_ENV === 'development' && (
-                <button
-                    onClick={() => setDebugOpen(true)}
-                    title="Open data verification panel (?debug=1)"
-                    style={{
-                        position: 'fixed', bottom: 48, right: 16, zIndex: 200,
-                        background: 'rgba(68,216,241,0.15)',
-                        border: '1px solid rgba(68,216,241,0.4)',
-                        borderRadius: 8, color: '#44d8f1',
-                        padding: '6px 12px', cursor: 'pointer',
-                        fontSize: 11, fontFamily: 'Inter, sans-serif',
-                        backdropFilter: 'blur(4px)',
-                    }}
-                >
-                    🔬 Verify Data
-                </button>
-            )}
 
             {/* ── Suspect data banner (non-blocking) ────────────────────────── */}
             {showSuspectBanner && (
@@ -229,14 +212,24 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                 {/* ── Center: Chart (40%) + Events (60%) ───────────────────── */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, overflow: 'hidden' }}>
                     <div style={{ flex: '0 0 40%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                        <div className="marine-section-label">Tide &amp; Current (7 Days)</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div className="marine-section-label">Tide &amp; Current (7 Days)</div>
+                            <div style={{ display: 'flex', gap: 12, fontSize: 9, color: 'rgba(232,238,247,0.4)', fontFamily: 'Inter', letterSpacing: '0.05em' }}>
+                                <span><span style={{ color: 'rgba(78,222,163,0.7)' }}>▌</span> Dive window</span>
+                                <span><span style={{ color: 'rgba(0,0,0,0.7)', background: 'rgba(232,238,247,0.35)', padding: '0 2px' }}>▌</span> Night</span>
+                            </div>
+                        </div>
                         <div style={{ flex: 1, minHeight: 0 }}>
-                            <TideCurrentChart
-                                tides={state.data}
-                                events={events}
-                                diveWindows={diveWindows}
-                                isLoading={isLoading}
-                            />
+                            <ChartErrorBoundary>
+                                <TideCurrentChart
+                                    tides={state.data}
+                                    events={events}
+                                    diveWindows={diveWindows}
+                                    isLoading={isLoading}
+                                    sunrises={weather?.daily.sunrise}
+                                    sunsets={weather?.daily.sunset}
+                                />
+                            </ChartErrorBoundary>
                         </div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

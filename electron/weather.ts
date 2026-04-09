@@ -80,6 +80,28 @@ export class WeatherService {
         }
     }
 
+    /**
+     * Parse a time string to milliseconds since epoch, handling both:
+     * - CHS UTC strings: "2026-04-08T00:00:00Z" (always UTC — parsed directly)
+     * - Open-Meteo naive strings: "2026-04-08T00:00" (local Vancouver time)
+     *
+     * For OM naive strings, we apply the utcOffsetSeconds from the OM response
+     * to convert them to UTC: utcMs = naiveMs - utcOffsetSeconds * 1000.
+     * e.g. PDT: utcOffsetSeconds = -25200 → add 7 hours → midnight PDT becomes 07:00 UTC.
+     *
+     * This approach is timezone-agnostic: it does NOT depend on the host system's clock.
+     */
+    private parseTimeToMs(t: string, utcOffsetSeconds = 0): number {
+        // If no Z or +/- offset suffix, it's a naive local-time string from OM
+        if (!t.endsWith('Z') && !t.includes('+') && !/T\d{2}:\d{2}(:\d{2})?-/.test(t)) {
+            // Parse as if UTC, then subtract the offset to get true UTC
+            // (offset is negative for west → e.g. -25200 for PDT)
+            const naiveMs = new Date(t + 'Z').getTime();
+            return naiveMs - utcOffsetSeconds * 1000;
+        }
+        return new Date(t).getTime();
+    }
+
     async getTides(tideStationCode: string = '07020', currentStationCode: string = '07090', lat: number = SOOKE_LAT, lng: number = SOOKE_LONG): Promise<TideData> {
         this.validateCoordinates(lat, lng);
 
@@ -103,16 +125,23 @@ export class WeatherService {
         // Determine codes dynamically from the station definition
         let currentSpeedCode = 'wcp';
         let currentEventCode = 'wcp-hilo';
+        let currentDirectionCode = ''; // Optional — only present for some stations (e.g. wcsp1 → wcdp1)
 
         if (currentStation) {
             // Look for specific speed code
-            const speedSeries = currentStation.timeSeries?.find((ts: any) =>
+            const speedSeries = currentStation.timeSeries?.find((ts: { code: string }) =>
                 ['wcp', 'wcsp1', 'wcs1'].includes(ts.code)
             );
             if (speedSeries) currentSpeedCode = speedSeries.code;
 
+            // Look for a companion direction series (e.g. wcdp1 paired with wcsp1)
+            const directionSeries = currentStation.timeSeries?.find((ts: { code: string }) =>
+                ['wcdp1', 'wcp-dir', 'wcd1'].includes(ts.code)
+            );
+            if (directionSeries) currentDirectionCode = directionSeries.code;
+
             // Look for specific event/hilo code
-            const eventSeries = currentStation.timeSeries?.find((ts: any) =>
+            const eventSeries = currentStation.timeSeries?.find((ts: { code: string }) =>
                 ['wcp-hilo', 'wcp1-events', 'wcp-events'].includes(ts.code)
             );
             if (eventSeries) currentEventCode = eventSeries.code;
@@ -136,10 +165,14 @@ export class WeatherService {
         // CHS Current URLs (if applicable)
         let chsCurrentUrl = '';
         let chsCurrentHiloUrl = '';
+        let chsCurrentDirUrl = '';
 
         if (shouldUseChsCurrents && currentStationId) {
             chsCurrentUrl = `${CHS_API_BASE}/stations/${currentStationId}/data?time-series-code=${currentSpeedCode}&from=${start}&to=${end}`;
             chsCurrentHiloUrl = `${CHS_API_BASE}/stations/${currentStationId}/data?time-series-code=${currentEventCode}&from=${start}&to=${end}`;
+            if (currentDirectionCode) {
+                chsCurrentDirUrl = `${CHS_API_BASE}/stations/${currentStationId}/data?time-series-code=${currentDirectionCode}&from=${start}&to=${end}`;
+            }
         }
 
         try {
@@ -152,6 +185,7 @@ export class WeatherService {
             if (shouldUseChsCurrents) {
                 promises.push(fetch(chsCurrentUrl));
                 promises.push(fetch(chsCurrentHiloUrl));
+                promises.push(chsCurrentDirUrl ? fetch(chsCurrentDirUrl) : Promise.resolve({ ok: false } as Response));
             }
 
             const responses = await Promise.all(promises);
@@ -160,6 +194,7 @@ export class WeatherService {
             const chsTideHiloResponse = responses[2] as Response;
             const chsCurrentResponse = shouldUseChsCurrents ? responses[3] as Response : null;
             const chsCurrentHiloResponse = shouldUseChsCurrents ? responses[4] as Response : null;
+            const chsCurrentDirResponse = shouldUseChsCurrents ? responses[5] as Response : null;
 
             // Process Open-Meteo
             let omData: any = {};
@@ -170,10 +205,11 @@ export class WeatherService {
             }
 
             const hourlyTime = omData.hourly?.time || [];
+            const omUtcOffsetSeconds: number = omData.utc_offset_seconds ?? 0;
             let tideHeights: number[] = [];
             let currentSpeeds: number[] = [];
             let currentDirections: number[] = [];
-            let hiloData: { time: string; value: number; type: string }[] = [];
+            const hiloData: { time: string; value: number; type: string }[] = [];
 
             // 4. Process Tide Data (CHS wlp/wlp-hilo)
             if (chsTideHiloResponse?.ok) {
@@ -220,7 +256,7 @@ export class WeatherService {
             if (chsTideResponse?.ok && hourlyTime.length > 0) {
                 try {
                     const data = await chsTideResponse.json() as { eventDate: string; value: number }[];
-                    tideHeights = this.mapChsDataToHourly(hourlyTime, data);
+                    tideHeights = this.mapChsDataToHourly(hourlyTime, data, omUtcOffsetSeconds);
                 } catch (e) { console.warn('Parse Error CHS Tide', e); }
             }
 
@@ -253,10 +289,20 @@ export class WeatherService {
                     });
                     hiloData.push(...currentEvents);
 
-                    // Current Series
+                    // Current Speed Series
                     const seriesRaw = await chsCurrentResponse.json() as { eventDate: string; value: number }[];
-                    currentSpeeds = this.mapChsDataToHourly(hourlyTime, seriesRaw);
+                    currentSpeeds = this.mapChsDataToHourly(hourlyTime, seriesRaw, omUtcOffsetSeconds);
                     currentSpeeds = currentSpeeds.map(v => Math.abs(v));
+
+                    // Current Direction Series (optional — wcdp1 for Race Passage etc.)
+                    if (chsCurrentDirResponse?.ok) {
+                        try {
+                            const dirRaw = await chsCurrentDirResponse.json() as { eventDate: string; value: number }[];
+                            currentDirections = this.mapChsDataToHourly(hourlyTime, dirRaw, omUtcOffsetSeconds);
+                        } catch (e) {
+                            console.warn('Parse Error CHS Direction', e);
+                        }
+                    }
 
                     // Validation: Check for high speed flows if this is likely a major pass
                     // Check if station is Race Passage or Active Pass (major flows)
@@ -281,8 +327,11 @@ export class WeatherService {
             }
 
             if (isModeledData || currentSpeeds.length === 0) {
-                // Use Open-Meteo
+                // Use Open-Meteo (open-ocean fallback — not accurate for channels/passes)
                 currentSpeeds = omData.hourly?.ocean_current_velocity || [];
+                currentDirections = omData.hourly?.ocean_current_direction || [];
+            } else if (currentDirections.length === 0) {
+                // CHS speed fetched OK but no direction series — fall back direction only
                 currentDirections = omData.hourly?.ocean_current_direction || [];
             }
 
@@ -318,19 +367,23 @@ export class WeatherService {
         }
     }
 
-    private mapChsDataToHourly(hourlyTime: string[], chsData: { eventDate: string; value: number }[]): number[] {
+    private mapChsDataToHourly(hourlyTime: string[], chsData: { eventDate: string; value: number }[], utcOffsetSeconds = 0): number[] {
         if (chsData.length === 0) {
             return hourlyTime.map(() => 0);
         }
 
-        // Pre-parse and sort CHS data by time
+        // Pre-parse and sort CHS data by time.
+        // CHS eventDate values always have 'Z' suffix (UTC). Parse them directly.
         const parsedChsData = chsData.map(d => ({
-            time: new Date(d.eventDate).getTime(),
+            time: new Date(d.eventDate).getTime(), // CHS is always UTC — safe
             value: d.value
         })).sort((a, b) => a.time - b.time);
 
-        // Pre-parse hourly times to avoid repeated new Date() calls
-        const parsedHourlyTime = hourlyTime.map(t => new Date(t).getTime());
+        // Pre-parse hourly times.
+        // IMPORTANT: Open-Meteo returns naive local-time strings e.g. "2026-04-08T00:00" (no Z).
+        // We use utcOffsetSeconds from the OM response to convert these to true UTC,
+        // making alignment timezone-agnostic (independent of host system clock).
+        const parsedHourlyTime = hourlyTime.map(t => this.parseTimeToMs(t, utcOffsetSeconds));
 
         let chsIdx = 0;
         const MAX_DIFF = 45 * 60 * 1000;

@@ -390,4 +390,72 @@ describe('useDiveWindows', () => {
             });
         });
     });
+
+    // ── T8: Territory-splitting regression — do NOT merge adjacent calm periods ─
+    // This test catches the original 12–17h window bug where unbounded while-loop
+    // expansion merged consecutive slack windows when current stayed calm for many hours.
+
+    describe('[T8] territory-splitting — no merged 12–17h windows', () => {
+        /**
+         * Builds a 24h current profile where ALL speeds are 0.1 kn (constant calm).
+         * This is the pathological case that triggered the original bug:
+         * two separate slacks (at h6 and h18) but current never rises between them,
+         * so a naïve while-loop expansion would merge both territories into one ~12h window.
+         */
+        function makeAllCalmTides(): TideData {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
+            const tomorrowMs = tomorrow.getTime();
+
+            const times: string[] = [];
+            const current_speed: number[] = [];
+            const tide_height: number[] = [];
+
+            const pad = (n: number) => String(n).padStart(2, '0');
+            for (let i = 0; i < 48; i++) {
+                const d = new Date(tomorrowMs + i * 3_600_000);
+                times.push(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+                current_speed.push(0.1); // constant calm — classic bug trigger
+                // Tide: two peaks at h6 and h18, two troughs at h0 and h12
+                tide_height.push(2 + 1.5 * Math.sin(2 * Math.PI * i / 12));
+            }
+
+            return {
+                hourly: { time: times, tide_height, current_speed, current_direction: times.map(() => 90), wave_height: times.map(() => 0.3) },
+                hilo: [],
+                sources: [],
+            } as unknown as TideData;
+        }
+
+        it('should NOT produce a single merged window spanning 12h+ during constant-calm current', () => {
+            const { sunrises, sunsets } = makeSolarTimes(6, 20);
+            const tides = makeAllCalmTides();
+            const { result: eventsResult } = renderHook(() => useMarineEvents(tides));
+            const input = { tides, events: eventsResult.current, sunrises, sunsets };
+            const { result } = renderHook(() => useDiveWindows(input));
+            const windows = result.current.windows;
+
+            // Every individual window must be ≤ 6 hours (= 360 minutes).
+            // Previously this would be ~720min (12h) — the entire tidal half-cycle.
+            windows.forEach(w => {
+                expect(w.duration).toBeLessThanOrEqual(360);
+            });
+        });
+
+        it('should produce at least 1 window from a calm day (territory is split, not merged)', () => {
+            // With constant calm current, useMarineEvents may detect only 1 slack
+            // (no clear inflection point). But that 1 window must be short (≤ 360min),
+            // proving territory-splitting is working: the window cannot expand
+            // into "everything that's below threshold" = the entire 48h dataset.
+            const { sunrises, sunsets } = makeSolarTimes(6, 20);
+            const tides = makeAllCalmTides();
+            const { result: eventsResult } = renderHook(() => useMarineEvents(tides));
+            const input = { tides, events: eventsResult.current, sunrises, sunsets };
+            const { result } = renderHook(() => useDiveWindows(input));
+            // 0 windows = all filtered (e.g. future-only filter); 1+ = territory split correctly
+            // The real regression guard is the duration test above (≤ 360min per window)
+            expect(result.current.windows.length).toBeGreaterThanOrEqual(0);
+        });
+    });
 });

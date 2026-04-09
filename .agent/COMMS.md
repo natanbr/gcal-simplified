@@ -24,6 +24,27 @@
 
 ## 📬 ACTIVE THREADS
 
+### 🔴 [FROM: QA + Hydrography Engineer → PM | 2026-04-09 | SAFETY CRITICAL — DO NOT CLOSE]
+**Subject**: ✅ FIXED — Current data timezone bug identified and patched
+**Body**:
+**Root Cause Found**: UTC/PDT timezone mismatch in `mapChsDataToHourly()`.
+- OM returns times as naive local strings (`"2026-04-08T00:00"` = PDT = UTC-7)
+- CHS returns times as UTC strings (`"2026-04-08T07:00:00Z"`)
+- They were the SAME moment but parsed differently → 7h offset → all CHS speed mappings returned `0` → `maxSpeed < 2.0` suspect guard triggered → Open-Meteo fallback
+
+**Fix Applied** (`electron/weather.ts`):
+- `mapChsDataToHourly` now accepts `utcOffsetSeconds` (from OM response `utc_offset_seconds`)
+- OM naive strings parsed as UTC then adjusted by offset → timezone-agnostic alignment
+- Also added CHS direction fetch (`wcdp1`) for Race Passage so directions come from CHS too
+- Regression test added: `weather_marine.test.ts` — 18/18 tests GREEN
+
+**Expected result after app restart**: Current speeds should match BW Dave values (Max Ebb ~4.5kn, Max Flood ~3.8kn for Apr 8).
+
+**Action Required**: Developer to rebuild Electron app and user to verify data matches BW Dave.
+**Status**: FIX SHIPPED — Awaiting user verification
+
+---
+
 ### [FROM: PM → ALL AGENTS | 2026-04-08 | Temporary]
 **Subject**: Sprint 6 kickoff — User feedback round
 **Body**: User submitted 3 clusters of feedback on the dive window UX:
@@ -81,10 +102,13 @@ Full Requirements Brief and task table in `implementation_plan.md`.
 
 ---
 
-## ✅ RECENTLY RESOLVED (Last 3)
+## ✅ RECENTLY RESOLVED (Last 6)
 
 | Sprint | Task | Resolution |
 |--------|------|-----------|
+| 7 | T8 — Dive window expansion bug (12–17h windows) | Fixed: midpoint territory bounds in calculateSlackWindows(). 24/24 tests GREEN. |
+| 7 | T9 — Chart day separator lines | Shipped: vertical ReferenceLine at midnight + "Wed, Apr 8" label |
+| 7 | T10 — Chart 1h resolution | Shipped: removed 3x thinning, every hourly point rendered |
+| 7 | T11 — Night overlay on chart | Shipped: darkened ReferenceArea bands (sunset→sunrise), sunrises/sunsets wired from weather |
 | 5d | DebugPanel + useDataAssertions | Shipped — dev-mode verification screen live |
 | 5d | Solar hard block (solarAvailable flag) | Shipped — no dive windows without solar data |
-| 5c | Framer Motion animations | Shipped — stagger on cards, spring slide on detail panel |

@@ -170,7 +170,7 @@ export const DiveWindowCard: React.FC<Props> = ({ window: w, onSelect }) => {
                         onMouseEnter={e => (e.currentTarget.style.background = 'var(--mc-cyan-glow)')}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
-                        Quality Details →
+                        See more →
                     </button>
                 )}
             </div>

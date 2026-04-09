@@ -76,16 +76,15 @@ export const DiveWindowDetailPanel: React.FC<Props> = ({ window: w, snapshot, on
                         transition={{ duration: 0.2 }}
                     />
 
-                    {/* Animated Panel */}
+                    {/* Animated Panel — centered modal */}
                     <motion.div
                         key="detail-panel"
-                        className="marine-guide-panel marine-detail-panel"
+                        className="marine-detail-modal"
                         data-testid="dive-detail-panel"
-                        style={{ zIndex: 211, width: 360 }}
-                        initial={{ x: '100%', opacity: 0.6 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        exit={{ x: '100%', opacity: 0 }}
-                        transition={{ type: 'spring', damping: 28, stiffness: 320, mass: 0.8 }}
+                        initial={{ opacity: 0, scale: 0.94, y: 12 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                        transition={{ type: 'spring', damping: 30, stiffness: 380, mass: 0.7 }}
                     >
                 {/* ── Header ─────────────────────────────────────────────────── */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>

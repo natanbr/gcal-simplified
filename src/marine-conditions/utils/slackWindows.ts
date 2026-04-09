@@ -23,6 +23,14 @@ const FALLBACK_FORMAT = "yyyy-MM-dd'T'HH:mm";
 const MIN_WINDOW_DURATION_MINS = 30;
 
 /**
+ * Maximum half-width of any single slack window, in CHS hourly bins.
+ * For a 0.5 kn threshold, 4 hours (= 4 bins at 1h resolution) is the
+ * physical upper limit before current climbs noticeably even at Race Passage.
+ * This guards the first/last slack at dataset edges from over-expanding.
+ */
+const MAX_WINDOW_HALF_BINS = 4;
+
+/**
  * Safely format a Date. If the Date is invalid, returns the raw ISO
  * from the source index as a fallback so we never pass Invalid Date to formatDate.
  */
@@ -104,39 +112,56 @@ export function calculateSlackWindows(
 ): SlackWindow[] {
     const windows: SlackWindow[] = [];
 
-    for (const slackIdx of slackIndices) {
+    for (let si = 0; si < slackIndices.length; si++) {
+        const slackIdx = slackIndices[si];
+
+        // ── Territory bounds: each slack owns the space up to the midpoint
+        //    between itself and its neighbours. This prevents adjacent calm
+        //    periods from merging into one enormous window (the 12–17h bug).
+        const prevSlackIdx = si > 0 ? slackIndices[si - 1] : 0;
+        const nextSlackIdx = si < slackIndices.length - 1
+            ? slackIndices[si + 1]
+            : speeds.length - 1;
+
+        const leftBound  = si > 0
+            ? Math.floor((prevSlackIdx + slackIdx) / 2)
+            : Math.max(0, slackIdx - MAX_WINDOW_HALF_BINS);
+        const rightBound = si < slackIndices.length - 1
+            ? Math.ceil((slackIdx + nextSlackIdx) / 2)
+            : Math.min(speeds.length - 1, slackIdx + MAX_WINDOW_HALF_BINS);
+
         // ── Find boundary where speed drops below threshold (start) ───────────
         let startIdx = slackIdx;
-        while (startIdx > 0 && speeds[startIdx - 1] < SLACK_THRESHOLD) {
+        while (startIdx > leftBound && speeds[startIdx - 1] < SLACK_THRESHOLD) {
             startIdx--;
         }
 
         let preciseStart: Date;
-        if (startIdx > 0) {
+        if (startIdx > leftBound) {
             const t1 = parseSafe(times[startIdx - 1]);
             const t2 = parseSafe(times[startIdx]);
             preciseStart = isValid(t1) && isValid(t2)
                 ? interpolateTime(t1, t2, speeds[startIdx - 1], speeds[startIdx], SLACK_THRESHOLD)
                 : parseSafe(times[startIdx]);
         } else {
-            preciseStart = parseSafe(times[0]);
+            preciseStart = parseSafe(times[leftBound]);
         }
 
         // ── Find boundary where speed rises above threshold (end) ─────────────
         let endIdx = slackIdx;
-        while (endIdx < speeds.length - 1 && speeds[endIdx + 1] < SLACK_THRESHOLD) {
+        while (endIdx < rightBound && speeds[endIdx + 1] < SLACK_THRESHOLD) {
             endIdx++;
         }
 
         let preciseEnd: Date;
-        if (endIdx < speeds.length - 1) {
+        if (endIdx < rightBound) {
             const t1 = parseSafe(times[endIdx]);
             const t2 = parseSafe(times[endIdx + 1]);
             preciseEnd = isValid(t1) && isValid(t2)
                 ? interpolateTime(t1, t2, speeds[endIdx], speeds[endIdx + 1], SLACK_THRESHOLD)
                 : parseSafe(times[endIdx]);
         } else {
-            preciseEnd = parseSafe(times.at(-1)!);
+            preciseEnd = parseSafe(times[rightBound]);
         }
 
         // Skip this window entirely if we still can't get valid boundaries
