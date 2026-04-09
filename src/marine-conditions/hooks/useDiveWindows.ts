@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { TideData, DiveWindow, MarineEvent, MarineConditionsSnapshot } from '../types';
 import { calculateSlackWindows, interpolateSpeedAt } from '../utils/slackWindows';
-import { parseSafe } from '../utils/dateUtils';
+import { parseSafe, utcToLocalPrefix } from '../utils/dateUtils';
 import { cosineTideFromHilo } from '../utils/tideMath';
 import { getDaylightTimes } from '../utils/solarTimes';
 
@@ -120,7 +120,10 @@ export function useDiveWindows({
         const slackIndices: number[] = [];
         for (const evt of events) {
             if (evt.type !== 'Slack') continue;
-            const idx = times.findIndex(t => t.startsWith(evt.time.substring(0, 13)));
+            // evt.time may be UTC (CHS, ends with Z) or local (Open-Meteo fallback, no Z).
+            // Convert to local first so the prefix matches the hourly time array format.
+            const localPrefix = utcToLocalPrefix(evt.time).substring(0, 13);
+            const idx = times.findIndex(t => t.startsWith(localPrefix));
             if (idx !== -1) slackIndices.push(idx);
         }
         if (slackIndices.length === 0) return { windows: [], solarAvailable: true };

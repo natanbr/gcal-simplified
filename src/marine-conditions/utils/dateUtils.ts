@@ -52,3 +52,25 @@ export function formatSafe(
         return fallback;
     }
 }
+
+/**
+ * Converts a CHS UTC timestamp ("2026-04-09T23:44:00Z" or "2026-04-09T23:44:00.000Z")
+ * to a local-time prefix string in the same format used by the Open-Meteo hourly
+ * time array ("YYYY-MM-DDTHH:mm", no Z suffix).
+ *
+ * The hourly array comes from Open-Meteo and is always in device-local time.
+ * CHS hilo events are always UTC. Without this conversion, h.time.substring(0,13)
+ * matches "2026-04-09T23" (UTC hour) against the local array which has "2026-04-09T16"
+ * (PDT hour) — always returning -1.
+ *
+ * Returns the original string unchanged if it is NOT a UTC string (no Z suffix),
+ * so callers can safely pass any format through this function.
+ */
+export function utcToLocalPrefix(dateStr: string): string {
+    if (!dateStr || !dateStr.endsWith('Z')) return dateStr;
+    const d = parseSafe(dateStr);
+    if (d.getTime() === 0) return dateStr; // parse failed — return as-is
+    // Format as local YYYY-MM-DDTHH:mm (no tz offset, matches Open-Meteo array format)
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

@@ -458,4 +458,61 @@ describe('useDiveWindows', () => {
             expect(result.current.windows.length).toBeGreaterThanOrEqual(0);
         });
     });
+
+    // ── UTC vs Local time mismatch regression (dive windows) ──────────────────
+    // Bug: useMarineEvents produced Slack events with UTC timestamps (from CHS hilo).
+    // useDiveWindows then tried to find them in the hourly array using the UTC hour
+    // prefix, always getting idx=-1. slackIndices stayed empty → zero windows.
+    //
+    // Fix: utcToLocalPrefix() is applied before the findIndex in both hooks.
+    // This test exercises the full pipe: hilo with UTC Z timestamps → MarineEvents
+    // → DiveWindows, and confirms windows are produced.
+
+    describe('[UTC-fix] dive windows are found when events carry CHS UTC timestamps', () => {
+        it('produces dive windows when Slack events come from CHS UTC hilo', () => {
+            const { sunrises, sunsets } = makeSolarTimes(6, 20);
+
+            // Build tides: hourly times use .toISOString().substring(0,16) (UTC-based but no Z)
+            const tides = makeTides(0);
+
+            // Patch times to tomorrow LOCAL to match solar times (same as T4 tests)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
+            const tomorrowMs = tomorrow.getTime();
+            const pad = (n: number) => String(n).padStart(2, '0');
+            tides.hourly.time = tides.hourly.time.map((_, i) => {
+                const d = new Date(tomorrowMs + i * 3_600_000);
+                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            });
+
+            // Inject hilo events with REAL UTC ISO timestamps (Z suffix) that
+            // correspond to local hour 10 and 22 (i.e. UTC = local + tzOffset).
+            // Use getTime() arithmetic so the UTC string is always correct regardless of TZ.
+            const localH10 = new Date(tomorrowMs + 10 * 3_600_000);
+            const localH22 = new Date(tomorrowMs + 22 * 3_600_000);
+            tides.hilo = [
+                { time: localH10.toISOString(), type: 'Slack Water', value: 0.05 },
+                { time: localH22.toISOString(), type: 'Slack Water', value: 0.05 },
+            ];
+            // Patch current_speed to be calm (below threshold) at h10 and h22
+            const speeds = tides.hourly.current_speed!;
+            speeds[10] = 0.05; speeds[9] = 0.05; speeds[11] = 0.05;
+            speeds[22] = 0.05; speeds[21] = 0.05; speeds[23] = 0.05;
+            tides.hourly.current_speed = speeds;
+
+            const { result: eventsResult } = renderHook(() => useMarineEvents(tides));
+            const slacks = eventsResult.current.filter((e) => e.type === 'Slack');
+
+            // Sanity: events pipeline must have found the slack
+            expect(slacks.length).toBeGreaterThan(0);
+
+            const input = { tides, events: eventsResult.current, sunrises, sunsets };
+            const { result } = renderHook(() => useDiveWindows(input));
+
+            // The critical assertion: with the fix, at least 1 dive window must be returned.
+            // Before the fix, slackIndices was always [] → windows always [].
+            expect(result.current.windows.length).toBeGreaterThan(0);
+        });
+    });
 });

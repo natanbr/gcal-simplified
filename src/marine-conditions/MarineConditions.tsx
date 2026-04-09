@@ -58,6 +58,7 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
 
     const [activity, setActivity]            = React.useState<ActivityProfile>('diving');
     const [selectedWindow, setSelectedWindow] = React.useState<DiveWindow | null>(null);
+    const [hoveredEventTime, setHoveredEventTime] = React.useState<string | null>(null);
     const [debugOpen, setDebugOpen]           = React.useState(
         () => new URLSearchParams(window.location.search).get('debug') === '1'
     );
@@ -69,7 +70,9 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
 
     // Derived data
     const location = getLocationById(settings.locationId);
-    const events   = useMarineEvents(state.data);
+    const sunrises = state.data?.sunrise ?? weather?.daily.sunrise;
+    const sunsets  = state.data?.sunset  ?? weather?.daily.sunset;
+    const events   = useMarineEvents(state.data, sunrises, sunsets);
 
     // Build conditions snapshot from the first future hour of tides data.
     // Computed BEFORE useDiveWindows so it can feed the scoring model.
@@ -120,8 +123,8 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
         events,
         coords:   location.coords,
         // Prefer marine-fetched sunrise/sunset (now included in TideData); fall back to land weather prop
-        sunrises: state.data?.sunrise ?? weather?.daily.sunrise,
-        sunsets:  state.data?.sunset  ?? weather?.daily.sunset,
+        sunrises,
+        sunsets,
         snapshot: {
             swellHeight:   snapshot.swellHeight,
             windSpeed:     snapshot.windSpeed,
@@ -227,18 +230,20 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                                     events={events}
                                     diveWindows={diveWindows}
                                     isLoading={isLoading}
-                                    sunrises={state.data?.sunrise ?? weather?.daily.sunrise}
-                                    sunsets={state.data?.sunset ?? weather?.daily.sunset}
+                                    sunrises={sunrises}
+                                    sunsets={sunsets}
+                                    highlightTime={hoveredEventTime}
                                 />
                             </ChartErrorBoundary>
                         </div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                        <MarineEventsTable
+                    <MarineEventsTable
                             events={events}
                             tides={state.data}
                             weather={weather?.hourly}
                             isLoading={isLoading}
+                            onEventHover={setHoveredEventTime}
                         />
                     </div>
                 </div>

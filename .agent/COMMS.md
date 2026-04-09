@@ -88,17 +88,34 @@ Full Requirements Brief and task table in `implementation_plan.md`.
 
 ---
 
+### [FROM: PM → ALL AGENTS | 2026-04-09 | Sprint 8 Kickoff]
+**Subject**: Sprint 8 — UI Polish + Sunrise/Sunset + Chart Sync
+**Body**: User submitted 4 requests — all UI/presentation layer, no data safety implications.
+1. R1: Table max-width on 4K — layout fix, trivial
+2. R2: Sunrise/Sunset events — new event type in table + chart lines
+3. R3: Tide direction arrows — replace `—` dashes with ↗↘ based on tide trend
+4. R4: Table hover → chart highlight sync — shared state, new prop threading
+
+Requirements Brief posted to `implementation_plan.md`. 3 open questions blocking full start — awaiting user answers.
+**Status**: AWAITING USER APPROVAL
+
+---
+
 ## 📋 CURRENT SPRINT TASKS
 
 | ID | Task | Assigned To | Status | Notes |
 |----|------|-------------|--------|-------|
-| T1 | Night filter audit + fix | QA → Developer | 🔴 BLOCKED | Awaiting user Q4 clarification |
-| T2 | Duration format humanization | Developer | 🟡 READY | No blockers — can start on user approval |
-| T3 | "Why FAIR?" button label | Developer | 🔴 BLOCKED | Awaiting user Q3 answer |
-| T4 | Scoring algorithm redesign | Hydro + Developer | 🔴 BLOCKED | Awaiting user Q1 + Architect ADR |
-| T5 | Center modal detail panel | Developer | 🔴 BLOCKED | Awaiting user Q2 answer |
-| T6 | Score breakdown bars | Developer | 🔴 BLOCKED | Blocked on T4 |
-| T7 | Visibility label clarification | Developer | 🟡 READY | No blockers — quick fix |
+| S7-T1 | Night filter audit + fix | QA → Developer | 🔴 BLOCKED | Awaiting user Q4 clarification |
+| S7-T2 | Duration format humanization | Developer | 🟡 READY | No blockers |
+| S7-T3 | "Why FAIR?" button label | Developer | 🔴 BLOCKED | Awaiting user Q3 |
+| S7-T4 | Scoring algorithm redesign | Hydro + Developer | 🔴 BLOCKED | Awaiting user Q1 + Architect ADR |
+| S7-T5 | Center modal detail panel | Developer | 🔴 BLOCKED | Awaiting user Q2 |
+| S7-T6 | Score breakdown bars | Developer | 🔴 BLOCKED | Blocked on S7-T4 |
+| S7-T7 | Visibility label clarification | Developer | 🟡 READY | No blockers |
+| **S8-R1** | Table max-width (4K fix) | Developer | ⏳ PENDING | Awaiting user approval |
+| **S8-R2** | Sunrise/Sunset events | Developer | ⏳ PENDING | Q1 open (all 7 days vs today only) |
+| **S8-R3** | Tide direction arrows | Developer | ⏳ PENDING | Q3 open (alone vs alongside height) |
+| **S8-R4** | Table hover → chart sync | Developer | ⏳ PENDING | Awaiting user approval |
 
 ---
 

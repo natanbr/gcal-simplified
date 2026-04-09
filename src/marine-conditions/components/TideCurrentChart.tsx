@@ -26,10 +26,12 @@ interface Props {
     sunrises?: string[];
     /** Sunset timestamps from weather daily (e.g. "2026-04-08T20:05") */
     sunsets?: string[];
+    /** ISO time string of currently-hovered table row — draws a highlight line */
+    highlightTime?: string | null;
 }
 
 export const TideCurrentChart: React.FC<Props> = ({
-    tides, events, diveWindows, isLoading, sunrises, sunsets,
+    tides, events, diveWindows, isLoading, sunrises, sunsets, highlightTime,
 }) => {
     const data = useMemo(() => {
         if (!tides?.hourly) return [];
@@ -148,6 +150,48 @@ export const TideCurrentChart: React.FC<Props> = ({
 
         return bands;
     }, [sunsets, sunrises, data]);
+
+    // Sunrise / sunset vertical reference lines — snapped to nearest chart data point
+    const sunriseLines = useMemo(() => {
+        if (!sunrises?.length || !data.length) return [];
+        return sunrises.map(sr => {
+            const targetMs = parseSafe(sr).getTime();
+            if (!targetMs) return null;
+            let nearest = data[0];
+            for (const pt of data) {
+                if (Math.abs(parseSafe(pt.time).getTime() - targetMs) <
+                    Math.abs(parseSafe(nearest.time).getTime() - targetMs)) nearest = pt;
+            }
+            return nearest.time;
+        }).filter(Boolean) as string[];
+    }, [sunrises, data]);
+
+    const sunsetLines = useMemo(() => {
+        if (!sunsets?.length || !data.length) return [];
+        return sunsets.map(ss => {
+            const targetMs = parseSafe(ss).getTime();
+            if (!targetMs) return null;
+            let nearest = data[0];
+            for (const pt of data) {
+                if (Math.abs(parseSafe(pt.time).getTime() - targetMs) <
+                    Math.abs(parseSafe(nearest.time).getTime() - targetMs)) nearest = pt;
+            }
+            return nearest.time;
+        }).filter(Boolean) as string[];
+    }, [sunsets, data]);
+
+    // Snap the hovered event time to nearest chart data point for the highlight line
+    const highlightKey = useMemo(() => {
+        if (!highlightTime || !data.length) return null;
+        const targetMs = parseSafe(highlightTime).getTime();
+        if (!targetMs) return null;
+        let nearest = data[0];
+        for (const pt of data) {
+            if (Math.abs(parseSafe(pt.time).getTime() - targetMs) <
+                Math.abs(parseSafe(nearest.time).getTime() - targetMs)) nearest = pt;
+        }
+        return nearest.time;
+    }, [highlightTime, data]);
 
     if (isLoading || data.length === 0) {
         const hasNoHilo = !isLoading && tides && (!tides.hilo || tides.hilo.length === 0);
@@ -303,6 +347,55 @@ export const TideCurrentChart: React.FC<Props> = ({
                             }}
                         />
                     ))}
+
+                    {/* ── R2: Sunrise reference lines ──────────────────────────── */}
+                    {sunriseLines.map((x, idx) => (
+                        <ReferenceLine
+                            key={`sunrise-${idx}`}
+                            x={x}
+                            yAxisId="tide"
+                            stroke="rgba(255, 215, 80, 0.55)"
+                            strokeWidth={1}
+                            strokeDasharray="4 3"
+                            label={{
+                                value: '☀ Rise',
+                                position: 'insideTopRight',
+                                fontSize: 8,
+                                fill: 'rgba(255, 215, 80, 0.75)',
+                                fontFamily: 'Inter',
+                            }}
+                        />
+                    ))}
+
+                    {/* ── R2: Sunset reference lines ───────────────────────────── */}
+                    {sunsetLines.map((x, idx) => (
+                        <ReferenceLine
+                            key={`sunset-${idx}`}
+                            x={x}
+                            yAxisId="tide"
+                            stroke="rgba(255, 143, 64, 0.5)"
+                            strokeWidth={1}
+                            strokeDasharray="4 3"
+                            label={{
+                                value: '☀ Set',
+                                position: 'insideTopLeft',
+                                fontSize: 8,
+                                fill: 'rgba(255, 143, 64, 0.75)',
+                                fontFamily: 'Inter',
+                            }}
+                        />
+                    ))}
+
+                    {/* ── R4: Table-hover highlight line ───────────────────────── */}
+                    {highlightKey && (
+                        <ReferenceLine
+                            key="hover-highlight"
+                            x={highlightKey}
+                            yAxisId="tide"
+                            stroke="rgba(255,255,255,0.8)"
+                            strokeWidth={2}
+                        />
+                    )}
 
                     {/* Tide height — filled area */}
                     <Area

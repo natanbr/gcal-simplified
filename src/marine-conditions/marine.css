@@ -214,6 +214,8 @@
 .marine-dot-ebb     { background: var(--mc-coral); }
 .marine-dot-high    { background: var(--mc-blue); }
 .marine-dot-low     { background: var(--mc-teal); }
+.marine-dot-sunrise { background: #ffd740; }
+.marine-dot-sunset  { background: #ff8f40; }
 
 /* ---- Badge ---- */
 .marine-badge {

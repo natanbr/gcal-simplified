@@ -38,6 +38,8 @@ export type MarineEventType =
     | 'Max Ebb'
     | 'High Tide'
     | 'Low Tide'
+    | 'Sunrise'
+    | 'Sunset'
     | 'separator';
 
 export interface MarineEvent {

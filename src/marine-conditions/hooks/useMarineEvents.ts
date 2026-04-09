@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { addDays, isSameDay, format } from 'date-fns';
-import { parseSafe } from '../utils/dateUtils';
+import { parseSafe, utcToLocalPrefix } from '../utils/dateUtils';
 import type { TideData, MarineEvent, MarineEventType } from '../types';
 import { EPSILON, FORECAST_DAYS } from '../config';
 import { interpolateExtremeTime } from '../utils/tideMath';
@@ -19,7 +19,11 @@ import { interpolateExtremeTime } from '../utils/tideMath';
  *
  * Returns events sorted chronologically, filtered to [now, now+7d].
  */
-export function useMarineEvents(tides: TideData | null): MarineEvent[] {
+export function useMarineEvents(
+    tides: TideData | null,
+    sunrises?: string[],
+    sunsets?: string[],
+): MarineEvent[] {
     return useMemo(() => {
         if (!tides?.hourly?.current_speed?.length) return [];
 
@@ -48,7 +52,10 @@ export function useMarineEvents(tides: TideData | null): MarineEvent[] {
             tides.hilo!.forEach(h => {
                 if (!['Slack Water', 'Max Flood', 'Max Ebb'].includes(h.type)) return;
                 const typeStr = h.type === 'Slack Water' ? 'Slack' : h.type;
-                const idx = times.findIndex(t => t.startsWith(h.time.substring(0, 13)));
+                // CHS hilo times are UTC (Z suffix). Hourly times are local (no Z).
+                // Convert to local before prefix-matching to get the correct hourly bin.
+                const localPrefix = utcToLocalPrefix(h.time).substring(0, 13);
+                const idx = times.findIndex(t => t.startsWith(localPrefix));
                 rawEvents.push({
                     time: h.time,
                     type: typeStr as MarineEventType,
@@ -104,7 +111,9 @@ export function useMarineEvents(tides: TideData | null): MarineEvent[] {
         if (tides.hilo && tides.hilo.length > 0) {
             tides.hilo.forEach(h => {
                 if (!['High', 'Low', 'High Tide', 'Low Tide'].includes(h.type)) return;
-                const idx = times.findIndex(t => t.startsWith(h.time.substring(0, 13)));
+                // Same UTC→local conversion needed for tide high/low events.
+                const localPrefix = utcToLocalPrefix(h.time).substring(0, 13);
+                const idx = times.findIndex(t => t.startsWith(localPrefix));
                 rawEvents.push({
                     time: h.time,
                     type: (h.type === 'High' || h.type === 'High Tide') ? 'High Tide' : 'Low Tide',
@@ -152,6 +161,19 @@ export function useMarineEvents(tides: TideData | null): MarineEvent[] {
         const now = new Date();
         const futureLimit = addDays(now, FORECAST_DAYS);
 
+        // Inject sunrise / sunset events (all 7 days)
+        const effectiveSunrises = sunrises ?? tides?.sunrise ?? [];
+        const effectiveSunsets  = sunsets  ?? tides?.sunset  ?? [];
+
+        for (const sr of (effectiveSunrises ?? [])) {
+            if (!sr) continue;
+            rawEvents.push({ time: sr, type: 'Sunrise', currentSpeed: 0 });
+        }
+        for (const ss of (effectiveSunsets ?? [])) {
+            if (!ss) continue;
+            rawEvents.push({ time: ss, type: 'Sunset', currentSpeed: 0 });
+        }
+
         const sorted = rawEvents
             .filter(e => {
                 if (!e.time) return false;
@@ -184,5 +206,5 @@ export function useMarineEvents(tides: TideData | null): MarineEvent[] {
         }
 
         return withSeparators;
-    }, [tides]);
+    }, [tides, sunrises, sunsets]);
 }
