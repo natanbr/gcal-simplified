@@ -14,7 +14,7 @@
  * production UI.
  */
 import React, { useMemo, useState } from 'react';
-import type { TideData, DiveWindow, MarineConditionsSnapshot } from '../types';
+import type { TideData, DiveWindow, MarineConditionsSnapshot, ActivityProfile } from '../types';
 import type { AssertionResult } from '../hooks/useDataAssertions';
 import { parseSafe } from '../utils/dateUtils';
 import { format } from 'date-fns';
@@ -32,6 +32,9 @@ interface Props {
     sunrises?: string[];
     sunsets?: string[];
     coords?: { lat: number; lng: number };
+    /** Spearfishing windows with breakdown — shown only when activity === 'spearfishing' */
+    spearfishingWindows?: DiveWindow[];
+    activity?: ActivityProfile;
 }
 
 // ── Mini UI primitives ──────────────────────────────────────────────────────
@@ -121,6 +124,44 @@ function ColHeader({ label }: { label: string }) {
     );
 }
 
+// ── Q Breakdown row (spearfishing debug) ─────────────────────────────────────
+
+function QBreakdownRow({ label, reasons, pts, color }: {
+    label: string;
+    reasons: string[];
+    pts: number;
+    color: string;
+}) {
+    const sign = pts >= 0 ? '+' : '';
+    return (
+        <div style={{
+            display: 'grid',
+            gridTemplateColumns: '150px 1fr 70px',
+            gap: 8,
+            padding: '5px 0',
+            borderBottom: '1px solid rgba(255,255,255,0.04)',
+            fontSize: 11,
+            alignItems: 'start',
+        }}>
+            <div style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 600, paddingTop: 1 }}>{label}</div>
+            <div style={{ color: LABEL_COLOR, fontSize: 10, lineHeight: 1.7 }}>
+                {reasons.length > 0
+                    ? reasons.map((r, i) => <div key={i}>{r}</div>)
+                    : <span style={{ opacity: 0.5 }}>—</span>}
+            </div>
+            <div style={{
+                color,
+                fontWeight: 700,
+                textAlign: 'right',
+                fontFamily: 'Space Grotesk, monospace',
+                paddingTop: 1,
+            }}>
+                {sign}{Math.abs(pts) < 10 ? pts.toFixed(1) : pts.toFixed(0)}
+            </div>
+        </div>
+    );
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(v: number | undefined | null, unit = '', dp = 2): string {
@@ -140,6 +181,7 @@ function fmtTime(iso: string | undefined): string {
 export const DebugPanel: React.FC<Props> = ({
     isOpen, onClose, tides, windows, snapshot, assertions,
     locationName, solarAvailable, sunrises, sunsets, coords,
+    spearfishingWindows, activity,
 }) => {
     const hourly = tides?.hourly;
 
@@ -406,8 +448,129 @@ export const DebugPanel: React.FC<Props> = ({
                         note={speeds.length < 72 ? 'Low point count — data may be truncated' : undefined}
                     />
 
-                    {/* ── Slack windows ─────────────────────────────────────────── */}
-                    <SectionHeader title={`Dive Windows (${windows.length} shown)`} />
+                    {/* ── Spearfishing Q-Score — shown FIRST on spearfishing tab ────── */}
+                    {activity === 'spearfishing' && (
+                        <>
+                            <SectionHeader title={`🎯 Spearfishing Q-Score (${spearfishingWindows?.length ?? 0} windows after No-Go)`} />
+
+                            {/* Q-level reference table */}
+                            <div style={{ marginBottom: 16, overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                            {(['Raw Q', 'Level', 'Description'] as const).map(h => (
+                                                <th key={h} style={{ padding: '4px 8px', textAlign: 'left', color: DIM_COLOR, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: 9 }}>{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {[
+                                            { range: '+6 to +8', level: 'Excellent',    color: '#ffd700', desc: 'Perfect visibility (Flood tide), low wind, optimal swell period, and golden hour.' },
+                                            { range: '+3 to +5', level: 'Good',          color: 'var(--mc-good)',    desc: 'Safe, productive conditions with minor visibility or wind trade-offs.' },
+                                            { range: '0 to +2',  level: 'Fair',          color: 'var(--mc-caution)', desc: 'Diveable, but expect to work harder. Likely average swell or Ebb tide visibility.' },
+                                            { range: '−3 to −1', level: 'Poor',          color: '#ff7043', desc: 'Low visibility, high wind, or short swell periods making it "washy".' },
+                                            { range: 'Below −3', level: 'Unproductive',  color: 'var(--mc-danger)',  desc: 'Technically safe (within limits), but visibility is likely zero or conditions very rough.' },
+                                        ].map(row => (
+                                            <tr key={row.level} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                                <td style={{ padding: '5px 8px', fontFamily: 'Space Grotesk, monospace', color: LABEL_COLOR, whiteSpace: 'nowrap' }}>{row.range}</td>
+                                                <td style={{ padding: '5px 8px', fontWeight: 700, color: row.color, whiteSpace: 'nowrap' }}>{row.level}</td>
+                                                <td style={{ padding: '5px 8px', color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', lineHeight: 1.4 }}>{row.desc}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {(!spearfishingWindows || spearfishingWindows.length === 0) && (
+                                <div style={{ color: WARN_COLOR, fontSize: 11, padding: '8px 0', lineHeight: 1.6 }}>
+                                    No spearfishing windows survived No-Go filters.<br />
+                                    Check: wind &lt;20kn, swell &lt;1.5m, currentAtSlack &lt;1.5kn, maxCurrent &lt;3.0kn.
+                                </div>
+                            )}
+
+                            {spearfishingWindows?.map((w, i) => {
+                                const bd = w.spearfishingBreakdown;
+                                if (!bd) return <div key={i} style={{ color: WARN_COLOR, fontSize: 10 }}>No breakdown for window #{i + 1}</div>;
+
+                                return (
+                                    <div key={i} style={{
+                                        borderLeft: '2px solid rgba(255,179,0,0.5)',
+                                        paddingLeft: 12,
+                                        marginBottom: 20,
+                                    }}>
+                                        <div style={{ display: 'flex', gap: 16, alignItems: 'baseline', marginBottom: 8 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#ffb300' }}>
+                                                Window #{i + 1} — Slack @ {fmtTime(w.slackTime)}
+                                            </div>
+                                            <div style={{ fontSize: 11, color: PASS_COLOR, fontFamily: 'Space Grotesk, monospace' }}>
+                                                Shot Quality: {w.activityScore.spearfishing} / 100
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '150px 1fr 70px',
+                                            gap: 8,
+                                            paddingBottom: 4,
+                                            marginBottom: 2,
+                                            borderBottom: '1px solid rgba(255,255,255,0.06)',
+                                        }}>
+                                            <div style={{ color: DIM_COLOR, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Factor</div>
+                                            <div style={{ color: DIM_COLOR, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Reason</div>
+                                            <div style={{ color: DIM_COLOR, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'right' }}>Pts</div>
+                                        </div>
+
+                                        <QBreakdownRow
+                                            label="V_pts (Visibility)"
+                                            reasons={[bd.vReason]}
+                                            pts={bd.vPts}
+                                            color={bd.vPts >= 1.5 ? PASS_COLOR : bd.vPts >= 0 ? WARN_COLOR : FAIL_COLOR}
+                                        />
+                                        <QBreakdownRow
+                                            label="F_pts (Fish Activity)"
+                                            reasons={bd.fReasons.length ? bd.fReasons : ['No bonuses this window']}
+                                            pts={bd.fPts}
+                                            color={bd.fPts > 0 ? PASS_COLOR : DIM_COLOR}
+                                        />
+                                        <QBreakdownRow
+                                            label="W_penalty (Weather)"
+                                            reasons={bd.wReasons.length ? bd.wReasons : ['No penalties']}
+                                            pts={-bd.wPenalty}
+                                            color={bd.wPenalty > 0 ? WARN_COLOR : DIM_COLOR}
+                                        />
+
+                                        <div style={{ paddingTop: 8, marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr auto', gap: 8, fontSize: 11, alignItems: 'center', marginBottom: 4 }}>
+                                                <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700 }}>Q = V + F − W</div>
+                                                <div style={{ color: LABEL_COLOR, fontFamily: 'Space Grotesk, monospace', fontSize: 10 }}>
+                                                    {bd.vPts >= 0 ? '+' : ''}{bd.vPts.toFixed(1)} + {bd.fPts} − {bd.wPenalty} = {bd.qRaw >= 0 ? '+' : ''}{bd.qRaw.toFixed(1)}
+                                                </div>
+                                                <div style={{
+                                                    color: bd.qLevel === 'excellent' ? '#ffd700'
+                                                        : bd.qLevel === 'good' ? PASS_COLOR
+                                                        : bd.qLevel === 'fair' ? WARN_COLOR
+                                                        : FAIL_COLOR,
+                                                    fontWeight: 800, fontSize: 12, letterSpacing: '0.08em',
+                                                    textTransform: 'uppercase', fontFamily: 'Space Grotesk, monospace',
+                                                }}>
+                                                    {bd.qLevel}
+                                                </div>
+                                            </div>
+                                            <div style={{ fontSize: 9, color: DIM_COLOR, lineHeight: 1.5, fontStyle: 'italic', paddingLeft: 158 }}>
+                                                {bd.qDescription}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </>
+                    )}
+
+                    {/* ── Diving model windows ───────────────────────────────────── */}
+                    <SectionHeader title={activity === 'spearfishing'
+                        ? `Diving Model Windows (${windows.length} shown — reference only, not used for spearfishing score)`
+                        : `Dive Windows (${windows.length} shown)`}
+                    />
 
                     {windows.length === 0 && (
                         <div style={{ color: WARN_COLOR, fontSize: 11, padding: '8px 0' }}>

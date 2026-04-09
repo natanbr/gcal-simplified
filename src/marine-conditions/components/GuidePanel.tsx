@@ -1,11 +1,13 @@
 import React from 'react';
+import type { ActivityProfile } from '../types';
 
 interface Props {
     isOpen: boolean;
     onClose: () => void;
+    activity?: ActivityProfile;
 }
 
-export const GuidePanel: React.FC<Props> = ({ isOpen, onClose }) => {
+export const GuidePanel: React.FC<Props> = ({ isOpen, onClose, activity = 'diving' }) => {
     if (!isOpen) return null;
 
     return (
@@ -23,7 +25,7 @@ export const GuidePanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
                     <div>
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--mc-cyan)', marginBottom: 4 }}>
-                            Diver's Reference
+                            {activity === 'spearfishing' ? "Spearfisher's Reference" : "Diver's Reference"}
                         </div>
                         <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--mc-text)' }}>
                             Quick Guide
@@ -95,6 +97,21 @@ export const GuidePanel: React.FC<Props> = ({ isOpen, onClose }) => {
                         'This app does not replace formal dive training',
                     ]}
                 />
+
+                {/* Spearfishing tactical tips — shown only on spearfishing tab */}
+                {activity === 'spearfishing' && (
+                    <GuideSection
+                        emoji="🎯"
+                        title="Spearfishing Tactical Tips"
+                        color="var(--mc-teal)"
+                        items={[
+                            "Steep Slope: If current ramps 0→ 3kn within 30 min, your safe window is shorter than 75 min — set a 45 min alarm and exit early.",
+                            "Up-Current Entry: Always enter the water swimming into the current. Let it push you back to your exit point — never fight a ripping ebb.",
+                            "Post-Rain Delay: After heavy rain (>15mm/24h), wait 24–48h for runoff sediment to clear. Visibility can drop to <2m in bays and river mouths.",
+                            "15-Minute Safety Buffer: Set a hard alarm 15 minutes after slack water. When it rings, end your dive regardless of conditions — ramp-up is faster than it looks.",
+                        ]}
+                    />
+                )}
 
                 {/* Data sources note */}
                 <div style={{

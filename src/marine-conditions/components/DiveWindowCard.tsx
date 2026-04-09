@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { parseSafe } from '../utils/dateUtils';
-import type { DiveWindow } from '../types';
+import type { DiveWindow, ActivityProfile } from '../types';
+import { getQLevel } from '../hooks/useSpearfishingWindows';
 
 interface Props {
     window: DiveWindow;
+    activity?: ActivityProfile;
     onSelect?: (w: DiveWindow) => void;
+    onHover?: (slackTime: string | null) => void;
+    isHighlighted?: boolean;
 }
 
 function scoreColor(score: number): string {
@@ -18,6 +22,17 @@ function scoreLabel(score: number): string {
     if (score >= 70) return 'GOOD';
     if (score >= 40) return 'FAIR';
     return 'POOR';
+}
+
+// Maps Q-level to a display color (spearfishing only)
+function qLevelColor(level: string): string {
+    switch (level) {
+        case 'excellent':    return '#ffd700';
+        case 'good':         return 'var(--mc-good)';
+        case 'fair':         return 'var(--mc-caution)';
+        case 'poor':         return '#ff7043';
+        default:             return 'var(--mc-danger)'; // unproductive
+    }
 }
 
 function scoreExplain(w: DiveWindow): string {
@@ -52,20 +67,46 @@ function formatDuration(mins: number): string {
     return m === 0 ? `${h}h window` : `${h}h ${m}min window`;
 }
 
-export const DiveWindowCard: React.FC<Props> = ({ window: w, onSelect }) => {
+export const DiveWindowCard: React.FC<Props> = ({ window: w, activity = 'diving', onSelect, onHover, isHighlighted = false }) => {
+    const ref = useRef<HTMLDivElement>(null);
     const slackDate   = parseSafe(w.slackTime);
     const startDate   = parseSafe(w.windowStart);
     const endDate     = parseSafe(w.windowEnd);
     const isOptimal   = w.isHighTide && w.isDaylight;
-    const score       = w.activityScore.diving;
-    const label       = scoreLabel(score);
-    const color       = scoreColor(score);
+    const score       = activity === 'spearfishing'
+        ? w.activityScore.spearfishing
+        : w.activityScore.diving;
+    const qualityLabel = activity === 'spearfishing' ? 'Shot Quality' : 'Dive Quality';
+
+    // Spearfishing: use Q-level label system
+    const qLevelData   = activity === 'spearfishing' && w.spearfishingBreakdown
+        ? getQLevel(w.spearfishingBreakdown.qRaw)
+        : null;
+    const label  = qLevelData ? qLevelData.level.toUpperCase() : scoreLabel(score);
+    const color  = qLevelData ? qLevelColor(qLevelData.level) : scoreColor(score);
+
+    // Scroll into view when activated from the chart hover
+    useEffect(() => {
+        if (isHighlighted && ref.current) {
+            ref.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }, [isHighlighted]);
 
     return (
         <div
+            ref={ref}
             data-testid="dive-window-card"
             className={`marine-card p-4 ${isOptimal ? 'marine-window-optimal' : ''}`}
-            style={{ marginBottom: 10 }}
+            style={{
+                marginBottom: 10,
+                transition: 'box-shadow 180ms ease, border-color 180ms ease',
+                ...(isHighlighted ? {
+                    borderColor: 'rgba(78, 222, 163, 0.65)',
+                    boxShadow: '0 0 0 1px rgba(78,222,163,0.28), 0 0 18px rgba(78,222,163,0.16)',
+                } : {}),
+            }}
+            onMouseEnter={() => onHover?.(w.slackTime)}
+            onMouseLeave={() => onHover?.(null)}
         >
             {/* Header row */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -119,11 +160,18 @@ export const DiveWindowCard: React.FC<Props> = ({ window: w, onSelect }) => {
                         textTransform: 'uppercase',
                         color: 'var(--mc-text-dim)',
                     }}>
-                        Dive Quality
+                        {qualityLabel}
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color, letterSpacing: '0.06em' }}>
-                        {label}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        {qLevelData && (
+                            <span style={{ fontSize: 9, color: 'var(--mc-text-dim)', fontFamily: 'Space Grotesk, monospace' }}>
+                                Q={w.spearfishingBreakdown!.qRaw >= 0 ? '+' : ''}{w.spearfishingBreakdown!.qRaw.toFixed(1)}
+                            </span>
+                        )}
+                        <span style={{ fontSize: 12, fontWeight: 800, color, letterSpacing: '0.06em' }}>
+                            {label}
+                        </span>
+                    </div>
                 </div>
                 <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden' }}>
                     <div style={{
@@ -134,6 +182,11 @@ export const DiveWindowCard: React.FC<Props> = ({ window: w, onSelect }) => {
                         transition: 'width 0.4s ease',
                     }} />
                 </div>
+                {qLevelData && (
+                    <div style={{ fontSize: 9, color: 'var(--mc-text-dim)', marginTop: 4, lineHeight: 1.4, fontStyle: 'italic' }}>
+                        {qLevelData.description}
+                    </div>
+                )}
             </div>
 
             {/* Factors breakdown + See more */}

@@ -101,21 +101,36 @@ Requirements Brief posted to `implementation_plan.md`. 3 open questions blocking
 
 ---
 
+### [FROM: PM → ALL AGENTS | 2026-04-10 | Sprint 9 Kickoff]
+**Subject**: Sprint 9 — Spearfishing Mode
+**Body**: User requested a dedicated "Spearfishing" profile.
+1. T1: New tab for activity switching.
+2. T2: swell_period data integration.
+3. T3: New scoring formula (Spearfishing-specific).
+4. T4: Tactical tips in GuidePanel.
+**Status**: AWAITING USER APPROVAL
+
+---
+
 ## 📋 CURRENT SPRINT TASKS
 
 | ID | Task | Assigned To | Status | Notes |
 |----|------|-------------|--------|-------|
-| S7-T1 | Night filter audit + fix | QA → Developer | 🔴 BLOCKED | Awaiting user Q4 clarification |
+| S7-T1 | Night filter audit + fix | QA → Developer | ✅ DONE | Shipped — all T1 regression tests GREEN |
 | S7-T2 | Duration format humanization | Developer | 🟡 READY | No blockers |
 | S7-T3 | "Why FAIR?" button label | Developer | 🔴 BLOCKED | Awaiting user Q3 |
-| S7-T4 | Scoring algorithm redesign | Hydro + Developer | 🔴 BLOCKED | Awaiting user Q1 + Architect ADR |
+| S7-T4 | Scoring algorithm redesign | Hydro + Developer | 🔴 BLOCKED | Superseded by S9 — see below |
 | S7-T5 | Center modal detail panel | Developer | 🔴 BLOCKED | Awaiting user Q2 |
-| S7-T6 | Score breakdown bars | Developer | 🔴 BLOCKED | Blocked on S7-T4 |
+| S7-T6 | Score breakdown bars | Developer | 🔴 BLOCKED | Blocked on S7-T4/S9-T4 |
 | S7-T7 | Visibility label clarification | Developer | 🟡 READY | No blockers |
 | **S8-R1** | Table max-width (4K fix) | Developer | ⏳ PENDING | Awaiting user approval |
 | **S8-R2** | Sunrise/Sunset events | Developer | ⏳ PENDING | Q1 open (all 7 days vs today only) |
 | **S8-R3** | Tide direction arrows | Developer | ⏳ PENDING | Q3 open (alone vs alongside height) |
 | **S8-R4** | Table hover → chart sync | Developer | ⏳ PENDING | Awaiting user approval |
+| **S9-T1** | Spearfishing tab (ActivityProfile + switcher) | Developer | ✅ DONE | 3-tab switcher live — Spearfishing added as primary tab |
+| **S9-T2** | swell_period column in MarineEventsTable | Developer | ✅ DONE | Period column shown in seconds, amber color when < 6s |
+| **S9-T3** | Spearfishing Q-score formula + useSpearfishingWindows hook | Hydro + Developer | ✅ DONE | 13 tests GREEN — No-Go filters + Q = (V+F) - W |
+| **S9-T4** | GuidePanel — Spearfishing tactical tips section | Developer | ✅ DONE | 4 tactical tips shown when spearfishing tab active |
 
 ---
 

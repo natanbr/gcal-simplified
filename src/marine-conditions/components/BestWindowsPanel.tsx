@@ -1,18 +1,22 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { DiveWindow } from '../types';
+import type { DiveWindow, ActivityProfile } from '../types';
 import { DiveWindowCard } from './DiveWindowCard';
 
 interface Props {
     windows: DiveWindow[];
     isLoading: boolean;
+    activity?: ActivityProfile;
     onSelect?: (w: DiveWindow) => void;
+    onHover?: (slackTime: string | null) => void;
+    hoveredWindowSlack?: string | null;
 }
 
-export const BestWindowsPanel: React.FC<Props> = ({ windows, isLoading, onSelect }) => {
+export const BestWindowsPanel: React.FC<Props> = ({ windows, isLoading, activity = 'diving', onSelect, onHover, hoveredWindowSlack }) => {
+    const panelLabel = activity === 'spearfishing' ? 'Best Times to Spearfish' : 'Best Times to Dive';
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div className="marine-section-label">Best Times to Dive</div>
+            <div className="marine-section-label">{panelLabel}</div>
 
             <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
                 {isLoading && (
@@ -67,7 +71,13 @@ export const BestWindowsPanel: React.FC<Props> = ({ windows, isLoading, onSelect
                                             transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } },
                                     }}
                                 >
-                                    <DiveWindowCard window={w} onSelect={onSelect} />
+                                    <DiveWindowCard
+                                        window={w}
+                                        activity={activity}
+                                        onSelect={onSelect}
+                                        onHover={onHover}
+                                        isHighlighted={hoveredWindowSlack === w.slackTime}
+                                    />
                                 </motion.div>
                             ))}
                         </motion.div>

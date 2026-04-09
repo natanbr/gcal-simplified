@@ -160,6 +160,13 @@ interface SwitcherProps {
 export const ActivitySwitcher: React.FC<SwitcherProps> = ({ activity, onChange }) => (
     <div className="marine-pill" data-testid="activity-switcher">
         <button
+            className={`marine-pill-tab ${activity === 'spearfishing' ? 'active' : ''}`}
+            onClick={() => onChange('spearfishing')}
+            data-testid="activity-spearfishing"
+        >
+            🎯 Spearfishing
+        </button>
+        <button
             className={`marine-pill-tab ${activity === 'diving' ? 'active' : ''}`}
             onClick={() => onChange('diving')}
             data-testid="activity-diving"
