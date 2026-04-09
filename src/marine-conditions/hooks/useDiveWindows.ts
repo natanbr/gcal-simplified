@@ -219,7 +219,7 @@ export function useDiveWindows({
                     tideHeight:      w.tideHeight,
                     isHighTide:      w.isHighTide,
                     isDaylight,
-                    activityScore: { diving: divingScore, surfing: 0 },
+                    activityScore: { diving: divingScore, spearfishing: 0, surfing: 0 },
                 };
                 return diveWindow;
             })

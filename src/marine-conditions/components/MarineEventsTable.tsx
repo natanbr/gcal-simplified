@@ -118,7 +118,7 @@ export const MarineEventsTable: React.FC<Props> = ({ events, tides, weather, isL
                     >
                         <thead>
                             <tr>
-                                {['Event', 'Time', 'Current', 'Tide', 'Swell', 'Wind'].map(h => (
+                                {['Event', 'Time', 'Current', 'Tide', 'Swell', 'Period', 'Wind'].map(h => (
                                     <th key={h} style={{
                                         padding: '0 8px 8px',
                                         textAlign: h === 'Event' ? 'left' : 'center',
@@ -140,7 +140,7 @@ export const MarineEventsTable: React.FC<Props> = ({ events, tides, weather, isL
                                 if (evt.type === 'separator') {
                                     return (
                                         <tr key={`sep-${i}`}>
-                                            <td colSpan={6} style={{
+                                            <td colSpan={7} style={{
                                                 padding: '10px 8px 4px',
                                                 fontSize: 10,
                                                 fontWeight: 700,
@@ -166,13 +166,16 @@ export const MarineEventsTable: React.FC<Props> = ({ events, tides, weather, isL
                                     ? (weather?.wind_speed_10m?.[weatherIdx] ?? 0)
                                     : (evt.windSpeed ?? 0);
 
-                                // Correlate with tides for swell
+                                // Correlate with tides for swell + period
                                 const tidesIdx = tides?.hourly.time.findIndex(
                                     t => t.startsWith(evt.time.substring(0, 13))
                                 ) ?? -1;
                                 const swellH = tidesIdx !== -1
                                     ? (tides?.hourly.wave_height?.[tidesIdx] ?? evt.swellHeight ?? 0)
                                     : (evt.swellHeight ?? 0);
+                                const swellPeriodRaw = tidesIdx !== -1
+                                    ? ((tides?.hourly as { wave_period?: number[] }).wave_period?.[tidesIdx] ?? null)
+                                    : null;
 
                                 // Tide direction arrow
                                 const arrow      = getTideArrow(evt, tides);
@@ -249,6 +252,26 @@ export const MarineEventsTable: React.FC<Props> = ({ events, tides, weather, isL
                                                 <span style={{ color: 'var(--mc-text-dim)' }}>—</span>
                                             ) : (
                                                 <span className="marine-data">{swellH.toFixed(1)}m</span>
+                                            )}
+                                        </td>
+
+                                        {/* Swell Period */}
+                                        <td style={{ padding: '8px 8px', textAlign: 'center', color: 'var(--mc-text-muted)' }}>
+                                            {isSolar || swellPeriodRaw == null ? (
+                                                <span style={{ color: 'var(--mc-text-dim)' }}>—</span>
+                                            ) : (
+                                                <span
+                                                    className="marine-data"
+                                                    style={{
+                                                        color: swellPeriodRaw < 6
+                                                            ? 'var(--mc-caution)'
+                                                            : 'var(--mc-text-muted)',
+                                                        fontWeight: swellPeriodRaw < 6 ? 700 : undefined,
+                                                    }}
+                                                    title={swellPeriodRaw < 6 ? 'Short period — washy conditions' : undefined}
+                                                >
+                                                    {swellPeriodRaw.toFixed(0)}s
+                                                </span>
                                             )}
                                         </td>
 

@@ -30,7 +30,7 @@ export interface TideData {
 
 // ── Domain types ──────────────────────────────────────────────────────────────
 
-export type ActivityProfile = 'diving' | 'surfing';
+export type ActivityProfile = 'diving' | 'spearfishing' | 'surfing';
 
 export type MarineEventType =
     | 'Slack'
@@ -65,8 +65,22 @@ export interface DiveWindow {
     isHighTide: boolean;
     isDaylight: boolean;
     activityScore: {
-        diving: number;     // 0–100, computed via min(7-factor model)
-        surfing: number;    // 0–100 (future)
+        diving: number;       // 0–100, computed via min(7-factor model)
+        spearfishing: number; // 0–100, computed via Q = (V_pts + F_pts) - W_penalty
+        surfing: number;      // 0–100 (future)
+    };
+    /** Debug breakdown — only populated by useSpearfishingWindows */
+    spearfishingBreakdown?: {
+        vPts:          number;   // weighted flood fraction V_pts ∈ [−1, +3]
+        fPts:          number;   // fish activity bonus ∈ [0, +5]
+        wPenalty:      number;   // weather penalty ∈ [0, 4]
+        qRaw:          number;   // vPts + fPts − wPenalty (before normalisation)
+        floodFraction: number;   // 0–1 (fraction of window bins where tide is rising)
+        vReason:       string;   // e.g. "Flood 70% / Ebb 30% → +1.8"
+        fReasons:      string[]; // e.g. ["🌅 Golden Hour (sunrise) +2", "🌕 Full Moon +1"]
+        wReasons:      string[]; // e.g. ["💨 Wind 14kn −1", "🌊 Swell 7s (acceptable) −1"]
+        qLevel:        'excellent' | 'good' | 'fair' | 'poor' | 'unproductive';
+        qDescription:  string;   // human-readable level description
     };
 }
 

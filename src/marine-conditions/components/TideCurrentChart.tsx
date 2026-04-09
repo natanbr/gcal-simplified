@@ -28,10 +28,14 @@ interface Props {
     sunsets?: string[];
     /** ISO time string of currently-hovered table row — draws a highlight line */
     highlightTime?: string | null;
+    /** slackTime of the currently-hovered dive window card — brightens that band */
+    hoveredWindowSlack?: string | null;
+    /** Called when the user hovers over a point inside a window band — returns the slackTime or null */
+    onWindowHover?: (slackTime: string | null) => void;
 }
 
 export const TideCurrentChart: React.FC<Props> = ({
-    tides, events, diveWindows, isLoading, sunrises, sunsets, highlightTime,
+    tides, events, diveWindows, isLoading, sunrises, sunsets, highlightTime, hoveredWindowSlack, onWindowHover,
 }) => {
     const data = useMemo(() => {
         if (!tides?.hourly) return [];
@@ -229,7 +233,19 @@ export const TideCurrentChart: React.FC<Props> = ({
     return (
         <div data-testid="tide-current-chart" style={{ height: '100%', minHeight: 120 }}>
             <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <ComposedChart
+                    data={data}
+                    margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
+                    onMouseMove={(state) => {
+                        if (!onWindowHover) return;
+                        const label = state?.activeLabel as string | undefined;
+                        if (!label) return;
+                        const ms = parseSafe(label).getTime();
+                        const hit = diveWindowRanges.find(w => ms >= w.start && ms <= w.end);
+                        onWindowHover(hit?.slackTime ?? null);
+                    }}
+                    onMouseLeave={() => onWindowHover?.(null)}
+                >
                     <CartesianGrid
                         strokeDasharray="3 3"
                         stroke="rgba(255,255,255,0.05)"
@@ -283,20 +299,24 @@ export const TideCurrentChart: React.FC<Props> = ({
 
                     {/* ── Dive window bands: highlight actual windowStart→windowEnd ── */}
                     {diveWindowRanges.map(w => {
-                        const startKey = data.find(d => parseSafe(d.time).getTime() >= w.start)?.time;
-                        const endKey   = data.filter(
-                            (d: { time: string }) => parseSafe(d.time).getTime() <= w.end
-                        ).at(-1)?.time;
+                        // Snap OUTWARD so the full window is covered:
+                        // startKey = last point <= windowStart (don't clip the leading edge)
+                        // endKey   = first point >= windowEnd   (don't clip the trailing edge)
+                        const startKey = data.filter(d => parseSafe(d.time).getTime() <= w.start).at(-1)?.time
+                            ?? data.find(d => parseSafe(d.time).getTime() >= w.start)?.time;
+                        const endKey = data.find(d => parseSafe(d.time).getTime() >= w.end)?.time
+                            ?? data.filter(d => parseSafe(d.time).getTime() <= w.end).at(-1)?.time;
                         if (!startKey || !endKey || startKey === endKey) return null;
+                        const isHovered = w.slackTime === hoveredWindowSlack;
                         return (
                             <ReferenceArea
                                 key={w.slackTime}
                                 x1={startKey}
                                 x2={endKey}
                                 yAxisId="tide"
-                                fill="rgba(78, 222, 163, 0.09)"
-                                stroke="rgba(78,222,163,0.2)"
-                                strokeWidth={1}
+                                fill={isHovered ? 'rgba(78, 222, 163, 0.22)' : 'rgba(78, 222, 163, 0.09)'}
+                                stroke={isHovered ? 'rgba(78,222,163,0.7)' : 'rgba(78,222,163,0.2)'}
+                                strokeWidth={isHovered ? 2 : 1}
                             />
                         );
                     })}
@@ -359,10 +379,11 @@ export const TideCurrentChart: React.FC<Props> = ({
                             strokeDasharray="4 3"
                             label={{
                                 value: '☀ Rise',
-                                position: 'insideTopRight',
+                                position: 'insideTopLeft',
                                 fontSize: 8,
                                 fill: 'rgba(255, 215, 80, 0.75)',
                                 fontFamily: 'Inter',
+                                dy: 2,
                             }}
                         />
                     ))}
@@ -378,10 +399,11 @@ export const TideCurrentChart: React.FC<Props> = ({
                             strokeDasharray="4 3"
                             label={{
                                 value: '☀ Set',
-                                position: 'insideTopLeft',
+                                position: 'insideTopRight',
                                 fontSize: 8,
                                 fill: 'rgba(255, 143, 64, 0.75)',
                                 fontFamily: 'Inter',
+                                dy: 2,
                             }}
                         />
                     ))}

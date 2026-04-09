@@ -6,6 +6,7 @@ import { useMarineSettings }  from './hooks/useMarineSettings';
 import { useMarineData }       from './hooks/useMarineData';
 import { useMarineEvents }     from './hooks/useMarineEvents';
 import { useDiveWindows }      from './hooks/useDiveWindows';
+import { useSpearfishingWindows } from './hooks/useSpearfishingWindows';
 import { useGuidePanel }       from './hooks/useGuidePanel';
 import { useDataQuality }     from './hooks/useDataQuality';
 import { useDataAssertions }  from './hooks/useDataAssertions';
@@ -59,6 +60,7 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
     const [activity, setActivity]            = React.useState<ActivityProfile>('diving');
     const [selectedWindow, setSelectedWindow] = React.useState<DiveWindow | null>(null);
     const [hoveredEventTime, setHoveredEventTime] = React.useState<string | null>(null);
+    const [hoveredWindowSlack, setHoveredWindowSlack] = React.useState<string | null>(null);
     const [debugOpen, setDebugOpen]           = React.useState(
         () => new URLSearchParams(window.location.search).get('debug') === '1'
     );
@@ -131,6 +133,23 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
             visibilityEst: snapshot.visibilityEst,
         },
     });
+
+    const { windows: spearfishingWindows, solarAvailable: spearSolarAvailable } = useSpearfishingWindows({
+        tides:    state.data,
+        events,
+        coords:   location.coords,
+        sunrises,
+        sunsets,
+        snapshot: {
+            swellHeight:  snapshot.swellHeight,
+            swellPeriod:  snapshot.swellPeriod,
+            windSpeed:    snapshot.windSpeed,
+        },
+    });
+
+    // The active "best windows" — switches based on which tab is selected
+    const activeWindows  = activity === 'spearfishing' ? spearfishingWindows : diveWindows;
+    const activeSolar    = activity === 'spearfishing' ? spearSolarAvailable : solarAvailable;
 
     const quality    = useDataQuality(state.data);
     const assertions = useDataAssertions(state.data, diveWindows);
@@ -205,12 +224,19 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
             >
                 {/* ── Left: Best Windows (scrollable) ──────────────────────── */}
                 <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-                    {!solarAvailable && !isLoading && (
+                    {!activeSolar && !isLoading && (
                         <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--mc-amber)', opacity: 0.8 }}>
                             ⚠ Cannot determine daylight hours for this location. Best dive times are unavailable.
                         </div>
                     )}
-                    <BestWindowsPanel windows={diveWindows} isLoading={isLoading} onSelect={setSelectedWindow} />
+                    <BestWindowsPanel
+                        windows={activeWindows}
+                        isLoading={isLoading}
+                        activity={activity}
+                        onSelect={setSelectedWindow}
+                        onHover={setHoveredWindowSlack}
+                        hoveredWindowSlack={hoveredWindowSlack}
+                    />
                 </div>
 
                 {/* ── Center: Chart (40%) + Events (60%) ───────────────────── */}
@@ -228,11 +254,13 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                                 <TideCurrentChart
                                     tides={state.data}
                                     events={events}
-                                    diveWindows={diveWindows}
+                                    diveWindows={activeWindows}
                                     isLoading={isLoading}
                                     sunrises={sunrises}
                                     sunsets={sunsets}
                                     highlightTime={hoveredEventTime}
+                                    hoveredWindowSlack={hoveredWindowSlack}
+                                    onWindowHover={setHoveredWindowSlack}
                                 />
                             </ChartErrorBoundary>
                         </div>
@@ -266,13 +294,14 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                 isSuspect={state.isSuspect}
             />
 
-            <GuidePanel isOpen={isGuideOpen} onClose={closeGuide} />
+            <GuidePanel isOpen={isGuideOpen} onClose={closeGuide} activity={activity} />
 
             <DiveWindowDetailPanel
                 window={selectedWindow}
                 snapshot={snapshot}
                 onClose={() => setSelectedWindow(null)}
                 locationName={location.name}
+                activity={activity}
             />
 
             {process.env.NODE_ENV === 'development' && (
@@ -288,6 +317,8 @@ export function MarineConditions({ onBackToCalendar, weather }: MarineConditions
                     sunrises={state.data?.sunrise ?? weather?.daily.sunrise}
                     sunsets={state.data?.sunset ?? weather?.daily.sunset}
                     coords={location.coords}
+                    spearfishingWindows={spearfishingWindows}
+                    activity={activity}
                 />
             )}
         </div>

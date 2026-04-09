@@ -216,30 +216,22 @@ describe('useMarineEvents', () => {
         // We pick a fixed local datetime string and put it in hourly[2],
         // then build the matching UTC Z string for hilo.
         // e.g. Local "2026-04-10T10:00" + UTC offset → UTC "2026-04-10T17:00:00Z" in PDT.
-        // We do this TZ-agnostically using Date arithmetic.
         const now = new Date();
         now.setMinutes(0, 0, 0);
-        // Compute local YYYY-MM-DDTHH:mm for "now + 2h"
-        const localPlus2 = new Date(now.getTime() + 2 * 3600_000);
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const localStr = `${localPlus2.getFullYear()}-${pad(localPlus2.getMonth()+1)}-${pad(localPlus2.getDate())}T${pad(localPlus2.getHours())}:${pad(localPlus2.getMinutes())}`;
-
-        // Patch hourly.time[2] to our known local string
-        tides.hourly.time[2] = localStr;
-        tides.hourly.current_speed![2] = 0.05; // below slack threshold
-
-        // CHS would give us this exact moment in UTC (with Z suffix)
-        const utcStr = localPlus2.toISOString(); // always UTC with Z
-
+        // Simulate a CHS hilo event: same wall-clock moment as hourly.time[2]
+        // but expressed as a UTC Z-suffix ISO string (as CHS actually returns).
+        // We get the real UTC equivalent by adding Nh to `now` and calling toISOString().
+        const slackCHSUtc = new Date(now.getTime() + 2 * 3600_000).toISOString(); // real UTC
         tides.hilo = [
-            { time: utcStr, type: 'Slack Water', value: 0.05 },
+            { time: slackCHSUtc, type: 'Slack Water', value: 0.05 },
         ];
+        tides.hourly.current_speed![2] = 0.05;
 
         const { result } = renderHook(() => useMarineEvents(tides));
         const slacks = result.current.filter((e: MarineEvent) => e.type === 'Slack');
 
         expect(slacks.length).toBeGreaterThan(0);
-        // With the fix: utcToLocalPrefix converts utcStr to localStr, idx===2, tideHeight defined
+        // With the fix: idx is found via utcToLocalPrefix and tideHeight is a number
         expect(typeof slacks[0].tideHeight).toBe('number');
     });
 
@@ -247,24 +239,16 @@ describe('useMarineEvents', () => {
         const tides = makeTides();
         const now = new Date();
         now.setMinutes(0, 0, 0);
-        const pad = (n: number) => String(n).padStart(2, '0');
-
-        // Build 3 local→UTC pairs for indices 1, 3, 4
-        const patchIdx = [1, 3, 4];
-        const utcTimes: string[] = [];
-        patchIdx.forEach(i => {
-            const local = new Date(now.getTime() + i * 3_600_000);
-            const localStr = `${local.getFullYear()}-${pad(local.getMonth()+1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}`;
-            tides.hourly.time[i] = localStr;
-            utcTimes.push(local.toISOString());
-        });
-        tides.hourly.current_speed![1] = 0.05;
-
+        // Real UTC equivalents for hours 1, 3, 4
+        const t1 = new Date(now.getTime() + 1 * 3600_000).toISOString();
+        const t3 = new Date(now.getTime() + 3 * 3600_000).toISOString();
+        const t4 = new Date(now.getTime() + 4 * 3600_000).toISOString();
         tides.hilo = [
-            { time: utcTimes[0], type: 'Slack Water', value: 0.05 },
-            { time: utcTimes[1], type: 'Max Flood', value: 2.5 },
-            { time: utcTimes[2], type: 'High', value: 3.1 },
+            { time: t1, type: 'Slack Water', value: 0.05 },
+            { time: t3, type: 'Max Flood',   value: 2.5 },
+            { time: t4, type: 'High',        value: 3.1 },
         ];
+        tides.hourly.current_speed![1] = 0.05;
 
         const { result } = renderHook(() => useMarineEvents(tides));
         const official_events = result.current.filter((e: MarineEvent) =>
@@ -272,7 +256,6 @@ describe('useMarineEvents', () => {
         );
         expect(official_events.length).toBeGreaterThan(0);
         official_events.forEach((e: MarineEvent) => {
-            // The bug: tideHeight was undefined when hilo used UTC Z timestamps
             expect(e.tideHeight).not.toBeUndefined();
             expect(typeof e.tideHeight).toBe('number');
         });
