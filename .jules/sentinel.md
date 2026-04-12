@@ -21,3 +21,7 @@
 **Vulnerability:** The main Electron window's `webContents` did not implement a `setWindowOpenHandler` handler, allowing potentially unauthorized opening of new browser windows (`window.open`) from the renderer process.
 **Learning:** By default, Electron permits `window.open` requests, which can open unrestricted secondary windows exposing vulnerabilities if the renderer script is compromised or injected (e.g. bypassing sandboxes, executing malicious scripts).
 **Prevention:** Always implement `setWindowOpenHandler` on `webContents` to return `{ action: 'deny' }` for unneeded scenarios, preventing unauthorized new windows.
+## 2025-05-24 - [Unbounded OAuth Callbacks and DoS]
+**Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
+**Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
+**Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
