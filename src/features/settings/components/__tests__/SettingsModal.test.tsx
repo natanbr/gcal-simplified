@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock framer-motion to avoid animation issues in tests
 vi.mock('framer-motion', () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     const React = require('react');
     const MOTION_PROPS = new Set(['initial', 'animate', 'exit', 'transition', 'whileHover', 'whileTap', 'variants', 'layout']);
     const MotionDiv = React.forwardRef(

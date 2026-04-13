@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { addDays, addMonths, format, isSameDay, isWeekend } from 'date-fns';
-import { SettingsModal } from './SettingsModal';
+import { SettingsModal } from '../features/settings/components/SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, Settings, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { EventDetailDrawer } from './EventDetailDrawer';
