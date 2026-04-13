@@ -34,6 +34,7 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose, title, 
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100]"
                         onClick={onClose}
+                        data-testid="drawer-backdrop"
                     />
                     <motion.div
                         initial={{ x: '100%' }}
