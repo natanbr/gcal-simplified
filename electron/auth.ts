@@ -20,6 +20,7 @@ const SCOPES = [
 
 export class AuthService {
     private oauth2Client: OAuth2Client;
+    private isAuthInProgress: boolean = false;
 
     constructor() {
         // These will be loaded from env vars or a separate config file
@@ -89,7 +90,12 @@ export class AuthService {
     }
 
     async startAuth(): Promise<void> {
-        return new Promise((resolve, reject) => {
+        if (this.isAuthInProgress) {
+            return Promise.reject(new Error('Authentication is already in progress.'));
+        }
+        this.isAuthInProgress = true;
+
+        const authPromise = new Promise<void>((resolve, reject) => {
             // Generate a secure random state token for CSRF protection
             const state = crypto.randomBytes(32).toString('hex');
             let redirectUri = '';
@@ -162,6 +168,11 @@ export class AuthService {
             });
 
             // Listen on random port (0) and loopback address
+            const timeoutHandle = setTimeout(() => {
+                reject(new Error('Authentication timed out.'));
+                server.close();
+            }, 5 * 60 * 1000); // 5 minutes timeout
+
             server.listen(0, '127.0.0.1', () => {
                 const address = server.address() as AddressInfo;
                 if (address) {
@@ -184,10 +195,18 @@ export class AuthService {
                 }
             });
 
+            server.on('close', () => {
+                clearTimeout(timeoutHandle);
+            });
+
             server.on('error', (err) => {
                 reject(err);
                 server.close();
             });
+        });
+
+        return authPromise.finally(() => {
+            this.isAuthInProgress = false;
         });
     }
 

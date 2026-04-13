@@ -26,3 +26,8 @@
 **Vulnerability:** Application logic used `Math.random()` to generate fallback IDs for calendar events and activity log entries.
 **Learning:** `Math.random()` is not cryptographically secure and uses a predictable seed. In scenarios where IDs are used for state synchronization or deduplication, predictability could lead to collisions or information disclosure.
 **Prevention:** Use `crypto.randomUUID()` in Node.js (via `node:crypto`) or the Web Crypto API in the browser to ensure IDs are globally unique and cryptographically secure.
+
+## 2025-05-24 - [Unbounded OAuth Callbacks and DoS]
+**Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
+**Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
+**Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
