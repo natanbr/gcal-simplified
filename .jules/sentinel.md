@@ -21,3 +21,8 @@
 **Vulnerability:** The main Electron window's `webContents` did not implement a `setWindowOpenHandler` handler, allowing potentially unauthorized opening of new browser windows (`window.open`) from the renderer process.
 **Learning:** By default, Electron permits `window.open` requests, which can open unrestricted secondary windows exposing vulnerabilities if the renderer script is compromised or injected (e.g. bypassing sandboxes, executing malicious scripts).
 **Prevention:** Always implement `setWindowOpenHandler` on `webContents` to return `{ action: 'deny' }` for unneeded scenarios, preventing unauthorized new windows.
+
+## 2026-04-10 - [Predictable ID Generation via Math.random]
+**Vulnerability:** Application logic used `Math.random()` to generate fallback IDs for calendar events and activity log entries.
+**Learning:** `Math.random()` is not cryptographically secure and uses a predictable seed. In scenarios where IDs are used for state synchronization or deduplication, predictability could lead to collisions or information disclosure.
+**Prevention:** Use `crypto.randomUUID()` in Node.js (via `node:crypto`) or the Web Crypto API in the browser to ensure IDs are globally unique and cryptographically secure.

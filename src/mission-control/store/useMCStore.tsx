@@ -18,7 +18,7 @@ import { mcReducer, initialState } from './mcReducer';
 
 function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState): ActivityLogEntry | null {
     const now = new Date().toISOString();
-    const id = Math.random().toString(36).slice(2, 9);
+    const id = self.crypto.randomUUID();
 
     switch (action.type) {
         case 'ADD_TOKEN':
