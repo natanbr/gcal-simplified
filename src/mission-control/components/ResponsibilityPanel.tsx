@@ -275,45 +275,10 @@ export function ResponsibilityPanel() {
     const state = useMCState();
 
     return (
-        <div
-            className="mc-panel"
-            style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-                padding: 14,
-                background: 'linear-gradient(160deg, #f5f3ff 0%, #ede9ff 100%)',
-            }}
-        >
-            {/* Header */}
-            <span style={{
-                fontSize: 11,
-                fontWeight: 900,
-                letterSpacing: '0.08em',
-                color: 'var(--mc-text)',
-                textTransform: 'uppercase',
-            }}>
-                📋 Responsibilities
-            </span>
-
-            {/* Task list */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
-                {state.responsibilities.map(task => (
-                    <ResponsibilityCard key={task.id} task={task} />
-                ))}
-                {state.responsibilities.length === 0 && (
-                    <span style={{
-                        color: 'var(--mc-text-dim)',
-                        fontSize: 11,
-                        textAlign: 'center',
-                        paddingTop: 20,
-                        fontWeight: 700,
-                    }}>
-                        No responsibilities yet
-                    </span>
-                )}
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+            {state.responsibilities.map(task => (
+                <ResponsibilityCard key={task.id} task={task} />
+            ))}
         </div>
     );
 }

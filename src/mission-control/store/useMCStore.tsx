@@ -31,7 +31,7 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
 
     /** Resolve a reward key → highlighted goal name */
     const rewardLabel = (rewardKey: string, { bold = true } = {}) => {
-        const r = REWARD_MAP[rewardKey];
+        const r = REWARD_MAP[rewardKey as keyof typeof REWARD_MAP];
         const name = r ? `${r.emoji} ${r.label}` : rewardKey;
         return bold ? `**${name}**` : name;
     };

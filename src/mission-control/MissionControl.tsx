@@ -202,7 +202,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           onCheatDetected={handleCheatDetected}
         />
 
-        {/* ── CENTER: Goal Pedestals (2 columns × 2 rows) ── */}
+        {/* ── CENTER: Goal Pedestals + Responsibilities ── */}
         <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
           <span style={{
             fontSize: 11, fontWeight: 900, letterSpacing: '0.08em',
@@ -237,11 +237,12 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
                 />
               ))}
             </div>
+            {/* Column 3: Responsibilities */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+              <ResponsibilityPanel />
+            </div>
           </div>
         </div>
-
-        {/* ── RIGHT: Responsibilities ── */}
-        <ResponsibilityPanel />
       </div>
 
       {/* ===== SETTINGS ===== */}
