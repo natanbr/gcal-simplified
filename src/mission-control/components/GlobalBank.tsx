@@ -27,11 +27,17 @@ interface GlobalBankProps {
   layoutRects: { bank: DOMRect | null; cases: Record<number, DOMRect | null> };
   /** Ref for the bank element to update layoutRects.bank */
   innerRef?: (el: HTMLDivElement | null) => void;
+  /** Callback fired when a trap button is pressed */
+  onCheatDetected?: () => void;
 }
 
-export function GlobalBank({ cases, layoutRects, innerRef }: GlobalBankProps) {
+export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: GlobalBankProps) {
   const state = useMCState();
   const dispatch = useMCDispatch();
+
+  // Admin popup state
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [trapMode, setTrapMode] = useState(false);
 
   // Track dragging to elevate the Bank's z-index
   const [isDragging, setIsDragging] = useState(false);
@@ -121,23 +127,65 @@ export function GlobalBank({ cases, layoutRects, innerRef }: GlobalBankProps) {
 
 
   // ------------------------------------------------------------------
-  // Add / Remove coin handlers
-  // ------------------------------------------------------------------
   const handleAddCoin = useCallback((amount = 1) => {
+    if (trapMode) {
+      setPopupOpen(false);
+      onCheatDetected?.();
+      return;
+    }
     dispatch({ type: 'ADD_TOKENS', amount, source: 'manual' });
     setBankTokens(prev => [...prev, ...Array.from({ length: amount }, () => ({ id: newId() }))]);
     prevBankCount.current += amount;
-  }, [dispatch]);
+  }, [dispatch, trapMode, onCheatDetected]);
 
   const handleRemoveCoin = useCallback(() => {
+    if (trapMode) {
+      setPopupOpen(false);
+      onCheatDetected?.();
+      return;
+    }
     if (state.bankCount <= 0) return;
     dispatch({ type: 'REMOVE_TOKEN' });
     setBankTokens(prev => prev.slice(0, prev.length - 1));
     prevBankCount.current = Math.max(0, prevBankCount.current - 1);
-  }, [dispatch, state.bankCount]);
+  }, [dispatch, state.bankCount, trapMode, onCheatDetected]);
 
-  // Admin popup state
-  const [popupOpen, setPopupOpen] = useState(false);
+  // Long-press detection logic
+  const ptrDownTimeRef = useRef<number>(0);
+  const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault(); // prevent selection
+    ptrDownTimeRef.current = Date.now();
+    
+    // Optional: could give feedback while pressing
+    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+  };
+  
+  const handlePointerUp = (e: React.PointerEvent) => {
+    const duration = Date.now() - ptrDownTimeRef.current;
+    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+    
+    // Toggle popup (if already open, close it)
+    if (popupOpen) {
+      setPopupOpen(false);
+      return;
+    }
+    
+    if (duration >= 600) {
+      // Long press -> real popup
+      setTrapMode(false);
+      setPopupOpen(true);
+    } else {
+      // Short press -> trap popup
+      setTrapMode(true);
+      setPopupOpen(true);
+    }
+  };
+
+  const handlePointerCancel = () => {
+    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+  };
 
   // ------------------------------------------------------------------
   // Render
@@ -158,10 +206,15 @@ export function GlobalBank({ cases, layoutRects, innerRef }: GlobalBankProps) {
     >
       {/* ── Header (tap to open admin popup) ── */}
       <button
-        onClick={() => setPopupOpen(o => !o)}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onContextMenu={(e) => e.preventDefault()} // prevent context menu on right click / long press
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '100%',
+          userSelect: 'none', // Extra safety
+          touchAction: 'none' // Prevent scrolling while holding
         }}
         aria-label="Bank admin"
       >
@@ -209,12 +262,12 @@ export function GlobalBank({ cases, layoutRects, innerRef }: GlobalBankProps) {
             {/* Panel */}
             <motion.div
               key="panel"
-              initial={{ opacity: 0, y: -12, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
               transition={{ type: 'spring', stiffness: 380, damping: 28 }}
               style={{
-                position: 'relative', zIndex: 160,
+                position: 'absolute', top: 0, left: 0, right: 0, zIndex: 160,
                 background: 'linear-gradient(160deg,#fff9f0,#fff4e0)',
                 border: '1.5px solid rgba(247,201,72,0.5)',
                 borderRadius: 16,
@@ -222,7 +275,7 @@ export function GlobalBank({ cases, layoutRects, innerRef }: GlobalBankProps) {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 10,
-                boxShadow: '0 8px 24px rgba(200,155,16,0.18)',
+                boxShadow: '0 8px 24px rgba(200,155,16,0.18), 0 0 0 1px rgba(255,255,255,0.7) inset',
               }}
               data-testid="mc-bank-admin-popup"
             >

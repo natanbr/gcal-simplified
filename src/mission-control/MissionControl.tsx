@@ -18,6 +18,7 @@ import { PrivilegeCardButton } from './components/PrivilegeCardButton';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { LiveClockDisplay } from './components/LiveClockDisplay';
 import { ActivityLogView } from './components/ActivityLogView';
+import { CheatTrapOverlay } from './components/CheatTrapOverlay';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
 interface MCLayoutProps {
@@ -46,6 +47,18 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       layoutRects.current.cases[Number.parseInt(id)] = el ? el.getBoundingClientRect() : null;
     }
   }, []);
+
+  const [showCheatTrap, setShowCheatTrap] = useState(false);
+  const cheatTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleCheatDetected = useCallback(() => {
+    dispatch({ type: 'CHEAT_ATTEMPT' });
+    setShowCheatTrap(true);
+    if (cheatTimerRef.current) clearTimeout(cheatTimerRef.current);
+    cheatTimerRef.current = setTimeout(() => {
+      setShowCheatTrap(false);
+    }, 5000);
+  }, [dispatch]);
 
   return (
     <div
@@ -186,6 +199,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           cases={state.cases}
           layoutRects={layoutRects.current}
           innerRef={el => { bankRef.current = el; }}
+          onCheatDetected={handleCheatDetected}
         />
 
         {/* ── CENTER: Goal Pedestals (2 columns × 2 rows) ── */}
@@ -232,6 +246,9 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
 
       {/* ===== SETTINGS ===== */}
       <MCSettingsOverlay open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      {/* ===== CHEAT TRAP ===== */}
+      <CheatTrapOverlay show={showCheatTrap} />
     </div>
   );
 }

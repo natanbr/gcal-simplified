@@ -3,21 +3,31 @@ import { createPortal } from 'react-dom';
 import { useMCState } from '../store/useMCStore';
 import { Activity, X } from 'lucide-react';
 import { ActivityLogEntry } from '../types';
+import { useMCDispatch } from '../store/useMCStore';
 
 export function ActivityLogView() {
-    const { activityLogs } = useMCState();
+    const { activityLogs, hasUnreviewedCheatAttempt } = useMCState();
+    const dispatch = useMCDispatch();
     const [isOpen, setIsOpen] = useState(false);
 
+    const handleOpen = () => {
+        setIsOpen(true);
+        if (hasUnreviewedCheatAttempt) {
+            dispatch({ type: 'CLEAR_CHEAT_FLAG' });
+        }
+    };
+
     return (
-        <>
+        <div style={{ position: 'relative' }}>
             <button 
-                onClick={() => setIsOpen(true)}
+                onClick={handleOpen}
                 className="flex items-center gap-2 px-3 py-2 bg-white/80 hover:bg-slate-50 text-slate-700 rounded-lg transition border border-slate-200 backdrop-blur-sm shadow-sm"
                 title="Activity Log"
             >
                 <Activity size={18} className="text-indigo-500" />
                 <span className="text-sm font-bold tracking-wide uppercase opacity-90">Logs</span>
             </button>
+            {hasUnreviewedCheatAttempt && <div className="mc-notification-dot" />}
 
             {isOpen && createPortal(
                 <div 
@@ -77,16 +87,21 @@ export function ActivityLogView() {
                 </div>,
                 document.body
             )}
-        </>
+        </div>
     );
 }
 
 function LogItemRow({ log }: { log: ActivityLogEntry }) {
     // Determine colors based on type
     let titleColor = "text-slate-700";
+    let bgClass = "hover:bg-slate-50/80 transition-colors";
     
     // Explicit color key overrides from user request
-    if (log.colorKey === 'morning') titleColor = "text-amber-500"; // Orange
+    if (log.colorKey === 'cheat') {
+        titleColor = "text-red-700";
+        bgClass = "bg-red-50 hover:bg-red-100 transition-colors";
+    }
+    else if (log.colorKey === 'morning') titleColor = "text-amber-500"; // Orange
     else if (log.colorKey === 'evening') titleColor = "text-purple-500";
     else if (log.colorKey === 'recycling') titleColor = "text-emerald-500"; // Green
     else if (log.colorKey === 'activity') titleColor = "text-blue-500";
@@ -104,7 +119,7 @@ function LogItemRow({ log }: { log: ActivityLogEntry }) {
     const dateString = new Date(log.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
     return (
-        <tr className="hover:bg-slate-50/80 transition-colors">
+        <tr className={bgClass}>
             <td className="px-6 py-3 whitespace-nowrap">
                 <div className="flex items-center gap-2 text-xs">
                     <span className="font-semibold text-slate-500">{dateString}</span>

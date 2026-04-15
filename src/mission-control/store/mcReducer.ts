@@ -103,6 +103,7 @@ export const initialState: MCState = {
     creamTaskDaysLeft: 0,
     responsibilities: defaultResponsibilities,
     activityLogs: [],
+    hasUnreviewedCheatAttempt: false,
 };
 
 // ---- Reducer ----
@@ -486,6 +487,18 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 activityLogs: filteredLogs
             };
         }
+
+        case 'CHEAT_ATTEMPT':
+            return {
+                ...state,
+                hasUnreviewedCheatAttempt: true,
+            };
+
+        case 'CLEAR_CHEAT_FLAG':
+            return {
+                ...state,
+                hasUnreviewedCheatAttempt: false,
+            };
 
         default:
             return state;

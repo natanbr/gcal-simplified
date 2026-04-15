@@ -299,10 +299,15 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
             : isEmptySelecting
               ? '#fafafe'
               : accent.bg,
-        border: isEmptyIdle
-          ? '2px dashed rgba(160,150,230,0.35)'
-          : undefined,
-        borderColor: isComplete ? 'rgba(247,201,72,0.7)' : undefined,
+        borderWidth: isEmptyIdle ? 2 : 1.5,
+        borderStyle: isEmptyIdle ? 'dashed' : 'solid',
+        borderColor: isEmptyIdle
+          ? 'rgba(160,150,230,0.35)'
+          : isComplete
+            ? 'rgba(247,201,72,0.7)'
+            : isEmptySelecting
+              ? 'rgba(160,150,230,0.25)'
+              : accent.border,
         outline: isComplete ? '2px solid var(--mc-gold)' : 'none',
         boxShadow: isComplete
           ? 'var(--mc-depth-shadow), 0 0 22px rgba(247,201,72,0.35)'

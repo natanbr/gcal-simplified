@@ -141,8 +141,8 @@ export interface ActivityLogEntry {
     icon: string; // lucide icon name or emoji
     message: string;
     delta?: number; // e.g., +2, -1
-    type: 'manual' | 'system' | 'mission' | 'reward' | 'responsibility'; // for filtering / styling
-    colorKey?: 'morning' | 'evening' | 'recycling' | 'activity' | 'bank' | 'system';
+    type: 'manual' | 'system' | 'mission' | 'reward' | 'responsibility' | 'cheat-attempt'; // for filtering / styling
+    colorKey?: 'morning' | 'evening' | 'recycling' | 'activity' | 'bank' | 'system' | 'cheat';
 }
 
 // --------------- Root App State ---------------
@@ -160,6 +160,7 @@ export interface MCState {
     creamTaskDaysLeft: number;
     responsibilities: ResponsibilityTask[];
     activityLogs: ActivityLogEntry[];
+    hasUnreviewedCheatAttempt: boolean;
 }
 
 // --------------- Action Discriminated Union ---------------
@@ -186,4 +187,6 @@ export type MCAction =
     | { type: 'SET_SETTINGS'; settings: Partial<MCSettings> }
     | { type: 'ADD_RESPONSIBILITY_POINT'; taskId: string }
     | { type: 'RESET_RESPONSIBILITY'; taskId: string; claimTokens?: number }
-    | { type: 'ADD_LOG'; log: ActivityLogEntry };
+    | { type: 'ADD_LOG'; log: ActivityLogEntry }
+    | { type: 'CHEAT_ATTEMPT' }
+    | { type: 'CLEAR_CHEAT_FLAG' };

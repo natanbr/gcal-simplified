@@ -87,6 +87,8 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
              const colorKey = resp?.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
              return resp ? { id, timestamp: now, icon: resp.icon, message: `${resp.label} completed`, delta: action.claimTokens ? +action.claimTokens : undefined, type: 'responsibility', colorKey } : null;
         }
+        case 'CHEAT_ATTEMPT':
+             return { id, timestamp: now, icon: '🚨', message: 'Unauthorized bank access attempt!', type: 'cheat-attempt', colorKey: 'cheat' };
         default:
             return null;
     }
