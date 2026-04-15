@@ -91,6 +91,31 @@ export function ActivityLogView() {
     );
 }
 
+/** Parses **text** markers in log messages and renders them as highlighted pills */
+function renderHighlightedMessage(message: string) {
+    const parts = message.split(/\*\*(.+?)\*\*/g);
+    if (parts.length === 1) return message; // no markers
+    return parts.map((part, i) =>
+        i % 2 === 1 ? (
+            <span
+                key={i}
+                style={{
+                    background: 'rgba(99,102,241,0.10)',
+                    color: '#4338ca',
+                    padding: '1px 6px',
+                    borderRadius: 6,
+                    fontWeight: 900,
+                    letterSpacing: '0.01em',
+                }}
+            >
+                {part}
+            </span>
+        ) : (
+            <span key={i}>{part}</span>
+        )
+    );
+}
+
 function LogItemRow({ log }: { log: ActivityLogEntry }) {
     // Determine colors based on type
     let titleColor = "text-slate-700";
@@ -129,7 +154,7 @@ function LogItemRow({ log }: { log: ActivityLogEntry }) {
             <td className="px-6 py-3">
                 <div className={`flex items-center gap-3 font-bold ${titleColor}`}>
                     <span className="text-base leading-none">{log.icon}</span>
-                    <span className="tracking-wide">{log.message}</span>
+                    <span className="tracking-wide">{renderHighlightedMessage(log.message)}</span>
                 </div>
             </td>
             <td className="px-6 py-3 text-right">

@@ -179,6 +179,7 @@ export type MCAction =
     | { type: 'LOCK_TASK'; missionPhase: MissionPhase; taskId: MissionTaskId }
     | { type: 'SET_ACTIVE_MISSION'; phase: MissionPhase }
     | { type: 'RESET_MISSION'; missionPhase: MissionPhase }
+    | { type: 'RESET_MISSION_WITH_TIMER'; missionPhase: MissionPhase }
     | { type: 'CANCEL_MISSION'; missionPhase: MissionPhase }
     | { type: 'COMPLETE_MISSION_ROUTINE'; missionPhase: MissionPhase; bonusTokens: number }
     | { type: 'MARK_MISSION_TIMEOUT'; missionPhase: MissionPhase }

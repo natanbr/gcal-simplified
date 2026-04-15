@@ -313,6 +313,30 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 )
             };
 
+        // Full reset — tasks AND timer restart from scratch.
+        // Mission stays active with a fresh startedAt + recalculated durationMins.
+        case 'RESET_MISSION_WITH_TIMER': {
+            const now = new Date().toISOString();
+            return {
+                ...state,
+                missions: state.missions.map(m => {
+                    if (m.phase !== action.missionPhase) return m;
+                    const [sh, sm] = m.startsAt.split(':').map(Number);
+                    const [eh, em] = m.endsAt.split(':').map(Number);
+                    let durationMins = (eh * 60 + em) - (sh * 60 + sm);
+                    if (durationMins < 0) durationMins += 24 * 60; // overnight wrap
+                    return {
+                        ...m,
+                        active: true,
+                        startedAt: now,
+                        durationMins,
+                        loggedTimeoutAt: undefined,
+                        tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
+                    };
+                }),
+            };
+        }
+
         case 'CANCEL_MISSION':
             return {
                 ...state,

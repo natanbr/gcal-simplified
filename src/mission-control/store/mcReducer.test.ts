@@ -137,3 +137,67 @@ describe('mcReducer — SET_ACTIVE_MISSION overlap rejection', () => {
     });
 });
 
+// ──────────────────────────────────────────────────────────────
+// RESET_MISSION_WITH_TIMER
+// ──────────────────────────────────────────────────────────────
+
+describe('mcReducer — RESET_MISSION_WITH_TIMER', () => {
+    it('clears all task progress', () => {
+        const taskId = morningMission(initialState).tasks[0].id;
+        const state = applyActions([
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
+            { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId },
+            { type: 'RESET_MISSION_WITH_TIMER', missionPhase: 'morning' },
+        ]);
+        expect(morningMission(state).tasks.every(t => !t.completed && !t.locked)).toBe(true);
+    });
+
+    it('refreshes startedAt (timer restarts from scratch)', () => {
+        const state1 = applyActions([
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
+        ]);
+        const originalStartedAt = morningMission(state1).startedAt;
+
+        const state2 = applyActions([
+            { type: 'RESET_MISSION_WITH_TIMER', missionPhase: 'morning' },
+        ], state1);
+
+        // startedAt should differ (or at least be a fresh ISO string)
+        expect(morningMission(state2).startedAt).toBeDefined();
+        expect(isToday(morningMission(state2).startedAt)).toBe(true);
+        // New startedAt should be >= original (created slightly later)
+        expect(new Date(morningMission(state2).startedAt!).getTime())
+            .toBeGreaterThanOrEqual(new Date(originalStartedAt!).getTime());
+    });
+
+    it('recalculates durationMins from startsAt/endsAt', () => {
+        const state = applyActions([
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
+            { type: 'RESET_MISSION_WITH_TIMER', missionPhase: 'morning' },
+        ]);
+        const m = morningMission(state);
+        const [sh, sm] = m.startsAt.split(':').map(Number);
+        const [eh, em] = m.endsAt.split(':').map(Number);
+        let expectedDuration = (eh * 60 + em) - (sh * 60 + sm);
+        if (expectedDuration < 0) expectedDuration += 24 * 60; // overnight wrap
+        expect(m.durationMins).toBe(expectedDuration);
+    });
+
+    it('keeps mission active (activeMission unchanged)', () => {
+        const state = applyActions([
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
+            { type: 'RESET_MISSION_WITH_TIMER', missionPhase: 'morning' },
+        ]);
+        expect(state.activeMission).toBe('morning');
+        expect(morningMission(state).active).toBe(true);
+    });
+
+    it('clears loggedTimeoutAt', () => {
+        const state = applyActions([
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
+            { type: 'MARK_MISSION_TIMEOUT', missionPhase: 'morning' },
+            { type: 'RESET_MISSION_WITH_TIMER', missionPhase: 'morning' },
+        ]);
+        expect(morningMission(state).loggedTimeoutAt).toBeUndefined();
+    });
+});

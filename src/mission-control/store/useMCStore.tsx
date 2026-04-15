@@ -12,6 +12,7 @@ import type {
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { mcReducer, initialState } from './mcReducer';
+import { REWARD_MAP } from '../rewardCatalogue';
 
 // ---- Logging Interceptor ----
 // We keep translation logic here to keep mcReducer pure and simple.
@@ -19,6 +20,21 @@ import { mcReducer, initialState } from './mcReducer';
 function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState): ActivityLogEntry | null {
     const now = new Date().toISOString();
     const id = Math.random().toString(36).slice(2, 9);
+
+    /** Resolve a case id → highlighted goal name (e.g. **🎮 Game**) */
+    const goalLabel = (caseId: number, { bold = true } = {}) => {
+        const c = state.cases.find(x => x.id === caseId);
+        const r = c?.reward ? REWARD_MAP[c.reward] : null;
+        const name = r ? `${r.emoji} ${r.label}` : `Goal #${caseId + 1}`;
+        return bold ? `**${name}**` : name;
+    };
+
+    /** Resolve a reward key → highlighted goal name */
+    const rewardLabel = (rewardKey: string, { bold = true } = {}) => {
+        const r = REWARD_MAP[rewardKey];
+        const name = r ? `${r.emoji} ${r.label}` : rewardKey;
+        return bold ? `**${name}**` : name;
+    };
 
     switch (action.type) {
         case 'ADD_TOKEN':
@@ -33,26 +49,40 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
         case 'REMOVE_TOKEN':
             return { id, timestamp: now, icon: '🪙', message: 'Manual token removed', delta: -1, type: 'manual', colorKey: 'bank' };
         case 'SELECT_CASE':
-            return { id, timestamp: now, icon: '🎯', message: `Goal selected: ${action.reward}`, type: 'system', colorKey: 'system' };
-        case 'DEPOSIT_TO_CASE':
-            return { id, timestamp: now, icon: '🏦', message: `Deposited tokens to goal`, delta: -action.amount, type: 'system', colorKey: 'system' };
-        case 'MOVE_TOKEN':
-            if (action.from === 'bank') return { id, timestamp: now, icon: '📤', message: `Token transferred to goal`, delta: -1, type: 'system', colorKey: 'system' };
-            if (action.to === 'bank') return { id, timestamp: now, icon: '📥', message: `Token transferred to bank`, delta: +1, type: 'system', colorKey: 'system' };
-            return null; // case to case
+            return { id, timestamp: now, icon: '🎯', message: `Goal selected: ${rewardLabel(action.reward)}`, type: 'system', colorKey: 'system' };
+        case 'DEPOSIT_TO_CASE': {
+            const tkn = action.amount === 1 ? 'token' : 'tokens';
+            return { id, timestamp: now, icon: '🏦', message: `${action.amount} ${tkn} deposited to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system' };
+        }
+        case 'MOVE_TOKEN': {
+            if (action.from === 'bank' && typeof action.to === 'number') {
+                return { id, timestamp: now, icon: '📤', message: `1 token added to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system' };
+            }
+            if (typeof action.from === 'number' && action.to === 'bank') {
+                return { id, timestamp: now, icon: '📥', message: `1 token removed from ${goalLabel(action.from)}`, type: 'system', colorKey: 'system' };
+            }
+            if (typeof action.from === 'number' && typeof action.to === 'number') {
+                return { id, timestamp: now, icon: '🔀', message: `1 token moved from ${goalLabel(action.from)} to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system' };
+            }
+            return null;
+        }
         case 'VACUUM_TO_CASE': {
             const target = state.cases.find(c => c.id === action.caseId);
             if (!target) return null;
             const amount = Math.min(state.bankCount, target.targetCount - target.tokenCount);
-            return { id, timestamp: now, icon: '💨', message: `Vacuumed tokens to goal`, delta: -amount, type: 'system', colorKey: 'system' };
+            const tkn = amount === 1 ? 'token' : 'tokens';
+            return { id, timestamp: now, icon: '💨', message: `${amount} ${tkn} vacuumed to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system' };
         }
         case 'REFUND_CASE': {
              const target = state.cases.find(c => c.id === action.caseId);
-             return target ? { id, timestamp: now, icon: '↩️', message: `Goal tokens refunded`, delta: +target.tokenCount, type: 'system', colorKey: 'system' } : null;
+             if (!target) return null;
+             const tkn = target.tokenCount === 1 ? 'token' : 'tokens';
+             return { id, timestamp: now, icon: '↩️', message: `${target.tokenCount} ${tkn} refunded from ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system' };
         }
         case 'CONSUME_CASE': {
              const target = state.cases.find(c => c.id === action.caseId);
-             return target && target.reward ? { id, timestamp: now, icon: '🎁', message: `Used reward: ${target.reward}`, type: 'reward', colorKey: 'system' } : null;
+             if (!target || !target.reward) return null;
+             return { id, timestamp: now, icon: '🎁', message: `Used: ${rewardLabel(target.reward)}`, delta: -target.tokenCount, type: 'reward', colorKey: 'system' };
         }
         case 'SET_ACTIVE_MISSION':
             if (action.phase === 'none') {
@@ -75,6 +105,8 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
         case 'COMPLETE_TASK': {
              return null; // The user requested to only log the main event, not subtasks.
         }
+        case 'RESET_MISSION_WITH_TIMER':
+             return { id, timestamp: now, icon: '🔄', message: `Mission fully reset (tasks + timer)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
         case 'ADJUST_MISSION_END':
              return { id, timestamp: now, icon: '⏱️', message: `Mission time adjusted (${action.deltaMinutes > 0 ? '+' : ''}${action.deltaMinutes}m)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
         case 'ADD_RESPONSIBILITY_POINT': {
@@ -95,8 +127,6 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
 }
 
 // ---- Persistence ----
-
-import { REWARD_MAP } from '../rewardCatalogue';
 
 const STORAGE_KEY = 'mc-state-v4'; // bumped: added settings field
 

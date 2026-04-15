@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch, useMission } from '../store/useMCStore.tsx';
 import { MissionTimerDisplay, MissionDepletingBar } from './MissionTimerDisplay';
+import { useLongPress } from '../hooks/useLongPress';
 import type { MissionPhase } from '../types';
 import { TaskCard } from './TaskCard';
 
@@ -28,6 +29,9 @@ const PHASE_META: Record<Exclude<MissionPhase, 'none'>, { label: string; emoji: 
     },
 };
 
+// ── Long-press threshold (ms) ─────────────────────────────────────────────────
+const LONG_PRESS_MS = 2000;
+
 // ── Main Overlay ──────────────────────────────────────────────────────────────
 export function MissionOverlay() {
     const state    = useMCState();
@@ -40,7 +44,33 @@ export function MissionOverlay() {
     const phase   = state.activeMission;
     const mission = useMission(phase !== 'none' ? phase : 'morning');
 
-    // ── Timer adjustment callback for the progress bar long-press ───────────────
+    // ── Long-press: Minimize (short = minimize, long = stop mission) ────────
+    const minimizeHandlers = useLongPress(
+        () => setMinimized(true),
+        () => {
+            if (phase !== 'none') {
+                dispatch({ type: 'CANCEL_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> });
+            }
+        },
+        LONG_PRESS_MS,
+    );
+
+    // ── Long-press: Reset (short = reset tasks, long = reset tasks + timer) ──
+    const resetHandlers = useLongPress(
+        () => {
+            if (phase !== 'none') {
+                dispatch({ type: 'RESET_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> });
+            }
+        },
+        () => {
+            if (phase !== 'none') {
+                dispatch({ type: 'RESET_MISSION_WITH_TIMER', missionPhase: phase as Exclude<MissionPhase, 'none'> });
+            }
+        },
+        LONG_PRESS_MS,
+    );
+
+
     const handleBarAdjust = useCallback((deltaMinutes: number) => {
         if (phase !== 'none')
             dispatch({ type: 'ADJUST_MISSION_END', missionPhase: phase as Exclude<MissionPhase,'none'>, deltaMinutes });
@@ -200,66 +230,60 @@ export function MissionOverlay() {
                                 onTimerExpiredInfo={handleTimerExpiredInfo}
                             />
 
-                            {/* RIGHT — Hide + Reset Tasks + Stop */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                            {/* RIGHT — Minimize + Reset (long-press for extended actions) */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
+                                {/* Minimize — looks like a simple minimize button */}
                                 <motion.button
                                     data-testid="mc-minimize-btn"
-                                    whileTap={{ scale: 0.88 }}
                                     whileHover={{ scale: 1.06 }}
-                                    onClick={() => setMinimized(true)}
+                                    onPointerDown={minimizeHandlers.onPointerDown}
+                                    onPointerUp={minimizeHandlers.onPointerUp}
+                                    onPointerLeave={minimizeHandlers.onPointerLeave}
                                     style={{
                                         background: 'rgba(255,255,255,0.6)',
-                                        border: `1.5px solid ${meta.accent}`,
-                                        borderRadius: 10,
-                                        padding: '5px 12px',
+                                        border: `2px solid ${meta.accent}`,
+                                        borderRadius: 14,
+                                        padding: '10px 20px',
                                         cursor: 'pointer',
-                                        fontSize: 11,
+                                        fontSize: 14,
                                         fontWeight: 800,
                                         color: 'var(--mc-text-muted)',
                                         fontFamily: "'Nunito', sans-serif",
+                                        minWidth: 52,
+                                        minHeight: 44,
+                                        WebkitTapHighlightColor: 'transparent',
+                                        touchAction: 'manipulation',
+                                        userSelect: 'none',
                                     }}
                                 >
-                                    — Hide
+                                    — Minimize
                                 </motion.button>
+
+                                {/* Reset — looks like a simple reset button */}
                                 <motion.button
                                     data-testid="mc-reset-btn"
-                                    whileTap={{ scale: 0.88 }}
                                     whileHover={{ scale: 1.06 }}
-                                    onClick={() => dispatch({ type: 'RESET_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> })}
-                                    title="Reset task progress (mission stays open)"
+                                    onPointerDown={resetHandlers.onPointerDown}
+                                    onPointerUp={resetHandlers.onPointerUp}
+                                    onPointerLeave={resetHandlers.onPointerLeave}
                                     style={{
                                         background: 'rgba(255,255,255,0.6)',
-                                        border: '1.5px solid rgba(160,150,230,0.3)',
-                                        borderRadius: 10,
-                                        padding: '5px 12px',
+                                        border: '2px solid rgba(160,150,230,0.3)',
+                                        borderRadius: 14,
+                                        padding: '10px 20px',
                                         cursor: 'pointer',
-                                        fontSize: 11,
+                                        fontSize: 14,
                                         fontWeight: 800,
                                         color: 'var(--mc-text-muted)',
                                         fontFamily: "'Nunito', sans-serif",
+                                        minWidth: 52,
+                                        minHeight: 44,
+                                        WebkitTapHighlightColor: 'transparent',
+                                        touchAction: 'manipulation',
+                                        userSelect: 'none',
                                     }}
                                 >
-                                    ↺ Tasks
-                                </motion.button>
-                                <motion.button
-                                    data-testid="mc-cancel-btn"
-                                    whileTap={{ scale: 0.88 }}
-                                    whileHover={{ scale: 1.06 }}
-                                    onClick={() => dispatch({ type: 'CANCEL_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> })}
-                                    title="Stop mission — fully resets tasks and timer; scheduler may re-trigger"
-                                    style={{
-                                        background: 'rgba(255,220,220,0.7)',
-                                        border: '1.5px solid rgba(220,100,100,0.35)',
-                                        borderRadius: 10,
-                                        padding: '5px 12px',
-                                        cursor: 'pointer',
-                                        fontSize: 11,
-                                        fontWeight: 800,
-                                        color: '#a03030',
-                                        fontFamily: "'Nunito', sans-serif",
-                                    }}
-                                >
-                                    ✕ Stop
+                                    ↺ Reset
                                 </motion.button>
                             </div>
                         </div>
