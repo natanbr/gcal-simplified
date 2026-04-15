@@ -7,7 +7,7 @@
 /* Google Fonts loaded via <link> in index.html — @import blocked by Electron CSP */
 
 /* ---- Color Tokens ---- */
-:root {
+.marine-root {
   /* Backgrounds */
   --mc-surface-dim: #0e131e;
   --mc-surface-card: rgba(37, 42, 54, 0.8);
