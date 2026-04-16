@@ -280,11 +280,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC, on
                     <motion.div 
                         className="h-full bg-family-cyan"
                         initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ 
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut"
+                        /* ⚡ Bolt Performance: Prevent Framer Motion infinite loop background CPU usage when hidden */
+                        animate={(loading || isEventsLoading || isBackgroundLoading) ? {
+                            width: "100%",
+                            transition: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                        } : {
+                            width: "0%"
                         }}
                     />
                 </div>
