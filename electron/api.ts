@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { randomUUID } from 'node:crypto';
 import { authService } from './auth';
 import { store, UserConfig } from './store';
 
@@ -117,7 +118,7 @@ export class ApiService {
                         (allDay && event.transparency === 'transparent');
 
                     return {
-                        id: event.id || Math.random().toString(),
+                        id: event.id || randomUUID(),
                         title: event.summary || 'No Title',
                         start: new Date(start!),
                         end: new Date(end!),

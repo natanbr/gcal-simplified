@@ -25,3 +25,8 @@
 **Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
 **Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
 **Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
+
+## 2024-05-18 - [Math.random used for IDs]
+**Vulnerability:** Weak random number generation (`Math.random()`) used for fallback event IDs (`electron/api.ts`) and activity log entries (`src/mission-control/store/useMCStore.tsx`).
+**Learning:** `Math.random()` is not cryptographically secure and can lead to predictability and collision risks.
+**Prevention:** Use `crypto.randomUUID()` in the browser and `node:crypto.randomUUID()` in Node/Electron environments for generating IDs.
