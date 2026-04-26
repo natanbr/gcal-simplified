@@ -25,3 +25,7 @@
 **Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
 **Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
 **Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
+## 2026-04-26 - Replaced Math.random() with CSPRNG
+**Vulnerability:** Predictable IDs generated with Math.random() were used for fallback calendar events and activity log entries. This constitutes weak random number generation for security purposes, potentially allowing for ID collisions or prediction.
+**Learning:** Even for non-critical IDs, using Math.random() can lead to unintended consequences and should be avoided in favor of cryptographically secure random number generators (CSPRNG) like `crypto.randomUUID()` when available. It was already in use in `electron/auth.ts`, so I ported it to other files where ID generation was needed.
+**Prevention:** Enforce the use of CSPRNGs like `crypto.randomUUID()` or `self.crypto.randomUUID()` for all random string/ID generation needs, and establish linters to flag usages of `Math.random().toString()`.
