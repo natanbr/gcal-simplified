@@ -33,4 +33,5 @@ When instructed or required to validate the codebase, execute the following spec
 *   **Code Coverage**: `npx vitest run --coverage`
 
 ## 6. Git & Version Control
-*   **Rebase Preference**: Always prefer working with rebase over merge. Before starting any new task, you MUST verify you are on the latest branch by fetching the latest changes and performing a rebase.
+*   **Rebase Preference**: Always prefer working with rebase over merge. Before starting any new task, you MUST verify you are on the latest and report back.
+*   **No WIP commits**: Do not commit unfinished work.
