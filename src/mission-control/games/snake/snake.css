@@ -1,0 +1,102 @@
+/* ============================================================
+ * Snake Game — Styles
+ * ⚠️  Internal to src/mission-control/games/snake/ only.
+ * ============================================================ */
+
+.snake-overlay-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.snake-overlay-container {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    border-radius: 28px;
+    border: 2px solid rgba(100, 180, 255, 0.15);
+    box-shadow:
+        0 25px 80px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    width: 90vw;
+    height: 90vh;
+}
+
+.snake-overlay-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.snake-overlay-title {
+    font-family: 'Nunito', sans-serif;
+    font-size: 18px;
+    font-weight: 900;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.02em;
+}
+
+.snake-overlay-stats {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.snake-stat {
+    font-family: 'Nunito', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.snake-stat-score {
+    color: #fbbf24;
+}
+
+.snake-lives {
+    display: flex;
+    gap: 3px;
+    font-size: 16px;
+}
+
+.snake-overlay-close {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1.5px solid rgba(239, 68, 68, 0.35);
+    border-radius: 12px;
+    padding: 6px 14px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    color: #fca5a5;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.snake-overlay-close:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: #fecaca;
+}
+
+.snake-overlay-body {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}

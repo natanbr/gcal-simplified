@@ -11,6 +11,7 @@ import { Button3D } from './Button3D';
 import { Token } from './Token';
 import type { DisplayCase, RewardIcon } from '../types';
 import { REWARDS, REWARD_MAP } from '../rewardCatalogue';
+import { QUICK_GAME_MIN_BANK_BALANCE } from '../games/snake/types';
 
 let _caseTokenIdCounter = 0;
 const newCaseTokenId = (caseId: number) => `ct-${caseId}-${_caseTokenIdCounter++}`;
@@ -142,9 +143,10 @@ interface GoalPedestalProps {
   innerRef?: (el: HTMLDivElement | null) => void;
   bankCount: number;
   layoutRects: { bank: DOMRect | null; cases: Record<number, DOMRect | null> };
+  onQuickGameOpen?: () => void;
 }
 
-export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }: GoalPedestalProps) {
+export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, onQuickGameOpen }: GoalPedestalProps) {
   const dispatch = useMCDispatch();
   const state = useMCState();
   const [isSelecting, setIsSelecting] = useState(false);
@@ -260,8 +262,13 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
   };
 
   const handleUse = () => {
+    const rewardId = case_.reward;
     // Permanently consume the tokens — reward has been redeemed, no refund
     dispatch({ type: 'CONSUME_CASE', caseId: case_.id });
+    // If this was a Quick Game reward, open the snake game overlay
+    if (rewardId === 'quick-game' && onQuickGameOpen) {
+      onQuickGameOpen();
+    }
   };
 
   // Pastel accent per pedestal — only used when ACTIVE
@@ -375,6 +382,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects }:
                 const config = state.settings.rewardConfigs?.[r.id];
                 const isEnabled = config ? config.enabled : true;
                 if (!isEnabled) return null;
+                // Quick Game requires minimum bank balance to be visible
+                if (r.id === 'quick-game' && state.bankCount < QUICK_GAME_MIN_BANK_BALANCE) return null;
 
                 const displayTargetCount = config ? config.targetCount : r.targetCount;
                 return (

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { REWARDS, REWARD_MAP } from './rewardCatalogue';
 
 describe('rewardCatalogue', () => {
-    it('should have exactly 8 rewards', () => {
-        expect(REWARDS).toHaveLength(8);
+    it('should have exactly 9 rewards', () => {
+        expect(REWARDS).toHaveLength(9);
     });
 
     it('should have all expected reward IDs', () => {
@@ -16,6 +16,7 @@ describe('rewardCatalogue', () => {
         expect(ids).toContain('movie-popcorn');
         expect(ids).toContain('campfire');
         expect(ids).toContain('mystery-box');
+        expect(ids).toContain('quick-game');
     });
 
     it('should have unique IDs for all rewards', () => {

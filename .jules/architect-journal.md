@@ -12,3 +12,15 @@
 **Invariant: Duration Calculations.** Any time-duration math based on `startsAt`/`endsAt` HH:MM strings must handle midnight crossings: `if (durationMins < 0) durationMins += 24 * 60`.
 
 **False Positive: Missing whileTap on long-press buttons.** This is intentional — the user explicitly requested no visual feedback to keep long-press features hidden from the child user. Do NOT flag this in future reviews.
+
+## 2026-04-24 - Quick Game (Snake + Quiz) Feature Review
+
+**Pattern: Ref-based Render Loop for Canvas Games.** When using `requestAnimationFrame` in React, NEVER put mutable game state in the `useCallback`/`useEffect` dependency array. This causes rAF teardown+restart on every state change, creating visible lag. Instead, store `gameState` in a ref (`gameStateRef.current = gameState`) and read from the ref inside a single, stable rAF loop with `[]` dependencies.
+
+**Pattern: Safe Random Placement on Bounded Grids.** Never use rejection-sampling (`do…while`) to place items on a grid that could theoretically be fully occupied. Instead, pre-compute the list of free cells and pick randomly from that array. This guarantees O(grid_size) instead of potentially infinite runtime.
+
+**Pattern: Only `preventDefault` When Consuming Input.** Keyboard handlers should only call `e.preventDefault()` inside the branch that actually processes the key. Blanket prevention blocks accessibility tools and browser navigation during inactive game phases.
+
+**Invariant: Decouple Quiz Module from Game Constants.** The quiz module (`games/quiz/`) should NOT import constants from `games/snake/`. Use props (e.g., `totalLives`) with sensible defaults to keep the quiz module reusable across future game types.
+
+**Known Pre-existing Test Failures (17).** `ResponsibilityPanel.test.tsx` and `WeatherDashboard.test.tsx` contain 17 pre-existing failures unrelated to Quick Game. Do NOT attribute these to Quick Game changes.

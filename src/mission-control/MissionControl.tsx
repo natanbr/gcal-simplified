@@ -19,6 +19,7 @@ import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { LiveClockDisplay } from './components/LiveClockDisplay';
 import { ActivityLogView } from './components/ActivityLogView';
 import { CheatTrapOverlay } from './components/CheatTrapOverlay';
+import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
 interface MCLayoutProps {
@@ -29,6 +30,8 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const state    = useMCState();
   const dispatch  = useMCDispatch();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [snakeGameOpen, setSnakeGameOpen] = useState(false);
+  const snakeGameStartRef = useRef<string | null>(null);
 
   // Refs to each pedestal DOM element for drop-zone hit testing
   const bankRef = useRef<HTMLDivElement | null>(null);
@@ -58,6 +61,47 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
     cheatTimerRef.current = setTimeout(() => {
       setShowCheatTrap(false);
     }, 5000);
+  }, [dispatch]);
+
+  const handleQuickGameOpen = useCallback(() => {
+    snakeGameStartRef.current = new Date().toISOString();
+    dispatch({
+      type: 'ADD_LOG',
+      log: {
+        id: `game-start-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        icon: '🕹️',
+        message: 'Quick Game started',
+        type: 'reward',
+        colorKey: 'system',
+      },
+    });
+    setSnakeGameOpen(true);
+  }, [dispatch]);
+
+  const handleQuickGameClose = useCallback((score: number) => {
+    const startedAt = snakeGameStartRef.current;
+    const endedAt = new Date().toISOString();
+    let durationLabel = '';
+    if (startedAt) {
+      const durationMs = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+      const mins = Math.floor(durationMs / 60000);
+      const secs = Math.floor((durationMs % 60000) / 1000);
+      durationLabel = mins > 0 ? ` (${mins}m ${secs}s)` : ` (${secs}s)`;
+    }
+    dispatch({
+      type: 'ADD_LOG',
+      log: {
+        id: `game-end-${Date.now()}`,
+        timestamp: endedAt,
+        icon: '🏁',
+        message: `Quick Game ended — Score: ${score}${durationLabel}`,
+        type: 'reward',
+        colorKey: 'system',
+      },
+    });
+    snakeGameStartRef.current = null;
+    setSnakeGameOpen(false);
   }, [dispatch]);
 
   return (
@@ -221,6 +265,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
                   bankCount={state.bankCount}
                   innerRef={el => { pedestalRefs.current[c.id] = el; }}
                   layoutRects={layoutRects.current}
+                  onQuickGameOpen={handleQuickGameOpen}
                 />
               ))}
             </div>
@@ -234,6 +279,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
                   bankCount={state.bankCount}
                   innerRef={el => { pedestalRefs.current[c.id] = el; }}
                   layoutRects={layoutRects.current}
+                  onQuickGameOpen={handleQuickGameOpen}
                 />
               ))}
             </div>
@@ -250,6 +296,9 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
 
       {/* ===== CHEAT TRAP ===== */}
       <CheatTrapOverlay show={showCheatTrap} />
+
+      {/* ===== QUICK GAME (SNAKE) ===== */}
+      <SnakeGameOverlay open={snakeGameOpen} onClose={handleQuickGameClose} />
     </div>
   );
 }
