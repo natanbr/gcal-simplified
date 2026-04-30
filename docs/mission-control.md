@@ -33,6 +33,17 @@ src/
       │    └── useMCStore.tsx
       ├── styles/
       │    └── mc.css
+      ├── games/
+      │    ├── quiz/
+      │    │    ├── types.ts              ← QuizQuestion / QuizGenerator interfaces
+      │    │    ├── additionQuiz.ts       ← Addition question generator
+      │    │    └── QuizOverlay.tsx       ← Reusable in-game quiz UI
+      │    └── snake/
+      │         ├── types.ts             ← Grid constants, game state types
+      │         ├── useSnakeGame.ts      ← Game logic hook (state machine)
+      │         ├── SnakeCanvas.tsx      ← Canvas renderer
+      │         ├── SnakeGameOverlay.tsx  ← Full-screen overlay (entry point)
+      │         └── snake.css            ← Overlay styles
       └── types.ts
 ```
 
@@ -70,6 +81,7 @@ src/
 | 🎮    | Game              | 6              |
 | 📖    | Extra Story       | 2              |
 | 💻    | Story with Points | 2              |
+| 🕹️    | Quick Game        | 1              |
 
 #### C. Status Brow (Privileges)
 
@@ -230,6 +242,59 @@ Icon replacements needed — find better Lucide icons:
 ### 6. Future Ideas
 
 - **Analog clock mode** — replace digital clock in top bar with a rendered analog clock face
+
+---
+
+## I. Quick Game (Snake + Math Quiz)
+
+**Status:** ✅ Implemented & Working
+
+### Overview
+
+A "Quick Game" reward that costs 1 coin (configurable via parent settings' reward cost editor). The child drags coins to the goal pedestal as with any other reward. When consumed, a full-screen Snake game overlay opens.
+
+**Prerequisite:** The reward only appears in the reward picker when the child has ≥ 10 coins in the bank (hardcoded constant `QUICK_GAME_MIN_BANK_BALANCE`).
+
+### Architecture (Separate Modules)
+
+The game system is split into two independent modules under `src/mission-control/games/`:
+
+#### Quiz Module (`games/quiz/`)
+
+- **Extensible design:** `QuizGenerator` function type + `QuizQuestion` interface.
+- **Current generators:** `generateAdditionQuestion(maxSum = 20)` — addition problems for young kids.
+- **Future expansion:** multiplication, subtraction, reading comprehension, verbal challenges. Each new type adds a generator function implementing `QuizGenerator`.
+- **UI:** `QuizOverlay.tsx` — kid-friendly numpad with digit buttons, progress dots, animated feedback (shake on wrong, checkmark on correct). Also supports keyboard input (0-9, Backspace, Enter).
+
+#### Snake Module (`games/snake/`)
+
+- **Game Loop:** `useSnakeGame.ts` hook — pure state machine: `waiting → playing → quiz-revive → game-over`.
+- **Rendering:** `SnakeCanvas.tsx` — HTML5 Canvas with 20×15 grid, 32px cells (640×480). Gradient snake body, eyes on head that follow direction, radial-gradient apple with stem and leaf.
+- **Controls:** Keyboard arrow keys only. Direction queue prevents 180° reversals. First keypress starts the game.
+- **Lives:** 3 lives. On death, player enters quiz-revive phase (answer 3 questions). On all lives lost, game over.
+- **Overlay:** `SnakeGameOverlay.tsx` — full-screen backdrop, dark glassmorphic container, header with score + lives + close button.
+
+### Game Flow
+
+1. Child consumes "Quick Game" goal → overlay opens.
+2. Snake waits at center for first arrow key press.
+3. Snake moves at constant speed (~6.7 ticks/sec). Eating apples increases score and snake length.
+4. On collision (wall or self): lose 1 life. If lives > 0: quiz overlay appears (3 addition questions). Wrong answers give infinite retries. After 3 correct: snake revives at center, score preserved.
+5. On 0 lives: Game Over screen. Press any arrow key to restart.
+6. ESC or Close button ends the session.
+
+### Activity Logging
+
+- **Start:** Logged with 🕹️ icon when overlay opens.
+- **End:** Logged with 🏁 icon including final score and play duration (e.g., "Quick Game ended — Score: 7 (2m 34s)").
+
+### Backlog
+
+- 🔇 **Background music** — fun music while game is active (TODO: requires audio asset pipeline).
+- 🎨 **Sprite-based graphics** — replace canvas primitives with sprite images for richer visuals.
+- 📱 **On-screen controls** — touch/click-based directional buttons for tablet use.
+- 🧩 **More quiz types** — multiplication, subtraction, reading, configurable by age/topic in settings.
+- 🎮 **More games** — additional game types beyond Snake, all using the shared quiz module.
 
 ---
 

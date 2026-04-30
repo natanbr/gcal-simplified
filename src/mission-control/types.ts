@@ -27,7 +27,8 @@ export type RewardIcon =
     | 'fishing'
     | 'story-points'
     | 'mystery-box'
-    | 'bow-arrow';
+    | 'bow-arrow'
+    | 'quick-game';
 
 export type DisplayCaseStatus = 'empty' | 'selecting' | 'active';
 
