@@ -69,8 +69,6 @@ export function QuizOverlay({
     open,
     requiredCorrect,
     currentCorrect,
-    livesRemaining: _livesRemaining,
-    totalLives: _totalLives = 3,
     generator,
     onCorrect,
     title = 'Answer to Revive!',

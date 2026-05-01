@@ -24,3 +24,9 @@
 **Invariant: Decouple Quiz Module from Game Constants.** The quiz module (`games/quiz/`) should NOT import constants from `games/snake/`. Use props (e.g., `totalLives`) with sensible defaults to keep the quiz module reusable across future game types.
 
 **Known Pre-existing Test Failures (17).** `ResponsibilityPanel.test.tsx` and `WeatherDashboard.test.tsx` contain 17 pre-existing failures unrelated to Quick Game. Do NOT attribute these to Quick Game changes.
+
+## 2026-04-30 - Quick Game Additional Architectural Review
+
+**Anti-Pattern: Hardcoded Colors Bypassing Design System.** The game introduces a standalone `snake.css` with raw hex values instead of utilizing Tailwind or `gcal-simplified` design tokens, violating the styling invariants.
+**Anti-Pattern: Unused Variables Breaking CI.** Leaving variables like `_livesRemaining` defined but unused in `QuizOverlay.tsx` triggers `--max-warnings 0` ESLint failures. Strict lint hygiene must be maintained before merging.
+**Regression Risk: Missing Coverage.** The core game engine (`useSnakeGame.ts`) and React overlays were committed without corresponding Vitest unit tests, while only `additionQuiz.test.ts` was implemented.

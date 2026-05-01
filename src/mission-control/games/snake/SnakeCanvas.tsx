@@ -267,7 +267,7 @@ export function SnakeCanvas({ gameState, debugRef }: SnakeCanvasProps) {
         };
         animFrameRef.current = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(animFrameRef.current);
-    }, []); // Stable — never re-subscribes
+    }, [debugRef]); // Stable — ref identities don't change
 
     return (
         <canvas
