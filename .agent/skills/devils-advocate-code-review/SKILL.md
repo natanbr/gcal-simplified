@@ -25,6 +25,51 @@ The journal records:
 
 ---
 
+## 📋 CODE REVIEW CHECKLIST
+Use this checklist to systematically evaluate code changes before and during Arbitration.
+
+### General & Architecture
+- [ ] **Project Constitution**: Code follows patterns in `AGENTS.md`, `GEMINI.md`, and `ai-index.md`
+- [ ] **File Size Limit**: All modified/new files remain under 300 lines of code
+- [ ] **Types**: No TypeScript `any` types (explicit or implicit)
+- [ ] **Design System**: No hardcoded colors (must use Tailwind classes or Abyssal Command design tokens)
+- [ ] **Hygiene**: No `console.log` statements in production code
+- [ ] **Hygiene**: No commented-out code blocks (dead code)
+- [ ] **Clean Code**: Clear, descriptive variable/function names and appropriate error handling
+
+### Frontend (React/TypeScript)
+- [ ] **Components**: Small, focused, and utilize `clsx` for conditional class combinations (no raw string concatenation)
+- [ ] **Styling**: Strictly adheres to the Tailwind + Framer Motion stack and Abyssal Command aesthetics
+- [ ] **State (Zustand)**: Components select specific state slices (not the entire store) to prevent over-rendering
+- [ ] **State (Zustand)**: Actions properly update immutably and types are cleanly exported (State, Actions, Store)
+- [ ] **Exports**: Features/components have proper barrel exports (`index.ts`)
+
+### Security & Electron IPC
+- [ ] **Secrets**: No hardcoded API keys or secrets in code or comments
+- [ ] **IPC Boundaries**: Context Bridge / `preload.ts` correctly isolates Node.js APIs from the renderer
+- [ ] **Input Validation**: External data (APIs, IPC, UI inputs) is properly validated before processing
+- [ ] **No Unsafe Execution**: `nodeIntegration` remains disabled; no arbitrary code execution paths
+
+### Performance
+- [ ] **Memoization**: React components properly memoized (`useMemo`, `useCallback`) where necessary to avoid thrashing
+- [ ] **Computation**: Expensive computations (e.g., date math, marine data crunching) are memoized
+- [ ] **Data Fetching**: Heavy API calls or blocking operations are not in the render path
+
+### Testing
+- [ ] **Unit Tests**: Vitest tests added/updated for new hooks, utilities, and logic
+- [ ] **Component Tests**: Tests added for new UI components
+- [ ] **E2E Tests**: Playwright tests considered for critical user flows
+- [ ] **Verification**: All tests pass locally (`npm run test:unit`)
+
+### Documentation & Commit
+- [ ] **Comments**: Complex business logic has inline comments explaining *why*
+- [ ] **Docstrings**: Public APIs and hooks have appropriate JSDoc comments
+- [ ] **Living Docs**: `docs/requirements.md` and `.jules/architect-journal.md` updated if architectural invariants changed
+- [ ] **Git**: Follows conventional commit format; commit message describes *why*
+- [ ] **CI**: `lint` (`npm run lint`) and type checks (`npx tsc --noEmit`) pass cleanly
+
+---
+
 ## PHASE 1 — Call the Agents (Parallel Review)
 
 > ⚠️ **Rule**: The Arbitrator does NOT do the raw analysis. Rely on the robust, standalone intelligence of the specialized team.

@@ -5,7 +5,6 @@
 // ⚠️  Internal to src/mission-control/games/snake/ only.
 // ============================================================
 
-import './snake.css';
 import { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SnakeCanvas } from './SnakeCanvas';
@@ -63,33 +62,33 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
         <AnimatePresence>
             {open && (
                 <motion.div
-                    className="snake-overlay-backdrop"
+                    className="fixed inset-0 z-[1000] bg-black/85 flex items-center justify-center"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.25 }}
                 >
                     <motion.div
-                        className="snake-overlay-container"
+                        className="bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-blue-400/15 rounded-[28px] shadow-[0_25px_80px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] flex flex-col overflow-hidden w-[90vw] h-[90vh]"
                         initial={{ scale: 0.88, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.92, opacity: 0 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 24 }}
                     >
                         {/* ── Header ── */}
-                        <div className="snake-overlay-header">
-                            <div className="snake-overlay-title">
+                        <div className="flex items-center justify-between py-3.5 px-5 border-b border-white/5">
+                            <div className="font-sans text-[18px] font-black text-slate-50 flex items-center gap-2 tracking-[0.02em]">
                                 🐍 Snake Game
                             </div>
 
-                            <div className="snake-overlay-stats">
+                            <div className="flex items-center gap-4">
                                 {/* Score */}
-                                <div className="snake-stat snake-stat-score">
+                                <div className="font-sans text-[15px] font-extrabold flex items-center gap-[5px] text-amber-400">
                                     🍎 {gameState.score}
                                 </div>
 
                                 {/* Lives */}
-                                <div className="snake-lives">
+                                <div className="flex gap-[3px] text-[16px]">
                                     {Array.from({ length: INITIAL_LIVES }, (_, i) => (
                                         <span key={i}>
                                             {i < gameState.lives ? '❤️' : '🖤'}
@@ -99,7 +98,7 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                             </div>
 
                             <button
-                                className="snake-overlay-close"
+                                className="bg-red-500/15 border-[1.5px] border-red-500/35 rounded-xl py-1.5 px-3.5 font-sans text-[13px] font-extrabold text-red-300 cursor-pointer transition-all duration-200 hover:bg-red-500/30 hover:text-red-200"
                                 onClick={handleClose}
                             >
                                 ✕ Close
@@ -107,7 +106,7 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                         </div>
 
                         {/* ── Game Area ── */}
-                        <div className="snake-overlay-body">
+                        <div className="relative flex items-center justify-center p-4 flex-1 min-h-0 overflow-hidden">
                             <SnakeCanvas gameState={gameState} debugRef={debugRef} />
 
                             {/* Quiz overlay for revival */}
