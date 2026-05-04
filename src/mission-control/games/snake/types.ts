@@ -41,19 +41,33 @@ export interface SnakeGameState {
     phase: GamePhase;
     /** How many quiz questions answered correctly during current revival */
     quizCorrectCount: number;
+    /** Current selected speed level */
+    level: GameLevel;
 }
 
 // ── Grid & Timing Constants ──────────────────────────────────
-export const GRID_COLS = 20;
-export const GRID_ROWS = 15;
 export const CELL_SIZE = 32;
-export const CANVAS_WIDTH = GRID_COLS * CELL_SIZE;   // 640
-export const CANVAS_HEIGHT = GRID_ROWS * CELL_SIZE;  // 480
+export const CANVAS_WIDTH = 20 * CELL_SIZE;   // 640
+export const CANVAS_HEIGHT = 15 * CELL_SIZE;  // 480
 
 export const INITIAL_LIVES = 3;
 export const INITIAL_SNAKE_LENGTH = 3;
-export const TICK_INTERVAL_MS = 300;
 export const QUIZ_QUESTIONS_TO_REVIVE = 3;
+
+export type GameLevel = 0 | 1 | 2 | 3;
+export const TICK_INTERVALS: Record<GameLevel, number> = {
+    0: 800, // Ultra Slow
+    1: 500, // Slow
+    2: 300, // Medium
+    3: 150, // Fast
+};
+
+export const LEVEL_GRID_SIZES: Record<GameLevel, { cols: number; rows: number }> = {
+    0: { cols: 12, rows: 12 },
+    1: { cols: 20, rows: 15 },
+    2: { cols: 20, rows: 15 },
+    3: { cols: 20, rows: 15 },
+};
 
 /** How many segments the snake loses when eating junk food. */
 export const JUNK_FOOD_PENALTY = 1;

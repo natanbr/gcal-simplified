@@ -10,18 +10,18 @@ import type {
     Position,
     Direction,
     FoodItem,
+    GameLevel,
 } from './types';
 import {
-    GRID_COLS,
-    GRID_ROWS,
     INITIAL_LIVES,
     INITIAL_SNAKE_LENGTH,
-    TICK_INTERVAL_MS,
+    TICK_INTERVALS,
     QUIZ_QUESTIONS_TO_REVIVE,
     FRUIT_EMOJIS,
     JUNK_FOOD_EMOJIS,
     JUNK_FOOD_PENALTY,
     MIN_SNAKE_LENGTH,
+    LEVEL_GRID_SIZES,
 } from './types';
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -30,19 +30,19 @@ function pickRandom<T>(arr: readonly T[]): T {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function randomFruit(snake: Position[]): FoodItem {
+function randomFruit(snake: Position[], cols: number, rows: number): FoodItem {
     return {
-        position: randomFreeCell(snake),
+        position: randomFreeCell(snake, cols, rows),
         emoji: pickRandom(FRUIT_EMOJIS),
     };
 }
 
-function randomFreeCell(snake: Position[], extra?: Position | null): Position {
+function randomFreeCell(snake: Position[], cols: number, rows: number, extra?: Position | null): Position {
     const occupied = new Set(snake.map(s => `${s.x},${s.y}`));
     if (extra) occupied.add(`${extra.x},${extra.y}`);
     const free: Position[] = [];
-    for (let x = 0; x < GRID_COLS; x++) {
-        for (let y = 0; y < GRID_ROWS; y++) {
+    for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < rows; y++) {
             if (!occupied.has(`${x},${y}`)) free.push({ x, y });
         }
     }
@@ -56,7 +56,7 @@ function randomFreeCell(snake: Position[], extra?: Position | null): Position {
  * If the target cell is occupied or out of bounds, falls back
  * to a random free cell.
  */
-function spawnJunkFood(snake: Position[], direction: Direction, fruitPos: Position): FoodItem {
+function spawnJunkFood(snake: Position[], direction: Direction, fruitPos: Position, cols: number, rows: number): FoodItem {
     const head = snake[0];
     const offset = 3 + Math.floor(Math.random() * 3); // 3–5 tiles ahead
     let target: Position;
@@ -71,18 +71,18 @@ function spawnJunkFood(snake: Position[], direction: Direction, fruitPos: Positi
     // Validate: in bounds and not occupied?
     const occupied = new Set(snake.map(s => `${s.x},${s.y}`));
     occupied.add(`${fruitPos.x},${fruitPos.y}`);
-    const inBounds = target.x >= 0 && target.x < GRID_COLS && target.y >= 0 && target.y < GRID_ROWS;
+    const inBounds = target.x >= 0 && target.x < cols && target.y >= 0 && target.y < rows;
     const isFree = inBounds && !occupied.has(`${target.x},${target.y}`);
 
     return {
-        position: isFree ? target : randomFreeCell(snake, fruitPos),
+        position: isFree ? target : randomFreeCell(snake, cols, rows, fruitPos),
         emoji: pickRandom(JUNK_FOOD_EMOJIS),
     };
 }
 
-function buildInitialSnake(): Position[] {
-    const startX = Math.floor(GRID_COLS / 2);
-    const startY = Math.floor(GRID_ROWS / 2);
+function buildInitialSnake(cols: number, rows: number): Position[] {
+    const startX = Math.floor(cols / 2);
+    const startY = Math.floor(rows / 2);
     return Array.from({ length: INITIAL_SNAKE_LENGTH }, (_, i) => ({
         x: startX - i,
         y: startY,
@@ -110,26 +110,28 @@ function isOpposite(a: Direction, b: Direction): boolean {
 
 // ── Initial State ────────────────────────────────────────────
 
-function createInitialState(): SnakeGameState {
-    const snake = buildInitialSnake();
+function createInitialState(level: GameLevel = 1): SnakeGameState {
+    const { cols, rows } = LEVEL_GRID_SIZES[level];
+    const snake = buildInitialSnake(cols, rows);
     return {
         snake,
         direction: 'right',
         nextDirection: 'right',
-        fruit: randomFruit(snake),
+        fruit: randomFruit(snake, cols, rows),
         junkFood: null,
         junkFoodTimer: 0,
         score: 0,
         lives: INITIAL_LIVES,
         phase: 'waiting',
         quizCorrectCount: 0,
+        level,
     };
 }
 
 // ── Hook ─────────────────────────────────────────────────────
 
 export function useSnakeGame(open: boolean) {
-    const [state, setState] = useState<SnakeGameState>(createInitialState);
+    const [state, setState] = useState<SnakeGameState>(() => createInitialState(1));
     const stateRef = useRef(state);
     stateRef.current = state;
 
@@ -180,9 +182,11 @@ export function useSnakeGame(open: boolean) {
 
             const head = prev.snake[0];
             const newHead = moveHead(head, direction);
+            
+            const { cols, rows } = LEVEL_GRID_SIZES[prev.level];
 
             // Wall collision
-            if (newHead.x < 0 || newHead.x >= GRID_COLS || newHead.y < 0 || newHead.y >= GRID_ROWS) {
+            if (newHead.x < 0 || newHead.x >= cols || newHead.y < 0 || newHead.y >= rows) {
                 return handleDeath(prev);
             }
 
@@ -205,7 +209,7 @@ export function useSnakeGame(open: boolean) {
 
             if (ateFruit) {
                 newScore += 1;
-                newFruit = randomFruit(newSnake);
+                newFruit = randomFruit(newSnake, cols, rows);
                 // Clear any existing junk food when a fruit is eaten
                 newJunkFood = null;
                 // Start junk food timer: 2–4 ticks after eating fruit
@@ -217,7 +221,7 @@ export function useSnakeGame(open: boolean) {
                 newJunkFoodTimer -= 1;
                 if (newJunkFoodTimer <= 0) {
                     // Spawn junk food ahead of the snake
-                    newJunkFood = spawnJunkFood(newSnake, direction, newFruit.position);
+                    newJunkFood = spawnJunkFood(newSnake, direction, newFruit.position, cols, rows);
                     newJunkFoodTimer = 0;
                 }
             }
@@ -277,7 +281,8 @@ export function useSnakeGame(open: boolean) {
         setState(prev => {
             const newCount = prev.quizCorrectCount + 1;
             if (newCount >= QUIZ_QUESTIONS_TO_REVIVE) {
-                const snake = buildInitialSnake();
+                const { cols, rows } = LEVEL_GRID_SIZES[prev.level];
+                const snake = buildInitialSnake(cols, rows);
                 dirQueueRef.current = [];
                 lastEffectiveDirRef.current = 'right';
                 return {
@@ -285,11 +290,12 @@ export function useSnakeGame(open: boolean) {
                     snake,
                     direction: 'right',
                     nextDirection: 'right',
-                    fruit: randomFruit(snake),
+                    fruit: randomFruit(snake, cols, rows),
                     junkFood: null,
                     junkFoodTimer: 0,
                     phase: 'playing',
                     quizCorrectCount: 0,
+                    level: prev.level,
                 };
             }
             return { ...prev, quizCorrectCount: newCount };
@@ -299,7 +305,14 @@ export function useSnakeGame(open: boolean) {
     const resetGame = useCallback(() => {
         dirQueueRef.current = [];
         lastEffectiveDirRef.current = 'right';
-        setState(createInitialState());
+        setState(prev => createInitialState(prev.level));
+    }, []);
+
+    const setLevel = useCallback((level: GameLevel) => {
+        setState(prev => {
+            if (prev.phase !== 'waiting') return prev;
+            return createInitialState(level);
+        });
     }, []);
 
     // ── Keyboard handler ─────────────────────────────────────
@@ -330,7 +343,7 @@ export function useSnakeGame(open: boolean) {
     // ── Tick interval management ─────────────────────────────
     useEffect(() => {
         if (open && state.phase === 'playing') {
-            tickRef.current = setInterval(tick, TICK_INTERVAL_MS);
+            tickRef.current = setInterval(tick, TICK_INTERVALS[state.level]);
         } else {
             if (tickRef.current) {
                 clearInterval(tickRef.current);
@@ -343,13 +356,14 @@ export function useSnakeGame(open: boolean) {
                 tickRef.current = null;
             }
         };
-    }, [open, state.phase, tick]);
+    }, [open, state.phase, tick, state.level]);
 
     return {
         gameState: state,
         startGame,
         onQuizCorrect,
         resetGame,
+        setLevel,
         debugRef,
     };
 }

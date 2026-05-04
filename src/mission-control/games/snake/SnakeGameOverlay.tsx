@@ -11,7 +11,7 @@ import { SnakeCanvas } from './SnakeCanvas';
 import { useSnakeGame } from './useSnakeGame';
 import { QuizOverlay } from '../quiz/QuizOverlay';
 import { generateAdditionQuestion } from '../quiz/additionQuiz';
-import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE } from './types';
+import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE, GameLevel } from './types';
 
 interface SnakeGameOverlayProps {
     open: boolean;
@@ -19,7 +19,7 @@ interface SnakeGameOverlayProps {
 }
 
 export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
-    const { gameState, onQuizCorrect, resetGame, debugRef } = useSnakeGame(open);
+    const { gameState, onQuizCorrect, resetGame, setLevel, debugRef } = useSnakeGame(open);
     const scoreRef = useRef(0);
     scoreRef.current = gameState.score;
 
@@ -82,6 +82,26 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                             </div>
 
                             <div className="flex items-center gap-4">
+                                {/* Level Selector */}
+                                <div className="flex items-center bg-slate-800/50 rounded-lg p-1 border border-white/5 mr-2">
+                                    {([0, 1, 2, 3] as GameLevel[]).map(lvl => (
+                                        <button
+                                            key={lvl}
+                                            onClick={() => setLevel(lvl)}
+                                            disabled={gameState.phase !== 'waiting'}
+                                            className={`
+                                                px-2.5 py-1 text-xs font-bold rounded-md transition-all
+                                                ${gameState.level === lvl 
+                                                    ? 'bg-blue-500 text-white shadow-sm' 
+                                                    : 'text-slate-400 hover:text-slate-200'}
+                                                ${gameState.phase !== 'waiting' && gameState.level !== lvl ? 'opacity-30 cursor-not-allowed' : ''}
+                                            `}
+                                        >
+                                            Speed {lvl}
+                                        </button>
+                                    ))}
+                                </div>
+
                                 {/* Score */}
                                 <div className="font-sans text-[15px] font-extrabold flex items-center gap-[5px] text-amber-400">
                                     🍎 {gameState.score}

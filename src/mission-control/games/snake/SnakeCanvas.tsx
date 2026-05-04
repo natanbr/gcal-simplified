@@ -7,12 +7,11 @@
 import { useRef, useEffect } from 'react';
 import type { SnakeGameState, Position, Direction, FoodItem } from './types';
 import {
-    GRID_COLS,
-    GRID_ROWS,
     CELL_SIZE,
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
     COLORS,
+    LEVEL_GRID_SIZES,
 } from './types';
 
 // ── Pre-computed font strings (avoid per-frame string creation) ──
@@ -23,37 +22,28 @@ const FONT_GAMEOVER_SCORE = "bold 24px 'Nunito', sans-serif";
 const FONT_GAMEOVER_HINT = "16px 'Nunito', sans-serif";
 const FONT_DEBUG = "bold 13px monospace";
 
-// ── Pre-rendered static grid (drawn once, blitted each frame) ─
-const gridCache = (() => {
-    const offscreen = document.createElement('canvas');
-    offscreen.width = CANVAS_WIDTH;
-    offscreen.height = CANVAS_HEIGHT;
-    const ctx = offscreen.getContext('2d')!;
-
-    // Background fill
-    ctx.fillStyle = COLORS.bg;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
+// ── Dynamic Grid Drawer ──
+function drawGrid(ctx: CanvasRenderingContext2D, cols: number, rows: number) {
     // Grid lines
     ctx.strokeStyle = COLORS.gridLine;
     ctx.lineWidth = 1;
-    for (let x = 0; x <= GRID_COLS; x++) {
+    for (let x = 0; x <= cols; x++) {
         ctx.beginPath();
         ctx.moveTo(x * CELL_SIZE, 0);
-        ctx.lineTo(x * CELL_SIZE, CANVAS_HEIGHT);
+        ctx.lineTo(x * CELL_SIZE, rows * CELL_SIZE);
         ctx.stroke();
     }
-    for (let y = 0; y <= GRID_ROWS; y++) {
+    for (let y = 0; y <= rows; y++) {
         ctx.beginPath();
         ctx.moveTo(0, y * CELL_SIZE);
-        ctx.lineTo(CANVAS_WIDTH, y * CELL_SIZE);
+        ctx.lineTo(cols * CELL_SIZE, y * CELL_SIZE);
         ctx.stroke();
     }
-    return offscreen;
-})();
 
-function drawBackground(ctx: CanvasRenderingContext2D) {
-    ctx.drawImage(gridCache, 0, 0);
+    // Border Wall
+    ctx.strokeStyle = '#334155'; // Slate 700 border
+    ctx.lineWidth = 4;
+    ctx.strokeRect(0, 0, cols * CELL_SIZE, rows * CELL_SIZE);
 }
 
 function drawRoundedRect(
@@ -179,7 +169,15 @@ function drawWaitingScreen(ctx: CanvasRenderingContext2D) {
     ctx.fillText(
         '🎮  Press an arrow key to start!',
         CANVAS_WIDTH / 2,
-        CANVAS_HEIGHT / 2 + 60,
+        CANVAS_HEIGHT / 2 + 50,
+    );
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = FONT_GAMEOVER_HINT;
+    ctx.fillText(
+        '(Select speed in the header above)',
+        CANVAS_WIDTH / 2,
+        CANVAS_HEIGHT / 2 + 80,
     );
 }
 
@@ -226,8 +224,18 @@ export function SnakeCanvas({ gameState, debugRef }: SnakeCanvasProps) {
 
         const loop = () => {
             const gs = gameStateRef.current;
+            const { cols, rows } = LEVEL_GRID_SIZES[gs.level];
+            const offsetX = (CANVAS_WIDTH - cols * CELL_SIZE) / 2;
+            const offsetY = (CANVAS_HEIGHT - rows * CELL_SIZE) / 2;
 
-            drawBackground(ctx);
+            // Clear full canvas
+            ctx.fillStyle = COLORS.bg;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            ctx.save();
+            ctx.translate(offsetX, offsetY);
+
+            drawGrid(ctx, cols, rows);
 
             // Draw healthy fruit (green glow)
             drawFoodEmoji(ctx, gs.fruit, COLORS.fruitAura);
@@ -242,6 +250,8 @@ export function SnakeCanvas({ gameState, debugRef }: SnakeCanvasProps) {
                 drawSnakeSegment(ctx, gs.snake[i], i, total, gs.direction);
             }
 
+            ctx.restore();
+
             if (gs.phase === 'waiting') {
                 drawWaitingScreen(ctx);
             } else if (gs.phase === 'game-over') {
@@ -249,6 +259,7 @@ export function SnakeCanvas({ gameState, debugRef }: SnakeCanvasProps) {
             }
 
             // ── DEBUG HUD (temporary) ────────────────
+            /*
             if (debugRef?.current) {
                 const d = debugRef.current;
                 ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -262,6 +273,7 @@ export function SnakeCanvas({ gameState, debugRef }: SnakeCanvasProps) {
                     4, 4
                 );
             }
+            */
 
             animFrameRef.current = requestAnimationFrame(loop);
         };
