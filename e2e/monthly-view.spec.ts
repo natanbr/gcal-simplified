@@ -27,9 +27,21 @@ test.describe('Monthly View', () => {
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(2000);
 
-        // Skip if login is required
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required — skipping monthly-view test');
+        // Wait for either login screen or dashboard to appear
+        const loginScreen = page.locator('[data-testid="login-screen"]');
+        const dashboard = page.locator('[data-testid="calendar-grid"]');
+        
+        await Promise.race([
+            loginScreen.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {}),
+            dashboard.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {})
+        ]);
+
+        const loginVisible = await loginScreen.isVisible();
+        if (loginVisible) {
+            await app.close();
+            test.skip(true, 'Login required — skipping monthly-view test');
+            return;
+        }
 
         // Find and click the Monthly view toggle button
         const monthlyBtn = page.locator('[data-testid="monthly-view-toggle"]');
@@ -57,8 +69,21 @@ test.describe('Monthly View', () => {
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(2000);
 
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required — skipping monthly-view test');
+        // Wait for either login screen or dashboard to appear
+        const loginScreen = page.locator('[data-testid="login-screen"]');
+        const dashboard = page.locator('[data-testid="calendar-grid"]');
+        
+        await Promise.race([
+            loginScreen.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {}),
+            dashboard.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {})
+        ]);
+
+        const loginVisible = await loginScreen.isVisible();
+        if (loginVisible) {
+            await app.close();
+            test.skip(true, 'Login required — skipping monthly-view test');
+            return;
+        }
 
         // Switch to monthly view
         await page.locator('[data-testid="monthly-view-toggle"]').click();
@@ -95,8 +120,21 @@ test.describe('Monthly View', () => {
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(2000);
 
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
+        // Wait for either login screen or dashboard to appear
+        const loginScreen = page.locator('[data-testid="login-screen"]');
+        const dashboard = page.locator('[data-testid="calendar-grid"]');
+        
+        await Promise.race([
+            loginScreen.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {}),
+            dashboard.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {})
+        ]);
+
+        const loginVisible = await loginScreen.isVisible();
+        if (loginVisible) {
+            await app.close();
+            test.skip(true, 'Login required');
+            return;
+        }
 
         await page.locator('[data-testid="monthly-view-toggle"]').click();
         await page.waitForTimeout(500);

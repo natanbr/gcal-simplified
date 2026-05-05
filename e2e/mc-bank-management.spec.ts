@@ -89,7 +89,11 @@ test.describe('Mission Control — Bank Management', () => {
 
         // Get initial count (the badge inside the header)
         const bankHeader = page.getByRole('button', { name: /Bank admin/i });
-        await bankHeader.click();
+        
+        // Long press to open the real admin popup (bypass trapMode)
+        await bankHeader.dispatchEvent('pointerdown');
+        await page.waitForTimeout(700);
+        await bankHeader.dispatchEvent('pointerup');
 
         // Read current count from the badge (visible in the header)
         const countBadge = bankHeader.locator('div').last();
@@ -97,7 +101,7 @@ test.describe('Mission Control — Bank Management', () => {
         const initialCount = parseInt(initialText ?? '0', 10);
 
         // Click +1
-        await page.getByText('+1').first().click();
+        await page.locator('[data-testid="mc-bank-admin-popup"]').getByRole('button', { name: '+1' }).click();
         await page.waitForTimeout(300);
 
         const newText = await countBadge.textContent();
