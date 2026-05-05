@@ -35,6 +35,15 @@ vi.mock('framer-motion', async () => {
 const EMPTY_CASES = [] as const;
 const EMPTY_RECTS = {} as Record<number, DOMRect | null>;
 
+async function openAdminPopup() {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const btn = screen.getByRole('button', { name: /Bank admin/i });
+    await act(async () => { fireEvent.pointerDown(btn); });
+    await act(async () => { vi.advanceTimersByTime(650); });
+    await act(async () => { fireEvent.pointerUp(btn); });
+    vi.useRealTimers();
+}
+
 /** Render GlobalBank with default (empty) case props */
 function renderBank() {
     return render(
@@ -98,13 +107,13 @@ describe('GlobalBank — admin popup', () => {
 
     it('clicking the bank header opens the admin popup', async () => {
         renderBank();
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Bank admin/i })); });
+        await openAdminPopup();
         expect(screen.getByText(/Bank Admin/i)).toBeInTheDocument();
     });
 
     it('clicking "close ✕" inside popup hides it', async () => {
         renderBank();
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Bank admin/i })); });
+        await openAdminPopup();
         expect(screen.getByText(/Bank Admin/i)).toBeInTheDocument();
         await act(async () => { fireEvent.click(screen.getByText(/close/i)); });
         expect(screen.queryByText(/Bank Admin/i)).not.toBeInTheDocument();
@@ -112,7 +121,7 @@ describe('GlobalBank — admin popup', () => {
 
     it('popup shows +1, +2, −1 control buttons', async () => {
         renderBank();
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Bank admin/i })); });
+        await openAdminPopup();
         expect(screen.getByText('+1')).toBeInTheDocument();
         expect(screen.getByText('+2')).toBeInTheDocument();
         expect(screen.getByText('−1')).toBeInTheDocument();
@@ -125,7 +134,7 @@ describe('GlobalBank — +1 button', () => {
     it('clicking +1 increments bank count by 1', async () => {
         renderBank();
         // Open popup
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Bank admin/i })); });
+        await openAdminPopup();
         // The count starts at 3
         expect(screen.getByText('3')).toBeInTheDocument();
         await act(async () => { fireEvent.click(screen.getByText('+1')); });
@@ -134,7 +143,7 @@ describe('GlobalBank — +1 button', () => {
 
     it('clicking +1 twice increments by 2', async () => {
         renderBank();
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Bank admin/i })); });
+        await openAdminPopup();
         await act(async () => { fireEvent.click(screen.getByText('+1')); });
         await act(async () => { fireEvent.click(screen.getByText('+1')); });
         expect(screen.getByText('5')).toBeInTheDocument();
@@ -146,7 +155,7 @@ describe('GlobalBank — +1 button', () => {
 describe('GlobalBank — +2 button', () => {
     it('clicking +2 increments bank count by 2', async () => {
         renderBank();
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Bank admin/i })); });
+        await openAdminPopup();
         expect(screen.getByText('3')).toBeInTheDocument();
         await act(async () => { fireEvent.click(screen.getByText('+2')); });
         expect(screen.getByText('5')).toBeInTheDocument();
@@ -158,7 +167,7 @@ describe('GlobalBank — +2 button', () => {
 describe('GlobalBank — −1 button', () => {
     it('clicking −1 decrements bank count by 1', async () => {
         renderBank();
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Bank admin/i })); });
+        await openAdminPopup();
         expect(screen.getByText('3')).toBeInTheDocument();
         await act(async () => { fireEvent.click(screen.getByText('−1')); });
         expect(screen.getByText('2')).toBeInTheDocument();
@@ -186,7 +195,7 @@ describe('GlobalBank — −1 button', () => {
         await act(async () => {});
         await act(async () => {});
 
-        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Bank admin/i })); });
+        await openAdminPopup();
         const minusBtn = screen.getByText('−1').closest('button');
         expect(minusBtn).toBeDisabled();
     });

@@ -136,28 +136,16 @@ export function useSnakeGame(open: boolean) {
     stateRef.current = state;
 
     const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const tickIntervalRef = useRef<number>(TICK_INTERVALS[state.level]);
 
     // ── Buffered direction queue ──────────────────────────────
     const dirQueueRef = useRef<Direction[]>([]);
     const lastEffectiveDirRef = useRef<Direction>('right');
+    const lastImmediateRef = useRef<number>(0);
 
     // ── DEBUG diagnostics (temporary) ────────────────────────
     const debugRef = useRef({ keyCount: 0, tickCount: 0, lastKey: '', queueLen: 0 });
 
-    const queueDirection = useCallback((dir: Direction) => {
-        const queue = dirQueueRef.current;
-        const lastDir = queue.length > 0
-            ? queue[queue.length - 1]
-            : lastEffectiveDirRef.current;
-
-        if (dir === lastDir || isOpposite(dir, lastDir)) return;
-        if (queue.length >= 3) return;
-
-        queue.push(dir);
-        debugRef.current.keyCount++;
-        debugRef.current.lastKey = dir;
-        debugRef.current.queueLen = queue.length;
-    }, []);
 
     // ── Tick: advance game state by one step ─────────────────
     const tick = useCallback(() => {
@@ -249,6 +237,31 @@ export function useSnakeGame(open: boolean) {
             };
         });
     }, []);
+
+    const queueDirection = useCallback((dir: Direction) => {
+        const queue = dirQueueRef.current;
+        const lastDir = queue.length > 0
+            ? queue[queue.length - 1]
+            : lastEffectiveDirRef.current;
+
+        if (dir === lastDir || isOpposite(dir, lastDir)) return;
+        if (queue.length >= 3) return;
+
+        queue.push(dir);
+        debugRef.current.keyCount++;
+        debugRef.current.lastKey = dir;
+        debugRef.current.queueLen = queue.length;
+
+        // Immediate step: fire tick now and restart the interval from zero.
+        // 100ms cooldown prevents double-stepping on rapid sequential inputs.
+        const now = Date.now();
+        if (now - lastImmediateRef.current > 100 && tickRef.current !== null) {
+            lastImmediateRef.current = now;
+            tick();
+            clearInterval(tickRef.current);
+            tickRef.current = setInterval(tick, tickIntervalRef.current);
+        }
+    }, [tick]);
 
     // ── Death handler ────────────────────────────────────────
     function handleDeath(prev: SnakeGameState): SnakeGameState {
@@ -342,8 +355,9 @@ export function useSnakeGame(open: boolean) {
 
     // ── Tick interval management ─────────────────────────────
     useEffect(() => {
+        tickIntervalRef.current = TICK_INTERVALS[state.level];
         if (open && state.phase === 'playing') {
-            tickRef.current = setInterval(tick, TICK_INTERVALS[state.level]);
+            tickRef.current = setInterval(tick, tickIntervalRef.current);
         } else {
             if (tickRef.current) {
                 clearInterval(tickRef.current);

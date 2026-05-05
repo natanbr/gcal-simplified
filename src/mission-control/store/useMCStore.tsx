@@ -13,6 +13,7 @@ import type {
 import { DEFAULT_SETTINGS } from '../types';
 import { mcReducer, initialState } from './mcReducer';
 import { REWARD_MAP } from '../rewardCatalogue';
+import { useGameTokenScheduler } from './useGameTokenScheduler';
 
 // ---- Logging Interceptor ----
 // We keep translation logic here to keep mcReducer pure and simple.
@@ -128,7 +129,7 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
 
 // ---- Persistence ----
 
-const STORAGE_KEY = 'mc-state-v4'; // bumped: added settings field
+const STORAGE_KEY = 'mc-state-v5'; // bumped: added gameTokens fields
 
 const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 
@@ -175,6 +176,8 @@ function loadPersistedState(): MCState {
                 return savedR ? { ...defaultR, ...savedR } : defaultR;
             }),
             activityLogs: parsed.activityLogs || [],
+            gameTokens: parsed.gameTokens ?? 0,
+            gameTokensLastGrantedDate: parsed.gameTokensLastGrantedDate ?? null,
         };
     } catch {
         return initialState;
@@ -193,6 +196,8 @@ const MCContext = createContext<MCContextValue | null>(null);
 export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
     const [state, dispatch] = useReducer(mcReducer, undefined, loadPersistedState);
     const contextValue = useMemo(() => ({ state, dispatch }), [state]);
+
+    useGameTokenScheduler(dispatch);
 
     // Persist state to localStorage on every change
     useEffect(() => {

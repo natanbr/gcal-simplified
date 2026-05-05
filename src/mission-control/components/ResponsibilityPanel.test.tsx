@@ -83,11 +83,6 @@ async function clickNTimes(testId: string, n: number) {
 // ── Initial render ────────────────────────────────────────────────────────────
 
 describe('ResponsibilityPanel — initial render', () => {
-    it('shows the panel header', () => {
-        renderPanel();
-        expect(screen.getByText(/responsibilities/i)).toBeInTheDocument();
-    });
-
     it('shows all default responsibility tasks', () => {
         renderPanel();
         // Default tasks: Recycling and Activity

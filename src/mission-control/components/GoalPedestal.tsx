@@ -263,13 +263,14 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
 
   const handleUse = () => {
     const rewardId = case_.reward;
-    // Permanently consume the tokens — reward has been redeemed, no refund
     dispatch({ type: 'CONSUME_CASE', caseId: case_.id });
-    // If this was a Quick Game reward, open the snake game overlay
     if (rewardId === 'quick-game' && onQuickGameOpen) {
+      dispatch({ type: 'CONSUME_GAME_TOKEN' });
       onQuickGameOpen();
     }
   };
+
+  const canUseQuickGame = case_.reward !== 'quick-game' || state.gameTokens >= 1;
 
   // Pastel accent per pedestal — only used when ACTIVE
   const pastelAccents = [
@@ -460,16 +461,80 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
               {isComplete ? '🎉 Done!' : reward.label}
             </span>
 
-            <span style={{ fontSize: 10, color: 'var(--mc-text-dim)', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-              {case_.tokenCount} / {case_.targetCount}
-            </span>
-
-            <TokenSlots filled={case_.tokenCount} total={case_.targetCount} tokens={caseTokens} exitingIds={exitingIds} onDrop={handleTokenDrop} onDragStateChange={handleDragStateChange} />
+            {case_.reward === 'quick-game' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: '100%' }}>
+                <motion.div
+                  initial={false}
+                  animate={state.gameTokens >= 1 ? { scale: [1.2, 1], opacity: 1 } : { scale: 0.88, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+                  style={{
+                    width: 40, height: 40, borderRadius: '50%',
+                    background: state.gameTokens >= 1
+                      ? 'radial-gradient(circle at 35% 32%, #c4b5fd, #7c3aed 60%, #4c1d95)'
+                      : 'transparent',
+                    border: state.gameTokens >= 1
+                      ? '2px solid rgba(124,58,237,0.5)'
+                      : '2.5px dashed rgba(160,150,230,0.35)',
+                    boxShadow: state.gameTokens >= 1 ? '0 3px 10px rgba(124,58,237,0.3)' : 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 18,
+                  }}
+                >
+                  {state.gameTokens >= 1 ? '🎮' : null}
+                </motion.div>
+                <span style={{ fontSize: 10, color: state.gameTokens >= 1 ? '#6d28d9' : 'var(--mc-text-dim)', fontWeight: 800 }}>
+                  {state.gameTokens >= 1 ? '1 game token ready' : 'No game tokens'}
+                </span>
+              </div>
+            ) : (
+              <>
+                <span style={{ fontSize: 10, color: 'var(--mc-text-dim)', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                  {case_.tokenCount} / {case_.targetCount}
+                </span>
+                <TokenSlots filled={case_.tokenCount} total={case_.targetCount} tokens={caseTokens} exitingIds={exitingIds} onDrop={handleTokenDrop} onDragStateChange={handleDragStateChange} />
+              </>
+            )}
 
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: 5, marginTop: 'auto', width: '100%' }}>
-              {isComplete ? (
-                // "Use" button replaces "All" when goal is complete
+              {case_.reward === 'quick-game' ? (
+                // Quick Game: always show Use! (gated) + Refund side by side
+                <>
+                  <Button3D
+                    variant="primary"
+                    onClick={canUseQuickGame ? handleUse : undefined}
+                    aria-label="Play snake game"
+                    disabled={!canUseQuickGame}
+                    style={{
+                      flex: 1, justifyContent: 'center', display: 'flex',
+                      alignItems: 'center', gap: 4, fontSize: 11,
+                      background: canUseQuickGame
+                        ? 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)'
+                        : 'rgba(200,200,220,0.4)',
+                      borderColor: canUseQuickGame ? 'rgba(61,206,118,0.5)' : 'rgba(160,150,230,0.2)',
+                      color: canUseQuickGame ? '#0b4a20' : 'var(--mc-text-dim)',
+                      cursor: canUseQuickGame ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    {canUseQuickGame ? '🎁 Use!' : '🎮 No tokens'}
+                  </Button3D>
+                  <motion.div
+                    animate={{ rotate: leverTilted ? 45 : 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                    style={{ transformOrigin: 'bottom center' }}
+                  >
+                    <Button3D
+                      variant="danger"
+                      onClick={handleRefund}
+                      aria-label="Remove quick game goal"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+                    >
+                      🗑️
+                    </Button3D>
+                  </motion.div>
+                </>
+              ) : isComplete ? (
+                // Regular reward complete: Use! only
                 <motion.div
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
@@ -491,32 +556,32 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                   </Button3D>
                 </motion.div>
               ) : (
-                <Button3D
-                  variant="primary"
-                  onClick={() => dispatch({ type: 'VACUUM_TO_CASE', caseId: case_.id })}
-                  aria-label="Move needed coins to this goal"
-                  disabled={bankCount === 0}
-                  style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
-                >
-                  💨 All
-                </Button3D>
-              )}
-
-              {!isComplete && (
-                <motion.div
-                  animate={{ rotate: leverTilted ? 45 : 0 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                  style={{ transformOrigin: 'bottom center' }}
-                >
+                // Regular reward in progress: vacuum + refund
+                <>
                   <Button3D
-                    variant="danger"
-                    onClick={handleRefund}
-                    aria-label="Refund all coins back to bank"
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+                    variant="primary"
+                    onClick={() => dispatch({ type: 'VACUUM_TO_CASE', caseId: case_.id })}
+                    aria-label="Move needed coins to this goal"
+                    disabled={bankCount === 0}
+                    style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
                   >
-                    🗑️
+                    💨 All
                   </Button3D>
-                </motion.div>
+                  <motion.div
+                    animate={{ rotate: leverTilted ? 45 : 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                    style={{ transformOrigin: 'bottom center' }}
+                  >
+                    <Button3D
+                      variant="danger"
+                      onClick={handleRefund}
+                      aria-label="Refund all coins back to bank"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+                    >
+                      🗑️
+                    </Button3D>
+                  </motion.div>
+                </>
               )}
             </div>
           </motion.div>

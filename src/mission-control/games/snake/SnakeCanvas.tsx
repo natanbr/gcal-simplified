@@ -20,7 +20,6 @@ const FONT_WAITING = "bold 22px 'Nunito', sans-serif";
 const FONT_GAMEOVER_TITLE = "bold 42px 'Nunito', sans-serif";
 const FONT_GAMEOVER_SCORE = "bold 24px 'Nunito', sans-serif";
 const FONT_GAMEOVER_HINT = "16px 'Nunito', sans-serif";
-const FONT_DEBUG = "bold 13px monospace";
 
 // ── Dynamic Grid Drawer ──
 function drawGrid(ctx: CanvasRenderingContext2D, cols: number, rows: number) {

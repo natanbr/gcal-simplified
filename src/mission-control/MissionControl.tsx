@@ -20,6 +20,7 @@ import { LiveClockDisplay } from './components/LiveClockDisplay';
 import { ActivityLogView } from './components/ActivityLogView';
 import { CheatTrapOverlay } from './components/CheatTrapOverlay';
 import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
+import { GameTokenPanel } from './components/GameTokenPanel';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
 interface MCLayoutProps {
@@ -286,6 +287,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
             {/* Column 3: Responsibilities */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
               <ResponsibilityPanel />
+              <GameTokenPanel />
             </div>
           </div>
         </div>

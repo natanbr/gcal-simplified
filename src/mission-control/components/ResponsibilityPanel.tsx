@@ -275,7 +275,7 @@ export function ResponsibilityPanel() {
     const state = useMCState();
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {state.responsibilities.map(task => (
                 <ResponsibilityCard key={task.id} task={task} />
             ))}

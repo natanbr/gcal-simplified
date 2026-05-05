@@ -53,8 +53,8 @@ describe('WeatherDashboard', () => {
         // Weather button should show temperature
         expect(screen.getByText(/10°C/i)).toBeDefined();
         
-        // Tides button existence
-        expect(screen.getByText(/Tides/i)).toBeDefined();
+        // Tides/Marine button existence
+        expect(screen.getByText(/Marine/i)).toBeDefined();
 
         // Tasks button existence
         expect(screen.getByText(/Tasks/i)).toBeDefined();
@@ -79,8 +79,8 @@ describe('WeatherDashboard', () => {
             onTidesActive={() => {}}
         />);
 
-        // Find and click the Tides button
-        const tidesButton = screen.getByText('Tides').closest('button');
+        // Find and click the Marine button
+        const tidesButton = screen.getByText('Marine').closest('button');
         if (tidesButton) {
             fireEvent.click(tidesButton);
         }

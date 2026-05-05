@@ -162,6 +162,10 @@ export interface MCState {
     responsibilities: ResponsibilityTask[];
     activityLogs: ActivityLogEntry[];
     hasUnreviewedCheatAttempt: boolean;
+    /** Accumulated game tokens (max 5). Earned 1/day when bankCount >= 10. */
+    gameTokens: number;
+    /** ISO date string (YYYY-MM-DD) of the last day a game token was granted. */
+    gameTokensLastGrantedDate: string | null;
 }
 
 // --------------- Action Discriminated Union ---------------
@@ -191,4 +195,7 @@ export type MCAction =
     | { type: 'RESET_RESPONSIBILITY'; taskId: string; claimTokens?: number }
     | { type: 'ADD_LOG'; log: ActivityLogEntry }
     | { type: 'CHEAT_ATTEMPT' }
-    | { type: 'CLEAR_CHEAT_FLAG' };
+    | { type: 'CLEAR_CHEAT_FLAG' }
+    | { type: 'GRANT_GAME_TOKEN'; force?: boolean }
+    | { type: 'CONSUME_GAME_TOKEN' }
+    | { type: 'RESET_GAME_TOKENS' };
