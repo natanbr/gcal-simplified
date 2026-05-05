@@ -98,7 +98,6 @@ vi.mock('./api', () => ({
 vi.mock('./weather', () => ({
   weatherService: {
     getWeather: vi.fn(),
-    getTides: vi.fn(),
   }
 }));
 

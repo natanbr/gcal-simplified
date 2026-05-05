@@ -162,7 +162,7 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
     if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
   };
   
-  const handlePointerUp = (_e: React.PointerEvent) => {
+  const handlePointerUp = () => {
     const duration = Date.now() - ptrDownTimeRef.current;
     if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
     

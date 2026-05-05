@@ -157,17 +157,6 @@ describe('Scheduler logic — timer deactivation', () => {
 // ── simulateTickOnce ─────────────────────────────────────────────────────────────
 // For testing the pure functionality of exactly matching the time.
 // ──────────────────────────────────────────────────────────────────────────
-function getMsUntilNextTime(now: Date, hhmm: string): number {
-    const [h, m] = hhmm.split(':').map(Number);
-    const target = new Date(now.getTime());
-    target.setHours(h, m, 0, 0);
-
-    if (target.getTime() <= now.getTime()) {
-        target.setDate(target.getDate() + 1);
-    }
-
-    return target.getTime() - now.getTime();
-}
 
 function simulateExactTrigger(state: MCState, currentSimulatedTime: Date): MCState {
     let next = state;
@@ -249,7 +238,7 @@ describe('Scheduler logic — no overlap', () => {
         d.setHours(19, 0, 0, 0);
         setTime(19, 0);
 
-        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+        const state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
 
         const afterTick = simulateExactTrigger(state, d);
         // Should STILL be morning, even though Evening triggered!

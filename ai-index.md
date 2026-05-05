@@ -13,7 +13,7 @@ This file serves as the definitive structural map of the `gcal-simplified` appli
 This directory houses isolated, feature-specific modules that bundle their own components, hooks, and utilities.
 
 * **`weather/`**: Handles all weather, marine, and task data display for the dashboard.
-  * **`components/`**: Contains small, focused UI components (`WeatherDashboard.tsx`, `WeatherPanel.tsx`, `TidesPanel.tsx`, `TasksPanel.tsx`).
+  * **`components/`**: Contains small, focused UI components (`WeatherDashboard.tsx`, `WeatherPanel.tsx`, `TasksPanel.tsx`).
 
 ### `src/mission-control/` (Command Center)
 A strictly isolated application module.

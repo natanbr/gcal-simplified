@@ -4,16 +4,15 @@ import React from 'react';
 
 // Mock must be defined before imports that use it, OR rely on hoisting.
 // We'll trust hoisting but define it clearly.
-// Using explicit any for children as per original file style
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 vi.mock('../../../components/SideDrawer', () => ({
-    SideDrawer: ({ isOpen, children }: { isOpen: boolean, children: any }) => {
+    SideDrawer: ({ isOpen, children }: { isOpen: boolean, children: React.ReactNode }) => {
         // Render children directly if open
         return isOpen ? <div data-testid="drawer-content">{children}</div> : null;
     }
 }));
 
 import { WeatherDashboard } from './WeatherDashboard';
+import { AppTask } from '../../../types';
 
 describe('WeatherDashboard', () => {
     it('should render correct buttons for Weather and Tasks', async () => {
@@ -22,7 +21,7 @@ describe('WeatherDashboard', () => {
             daily: { sunrise: [], sunset: [], weather_code: [], temperature_2m_max: [], temperature_2m_min: [] },
             hourly: { time: [], temperature_2m: [], precipitation_probability: [], weather_code: [] }
         };
-        const mockTasks: any[] = [];
+        const mockTasks: AppTask[] = [];
 
         render(<WeatherDashboard 
             weather={mockWeather} 

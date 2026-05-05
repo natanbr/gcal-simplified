@@ -1,4 +1,4 @@
-import { test, _electron as electron, expect } from '@playwright/test';
+import { test, _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format } from 'date-fns';
@@ -7,8 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 test.describe('Week Navigation', () => {
-    let electronApp: any;
-    let window: any;
+    let electronApp: ElectronApplication;
+    let window: Page;
 
     test.beforeEach(async () => {
         // Launch Electron app

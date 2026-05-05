@@ -91,10 +91,9 @@ export function useMissionScheduler(): void {
             timeouts.clear();
         };
     }, [
-        state.settings.morningStartsAt,
-        state.settings.eveningStartsAt,
+        state.missions,
         dispatch
-    ]); // Only re-run when configured start times change
+    ]); // Only re-run when mission configurations change
 
     // ── 2. Expiry Interval (Duration Countdown) ───────────────────────────────
     // Periodically checks if the currently running mission's duration has expired.

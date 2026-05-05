@@ -78,8 +78,6 @@ test.describe('Week Display Customization', () => {
                 }
             }));
 
-            ipcMain.removeHandler('tides:get');
-            ipcMain.handle('tides:get', () => null);
         });
 
         // Reload window to apply mocked handlers

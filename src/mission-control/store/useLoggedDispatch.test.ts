@@ -2,7 +2,7 @@
 // Mission Control — Activity Logs (Command Interceptor) Tests
 // ============================================================
 
-import { mcReducer, initialState } from './mcReducer';
+import { initialState } from './mcReducer';
 import type { MCAction, MCState } from '../types';
 
 // Extract the translation logic from useMCStore (replicated for testing or exported if refactored)

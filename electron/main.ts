@@ -166,13 +166,9 @@ app.whenReady().then(() => {
     return await apiService.getTasks();
   });
 
-  // Weather & Tides
+  // Weather
   ipcMain.handle('weather:get', async (_, lat?: number, lng?: number) => {
     return await weatherService.getWeather(lat, lng);
-  });
-
-  ipcMain.handle('tides:get', async (_, tideStation?: string, currentStation?: string, lat?: number, lng?: number) => {
-    return await weatherService.getTides(tideStation, currentStation, lat, lng);
   });
 
   // Update Handlers

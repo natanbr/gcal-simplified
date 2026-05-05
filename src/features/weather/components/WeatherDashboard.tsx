@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { SideDrawer } from '../../../components/SideDrawer';
 import { WeatherData, AppTask } from '../../../types';
 import {
-    Anchor,
     Sun,
     ListTodo
 } from 'lucide-react';

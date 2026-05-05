@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-test.describe('Weather & Tides Drawers Test', () => {
-    test('should display weather and tides drawers', async () => {
+test.describe('Weather Drawer Test', () => {
+    test('should display weather drawer', async () => {
         // Launch Electron app - use the main.js from dist-electron
         const electronApp = await electron.launch({
             args: [path.join(__dirname, '../dist-electron/main.js')],

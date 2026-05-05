@@ -131,8 +131,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
              setWeather(fetchedWeather as WeatherData);
           }
           
-          // Note: Tides are NOT fetched here. Lazy loaded.
-          
+
           if (isInitial) {
              setLoadingMessage('Loading Settings...');
              const fetchedSettings = await window.ipcRenderer.invoke('settings:get');

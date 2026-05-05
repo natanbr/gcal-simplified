@@ -1,4 +1,4 @@
-import { test, _electron as electron, expect } from '@playwright/test';
+import { test, _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,8 +6,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 test.describe('Calendar Caching and Background Loading', () => {
-    let electronApp: any;
-    let window: any;
+    let electronApp: ElectronApplication;
+    let window: Page;
 
     test.beforeEach(async () => {
         electronApp = await electron.launch({
@@ -53,7 +53,7 @@ test.describe('Calendar Caching and Background Loading', () => {
 
         // It might show the pulse
         const refreshIcon = window.locator('svg.animate-pulse');
-        const isPulseVisible = await refreshIcon.isVisible().catch(() => false);
+        await refreshIcon.isVisible().catch(() => false);
 
         const spinIcon = window.locator('svg.animate-spin');
         const isSpinVisible = await spinIcon.isVisible().catch(() => false);

@@ -5,7 +5,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 // Mock ipcRenderer
 window.ipcRenderer = {
     invoke: vi.fn(),
-} as any;
+} as unknown as typeof window.ipcRenderer;
 
 describe('useCalendarData hook', () => {
     beforeEach(() => {
@@ -23,7 +23,7 @@ describe('useCalendarData hook', () => {
 
     it('should trigger fetch process on fetchEventsForMonth', async () => {
         const mockEvents = [{ id: '1', title: 'Test Event', start: '2026-02-01T10:00:00.000Z', end: '2026-02-01T11:00:00.000Z' }];
-        (window.ipcRenderer.invoke as any).mockResolvedValue(mockEvents);
+        vi.mocked(window.ipcRenderer.invoke).mockResolvedValue(mockEvents);
 
         const { result } = renderHook(() => useCalendarData());
 
@@ -61,7 +61,7 @@ describe('useCalendarData hook', () => {
         const mockEventsFirst = [{ id: '1', title: 'V1', start: '2026-02-01T10:00:00.000Z', end: '2026-02-01T11:00:00.000Z' }];
         const mockEventsSecond = [{ id: '1', title: 'V2', start: '2026-02-01T10:00:00.000Z', end: '2026-02-01T11:00:00.000Z' }];
 
-        const invokeMock = window.ipcRenderer.invoke as any;
+        const invokeMock = vi.mocked(window.ipcRenderer.invoke);
         invokeMock.mockResolvedValueOnce(mockEventsFirst);
 
         const { result } = renderHook(() => useCalendarData());

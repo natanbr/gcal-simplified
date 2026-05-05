@@ -82,69 +82,13 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Hourly Forecast Table**: Dense table showing Time, Conditions (Icon), Temperature, Rain %, and Wind.
   - **Design**: Minimal spacing to maximize data on one screen.
 
-- **Marine/Tides Panel (Spearfishing Focus)**:
-  - **Diver's Guide**: Educational for beginners (Slack Water, Flood/Ebb, Visibility, Swell).
-  - **Marine Events Table (Chronological)**:
-    - **Columns**: Event Name | Time | Value (kn) | Visibility (est) | Swell (m) | Wind (kn) | Height (m) | Period (s).
-    - **Rows**:
-      - **High Tide**: Local maxima of tide height.
-      - **Low Tide**: Local minima of tide height.
-      - **Slack Water**: Local minima of current speed (< 1.0kn).
-      - **Max Flood / Max Ebb**: Peak current speed.
-    - **Data Visuals**:
-      - **Safety Coloring**: Current speed values colored by safety (e.g., Green < 1.0kn, Yellow/Red > 1.5kn).
-      - **Date Headers**: Explicit date separators (e.g., "Wednesday, Feb 5").
-  - **Best Times for Spearfishing**:
-    - **Slack Tide Windows**: Calculate and display time windows around slack tides when current speed is < 0.5kn.
-      - **High Tide Slack (Preferred)**: Slack periods that occur near high tide are highlighted as optimal due to better water clarity from fresh ocean water flooding in.
-      - **Safety Filter**: Exclude slack windows that occur during dark hours (before sunrise or after sunset) as diving in darkness is too dangerous.
-      - **Window Calculation**: For each slack event, determine the time range where current speed remains below 0.5kn (typically ±30-60 minutes around the slack minimum).
-      - **Display**: Show these windows prominently with:
-        - Start and end times of the window
-        - Duration of the window
-        - Tide height at slack time (to identify high vs low tide slack)
-        - Visual indicator for "High Tide Slack" (best conditions)
-        - Associated conditions: visibility estimate, swell height, wind speed
-  - **Data Sources (Dual-Station Strategy)**:
-    - **Currents**:
-      - **Source**: Canadian Hydrographic Service (CHS) API.
-      - **Station**: Nearest Current Station (e.g., **07040 Race Passage**). Distinct from Tide Station.
-      - **Codes**: Dynamics resolution of time-series codes (e.g., `wcp` vs `wcsp1`) required.
-      - **Guardrails**:
-        - **Speed Check**: If max current speed < 2.0kn for a major pass, mark as **Suspect Data**.
-        - **Fallback**: Automatically revert to Open-Meteo with "Warning: Modeled open-ocean data" if data is missing or suspect.
-      - **Labeling**: Use official `qualifier` field (`SLACK`, `EXTREMA_FLOOD`, `EXTREMA_EBB`) for event labels.
-    - **Tide Height**:
-      - **Source**: CHS API (Endpoint: `wlp`).
-      - **Station**: Nearest Tide Station (e.g., **07020 Sooke**).
-    - **Swell/Waves/Temp**:
-      - **Source**: Open-Meteo.
-  - **Metadata Display**:
-    - The UI must list the specific data sources and locations used (e.g., "Tides: Sooke", "Currents: Race Passage") to allow for user verification.
-  - **Timezone Verification**:
-    - Data must be displayed in the user's local timezone (PST/PDT for Sooke, BC).
-    - Verification: Compare UI times with official tide tables for Sooke (Station 07020) and Race Passage (Station 07040). Times should match exactly.
 
-### Multi-Location Support (Spearfishing Hotspots)
-
-- **Constraint**: The app must support selecting from a predefined list of spearfishing locations, each mapping to specific CHS Tide and Current stations.
-- **Data Model**:
-  - **Locations**: Sooke, Oak Bay, Gordon Head, Point No Point, Sombrio, Port Renfrew, Salt Spring, Gulf Islands.
-  - **Mapping**: Each location defines:
-    - `id`: Unique identifier (e.g., "sooke").
-    - `name`: Display name.
-    - `tideStation`: CHS Station Code (e.g., "07020").
-    - `currentStation`: CHS Station Code (e.g., "07090").
-    - `coords`: Lat/Lng for Open-Meteo weather fetch.
-- **UI Selector**:
-  - **Location**: The location selector must be located **inside** the "Marine Conditions" popup/drawer, not in the global header.
-  - **Lazy Loading**: Marine data (tides/currents) must **only** be fetched when the user opens the "Marine Conditions" panel. It should not load on initial app load.
-  - **Loading State**: When opening the panel or changing location, display a loading indicator (consistent with the main app's loader) until data is ready.
-  - **Behavior**: Changing the location in the dropdown immediately triggers a re-fetch of marine data for that location.
-- **Conflicting Station Handling**:
-  - If `tideStation` == `currentStation` (e.g., Active Pass), the API fetcher must request both `wlp` and `wcp` data types from the same station ID without locking or erroring.
+- **Weather Panel**:
+  - **Hourly Forecast Table**: Dense table showing Time, Conditions (Icon), Temperature, Rain %, and Wind.
+  - **Design**: Minimal spacing to maximize data on one screen.
 
 ## Authentication & Systems
+
 
 - **Google Login**:
   - Custom Login Screen with "Sign in with Google" button.

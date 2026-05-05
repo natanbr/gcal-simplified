@@ -4,15 +4,13 @@ import { SideDrawer } from '../SideDrawer';
 import { describe, it, expect, vi } from 'vitest';
 
 // Mock framer-motion to avoid animation issues in tests
-vi.mock('framer-motion', () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const React = require('react');
+vi.mock('framer-motion', async () => {
+    const React = await import('react');
     const MOTION_PROPS = new Set(['initial', 'animate', 'exit', 'transition', 'whileHover', 'whileTap', 'variants', 'layout']);
     const MotionDiv = React.forwardRef(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (props: any, ref: React.Ref<HTMLDivElement>) => {
+        (props: Record<string, unknown>, ref: React.Ref<HTMLDivElement>) => {
             const htmlProps = Object.fromEntries(
-                Object.entries(props).filter(([key]: [string, unknown]) => !MOTION_PROPS.has(key))
+                Object.entries(props).filter(([key]) => !MOTION_PROPS.has(key))
             );
             return React.createElement('div', { ref, ...htmlProps });
         }

@@ -45,13 +45,11 @@ export const UpdateNotification: React.FC = () => {
 
         // Listen for update available
         const cleanupAvailable = window.ipcRenderer.on('update:available', (info) => {
-            console.log('Update available:', info);
             setUpdateAvailable(info as UpdateInfo);
         });
 
         // Listen for update not available
         const cleanupNotAvailable = window.ipcRenderer.on('update:not-available', () => {
-            console.log('Update not available');
             setUpdateAvailable(null);
         });
 
@@ -74,9 +72,7 @@ export const UpdateNotification: React.FC = () => {
         });
 
         // Listen for errors
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cleanupError = window.ipcRenderer.on('update:error', (err: any) => {
-            console.error('Update error:', err);
+        const cleanupError = window.ipcRenderer.on('update:error', () => {
             setIsDownloading(false);
             setError('Update failed');
             setTimeout(() => setError(null), 5000);
@@ -95,11 +91,8 @@ export const UpdateNotification: React.FC = () => {
             if (result && result.updateInfo) {
                 const availableVersion: string = result.updateInfo.version;
                 const currentVersion: string = appInfo?.version ?? '';
-                console.log(`Update check: available=${availableVersion}, current=${currentVersion}`);
                 if (isNewerVersion(availableVersion, currentVersion)) {
                     setUpdateAvailable(result.updateInfo);
-                } else {
-                    console.log('Available version is not newer than current; suppressing update button.');
                 }
             }
         }).catch(err => {

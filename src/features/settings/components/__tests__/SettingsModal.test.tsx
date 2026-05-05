@@ -4,9 +4,8 @@ import { SettingsModal } from '../SettingsModal';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock framer-motion to avoid animation issues in tests
-vi.mock('framer-motion', () => {
-
-    const React = require('react');
+vi.mock('framer-motion', async () => {
+    const React = await import('react');
     const MOTION_PROPS = new Set(['initial', 'animate', 'exit', 'transition', 'whileHover', 'whileTap', 'variants', 'layout']);
     const MotionDiv = React.forwardRef(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

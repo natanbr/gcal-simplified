@@ -79,27 +79,4 @@ export interface WeatherData {
     };
 }
 
-export interface TideData {
-    location?: string;
-    station?: string;
-    water_temperature?: number;
-    sunrise?: string[];       // ISO strings per day (from OM daily)
-    sunset?: string[];        // ISO strings per day (from OM daily)
-    hourly: {
-        time: string[];
-        tide_height: number[];
-        current_speed?: number[];
-        current_direction?: number[];
-        wave_height?: number[];
-        wave_period?: number[];
-    };
-    hilo?: {
-        time: string;
-        value: number;
-        type: string;
-    }[];
-    sources?: {
-        name: string;
-        details: string;
-    }[];
-}
+

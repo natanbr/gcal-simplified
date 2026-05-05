@@ -21,7 +21,7 @@ describe('WeatherService Security', () => {
     it('should validate latitude input to prevent parameter injection', async () => {
         // Attack payload: injecting extra query parameters
         // We cast to any to simulate IPC call passing a string where a number is expected
-        const maliciousLat = "50&hourly=sensitive_data" as any;
+        const maliciousLat = "50&hourly=sensitive_data" as unknown as number;
 
         // This should throw an error due to input validation
         // The new validation throws 'Invalid coordinate type' for non-number inputs
@@ -30,7 +30,7 @@ describe('WeatherService Security', () => {
     });
 
     it('should validate longitude input to prevent parameter injection', async () => {
-        const maliciousLng = "-123&hourly=sensitive_data" as any;
+        const maliciousLng = "-123&hourly=sensitive_data" as unknown as number;
         await expect(weatherService.getWeather(50.0, maliciousLng))
             .rejects.toThrow('Invalid coordinate type');
     });
@@ -52,11 +52,5 @@ describe('WeatherService Security', () => {
         await expect(weatherService.getWeather(0, 'invalid')).rejects.toThrow('Invalid coordinate type');
     });
 
-    it('should validate coordinates in getTides', async () => {
-        const maliciousLat = "50&hourly=sensitive_data" as any;
-        await expect(weatherService.getTides('07020', '07090', maliciousLat, -123.0))
-            .rejects.toThrow('Invalid coordinate type');
 
-        await expect(weatherService.getTides('code', 'code', 91, 0)).rejects.toThrow('Invalid latitude');
-    });
 });
