@@ -336,3 +336,31 @@ describe('MissionOverlay — reset tasks button', () => {
     });
 });
 
+// ── Color token regression — overlay outside .mc-root ─────────────────────────
+// Bug: --mc-text & --mc-text-muted were only defined inside .mc-root.
+// When MissionOverlay renders via position:fixed in App (outside .mc-root),
+// those vars fell back to the inherited dark-mode white (#f3f4f6), causing
+// white text on a bright pastel background.
+// Fix: the overlay element must carry the MC color tokens as inline CSS vars.
+describe('MissionOverlay — color token isolation outside .mc-root', () => {
+    beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
+    afterEach(() => { cleanup(); localStorage.clear(); });
+
+    it('overlay element defines --mc-text inline so it resolves outside .mc-root', async () => {
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+
+        const overlay = screen.getByTestId('mc-mission-overlay');
+        // The overlay must carry --mc-text as an inline style property
+        // so it resolves correctly regardless of ancestor DOM context.
+        expect(overlay).toHaveStyle({ '--mc-text': '#3a3560' } as React.CSSProperties);
+    });
+
+    it('overlay element defines --mc-text-muted inline so it resolves outside .mc-root', async () => {
+        renderOverlay(<TriggerMission phase="evening" />);
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+
+        const overlay = screen.getByTestId('mc-mission-overlay');
+        expect(overlay).toHaveStyle({ '--mc-text-muted': '#8a87b8' } as React.CSSProperties);
+    });
+});

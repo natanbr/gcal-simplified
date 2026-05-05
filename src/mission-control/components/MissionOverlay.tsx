@@ -194,6 +194,15 @@ export function MissionOverlay() {
                             flexDirection: 'column',
                             overflow: 'hidden',
                             boxShadow: '0 4px 24px rgba(130,120,200,0.18)',
+                            // Inject MC color tokens as inline custom properties.
+                            // The overlay renders outside .mc-root in App.tsx (position:fixed),
+                            // so CSS variables defined in .mc-root are not in scope.
+                            // Without these, var(--mc-text) falls back to the body's
+                            // dark-mode inherited color (#f3f4f6 ≈ white) — unreadable
+                            // against the bright pastel overlay backgrounds.
+                            ['--mc-text' as string]: '#3a3560',
+                            ['--mc-text-muted' as string]: '#8a87b8',
+                            ['--mc-text-dim' as string]: '#b8b5d8',
                         }}
                     >
                         {/* ── Header row: 3 zones ── */}
