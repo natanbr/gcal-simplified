@@ -25,10 +25,9 @@ import { useCalendarData } from '../hooks/useCalendarData';
 interface DashboardProps {
   onLogout?: () => void;
   onSwitchToMC?: () => void;
-  onSwitchToMarine?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC, onSwitchToMarine }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [tasks, setTasks] = useState<AppTask[]>([]);
@@ -298,7 +297,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC, on
                 <WeatherDashboard
                   weather={weather}
                   tasks={tasks}
-                  onSwitchToMarine={onSwitchToMarine}
                 />
              )}
 
