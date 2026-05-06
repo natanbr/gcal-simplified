@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MCStoreProvider } from '../store/useMCStore.tsx';
+import { MCStoreProvider } from '../store/MCStoreProvider';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
 import type { PrivilegeCard } from '../types';
 

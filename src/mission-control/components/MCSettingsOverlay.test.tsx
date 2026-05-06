@@ -8,7 +8,8 @@ import React, { useState } from 'react';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
-import { MCStoreProvider, useMCState } from '../store/useMCStore.tsx';
+import { MCStoreProvider } from '../store/MCStoreProvider';
+import { useMCState } from '../store/useMCStore.tsx';
 import { MCSettingsOverlay } from './MCSettingsOverlay';
 import { DEFAULT_SETTINGS } from '../types';
 

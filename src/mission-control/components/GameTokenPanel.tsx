@@ -20,9 +20,7 @@ function msUntilMidnight(): number {
     return midnight.getTime() - now.getTime();
 }
 
-function todayStr(): string {
-    return new Date().toISOString().slice(0, 10);
-}
+
 
 function ProgressBar({ fraction, paused }: { fraction: number; paused: boolean }) {
     return (
@@ -81,11 +79,10 @@ function TokenDot({ filled, index }: { filled: boolean; index: number }) {
 export function GameTokenPanel() {
     const state = useMCState();
     const dispatch = useMCDispatch();
-    const { gameTokens, gameTokensLastGrantedDate, bankCount, cases } = state;
+    const { gameTokens, bankCount, cases } = state;
 
     const totalWealth = bankCount + cases.reduce((sum, c) => sum + c.tokenCount, 0);
     const isPaused = totalWealth < MIN_BANK_FOR_INTEREST;
-    const earnedToday = gameTokensLastGrantedDate === todayStr();
     const atCap = gameTokens >= MAX_GAME_TOKENS;
 
     // ── Long-press admin popup ──────────────────────────────
@@ -125,10 +122,8 @@ export function GameTokenPanel() {
     } else if (atCap) {
         statusLabel = '⭐ Full! Use a game token to earn more';
         statusColor = '#a87c00';
-    } else if (earnedToday) {
-        statusLabel = '✅ Earned today! Next: tomorrow';
-        statusColor = '#1a6a35';
     } else {
+        // Even if earned today, we show "Earning..." to satisfy user request for constant loader
         statusLabel = 'Earning...';
         statusColor = '#6d28d9';
     }
@@ -288,7 +283,7 @@ export function GameTokenPanel() {
             </div>
 
             {/* Progress bar */}
-            <ProgressBar fraction={isPaused || atCap || earnedToday ? 0 : barFraction} paused={isPaused} />
+            <ProgressBar fraction={isPaused || atCap ? 0 : barFraction} paused={isPaused} />
 
             {/* Status label */}
             <div style={{

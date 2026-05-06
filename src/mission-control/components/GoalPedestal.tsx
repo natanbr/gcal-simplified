@@ -445,8 +445,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
             }}
           >
             <span
-              className={isComplete ? "mc-anim-pedestal-complete" : "mc-anim-pedestal-idle"}
               style={{ fontSize: 32, lineHeight: 1, marginTop: 2, display: 'inline-block' }}
+              className={isComplete ? 'mc-anim-pedestal-complete' : 'mc-anim-pedestal-idle'}
             >
               {reward.emoji}
             </span>
@@ -474,6 +474,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 18,
                     }}
+                    className="mc-anim-icon-pulse"
                   >
                     🐍
                   </motion.div>

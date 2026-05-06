@@ -5,7 +5,7 @@
 // ============================================================
 
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
-import { useDragBounds } from './DragLayer';
+import { useDragBounds } from './DragLayerContext';
 
 interface TokenProps {
   id: string;

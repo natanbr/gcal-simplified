@@ -5,13 +5,8 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import React, { createContext, useContext, useRef } from 'react';
-
-interface DragLayerContextValue {
-  boundsRef: React.RefObject<HTMLDivElement | null>;
-}
-
-const DragLayerContext = createContext<DragLayerContextValue | null>(null);
+import React, { useRef } from 'react';
+import { DragLayerContext } from './DragLayerContext';
 
 export function DragLayer({ children }: { children: React.ReactNode }) {
   const boundsRef = useRef<HTMLDivElement>(null);
@@ -34,10 +29,4 @@ export function DragLayer({ children }: { children: React.ReactNode }) {
       </div>
     </DragLayerContext.Provider>
   );
-}
-
-export function useDragBounds(): React.RefObject<HTMLDivElement | null> {
-  const ctx = useContext(DragLayerContext);
-  if (!ctx) throw new Error('useDragBounds must be used within <DragLayer>');
-  return ctx.boundsRef;
 }

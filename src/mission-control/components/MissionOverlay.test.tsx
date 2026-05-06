@@ -6,7 +6,8 @@
 import React from 'react';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MCStoreProvider, useMCDispatch } from '../store/useMCStore.tsx';
+import { MCStoreProvider } from '../store/MCStoreProvider';
+import { useMCDispatch } from '../store/useMCStore.tsx';
 import { MissionOverlay } from './MissionOverlay';
 
 

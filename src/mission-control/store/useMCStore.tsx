@@ -1,10 +1,10 @@
 // ============================================================
 // Mission Control — Isolated State Store
-// Uses React Context + useReducer. No external library.
+// Uses React Context. No external library.
 // ⚠️  Do NOT import or use outside of src/mission-control/
 // ============================================================
 
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import React, { createContext, useContext, useRef } from 'react';
 import type {
     MCState,
     MissionPhase,
@@ -13,7 +13,7 @@ import type {
 import { DEFAULT_SETTINGS } from '../types';
 import { mcReducer, initialState } from './mcReducer';
 import { REWARD_MAP } from '../rewardCatalogue';
-import { useGameTokenScheduler } from './useGameTokenScheduler';
+
 
 // ---- Logging Interceptor ----
 // We keep translation logic here to keep mcReducer pure and simple.
@@ -129,11 +129,11 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
 
 // ---- Persistence ----
 
-const STORAGE_KEY = 'mc-state-v5'; // bumped: added gameTokens fields
+export const STORAGE_KEY = 'mc-state-v5'; // bumped: added gameTokens fields
 
 const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 
-function loadPersistedState(): MCState {
+export function loadPersistedState(): MCState {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return initialState;
@@ -191,29 +191,9 @@ interface MCContextValue {
     dispatch: React.Dispatch<Parameters<typeof mcReducer>[1]>;
 }
 
-const MCContext = createContext<MCContextValue | null>(null);
+export const MCContext = createContext<MCContextValue | null>(null);
 
-export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
-    const [state, dispatch] = useReducer(mcReducer, undefined, loadPersistedState);
-    const contextValue = useMemo(() => ({ state, dispatch }), [state]);
 
-    useGameTokenScheduler(dispatch);
-
-    // Persist state to localStorage on every change
-    useEffect(() => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        } catch {
-            // Storage quota — fail silently
-        }
-    }, [state]);
-
-    return (
-        <MCContext.Provider value={contextValue}>
-            {children}
-        </MCContext.Provider>
-    );
-}
 
 export function useMCStore(): MCContextValue {
     const ctx = useContext(MCContext);

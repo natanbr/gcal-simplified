@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { LoginScreen } from './components/LoginScreen';
 import { MissionControl } from './mission-control/MissionControl';
-import { MCStoreProvider } from './mission-control/store/useMCStore.tsx';
+import { MCStoreProvider } from './mission-control/store/MCStoreProvider';
 import { DragLayer } from './mission-control/components/DragLayer';
 import { MissionOverlay } from './mission-control/components/MissionOverlay';
 import { useMissionScheduler } from './mission-control/hooks/useMissionScheduler';

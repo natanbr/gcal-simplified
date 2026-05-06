@@ -5,7 +5,7 @@
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { MCStoreProvider } from '../store/useMCStore.tsx';
+import { MCStoreProvider } from '../store/MCStoreProvider';
 import { GoalPedestal } from './GoalPedestal';
 import { DragLayer } from './DragLayer';
 import type { DisplayCase } from '../types';
