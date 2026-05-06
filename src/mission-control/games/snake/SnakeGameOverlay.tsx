@@ -41,12 +41,12 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
         if (!open || gameState.phase !== 'game-over') return;
         const handler = (e: KeyboardEvent) => {
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-                resetGame();
+                handleClose();
             }
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [open, gameState.phase, resetGame]);
+    }, [open, gameState.phase, handleClose]);
 
     // ESC to close
     useEffect(() => {

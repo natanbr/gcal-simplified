@@ -73,7 +73,7 @@ function TokenDot({ filled, index }: { filled: boolean; index: number }) {
                 fontSize: 14,
             }}
         >
-            {filled ? '🎮' : null}
+            {filled ? '🐍' : null}
         </motion.div>
     );
 }
@@ -156,7 +156,7 @@ export function GameTokenPanel() {
                     style={{ fontSize: 26, lineHeight: 1, flexShrink: 0, display: 'inline-block' }}
                     className={isPaused ? '' : 'mc-anim-icon-pulse'}
                 >
-                    🎮
+                    🐍
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)', lineHeight: 1.1 }}>

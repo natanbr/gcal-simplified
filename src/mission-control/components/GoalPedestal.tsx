@@ -480,7 +480,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                     fontSize: 18,
                   }}
                 >
-                  {state.gameTokens >= 1 ? '🎮' : null}
+                  {state.gameTokens >= 1 ? '🐍' : null}
                 </motion.div>
                 <span style={{ fontSize: 10, color: state.gameTokens >= 1 ? '#6d28d9' : 'var(--mc-text-dim)', fontWeight: 800 }}>
                   {state.gameTokens >= 1 ? '1 game token ready' : 'No game tokens'}
@@ -516,7 +516,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                       cursor: canUseQuickGame ? 'pointer' : 'not-allowed',
                     }}
                   >
-                    {canUseQuickGame ? '🎁 Use!' : '🎮 No tokens'}
+                    {canUseQuickGame ? '🎁 Use!' : '🐍 No tokens'}
                   </Button3D>
                   <motion.div
                     animate={{ rotate: leverTilted ? 45 : 0 }}

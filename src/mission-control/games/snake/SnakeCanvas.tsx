@@ -198,7 +198,7 @@ function drawGameOverScreen(ctx: CanvasRenderingContext2D, score: number) {
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = FONT_GAMEOVER_HINT;
-    ctx.fillText('Press any arrow key to play again', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 60);
+    ctx.fillText('Press any arrow key to close', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 60);
 }
 
 // ── Component ────────────────────────────────────────────────

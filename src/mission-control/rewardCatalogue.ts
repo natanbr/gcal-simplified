@@ -16,7 +16,7 @@ export const REWARDS: { id: RewardIcon; label: string; emoji: string; targetCoun
     { id: 'movie-popcorn', label: 'Movie + Popcorn', emoji: '🍿', targetCount: 12 },
     { id: 'campfire', label: 'Fire', emoji: '🔥', targetCount: 14 },
     { id: 'mystery-box', label: 'Mystery Box', emoji: '❓', targetCount: 50 },
-    { id: 'quick-game', label: 'Quick Game', emoji: '🕹️', targetCount: 1 },
+    { id: 'quick-game', label: 'Quick Game', emoji: '🐍', targetCount: 1 },
 ];
 
 export const REWARD_MAP = Object.fromEntries(
