@@ -265,12 +265,11 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     const rewardId = case_.reward;
     dispatch({ type: 'CONSUME_CASE', caseId: case_.id });
     if (rewardId === 'quick-game' && onQuickGameOpen) {
-      dispatch({ type: 'CONSUME_GAME_TOKEN' });
       onQuickGameOpen();
     }
   };
 
-  const canUseQuickGame = case_.reward !== 'quick-game' || state.gameTokens >= 1;
+  const canUseQuickGame = true; // Token is consumed on creation, so if it's active, it's usable.
 
   // Pastel accent per pedestal — only used when ACTIVE
   const pastelAccents = [
@@ -383,8 +382,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                 const config = state.settings.rewardConfigs?.[r.id];
                 const isEnabled = config ? config.enabled : true;
                 if (!isEnabled) return null;
-                // Quick Game requires minimum bank balance to be visible
-                if (r.id === 'quick-game' && state.bankCount < QUICK_GAME_MIN_BANK_BALANCE) return null;
+                // Quick Game requires minimum bank balance AND a token to be visible
+                if (r.id === 'quick-game' && (state.bankCount < QUICK_GAME_MIN_BANK_BALANCE || state.gameTokens < 1)) return null;
 
                 const displayTargetCount = config ? config.targetCount : r.targetCount;
                 return (
@@ -463,28 +462,24 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
 
             {case_.reward === 'quick-game' ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: '100%' }}>
-                <motion.div
-                  initial={false}
-                  animate={state.gameTokens >= 1 ? { scale: [1.2, 1], opacity: 1 } : { scale: 0.88, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 18 }}
-                  style={{
-                    width: 40, height: 40, borderRadius: '50%',
-                    background: state.gameTokens >= 1
-                      ? 'radial-gradient(circle at 35% 32%, #c4b5fd, #7c3aed 60%, #4c1d95)'
-                      : 'transparent',
-                    border: state.gameTokens >= 1
-                      ? '2px solid rgba(124,58,237,0.5)'
-                      : '2.5px dashed rgba(160,150,230,0.35)',
-                    boxShadow: state.gameTokens >= 1 ? '0 3px 10px rgba(124,58,237,0.3)' : 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 18,
-                  }}
-                >
-                  {state.gameTokens >= 1 ? '🐍' : null}
-                </motion.div>
-                <span style={{ fontSize: 10, color: state.gameTokens >= 1 ? '#6d28d9' : 'var(--mc-text-dim)', fontWeight: 800 }}>
-                  {state.gameTokens >= 1 ? '1 game token ready' : 'No game tokens'}
-                </span>
+                  <motion.div
+                    initial={false}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+                    style={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      background: 'radial-gradient(circle at 35% 32%, #c4b5fd, #7c3aed 60%, #4c1d95)',
+                      border: '2px solid rgba(124,58,237,0.5)',
+                      boxShadow: '0 3px 10px rgba(124,58,237,0.3)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 18,
+                    }}
+                  >
+                    🐍
+                  </motion.div>
+                  <span style={{ fontSize: 10, color: '#6d28d9', fontWeight: 800 }}>
+                    1 game token ready
+                  </span>
               </div>
             ) : (
               <>

@@ -121,15 +121,20 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         case 'REMOVE_TOKEN':
             return { ...state, bankCount: Math.max(0, state.bankCount - 1) };
 
-        case 'SELECT_CASE':
+        case 'SELECT_CASE': {
+            const isQuickGame = action.reward === 'quick-game';
+            if (isQuickGame && state.gameTokens <= 0) return state;
+
             return {
                 ...state,
+                gameTokens: isQuickGame ? state.gameTokens - 1 : state.gameTokens,
                 cases: state.cases.map(c =>
                     c.id === action.caseId
                         ? { ...c, status: 'active', reward: action.reward, targetCount: action.targetCount }
                         : c,
                 ),
             };
+        }
 
         case 'DEPOSIT_TO_CASE': {
             const amount = Math.min(action.amount, state.bankCount);
@@ -202,9 +207,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         case 'REFUND_CASE': {
             const targetCase = state.cases.find(c => c.id === action.caseId);
             if (!targetCase) return state;
+            const isQuickGame = targetCase.reward === 'quick-game';
             return {
                 ...state,
                 bankCount: state.bankCount + targetCase.tokenCount,
+                gameTokens: isQuickGame ? Math.min(5, state.gameTokens + 1) : state.gameTokens,
                 cases: state.cases.map(c =>
                     c.id === action.caseId
                         ? { ...c, status: 'empty', reward: null, tokenCount: 0 }
