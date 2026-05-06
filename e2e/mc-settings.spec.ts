@@ -15,7 +15,7 @@ import type { Page } from '@playwright/test';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
-const STORAGE_KEY = 'mc-state-v4';
+const STORAGE_KEY = 'mc-state-v5';
 
 async function gotoMC(page: Page): Promise<void> {
     const currentUrl = page.url();
