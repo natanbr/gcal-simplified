@@ -35,3 +35,7 @@
 ## 2024-05-19 - Short-Circuit Object Array Lookups During Iteration
 **Learning:** In components like `GoalPedestal.tsx` and `GlobalBank.tsx`, token drag-and-drop hit detection iterates over boundary rects to find valid drop targets. Inside this iteration, it also performed an `array.find()` to fetch token configuration info BEFORE checking if the token was actually dropped within the boundary rect, leading to a redundant O(N) lookup for every non-hit element per mouse release, scaling to O(N^2).
 **Action:** Always reorder validation logic during pointer/hit detection loops so that the primitive boundary coordinates check (`x >= rect.left...`) executes first. This short-circuits the evaluation and turns O(N^2) checks back into an O(N) evaluation since expensive inner object searches will only execute for the single hovered target.
+
+## 2026-05-07 - Duplicating utility contracts (redundant sorting/array passes)
+**Learning:** Passing an explicitly pre-sorted array slice or filtering over arrays multiple times before passing them to a utility function that already performs sorting and slicing internally incurs unnecessary O(N log N) overhead and memory allocations.
+**Action:** Use single loops (e.g., `for...of`) to partition arrays instead of multiple `.filter()` passes, and do not defensively pre-sort data before passing it to utilities that already enforce an internal sort contract.
