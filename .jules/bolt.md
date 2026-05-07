@@ -14,3 +14,7 @@
 ## 2026-03-13 - Module-level singleton state initialization issue
 **Learning:** When using a module-level singleton state pattern for hooks (like `useLiveClock`), initializing the state statically at the module level (`let currentDate = new Date()`) causes components to mount with a stale date if they are loaded much later than the script evaluation time.
 **Action:** Initialize the singleton state dynamically inside the hook when it's first used (e.g. `if (!intervalId) currentDate = new Date()`) to ensure it gets the accurate value at the time the first component actually mounts.
+
+## 2026-05-07 - Duplicating utility contracts (redundant sorting/array passes)
+**Learning:** Passing an explicitly pre-sorted array slice or filtering over arrays multiple times before passing them to a utility function that already performs sorting and slicing internally incurs unnecessary O(N log N) overhead and memory allocations.
+**Action:** Use single loops (e.g., `for...of`) to partition arrays instead of multiple `.filter()` passes, and do not defensively pre-sort data before passing it to utilities that already enforce an internal sort contract.
