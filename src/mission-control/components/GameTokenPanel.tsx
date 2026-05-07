@@ -8,10 +8,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMCDispatch, useMCState } from '../store/useMCStore.tsx';
+import { useMCDispatch, useMCState, useMCTotalWealth, MIN_WEALTH_FOR_GAMES } from '../store/useMCStore.tsx';
 
 const MAX_GAME_TOKENS = 5;
-const MIN_BANK_FOR_INTEREST = 10;
 
 function msUntilMidnight(): number {
     const now = new Date();
@@ -79,10 +78,10 @@ function TokenDot({ filled, index }: { filled: boolean; index: number }) {
 export function GameTokenPanel() {
     const state = useMCState();
     const dispatch = useMCDispatch();
-    const { gameTokens, bankCount, cases } = state;
+    const totalWealth = useMCTotalWealth();
+    const { gameTokens } = state;
 
-    const totalWealth = bankCount + cases.reduce((sum, c) => sum + c.tokenCount, 0);
-    const isPaused = totalWealth < MIN_BANK_FOR_INTEREST;
+    const isPaused = totalWealth < MIN_WEALTH_FOR_GAMES;
     const atCap = gameTokens >= MAX_GAME_TOKENS;
 
     // ── Long-press admin popup ──────────────────────────────
@@ -117,7 +116,7 @@ export function GameTokenPanel() {
     let statusLabel: string;
     let statusColor: string;
     if (isPaused) {
-        statusLabel = `🔒 Paused — need ${MIN_BANK_FOR_INTEREST}+ tokens to earn`;
+        statusLabel = `🔒 Paused — need ${MIN_WEALTH_FOR_GAMES}+ tokens to earn`;
         statusColor = 'var(--mc-text-dim)';
     } else if (atCap) {
         statusLabel = '⭐ Full! Use a game token to earn more';

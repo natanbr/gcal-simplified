@@ -253,7 +253,7 @@ Icon replacements needed — find better Lucide icons:
 
 A "Quick Game" reward that costs 1 coin (configurable via parent settings' reward cost editor). The child drags coins to the goal pedestal as with any other reward. When consumed, a full-screen Snake game overlay opens.
 
-**Prerequisite:** The reward only appears in the reward picker when the child has ≥ 10 coins in the bank (hardcoded constant `QUICK_GAME_MIN_BANK_BALANCE`).
+**Prerequisite:** The reward only appears in the reward picker when the child's Total Wealth (coins in the bank + coins assigned to other active cases) is ≥ 10 (defined by the `MIN_WEALTH_FOR_GAMES` constant).
 
 ### Architecture (Separate Modules)
 

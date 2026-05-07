@@ -74,12 +74,6 @@ export const JUNK_FOOD_PENALTY = 1;
 /** Minimum snake length (can't shrink below this). */
 export const MIN_SNAKE_LENGTH = 2;
 
-/**
- * Minimum bank balance required before the "Quick Game" reward
- * becomes visible in the reward picker. Hardcoded for now;
- * can be moved to MCSettings later if needed.
- */
-export const QUICK_GAME_MIN_BANK_BALANCE = 10;
 
 // ── Food Emojis ─────────────────────────────────────────────
 export const FRUIT_EMOJIS = [

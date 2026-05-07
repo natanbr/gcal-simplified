@@ -6,12 +6,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMCDispatch, useMCState } from '../store/useMCStore';
+import { useMCDispatch, useMCState, selectTotalWealth, MIN_WEALTH_FOR_GAMES } from '../store/useMCStore';
 import { Button3D } from './Button3D';
 import { Token } from './Token';
 import type { DisplayCase, RewardIcon } from '../types';
 import { REWARDS, REWARD_MAP } from '../rewardCatalogue';
-import { QUICK_GAME_MIN_BANK_BALANCE } from '../games/snake/types';
 
 let _caseTokenIdCounter = 0;
 const newCaseTokenId = (caseId: number) => `ct-${caseId}-${_caseTokenIdCounter++}`;
@@ -368,12 +367,26 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
               gap: 6, width: '100%',
             }}
           >
-            <span style={{
-              fontSize: 10, color: 'var(--mc-text-muted)', textAlign: 'center',
-              letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 800,
-            }}>
-              🌟 Pick a Goal
-            </span>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+              <span style={{
+                fontSize: 10, color: 'var(--mc-text-muted)', textAlign: 'center',
+                letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 800,
+              }}>
+                🌟 Pick a Goal
+              </span>
+              <button
+                onClick={() => setIsSelecting(false)}
+                style={{
+                  position: 'absolute', right: 0,
+                  background: 'none', border: 'none', color: 'var(--mc-text-dim)',
+                  cursor: 'pointer', fontSize: 14, fontWeight: 700,
+                  padding: '0 4px',
+                }}
+                aria-label="Cancel"
+              >
+                ✕
+              </button>
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
               {REWARDS.filter(() => {
@@ -382,8 +395,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                 const config = state.settings.rewardConfigs?.[r.id];
                 const isEnabled = config ? config.enabled : true;
                 if (!isEnabled) return null;
-                // Quick Game requires minimum bank balance AND a token to be visible
-                if (r.id === 'quick-game' && (state.bankCount < QUICK_GAME_MIN_BANK_BALANCE || state.gameTokens < 1)) return null;
+                // Quick Game requires minimum total wealth AND a token to be visible
+                if (r.id === 'quick-game' && (selectTotalWealth(state) < MIN_WEALTH_FOR_GAMES || state.gameTokens < 1)) return null;
 
                 const displayTargetCount = config ? config.targetCount : r.targetCount;
                 return (
@@ -418,16 +431,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
               );})}
             </div>
 
-            <button
-              onClick={() => setIsSelecting(false)}
-              style={{
-                background: 'none', border: 'none', color: 'var(--mc-text-dim)',
-                cursor: 'pointer', fontSize: 10, fontWeight: 700,
-                fontFamily: "'Nunito', sans-serif",
-              }}
-            >
-              Cancel
-            </button>
+
           </motion.div>
         )}
       </AnimatePresence>

@@ -203,6 +203,16 @@ export function useMCStore(): MCContextValue {
 
 // ---- Convenience selectors ----
 
+export const MIN_WEALTH_FOR_GAMES = 10;
+
+export function selectTotalWealth(state: MCState): number {
+    return state.bankCount + state.cases.reduce((sum, c) => sum + c.tokenCount, 0);
+}
+
+export function useMCTotalWealth(): number {
+    return selectTotalWealth(useMCState());
+}
+
 export function useMCState(): MCState {
     return useMCStore().state;
 }

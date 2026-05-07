@@ -81,7 +81,7 @@ describe('GoalPedestal', () => {
             fireEvent.click(screen.getByLabelText('Add a new goal'));
         });
         await act(async () => {
-            fireEvent.click(screen.getByText('Cancel'));
+            fireEvent.click(screen.getByLabelText('Cancel'));
         });
         expect(screen.queryByText(/Pick a Goal/i)).not.toBeInTheDocument();
         expect(screen.getByText('Add goal')).toBeInTheDocument();
