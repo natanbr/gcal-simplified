@@ -30,3 +30,7 @@
 **Anti-Pattern: Hardcoded Colors Bypassing Design System.** The game introduces a standalone `snake.css` with raw hex values instead of utilizing Tailwind or `gcal-simplified` design tokens, violating the styling invariants.
 **Anti-Pattern: Unused Variables Breaking CI.** Leaving variables like `_livesRemaining` defined but unused in `QuizOverlay.tsx` triggers `--max-warnings 0` ESLint failures. Strict lint hygiene must be maintained before merging.
 **Regression Risk: Missing Coverage.** The core game engine (`useSnakeGame.ts`) and React overlays were committed without corresponding Vitest unit tests, while only `additionQuiz.test.ts` was implemented.
+## 2024-05-10 - Split God Reducer
+
+**Learning:** `src/mission-control/store/mcReducer.ts` had grown into a God file of >600 lines containing logic for multiple domains (economy, missions, settings, logs, privileges, security). We successfully split this into domain-specific reducers (`economyReducer.ts`, `missionReducer.ts`, etc.) in a `reducers/` subdirectory while keeping the `MCState` intact and the root `mcReducer.ts` file purely for delegation and composition (`syncCreamTask`).
+**Action:** When a reducer file grows too large and handles mixed concerns, actively split the `switch` cases into distinct domain-specific functions that accept and return the full state (or domain sub-states) to reduce token usage and improve maintainability, following the Single Responsibility Principle.
