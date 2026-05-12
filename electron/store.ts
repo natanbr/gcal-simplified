@@ -17,6 +17,10 @@ export interface UserConfig {
     sleepEnd?: number;       // 0-23
 
     weekStartDay?: 'sunday' | 'monday' | 'today';
+
+    // Remote Control
+    remoteRoomId?: string;
+    remoteKey?: string;
 }
 
 let configPath = '';
@@ -59,7 +63,9 @@ export const store = {
                 sleepEnabled: loaded.sleepEnabled ?? true,
                 sleepStart: loaded.sleepStart ?? 22,
                 sleepEnd: loaded.sleepEnd ?? 6,
-                weekStartDay: loaded.weekStartDay || 'today'
+                weekStartDay: loaded.weekStartDay || 'today',
+                remoteRoomId: loaded.remoteRoomId,
+                remoteKey: loaded.remoteKey
             };
         } catch (e) {
             console.error("Failed to read config", e);
