@@ -129,32 +129,25 @@ describe('ResponsibilityPanel — +1 point button (recycling)', () => {
 
 // ── Activity-specific buttons ─────────────────────────────────────────────────
 
-describe('ResponsibilityPanel — activity buttons (activity task)', () => {
-    it('renders one button per activity (Skating, Swimming, Karate)', () => {
+describe('ResponsibilityPanel — activity button (combined)', () => {
+    it('renders the combined +1 button for Activity', () => {
         renderPanel();
-        expect(screen.getByTestId('mc-responsibility-activity-activity-skating')).toBeInTheDocument();
-        expect(screen.getByTestId('mc-responsibility-activity-activity-swimming')).toBeInTheDocument();
-        expect(screen.getByTestId('mc-responsibility-activity-activity-karate')).toBeInTheDocument();
+        expect(screen.getByTestId('mc-responsibility-add-activity')).toBeInTheDocument();
     });
 
-    it('does NOT render the generic +1 button for the activity task', () => {
+    it('clicking the activity button once increments the progress to 1', async () => {
         renderPanel();
-        expect(screen.queryByTestId('mc-responsibility-add-activity')).not.toBeInTheDocument();
-    });
-
-    it('clicking a sport button once increments the progress to 1', async () => {
-        renderPanel();
-        await clickNTimes('mc-responsibility-activity-activity-skating', 1);
+        await clickNTimes('mc-responsibility-add-activity', 1);
         // After 1 point in Activity — should show "1 / 3 completed" (Recycling still 0)
         expect(screen.getByText('1 / 3 completed')).toBeInTheDocument();
     });
 
-    it('completing activity (3 taps) replaces sport buttons with Claim button', async () => {
+    it('completing activity (3 taps) replaces the button with Claim button', async () => {
         renderPanel();
-        await clickNTimes('mc-responsibility-activity-activity-skating', 3);
-        // Claim button should appear; sport buttons gone
+        await clickNTimes('mc-responsibility-add-activity', 3);
+        // Claim button should appear; add button gone
         expect(screen.getByTestId('mc-responsibility-claim-activity')).toBeInTheDocument();
-        expect(screen.queryByTestId('mc-responsibility-activity-activity-skating')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('mc-responsibility-add-activity')).not.toBeInTheDocument();
     });
 });
 
@@ -177,17 +170,17 @@ describe('ResponsibilityPanel — Claim & Start Over', () => {
         expect(screen.getByTestId('mc-responsibility-add-recycling')).toBeInTheDocument();
     });
 
-    it('clicking Claim for Activity restores the sport buttons and clears the Claim button', async () => {
+    it('clicking Claim for Activity restores the add button and clears the Claim button', async () => {
         renderPanel();
-        await clickNTimes('mc-responsibility-activity-activity-swimming', 3);
+        await clickNTimes('mc-responsibility-add-activity', 3);
         expect(screen.getByTestId('mc-responsibility-claim-activity')).toBeInTheDocument();
 
         await act(async () => {
             fireEvent.click(screen.getByTestId('mc-responsibility-claim-activity'));
         });
 
-        // After claim: activity buttons return, Claim button gone
+        // After claim: activity button returns, Claim button gone
         expect(screen.queryByTestId('mc-responsibility-claim-activity')).not.toBeInTheDocument();
-        expect(screen.getByTestId('mc-responsibility-activity-activity-skating')).toBeInTheDocument();
+        expect(screen.getByTestId('mc-responsibility-add-activity')).toBeInTheDocument();
     });
 });

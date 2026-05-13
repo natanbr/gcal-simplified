@@ -8,19 +8,21 @@
 //   - State: uses MCStoreProvider (provided by App.tsx — do not re-wrap here)
 // ============================================================
 
-import './styles/mc.css';
-import { useRef, useCallback, useState } from 'react';
-import { useMCState, useMCDispatch } from './store/useMCStore.tsx';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityLogView } from './components/ActivityLogView';
+import { CelebrationOverlay } from './components/CelebrationOverlay';
+import { CheatTrapOverlay } from './components/CheatTrapOverlay';
+import { GameTokenPanel } from './components/GameTokenPanel';
 import { GlobalBank } from './components/GlobalBank';
 import { GoalPedestal } from './components/GoalPedestal';
+import { LiveClockDisplay } from './components/LiveClockDisplay';
 import { MCSettingsOverlay } from './components/MCSettingsOverlay';
 import { PrivilegeCardButton } from './components/PrivilegeCardButton';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
-import { LiveClockDisplay } from './components/LiveClockDisplay';
-import { ActivityLogView } from './components/ActivityLogView';
-import { CheatTrapOverlay } from './components/CheatTrapOverlay';
 import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
-import { GameTokenPanel } from './components/GameTokenPanel';
+import { useRemoteControl } from './hooks/useRemoteControl';
+import { useMCDispatch, useMCState } from './store/useMCStore.tsx';
+import './styles/mc.css';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
 interface MCLayoutProps {
@@ -30,6 +32,10 @@ interface MCLayoutProps {
 function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const state    = useMCState();
   const dispatch  = useMCDispatch();
+  
+  // Start listening for remote control actions
+  useRemoteControl();
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [snakeGameOpen, setSnakeGameOpen] = useState(false);
   const snakeGameStartRef = useRef<string | null>(null);
@@ -54,6 +60,17 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
 
   const [showCheatTrap, setShowCheatTrap] = useState(false);
   const cheatTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (state.hasUnreviewedCheatAttempt && !showCheatTrap) {
+      setShowCheatTrap(true);
+      if (cheatTimerRef.current) clearTimeout(cheatTimerRef.current);
+      cheatTimerRef.current = setTimeout(() => {
+        setShowCheatTrap(false);
+        dispatch({ type: 'CLEAR_CHEAT_FLAG' });
+      }, 5000);
+    }
+  }, [state.hasUnreviewedCheatAttempt, dispatch, showCheatTrap]);
 
   const handleCheatDetected = useCallback(() => {
     dispatch({ type: 'CHEAT_ATTEMPT' });
@@ -301,6 +318,9 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
 
       {/* ===== QUICK GAME (SNAKE) ===== */}
       <SnakeGameOverlay open={snakeGameOpen} onClose={handleQuickGameClose} />
+
+      {/* ===== REMOTE ANIMATIONS ===== */}
+      <CelebrationOverlay />
     </div>
   );
 }

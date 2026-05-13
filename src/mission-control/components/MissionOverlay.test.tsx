@@ -155,7 +155,7 @@ describe('MissionOverlay', () => {
         // Complete every morning task by clicking each active (non-disabled) task button.
         // Morning mission currently has 4 tasks: tshirt, toothbrush, feed-dog, vitamin.
         // Re-query before each click to get fresh references after re-renders.
-        const taskIds = ['tshirt', 'toothbrush', 'feed-dog', 'vitamin'];
+        const taskIds = ['tshirt', 'toothbrush', 'feed-dog', 'vitamin', 'wash-hands'];
         for (const id of taskIds) {
             const btn = screen.queryByTestId(`mc-task-card-${id}`);
             if (btn && !(btn as HTMLButtonElement).disabled) {
@@ -170,7 +170,7 @@ describe('MissionOverlay', () => {
         await act(async () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
-        const taskIds = ['tshirt', 'toothbrush', 'feed-dog', 'vitamin'];
+        const taskIds = ['tshirt', 'toothbrush', 'feed-dog', 'vitamin', 'wash-hands'];
         for (const id of taskIds) {
             const btn = screen.queryByTestId(`mc-task-card-${id}`);
             if (btn && !(btn as HTMLButtonElement).disabled) {

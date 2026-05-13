@@ -1,9 +1,11 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { BrowserWindow } from 'electron';
 import { store } from './store';
 
 export class RemoteBridge {
     private supabase: SupabaseClient | null = null;
+    private channel: RealtimeChannel | null = null;
+    private seenIds = new Set<string>();
 
     init() {
         console.log('[RemoteBridge] --- INIT CALLED ---');
@@ -31,23 +33,56 @@ export class RemoteBridge {
             store.set({ ...config, remoteRoomId: roomId, remoteKey });
         }
 
-        const channel = this.supabase.channel(`remote-control:${roomId}`);
+        this.channel = this.supabase.channel(`remote-control:${roomId}`);
         
         console.log(`[RemoteBridge] Initializing. Room ID: ${roomId}`);
 
-        channel
-            .on('broadcast', { event: 'action' }, (payload: any) => {
-                console.log('[RemoteBridge] Received broadcast message:', payload);
-                const { key: receivedKey, action } = payload.payload;
+        this.channel
+            .on('broadcast', { event: 'action' }, (payload: { payload: { key: string; action: any; msgId?: string; timestamp?: number } }) => {
+                console.log('[RemoteBridge] Broadcast received:', JSON.stringify(payload, null, 2));
+                const { key: receivedKey, action, msgId, timestamp } = payload.payload || {};
                 
+                if (!action) {
+                    console.error('[RemoteBridge] No action found in payload');
+                    return;
+                }
+
+                // 1. Validate msgId for double-dispatch protection
+                if (msgId && this.seenIds.has(msgId)) {
+                    console.log(`[RemoteBridge] Ignoring duplicate msgId: ${msgId}`);
+                    return;
+                }
+
+                // 2. Ignore extremely old messages (older than 15 seconds)
+                // Tightened from 5 minutes to 15 seconds to prevent replaying old actions on connect
+                if (timestamp && Math.abs(Date.now() - timestamp) > 15000) {
+                    console.warn(`[RemoteBridge] Ignoring stale message. Remote time: ${new Date(timestamp).toLocaleTimeString()}, Local time: ${new Date().toLocaleTimeString()}`);
+                    return;
+                }
+
                 // Re-fetch config to ensure we have latest key
                 const currentConfig = store.get();
                 
                 if (receivedKey === currentConfig.remoteKey) {
-                    console.log(`[RemoteBridge] Key matched! Dispatching action: ${action?.type}`);
+                    // Special case: Sync Request
+                    if (action.type === 'SYNC_REQUEST') {
+                        console.log('[RemoteBridge] 🔄 Sync request received. Asking renderer to broadcast state.');
+                        this.sendToRenderer('remote:request-sync', null);
+                        return;
+                    }
+
+                    console.log(`[RemoteBridge] ✅ Key matched! Dispatching action: ${action.type}`);
+                    
+                    // Track seenId to prevent double-dispatch
+                    if (msgId) {
+                        this.seenIds.add(msgId);
+                        // Clean up seenIds after 2 minutes to keep memory low
+                        setTimeout(() => this.seenIds.delete(msgId), 120000);
+                    }
+
                     this.sendToRenderer('remote-control:action', action);
                 } else {
-                    console.warn(`[RemoteBridge] INVALID KEY. Expected: ${currentConfig.remoteKey}, Got: ${receivedKey}`);
+                    console.warn(`[RemoteBridge] ❌ INVALID KEY. Expected: ${currentConfig.remoteKey}, Got: ${receivedKey}`);
                 }
             })
             .subscribe((status, err) => {
@@ -67,10 +102,27 @@ export class RemoteBridge {
         return { roomId, remoteKey };
     }
 
-    private sendToRenderer(channel: string, data: any) {
+    private sendToRenderer(channel: string, data: unknown) {
         const wins = BrowserWindow.getAllWindows();
         wins.forEach(win => {
             win.webContents.send(channel, data);
+        });
+    }
+
+    async broadcastState(state: unknown) {
+        if (!this.supabase || !this.channel) return;
+        const config = store.get();
+        if (!config.remoteRoomId || !config.remoteKey) return;
+
+        console.log('[RemoteBridge] Broadcasting state update...');
+        await this.channel.send({
+            type: 'broadcast',
+            event: 'state-update',
+            payload: {
+                key: config.remoteKey,
+                state,
+                timestamp: Date.now()
+            }
         });
     }
 }

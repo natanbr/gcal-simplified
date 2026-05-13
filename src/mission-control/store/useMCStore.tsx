@@ -37,33 +37,41 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
         return bold ? `**${name}**` : name;
     };
 
+    // Calculate next state to get accurate snapshots for the log
+    const nextState = mcReducer(state, action);
+    const snapshots = {
+        totalTokens: selectTotalWealth(nextState),
+        bankTokens: nextState.bankCount,
+        ...(action.isRemote ? { isRemote: true } : {})
+    };
+
     switch (action.type) {
         case 'ADD_TOKEN':
-            return { id, timestamp: now, icon: '🪙', message: 'Manual token added', delta: +1, type: 'manual', colorKey: 'bank' };
+            return { id, timestamp: now, icon: '🪙', message: 'Manual token added', delta: +1, type: 'manual', colorKey: 'bank', ...snapshots };
         case 'ADD_TOKENS':
-            if (action.source === 'mission') return { id, timestamp: now, icon: '🎉', message: `${action.label || 'Mission'} completed`, delta: +action.amount, type: 'mission', colorKey: action.label?.toLowerCase().includes('morning') ? 'morning' : 'evening' };
+            if (action.source === 'mission') return { id, timestamp: now, icon: '🎉', message: `${action.label || 'Mission'} completed`, delta: +action.amount, type: 'mission', colorKey: action.label?.toLowerCase().includes('morning') ? 'morning' : 'evening', ...snapshots };
             if (action.source === 'responsibility') {
                 const colorKey = action.label?.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
-                return { id, timestamp: now, icon: '⭐', message: `${action.label || 'Activity'} completed`, delta: +action.amount, type: 'responsibility', colorKey };
+                return { id, timestamp: now, icon: '⭐', message: `${action.label || 'Activity'} completed`, delta: +action.amount, type: 'responsibility', colorKey, ...snapshots };
             }
-            return { id, timestamp: now, icon: '🪙', message: `Manual tokens added`, delta: +action.amount, type: 'manual', colorKey: 'bank' };
+            return { id, timestamp: now, icon: '🪙', message: `Manual tokens added`, delta: +action.amount, type: 'manual', colorKey: 'bank', ...snapshots };
         case 'REMOVE_TOKEN':
-            return { id, timestamp: now, icon: '🪙', message: 'Manual token removed', delta: -1, type: 'manual', colorKey: 'bank' };
+            return { id, timestamp: now, icon: '🪙', message: 'Manual token removed', delta: -1, type: 'manual', colorKey: 'bank', ...snapshots };
         case 'SELECT_CASE':
-            return { id, timestamp: now, icon: '🎯', message: `Goal selected: ${rewardLabel(action.reward)}`, type: 'system', colorKey: 'system' };
+            return { id, timestamp: now, icon: '🎯', message: `Goal selected: ${rewardLabel(action.reward)}`, type: 'system', colorKey: 'system', ...snapshots };
         case 'DEPOSIT_TO_CASE': {
             const tkn = action.amount === 1 ? 'token' : 'tokens';
-            return { id, timestamp: now, icon: '🏦', message: `${action.amount} ${tkn} deposited to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system' };
+            return { id, timestamp: now, icon: '🏦', message: `${action.amount} ${tkn} deposited to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snapshots };
         }
         case 'MOVE_TOKEN': {
             if (action.from === 'bank' && typeof action.to === 'number') {
-                return { id, timestamp: now, icon: '📤', message: `1 token added to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system' };
+                return { id, timestamp: now, icon: '📤', message: `1 token added to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system', ...snapshots };
             }
             if (typeof action.from === 'number' && action.to === 'bank') {
-                return { id, timestamp: now, icon: '📥', message: `1 token removed from ${goalLabel(action.from)}`, type: 'system', colorKey: 'system' };
+                return { id, timestamp: now, icon: '📥', message: `1 token removed from ${goalLabel(action.from)}`, type: 'system', colorKey: 'system', ...snapshots };
             }
             if (typeof action.from === 'number' && typeof action.to === 'number') {
-                return { id, timestamp: now, icon: '🔀', message: `1 token moved from ${goalLabel(action.from)} to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system' };
+                return { id, timestamp: now, icon: '🔀', message: `1 token moved from ${goalLabel(action.from)} to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system', ...snapshots };
             }
             return null;
         }
@@ -72,18 +80,18 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
             if (!target) return null;
             const amount = Math.min(state.bankCount, target.targetCount - target.tokenCount);
             const tkn = amount === 1 ? 'token' : 'tokens';
-            return { id, timestamp: now, icon: '💨', message: `${amount} ${tkn} vacuumed to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system' };
+            return { id, timestamp: now, icon: '💨', message: `${amount} ${tkn} vacuumed to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snapshots };
         }
         case 'REFUND_CASE': {
              const target = state.cases.find(c => c.id === action.caseId);
              if (!target) return null;
              const tkn = target.tokenCount === 1 ? 'token' : 'tokens';
-             return { id, timestamp: now, icon: '↩️', message: `${target.tokenCount} ${tkn} refunded from ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system' };
+             return { id, timestamp: now, icon: '↩️', message: `${target.tokenCount} ${tkn} refunded from ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snapshots };
         }
         case 'CONSUME_CASE': {
              const target = state.cases.find(c => c.id === action.caseId);
              if (!target || !target.reward) return null;
-             return { id, timestamp: now, icon: '🎁', message: `Used: ${rewardLabel(target.reward)}`, delta: -target.tokenCount, type: 'reward', colorKey: 'system' };
+             return { id, timestamp: now, icon: '🎁', message: `Used: ${rewardLabel(target.reward)}`, delta: -target.tokenCount, type: 'reward', colorKey: 'system', ...snapshots };
         }
         case 'SET_ACTIVE_MISSION':
             if (action.phase === 'none') {
@@ -92,36 +100,36 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
                 const timedOutPhase = state.activeMission;
                 if (timedOutPhase === 'none') return null; // already inactive, nothing to log
                 const phaseLabel = timedOutPhase === 'morning' ? 'Morning' : 'Evening';
-                return { id, timestamp: now, icon: '🕐', message: `${phaseLabel} mission expired`, type: 'mission', colorKey: timedOutPhase };
+                return { id, timestamp: now, icon: '🕐', message: `${phaseLabel} mission expired`, type: 'mission', colorKey: timedOutPhase, ...snapshots };
             }
-            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started`, type: 'mission', colorKey: action.phase };
+            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started`, type: 'mission', colorKey: action.phase, ...snapshots };
         case 'CANCEL_MISSION':
-             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
+             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
         case 'MARK_MISSION_TIMEOUT':
              // Suppressed: SET_ACTIVE_MISSION phase:'none' now logs the expiry event with full
              // phase context. Logging here too would produce a duplicate entry.
              return null;
         case 'COMPLETE_MISSION_ROUTINE':
-             return { id, timestamp: now, icon: '🎉', message: `${action.missionPhase === 'morning' ? 'Morning' : 'Evening'} mission completed`, delta: +action.bonusTokens, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
+             return { id, timestamp: now, icon: '🎉', message: `${action.missionPhase === 'morning' ? 'Morning' : 'Evening'} mission completed`, delta: +action.bonusTokens, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
         case 'COMPLETE_TASK': {
              return null; // The user requested to only log the main event, not subtasks.
         }
         case 'RESET_MISSION_WITH_TIMER':
-             return { id, timestamp: now, icon: '🔄', message: `Mission fully reset (tasks + timer)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
+             return { id, timestamp: now, icon: '🔄', message: `Mission fully reset (tasks + timer)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
         case 'ADJUST_MISSION_END':
-             return { id, timestamp: now, icon: '⏱️', message: `Mission time adjusted (${action.deltaMinutes > 0 ? '+' : ''}${action.deltaMinutes}m)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase };
+             return { id, timestamp: now, icon: '⏱️', message: `Mission time adjusted (${action.deltaMinutes > 0 ? '+' : ''}${action.deltaMinutes}m)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
         case 'ADD_RESPONSIBILITY_POINT': {
              const resp = state.responsibilities.find(r => r.id === action.taskId);
              const colorKey = resp?.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
-             return { id, timestamp: now, icon: resp?.icon || '⭐', message: `Point earned for ${resp?.label || 'responsibility'}`, type: 'responsibility', colorKey };
+             return { id, timestamp: now, icon: resp?.icon || '⭐', message: `Point earned for ${resp?.label || 'responsibility'}`, type: 'responsibility', colorKey, ...snapshots };
         }
         case 'RESET_RESPONSIBILITY': {
              const resp = state.responsibilities.find(r => r.id === action.taskId);
              const colorKey = resp?.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
-             return resp ? { id, timestamp: now, icon: resp.icon, message: `${resp.label} completed`, delta: action.claimTokens ? +action.claimTokens : undefined, type: 'responsibility', colorKey } : null;
+             return resp ? { id, timestamp: now, icon: resp.icon, message: `${resp.label} completed`, delta: action.claimTokens ? +action.claimTokens : undefined, type: 'responsibility', colorKey, ...snapshots } : null;
         }
         case 'CHEAT_ATTEMPT':
-             return { id, timestamp: now, icon: '🚨', message: 'Unauthorized bank access attempt!', type: 'cheat-attempt', colorKey: 'cheat' };
+             return { id, timestamp: now, icon: '🚨', message: 'Unauthorized bank access attempt!', type: 'cheat-attempt', colorKey: 'cheat', ...snapshots };
         default:
             return null;
     }
@@ -182,6 +190,65 @@ export function loadPersistedState(): MCState {
     } catch {
         return initialState;
     }
+}
+
+// ---- Remote Sync Hook ----
+
+function useRemoteSync(state: MCState) {
+    const stateRef = React.useRef(state);
+    stateRef.current = state;
+
+    const broadcast = React.useCallback(() => {
+        const syncData = {
+            bankCount: stateRef.current.bankCount,
+            gameTokens: stateRef.current.gameTokens,
+            responsibilities: stateRef.current.responsibilities.map(r => ({
+                id: r.id,
+                pointsEarned: r.pointsEarned,
+                pointsRequired: r.pointsRequired,
+                completedAt: r.completedAt
+            }))
+        };
+        // @ts-ignore - ipcRenderer is exposed via preload
+        if (window.ipcRenderer) {
+            window.ipcRenderer.invoke('remote:sync-state', syncData);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        // Debounce state sync to avoid flooding Supabase (sync every 1s of stability)
+        const timer = setTimeout(broadcast, 1000);
+        return () => clearTimeout(timer);
+    }, [state.bankCount, state.gameTokens, state.responsibilities, broadcast]);
+
+    React.useEffect(() => {
+        // Listen for explicit sync requests from remotes
+        // @ts-ignore
+        if (!window.ipcRenderer) return;
+        // @ts-ignore
+        const unsubscribe = window.ipcRenderer.on('remote:request-sync', () => {
+            broadcast();
+        });
+        return () => unsubscribe && unsubscribe();
+    }, [broadcast]);
+}
+
+export function MCStoreProvider({ children }: { children: React.ReactNode }) {
+    const [state, dispatch] = React.useReducer(mcReducer, initialState, loadPersistedState);
+
+    // Persist state to localStorage on every change
+    React.useEffect(() => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }, [state]);
+
+    // Sync state to Remote
+    useRemoteSync(state);
+
+    return (
+        <MCContext.Provider value={{ state, dispatch }}>
+            {children}
+        </MCContext.Provider>
+    );
 }
 
 // ---- Context ----

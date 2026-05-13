@@ -69,9 +69,11 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                     : '1.5px solid rgba(160,150,230,0.25)',
                 borderRadius: 18,
                 padding: '14px 14px 12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
+                display: 'grid',
+                gridTemplateColumns: '1fr auto',
+                gridTemplateRows: 'auto auto',
+                gap: '10px 14px',
+                alignItems: 'center',
                 boxShadow: isComplete
                     ? '0 4px 16px rgba(247,201,72,0.2), var(--mc-depth-shadow)'
                     : 'var(--mc-depth-shadow)',
@@ -92,8 +94,8 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                 />
             )}
 
-            {/* Header row: icon + label + status badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Left side: Header (Row 1) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, gridColumn: 1, gridRow: 1 }}>
                 <span
                     className={isComplete ? "mc-anim-icon-complete" : "mc-anim-icon-pulse"}
                     style={{ fontSize: 28, lineHeight: 1, flexShrink: 0, display: 'inline-block' }}
@@ -140,131 +142,134 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                 )}
             </div>
 
-            {/* Progress dots */}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                {Array.from({ length: task.pointsRequired }, (_, i) => (
-                    <PointDot key={i} filled={i < task.pointsEarned} index={i} icon={task.pointIcon} />
-                ))}
+            {/* Left side: Progress (Row 2) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, gridColumn: 1, gridRow: 2 }}>
+                {/* Progress dots */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                    {Array.from({ length: task.pointsRequired }, (_, i) => (
+                        <PointDot key={i} filled={i < task.pointsEarned} index={i} icon={task.pointIcon} />
+                    ))}
+                </div>
+
+                {/* Progress label */}
+                <div style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    color: isComplete ? '#a87c00' : inProgress ? 'var(--mc-text-muted)' : 'var(--mc-text-dim)',
+                }}>
+                    {isComplete
+                        ? task.rewardLabel
+                        : `${task.pointsEarned} / ${task.pointsRequired} completed`
+                    }
+                </div>
             </div>
 
-            {/* Progress label */}
-            <div style={{
-                textAlign: 'center',
-                fontSize: 10,
-                fontWeight: 800,
-                color: isComplete ? '#a87c00' : inProgress ? 'var(--mc-text-muted)' : 'var(--mc-text-dim)',
-            }}>
-                {isComplete
-                    ? task.rewardLabel
-                    : `${task.pointsEarned} / ${task.pointsRequired} completed`
-                }
-            </div>
-
-            {/* Action buttons */}
-            <AnimatePresence mode="wait">
-                {isComplete ? (
-                    /* Parent-only: claim reward and restart */
-                    <motion.div
-                        key="claim"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
-                    >
-                        <motion.button
-                            data-testid={`mc-responsibility-claim-${task.id}`}
-                            whileTap={{ scale: 0.93, y: 2 }}
-                            whileHover={{ scale: 1.03, y: -1 }}
-                            onClick={() => {
-                                dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id, claimTokens: task.tokenReward });
-                            }}
-                            style={{
-                                background: 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
-                                border: '1.5px solid rgba(61,206,118,0.5)',
-                                borderRadius: 12,
-                                padding: '9px 12px',
-                                fontSize: 12,
-                                fontWeight: 900,
-                                color: '#0b4a20',
-                                cursor: 'pointer',
-                                fontFamily: "'Nunito', sans-serif",
-                                boxShadow: '0 3px 0 #2da85a',
-                            }}
+            {/* Right side: Action Buttons (Spans Rows 1-2) */}
+            <div style={{ gridColumn: 2, gridRow: '1 / span 2', display: 'flex', alignItems: 'stretch' }}>
+                <AnimatePresence mode="wait">
+                    {isComplete ? (
+                        /* Parent-only: claim reward and restart */
+                        <motion.div
+                            key="claim"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0 }}
+                            style={{ display: 'flex', height: '100%' }}
                         >
-                            🎁 Claim & Start Over
-                        </motion.button>
-                    </motion.div>
-                ) : task.activities && task.activities.length > 0 ? (
-                    /* Activity-specific buttons — one per sport */
-                    <motion.div
-                        key="activities"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        style={{ display: 'flex', gap: 8 }}
-                    >
-                        {task.activities.map(activity => (
                             <motion.button
-                                key={activity.label}
-                                data-testid={`mc-responsibility-activity-${task.id}-${activity.label.toLowerCase()}`}
-                                whileTap={{ scale: 0.88, y: 2 }}
-                                whileHover={{ scale: 1.08, y: -2 }}
-                                onClick={() => dispatch({ type: 'ADD_RESPONSIBILITY_POINT', taskId: task.id })}
-                                title={`${activity.label} +1`}
+                                data-testid={`mc-responsibility-claim-${task.id}`}
+                                whileTap={{ scale: 0.93 }}
+                                whileHover={{ scale: 1.03 }}
+                                onClick={() => {
+                                    dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id, claimTokens: task.tokenReward });
+                                }}
                                 style={{
-                                    flex: 1,
-                                    background: 'linear-gradient(180deg, #ffe880 0%, #f7c948 100%)',
-                                    border: '1.5px solid rgba(247,201,72,0.6)',
+                                    background: 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
+                                    border: '1.5px solid rgba(61,206,118,0.5)',
                                     borderRadius: 12,
-                                    padding: '10px 4px',
-                                    fontSize: 26,
+                                    padding: '0 16px',
+                                    fontSize: 13,
+                                    fontWeight: 900,
+                                    color: '#0b4a20',
                                     cursor: 'pointer',
                                     fontFamily: "'Nunito', sans-serif",
-                                    boxShadow: '0 3px 0 #c99b10',
+                                    boxShadow: '0 3px 0 #2da85a',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
-                                    gap: 3,
+                                    justifyContent: 'center',
+                                    gap: 4,
+                                    height: '100%'
                                 }}
                             >
-                                <span>{activity.emoji}</span>
-                                <span style={{ fontSize: 9, fontWeight: 900, color: '#5a3e00' }}>+1</span>
+                                <span style={{ fontSize: 20 }}>🎁</span>
+                                <span>Claim</span>
                             </motion.button>
-                        ))}
-                    </motion.div>
-                ) : (
-                    /* +1 point button */
-                    <motion.button
-                        key="add"
-                        data-testid={`mc-responsibility-add-${task.id}`}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        whileTap={{ scale: 0.93, y: 2 }}
-                        whileHover={{ scale: 1.03, y: -1 }}
-                        onClick={() => dispatch({ type: 'ADD_RESPONSIBILITY_POINT', taskId: task.id })}
-                        style={{
-                            background: 'linear-gradient(180deg, #ffe880 0%, #f7c948 100%)',
-                            border: '1.5px solid rgba(247,201,72,0.6)',
-                            borderRadius: 12,
-                            padding: '9px 12px',
-                            fontSize: 12,
-                            fontWeight: 900,
-                            color: '#5a3e00',
-                            cursor: 'pointer',
-                            fontFamily: "'Nunito', sans-serif",
-                            boxShadow: '0 3px 0 #c99b10',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6,
-                        }}
-                    >
-                        <span>⭐</span>
-                        <span>+1 Point</span>
-                    </motion.button>
-                )}
-            </AnimatePresence>
+                        </motion.div>
+                    ) : (
+                        /* +1 point button (Combined for all tasks) */
+                        <motion.button
+                            key="add"
+                            data-testid={`mc-responsibility-add-${task.id}`}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0 }}
+                            whileTap={{ scale: 0.93 }}
+                            whileHover={{ scale: 1.03 }}
+                            onClick={() => dispatch({ type: 'ADD_RESPONSIBILITY_POINT', taskId: task.id })}
+                            style={{
+                                background: 'linear-gradient(180deg, #ffe880 0%, #f7c948 100%)',
+                                border: '1.5px solid rgba(247,201,72,0.6)',
+                                borderRadius: 12,
+                                padding: '0 16px',
+                                fontSize: 13,
+                                fontWeight: 900,
+                                color: '#5a3e00',
+                                cursor: 'pointer',
+                                fontFamily: "'Nunito', sans-serif",
+                                boxShadow: '0 3px 0 #c99b10',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6,
+                                height: '100%',
+                                minWidth: 90
+                            }}
+                        >
+                            {(() => {
+                                // Force 4 icons for Activity task to handle stale localStorage state
+                                const activities = task.id === 'activity' 
+                                    ? [
+                                        { emoji: '🛼', label: 'Rollerblading' },
+                                        { emoji: '⛸️', label: 'Ice Skating' },
+                                        { emoji: '🏊', label: 'Swimming' },
+                                        { emoji: '🥋', label: 'Karate' }
+                                      ]
+                                    : task.activities;
+
+                                if (activities && activities.length > 0) {
+                                    return (
+                                        <div style={{ 
+                                            display: 'grid', 
+                                            gridTemplateColumns: 'repeat(2, 1fr)', 
+                                            gap: '2px 6px',
+                                            fontSize: 16,
+                                            lineHeight: 1.1
+                                        }}>
+                                            {activities.map((act, i) => (
+                                                <span key={i} title={act.label}>{act.emoji}</span>
+                                            ))}
+                                        </div>
+                                    );
+                                }
+                                return <span style={{ fontSize: 24 }}>{task.icon || '⭐'}</span>;
+                            })()}
+                            <span style={{ whiteSpace: 'nowrap' }}>+1 Point</span>
+                        </motion.button>
+                    )}
+                </AnimatePresence>
+            </div>
         </motion.div>
     );
 }

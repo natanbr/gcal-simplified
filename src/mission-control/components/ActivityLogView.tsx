@@ -149,6 +149,9 @@ function LogItemRow({ log }: { log: ActivityLogEntry }) {
                 <div className="flex items-center gap-2 text-xs">
                     <span className="font-semibold text-slate-500">{dateString}</span>
                     <span className="text-slate-400 font-medium">{timeString}</span>
+                    {log.isRemote && (
+                        <span title="Triggered from Remote" className="opacity-70" style={{ fontSize: '11px' }}>📱</span>
+                    )}
                 </div>
             </td>
             <td className="px-6 py-3">
@@ -158,15 +161,36 @@ function LogItemRow({ log }: { log: ActivityLogEntry }) {
                 </div>
             </td>
             <td className="px-6 py-3 text-right">
-                {log.delta !== undefined && log.delta !== 0 && (
-                    <span className={`inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-black tracking-wider border ${
-                        log.delta > 0 
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
-                        : 'bg-rose-50 text-rose-600 border-rose-200'
-                    }`}>
-                        {log.delta > 0 ? '+' : ''}{log.delta}
-                    </span>
-                )}
+                <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-2">
+                        {/* Action: Added/Removed from game */}
+                        {log.delta !== undefined && log.delta !== 0 && (
+                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider border ${
+                                log.delta > 0 
+                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+                                : 'bg-rose-50 text-rose-600 border-rose-200'
+                            }`}>
+                                {log.delta > 0 ? '+' : ''}{log.delta}
+                            </span>
+                        )}
+                        
+                        {/* Total Tokens (Wealth) */}
+                        {log.totalTokens !== undefined && (
+                            <div className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="Total Tokens (Bank + Goals)">
+                                <span className="text-[10px] opacity-60">Σ</span>
+                                <span className="text-[10px] font-black text-slate-700">{log.totalTokens}</span>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Bank Tokens */}
+                    {log.bankTokens !== undefined && (
+                        <div className="flex items-center gap-1 px-1.5 py-0.5" title="Bank Tokens">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Bank:</span>
+                            <span className="text-[10px] font-black text-slate-600">{log.bankTokens}</span>
+                        </div>
+                    )}
+                </div>
             </td>
         </tr>
     );

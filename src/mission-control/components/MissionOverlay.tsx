@@ -37,12 +37,12 @@ export function MissionOverlay() {
     const state    = useMCState();
     const dispatch = useMCDispatch();
     const [minimized,       setMinimized]      = useState(false);
-    const [whiningDetected, setWhiningDetected] = useState(false);
 
     const BONUS_BASE = 2;
 
     const phase   = state.activeMission;
     const mission = useMission(phase !== 'none' ? phase : 'morning');
+    const whiningDetected = mission?.whiningDetected ?? false;
 
     // ── Long-press: Minimize (short = minimize, long = stop mission) ────────
     const minimizeHandlers = useLongPress(
@@ -83,11 +83,10 @@ export function MissionOverlay() {
         }
     }, [dispatch, mission, phase]);
 
-    // Auto-restore and reset penalty when a new mission starts
+    // Auto-restore when a new mission starts
     useEffect(() => {
         if (phase !== 'none') {
             setMinimized(false);
-            setWhiningDetected(false);
         }
     }, [phase]);
 
@@ -335,7 +334,11 @@ export function MissionOverlay() {
                             >
                                 <motion.button
                                     data-testid="mc-whining-btn"
-                                    onClick={() => setWhiningDetected(prev => !prev)}
+                                    onClick={() => {
+                                        if (!mission?.whiningLocked) {
+                                            dispatch({ type: 'TOGGLE_WHINING', missionPhase: phase as Exclude<MissionPhase, 'none'> });
+                                        }
+                                    }}
                                     whileTap={{ scale: 0.93 }}
                                     whileHover={{ scale: 1.03, y: -2 }}
                                     style={{

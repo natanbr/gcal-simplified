@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch } from '../store/useMCStore';
 import type { MCSettings } from '../types';
 import { REWARDS } from '../rewardCatalogue';
+import { QRCodeCanvas } from 'qrcode.react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -149,7 +150,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
 
     // Local draft — only committed on "Save"
     const [draft, setDraft] = useState<MCSettings>(() => state.settings);
-    const [activeTab, setActiveTab] = useState<'time' | 'tasks' | 'rewards'>('time');
+    const [activeTab, setActiveTab] = useState<'time' | 'tasks' | 'rewards' | 'remote'>('time');
 
     // Reset draft whenever the panel opens
     const handleOpen = () => setDraft(state.settings);
@@ -260,6 +261,16 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                     }}
                                 >
                                     🎁 Rewards
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('remote')}
+                                    style={{
+                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
+                                        background: activeTab === 'remote' ? 'rgba(165,125,255,0.15)' : 'transparent',
+                                        color: activeTab === 'remote' ? '#8050e0' : 'var(--mc-text-muted)',
+                                    }}
+                                >
+                                    📱 Remote
                                 </button>
                             </div>
 
@@ -455,6 +466,115 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                         </div>
                                     </div>
                                 )}
+
+                                {activeTab === 'remote' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                            <span style={{ fontSize: 18 }}>📱</span>
+                                            <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Remote Control Pairing</span>
+                                        </div>
+                                        
+                                        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+                                            <div style={{ 
+                                                background: 'white', 
+                                                padding: 16, 
+                                                borderRadius: 16, 
+                                                boxShadow: '0 8px 24px rgba(130,110,200,0.15)',
+                                                border: '1.5px solid rgba(130,110,200,0.1)'
+                                            }}>
+                                                {draft.remoteRoomId && draft.remoteKey ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                                                        <QRCodeCanvas 
+                                                            value={`https://mc-remote.vercel.app/?room=${draft.remoteRoomId}&key=${draft.remoteKey}`}
+                                                            size={180}
+                                                            level="H"
+                                                            includeMargin={false}
+                                                        />
+                                                        <input 
+                                                            type="text" 
+                                                            readOnly 
+                                                            value={`https://mc-remote.vercel.app/?room=${draft.remoteRoomId}&key=${draft.remoteKey}`}
+                                                            onClick={(e) => {
+                                                                (e.target as HTMLInputElement).select();
+                                                                navigator.clipboard.writeText((e.target as HTMLInputElement).value);
+                                                            }}
+                                                            style={{
+                                                                width: '100%',
+                                                                fontSize: 10,
+                                                                padding: '6px 8px',
+                                                                borderRadius: 6,
+                                                                border: '1px solid rgba(130,110,200,0.3)',
+                                                                background: 'rgba(130,110,200,0.05)',
+                                                                color: 'var(--mc-text-muted)',
+                                                                fontFamily: 'monospace',
+                                                                cursor: 'copy',
+                                                                textAlign: 'center'
+                                                            }}
+                                                            title="Click to copy URL"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--mc-text-muted)', fontSize: 12, textAlign: 'center' }}>
+                                                        Keys not generated.<br/>Try restarting the app.
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--mc-text)', fontWeight: 600 }}>
+                                                    Scan this code with your phone's camera to open the remote control.
+                                                </p>
+                                                <ul style={{ fontSize: 12, color: 'var(--mc-text-muted)', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                    <li>Control tokens and missions from anywhere.</li>
+                                                    <li>Trigger special animations (Fireworks!).</li>
+                                                    <li>Secure pairing (keys are stored only on this device).</li>
+                                                </ul>
+
+                                                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--mc-text-muted)', opacity: 0.7 }}>
+                                                    Target: <span style={{ fontFamily: 'monospace' }}>mc-remote.vercel.app</span>
+                                                </div>
+
+                                                <motion.button
+                                                    whileTap={{ scale: 0.95 }}
+                                                    onClick={async () => {
+                                                        if ((window as any).ipcRenderer) {
+                                                            const newKeys = await (window as any).ipcRenderer.invoke('remote:regenerate') as { roomId: string; remoteKey: string };
+                                                            setDraft(prev => ({ 
+                                                                ...prev, 
+                                                                remoteRoomId: newKeys.roomId, 
+                                                                remoteKey: newKeys.remoteKey 
+                                                            }));
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        marginTop: 8,
+                                                        background: 'rgba(255,100,100,0.1)',
+                                                        border: '1.5px solid rgba(255,100,100,0.2)',
+                                                        borderRadius: 10,
+                                                        padding: '8px 16px',
+                                                        fontSize: 12,
+                                                        fontWeight: 800,
+                                                        color: '#e74c3c',
+                                                        cursor: 'pointer',
+                                                        width: 'fit-content'
+                                                    }}
+                                                >
+                                                    🔄 Regenerate Keys
+                                                </motion.button>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ marginTop: 12, padding: 12, background: 'rgba(130,110,200,0.05)', borderRadius: 12, border: '1px dashed rgba(130,110,200,0.2)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6de89e' }} />
+                                                <span style={{ fontSize: 11, fontWeight: 900, textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>Connection Status</span>
+                                            </div>
+                                            <span style={{ fontSize: 12, color: 'var(--mc-text)', fontWeight: 700 }}>
+                                                Supabase Realtime Bridge is active.
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -488,5 +608,3 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
         </AnimatePresence>
     );
 }
-
-

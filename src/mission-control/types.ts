@@ -83,8 +83,9 @@ export interface Mission {
     loggedTimeoutAt?: string;
     tasks: MissionTask[];
     active: boolean;
+    whiningDetected?: boolean;
+    whiningLocked?: boolean;
 }
-
 
 // --------------- Settings ---------------
 
@@ -105,6 +106,10 @@ export interface MCSettings {
     creamTaskSchedule?: 'morning' | 'evening' | 'both';
     /** Custom token costs and enablement state for rewards */
     rewardConfigs?: Record<string, { enabled: boolean; targetCount: number }>;
+    /** Remote Control Pairing */
+    remoteRoomId?: string;
+    /** Remote Control Secret Key */
+    remoteKey?: string;
 }
 
 export const DEFAULT_SETTINGS: MCSettings = {
@@ -144,6 +149,9 @@ export interface ActivityLogEntry {
     delta?: number; // e.g., +2, -1
     type: 'manual' | 'system' | 'mission' | 'reward' | 'responsibility' | 'cheat-attempt'; // for filtering / styling
     colorKey?: 'morning' | 'evening' | 'recycling' | 'activity' | 'bank' | 'system' | 'cheat';
+    totalTokens?: number;
+    bankTokens?: number;
+    isRemote?: boolean;
 }
 
 // --------------- Root App State ---------------
@@ -166,11 +174,13 @@ export interface MCState {
     gameTokens: number;
     /** ISO date string (YYYY-MM-DD) of the last day a game token was granted. */
     gameTokensLastGrantedDate: string | null;
+    /** Track remote animation triggers */
+    lastAnimationTrigger?: { type: 'fireworks' | 'confetti' | 'confetti-fireworks' | 'good-job' | 'too-loud'; timestamp: number };
 }
 
 // --------------- Action Discriminated Union ---------------
 
-export type MCAction =
+export type MCAction = (
     | { type: 'ADD_TOKEN' }
     | { type: 'ADD_TOKENS'; amount: number; source: 'manual' | 'mission' | 'responsibility'; label?: string }
     | { type: 'REMOVE_TOKEN' }
@@ -189,13 +199,16 @@ export type MCAction =
     | { type: 'COMPLETE_MISSION_ROUTINE'; missionPhase: MissionPhase; bonusTokens: number }
     | { type: 'MARK_MISSION_TIMEOUT'; missionPhase: MissionPhase }
     | { type: 'ADJUST_MISSION_END'; missionPhase: MissionPhase; deltaMinutes: number }
+    | { type: 'TOGGLE_WHINING'; missionPhase: MissionPhase; lockedFromUI?: boolean }
     | { type: 'CONSUME_CASE'; caseId: number }
     | { type: 'SET_SETTINGS'; settings: Partial<MCSettings> }
-    | { type: 'ADD_RESPONSIBILITY_POINT'; taskId: string }
+    | { type: 'ADD_RESPONSIBILITY_POINT'; taskId: string; amount?: number }
     | { type: 'RESET_RESPONSIBILITY'; taskId: string; claimTokens?: number }
     | { type: 'ADD_LOG'; log: ActivityLogEntry }
     | { type: 'CHEAT_ATTEMPT' }
     | { type: 'CLEAR_CHEAT_FLAG' }
     | { type: 'GRANT_GAME_TOKEN'; force?: boolean }
     | { type: 'CONSUME_GAME_TOKEN' }
-    | { type: 'RESET_GAME_TOKENS' };
+    | { type: 'RESET_GAME_TOKENS' }
+    | { type: 'TRIGGER_ANIMATION'; animation: 'fireworks' | 'confetti' | 'confetti-fireworks' | 'good-job' | 'too-loud' }
+) & { isRemote?: boolean };

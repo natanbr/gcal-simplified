@@ -534,27 +534,43 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                   </motion.div>
                 </>
               ) : isComplete ? (
-                // Regular reward complete: Use! only
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  style={{ flex: 1 }}
-                >
-                  <Button3D
-                    variant="primary"
-                    onClick={handleUse}
-                    aria-label="Use this reward"
-                    style={{
-                      flex: 1, width: '100%', justifyContent: 'center', display: 'flex',
-                      alignItems: 'center', gap: 4, fontSize: 11,
-                      background: 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
-                      borderColor: 'rgba(61,206,118,0.5)',
-                      color: '#0b4a20',
-                    }}
+                // Regular reward complete: Use! + Refund
+                <div style={{ display: 'flex', gap: 5, width: '100%' }}>
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    style={{ flex: 1 }}
                   >
-                    🎁 Use!
-                  </Button3D>
-                </motion.div>
+                    <Button3D
+                      variant="primary"
+                      onClick={handleUse}
+                      aria-label="Use this reward"
+                      style={{
+                        flex: 1, width: '100%', justifyContent: 'center', display: 'flex',
+                        alignItems: 'center', gap: 4, fontSize: 11,
+                        background: 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
+                        borderColor: 'rgba(61,206,118,0.5)',
+                        color: '#0b4a20',
+                      }}
+                    >
+                      🎁 Use!
+                    </Button3D>
+                  </motion.div>
+                  <motion.div
+                    animate={{ rotate: leverTilted ? 45 : 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                    style={{ transformOrigin: 'bottom center' }}
+                  >
+                    <Button3D
+                      variant="danger"
+                      onClick={handleRefund}
+                      aria-label="Refund all coins back to bank"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+                    >
+                      🗑️
+                    </Button3D>
+                  </motion.div>
+                </div>
               ) : (
                 // Regular reward in progress: vacuum + refund
                 <>

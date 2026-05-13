@@ -45,6 +45,7 @@ const defaultMissions: Mission[] = [
             { id: 'toothbrush', label: 'Teeth', icon: 'Toothbrush', completed: false, locksAt: null, locked: false },
             { id: 'feed-dog', label: 'Feed Dog', icon: 'Dog', completed: false, locksAt: null, locked: false },
             { id: 'vitamin', label: 'Vitamin D', icon: 'Pill', completed: false, locksAt: null, locked: false },
+            { id: 'wash-hands', label: 'Wash Hands', icon: '🙏🧼', completed: false, locksAt: null, locked: false },
         ],
     },
     {
@@ -77,15 +78,16 @@ const defaultResponsibilities: ResponsibilityTask[] = [
     {
         id: 'activity',
         label: 'Activity',
-        icon: '🏅',
-        pointIcon: '🏅',
+        icon: '🛼',
+        pointIcon: '🛼',
         description: 'Skating, Swimming or Karate — tap for each session',
         rewardLabel: 'Great effort! ⭐',
         pointsRequired: 3,
         pointsEarned: 0,
         completedAt: null,
         activities: [
-            { emoji: '⛸️', label: 'Skating' },
+            { emoji: '🛼', label: 'Rollerblading' },
+            { emoji: '⛸️', label: 'Ice Skating' },
             { emoji: '🏊', label: 'Swimming' },
             { emoji: '🥋', label: 'Karate' },
         ],
@@ -304,6 +306,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         active: true,
                         startedAt: now,
                         durationMins: Math.max(0, durationMins), // no minimum — allows sub-minute test durations
+                        whiningDetected: false,
+                        whiningLocked: false,
                         tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
                     };
                 }),
@@ -317,7 +321,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? { ...m, active: true, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        ? { ...m, active: true, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
                         : m
                 )
             };
@@ -340,6 +344,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         startedAt: now,
                         durationMins,
                         loggedTimeoutAt: undefined,
+                        whiningDetected: false,
+                        whiningLocked: false,
                         tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
                     };
                 }),
@@ -352,7 +358,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 activeMission: 'none',
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
                         : m
                 )
             };
@@ -364,7 +370,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 bankCount: state.bankCount + action.bonusTokens,
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
                         : m
                 )
             };
@@ -408,6 +414,20 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ),
             };
         }
+
+        case 'TOGGLE_WHINING':
+            return {
+                ...state,
+                missions: state.missions.map(m => {
+                    if (m.phase !== action.missionPhase) return m;
+                    if (m.whiningLocked && !action.lockedFromUI) return m; // UI clicks ignored if locked
+                    return {
+                        ...m,
+                        whiningDetected: !m.whiningDetected,
+                        whiningLocked: action.lockedFromUI ? true : m.whiningLocked
+                    };
+                }),
+            };
 
         case 'SET_SETTINGS': {
             const nextSettings = { ...state.settings, ...action.settings };
@@ -479,8 +499,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 responsibilities: state.responsibilities.map(r => {
                     if (r.id !== action.taskId) return r;
-                    if (r.completedAt) return r; // already complete — ignore
-                    const newPoints = r.pointsEarned + 1;
+                    if (r.completedAt && (action.amount || 1) > 0) return r; // already complete — ignore if adding
+                    const newPoints = Math.max(0, r.pointsEarned + (action.amount || 1));
                     const isComplete = newPoints >= r.pointsRequired;
                     return {
                         ...r,
@@ -556,6 +576,15 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 gameTokens: 0,
                 gameTokensLastGrantedDate: null,
+            };
+
+        case 'TRIGGER_ANIMATION':
+            return {
+                ...state,
+                lastAnimationTrigger: {
+                    type: action.animation,
+                    timestamp: Date.now()
+                }
             };
 
         default:

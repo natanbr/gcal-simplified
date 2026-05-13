@@ -98,6 +98,13 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Calendars**: Toggle visibility of specific Google Calendars.
   - **Task Lists**: Toggle visibility of specific Task Lists.
   - **Auto-Refresh**: Data refreshes every 5 minutes.
+- **Remote Control (Mission Control)**:
+  - **Secure Bridge**: Established via Supabase Realtime (Broadcast) and Electron IPC.
+  - **Main Process Isolation**: All Supabase connections and key validations are restricted to the Main process.
+  - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing.
+  - **QR Code Pairing**: Displayed in Settings for easy mobile connection.
+  - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
+  - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
 
 ## UX / UI Enhancements
 
@@ -130,3 +137,10 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Calendars**: Toggle visibility of specific Google Calendars.
   - **Tasks**: Toggle visibility of specific Task Lists.
 - **UI/UX**: Improved navigation and accessibility with clear category icons and structured content.
+
+### 2026-05-13 Mission Control & Remote Hardening
+
+- **UI Unification**: Standardized Responsibility panel layout with action buttons on the right side.
+- **Activity Consolidation**: Merged multiple sport buttons into a single 4-icon grid button for cleaner mobile/desktop UX.
+- **Remote Stability**: Resolved all build-time TypeScript errors, implemented strict IPC message validation, and optimized Supabase Realtime synchronization logic.
+- **Logging**: Added remote-action identification (📱) to the MC Activity Log.

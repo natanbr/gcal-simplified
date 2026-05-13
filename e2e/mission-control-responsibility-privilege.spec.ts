@@ -152,12 +152,17 @@ test.describe('Mission Control — Responsibility panel', () => {
         await app.close();
     });
 
-    test('Activity task has sport-specific buttons (Skating, Swimming, Karate)', async () => {
+    test('Activity task has a consolidated button with all sport icons', async () => {
         const { app, page } = await launchMC();
 
-        await expect(page.locator('[data-testid="mc-responsibility-activity-activity-skating"]')).toBeVisible({ timeout: 10_000 });
-        await expect(page.locator('[data-testid="mc-responsibility-activity-activity-swimming"]')).toBeVisible({ timeout: 5000 });
-        await expect(page.locator('[data-testid="mc-responsibility-activity-activity-karate"]')).toBeVisible({ timeout: 5000 });
+        const activityBtn = page.locator('[data-testid="mc-responsibility-add-activity"]');
+        await expect(activityBtn).toBeVisible({ timeout: 10_000 });
+        
+        // Verify it contains the 4 icons (grid)
+        await expect(activityBtn.locator('text=🛼')).toBeVisible();
+        await expect(activityBtn.locator('text=⛸️')).toBeVisible();
+        await expect(activityBtn.locator('text=🏊')).toBeVisible();
+        await expect(activityBtn.locator('text=🥋')).toBeVisible();
 
         await app.close();
     });

@@ -7,6 +7,7 @@ import { autoUpdater } from 'electron-updater'
 import { authService } from './auth'
 import { apiService } from './api'
 import { weatherService } from './weather'
+import { remoteBridge } from './remote-bridge'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -97,6 +98,7 @@ app.whenReady().then(() => {
   });
 
   createWindow()
+  remoteBridge.init()
 
   // IPC Handlers
   ipcMain.handle('auth:login', async () => {
@@ -158,6 +160,9 @@ app.whenReady().then(() => {
   // Data Lists (for Settings UI)
   ipcMain.handle('data:calendars', () => apiService.getCalendars());
   ipcMain.handle('data:tasklists', () => apiService.getTaskLists());
+
+  ipcMain.handle('remote:regenerate', () => remoteBridge.regenerateKeys());
+  ipcMain.handle('remote:sync-state', (_, state) => remoteBridge.broadcastState(state));
 
   // Data Handlers (Updated)
 
