@@ -30,9 +30,10 @@ export const DayColumn: React.FC<DayColumnProps> = React.memo(({ day, events, co
         const hours = Array.from({ length: endHour - startHour }, (_, idx) => startHour + idx);
 
         // Hourly events processing - events prop is now already filtered and partitioned
-        const hourlyEvents = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
-
-        const hourlyGroups = groupOverlappingEvents(hourlyEvents);
+        // ⚡ Bolt Performance: Do not redundantly sort `events` here.
+        // `groupOverlappingEvents` internally copies and sorts the array.
+        // Skipping [...events].sort() saves an unnecessary O(N log N) pass.
+        const hourlyGroups = groupOverlappingEvents(events);
 
         return { hourlyGroups, hours, startHour, endHour };
     }, [events, config.activeHoursStart, config.activeHoursEnd]);
