@@ -118,4 +118,37 @@ describe('RemoteBridge (Main Process)', () => {
 
         expect(mockWin.webContents.send).not.toHaveBeenCalled();
     });
+
+    it('schedules a reconnect when channel status is CLOSED', () => {
+        vi.useFakeTimers();
+        const initSpy = vi.spyOn(bridge, 'init');
+        
+        let subscribeCallback: any;
+        const mockChannel = {
+            on: vi.fn().mockReturnThis(),
+            subscribe: vi.fn().mockImplementation((cb) => {
+                subscribeCallback = cb;
+            }),
+            removeChannel: vi.fn()
+        };
+        const mockSupabase = { 
+            channel: vi.fn().mockReturnValue(mockChannel),
+            removeChannel: vi.fn()
+        };
+        (createClient as unknown as Mock).mockReturnValue(mockSupabase);
+
+        bridge.init();
+
+        // Simulate channel close
+        expect(subscribeCallback).toBeDefined();
+        subscribeCallback('CLOSED');
+
+        // Fast-forward timers
+        vi.advanceTimersByTime(5000);
+
+        // Expect init to have been called again (once initially, once after timeout)
+        expect(initSpy).toHaveBeenCalledTimes(2);
+        
+        vi.useRealTimers();
+    });
 });

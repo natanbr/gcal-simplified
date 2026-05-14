@@ -6,6 +6,7 @@ export class RemoteBridge {
     private supabase: SupabaseClient | null = null;
     private channel: RealtimeChannel | null = null;
     private seenIds = new Set<string>();
+    private reconnectTimeout: NodeJS.Timeout | null = null;
 
     init() {
         console.log('[RemoteBridge] --- INIT CALLED ---');
@@ -20,7 +21,14 @@ export class RemoteBridge {
             return;
         }
 
-        this.supabase = createClient(url, key);
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+
+        if (!this.supabase) {
+            this.supabase = createClient(url, key);
+        }
 
         const config = store.get();
         let roomId = config.remoteRoomId;
@@ -31,6 +39,10 @@ export class RemoteBridge {
             roomId = crypto.randomUUID();
             remoteKey = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
             store.set({ ...config, remoteRoomId: roomId, remoteKey });
+        }
+
+        if (this.channel) {
+            this.supabase.removeChannel(this.channel);
         }
 
         this.channel = this.supabase.channel(`remote-control:${roomId}`);
@@ -87,6 +99,42 @@ export class RemoteBridge {
             })
             .subscribe((status, err) => {
                 console.log(`[RemoteBridge] Supabase Realtime status: ${status}`, err || '');
+                if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                    console.error(`[RemoteBridge] Channel disconnected (Status: ${status}). Scheduling reconnect...`);
+                    
+                    this.sendToRenderer('remote-control:action', {
+                        type: 'ADD_LOG',
+                        log: {
+                            id: Math.random().toString(36).slice(2, 9),
+                            timestamp: new Date().toISOString(),
+                            icon: '⚠️',
+                            message: 'Remote connection lost. Reconnecting...',
+                            type: 'system',
+                            colorKey: 'system',
+                            totalTokens: 0, // Mock fields for log compatibility
+                            bankTokens: 0
+                        }
+                    });
+
+                    this.reconnectTimeout = setTimeout(() => {
+                        console.log('[RemoteBridge] Attempting to reconnect channel...');
+                        this.init();
+                    }, 5000);
+                } else if (status === 'SUBSCRIBED') {
+                    this.sendToRenderer('remote-control:action', {
+                        type: 'ADD_LOG',
+                        log: {
+                            id: Math.random().toString(36).slice(2, 9),
+                            timestamp: new Date().toISOString(),
+                            icon: '📡',
+                            message: 'Remote control online',
+                            type: 'system',
+                            colorKey: 'system',
+                            totalTokens: 0,
+                            bankTokens: 0
+                        }
+                    });
+                }
             });
     }
 

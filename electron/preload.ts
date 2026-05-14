@@ -29,6 +29,7 @@ const ALLOWED_ON_CHANNELS = [
   'update:downloaded',
   'update:error',
   'remote-control:action',
+  'remote:request-sync',
 ];
 
 // --------- Expose some API to the Renderer process ---------
