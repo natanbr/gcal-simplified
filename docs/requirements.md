@@ -142,5 +142,5 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 - **UI Unification**: Standardized Responsibility panel layout with action buttons on the right side.
 - **Activity Consolidation**: Merged multiple sport buttons into a single 4-icon grid button for cleaner mobile/desktop UX.
-- **Remote Stability**: Resolved all build-time TypeScript errors, implemented strict IPC message validation, and optimized Supabase Realtime synchronization logic.
+- **Remote Stability**: Resolved all build-time TypeScript errors, implemented strict IPC message validation, and optimized Supabase Realtime synchronization logic. Added VITE_SUPABASE keys to Electron main process Vite define block to fix production connectivity.
 - **Logging**: Added remote-action identification (📱) to the MC Activity Log.

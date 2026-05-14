@@ -27,9 +27,8 @@
 | **Requirements Brief** | PM | ✅ Done | [Blueprint](file:///c:/Users/dev/Documents/Projects/gcal-simplified-main/docs/tasks/mc-ui-refinement-brief.md) |
 | **Architect ADR** | Architect | ✅ Done | [ADR](file:///c:/Users/dev/Documents/Projects/gcal-simplified-main/docs/tasks/mc-ui-refinement-adr.md) |
 | UI/UX Mockups | UI/UX | ✅ Done | [Mockup](file:///C:/Users/dev/.gemini/antigravity/brain/b1498d5c-8310-4320-9159-5b55ae0f1196/mc_remote_new_layout_1778699074317.png) |
-| **TDD (RED)** | QA | 🟡 In Progress | Writing log snapshot tests |
-| **Implementation** | Developer | ⚪ Waiting | |
-|
+| **TDD (RED)** | QA | ✅ Done | 444 unit tests passing |
+| **Implementation** | Developer | ✅ Done | v0.0.26 Released |
 
 ---
 
