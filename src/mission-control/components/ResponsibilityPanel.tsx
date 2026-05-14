@@ -103,22 +103,34 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                     {task.icon}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                        fontSize: 13,
-                        fontWeight: 900,
-                        color: 'var(--mc-text)',
-                        lineHeight: 1.1,
-                    }}>
-                        {task.label}
-                    </div>
-                    <div style={{
-                        fontSize: 10,
-                        color: 'var(--mc-text-muted)',
-                        fontWeight: 700,
-                        marginTop: 2,
-                        lineHeight: 1.2,
-                    }}>
-                        {task.description}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{
+                            fontSize: 13,
+                            fontWeight: 900,
+                            color: 'var(--mc-text)',
+                            lineHeight: 1.1,
+                        }}>
+                            {task.label}
+                        </div>
+                        <div
+                            title={task.description}
+                            style={{
+                                background: 'rgba(160,150,230,0.15)',
+                                color: 'var(--mc-text-dim)',
+                                borderRadius: '50%',
+                                width: 16,
+                                height: 16,
+                                fontSize: 10,
+                                fontWeight: 900,
+                                cursor: 'help',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                            }}
+                        >
+                            ?
+                        </div>
                     </div>
                 </div>
                 {isComplete && (
@@ -152,16 +164,15 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                 </div>
 
                 {/* Progress label */}
-                <div style={{
-                    fontSize: 10,
-                    fontWeight: 800,
-                    color: isComplete ? '#a87c00' : inProgress ? 'var(--mc-text-muted)' : 'var(--mc-text-dim)',
-                }}>
-                    {isComplete
-                        ? task.rewardLabel
-                        : `${task.pointsEarned} / ${task.pointsRequired} completed`
-                    }
-                </div>
+                {isComplete && (
+                    <div style={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color: '#a87c00',
+                    }}>
+                        {task.rewardLabel}
+                    </div>
+                )}
             </div>
 
             {/* Right side: Action Buttons (Spans Rows 1-2) */}
@@ -221,7 +232,7 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                                 background: 'linear-gradient(180deg, #ffe880 0%, #f7c948 100%)',
                                 border: '1.5px solid rgba(247,201,72,0.6)',
                                 borderRadius: 12,
-                                padding: '0 16px',
+                                padding: '8px 24px',
                                 fontSize: 13,
                                 fontWeight: 900,
                                 color: '#5a3e00',
@@ -234,9 +245,20 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                                 justifyContent: 'center',
                                 gap: 6,
                                 height: '100%',
-                                minWidth: 90
+                                minWidth: 100,
+                                position: 'relative'
                             }}
                         >
+                            <span style={{ 
+                                position: 'absolute', 
+                                top: 4, 
+                                right: 6, 
+                                fontSize: 13, 
+                                fontWeight: 900, 
+                                color: '#7a5a00' 
+                            }}>
+                                +1
+                            </span>
                             {(() => {
                                 // Force 4 icons for Activity task to handle stale localStorage state
                                 const activities = task.id === 'activity' 
@@ -253,9 +275,10 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                                         <div style={{ 
                                             display: 'grid', 
                                             gridTemplateColumns: 'repeat(2, 1fr)', 
-                                            gap: '2px 6px',
-                                            fontSize: 16,
-                                            lineHeight: 1.1
+                                            gap: '4px',
+                                            fontSize: 20,
+                                            lineHeight: 1.1,
+                                            marginTop: 2
                                         }}>
                                             {activities.map((act, i) => (
                                                 <span key={i} title={act.label}>{act.emoji}</span>
@@ -263,9 +286,8 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                                         </div>
                                     );
                                 }
-                                return <span style={{ fontSize: 24 }}>{task.icon || '⭐'}</span>;
+                                return <span style={{ fontSize: 28 }}>{task.icon || '⭐'}</span>;
                             })()}
-                            <span style={{ whiteSpace: 'nowrap' }}>+1 Point</span>
                         </motion.button>
                     )}
                 </AnimatePresence>

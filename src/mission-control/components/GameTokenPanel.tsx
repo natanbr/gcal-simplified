@@ -153,11 +153,29 @@ export function GameTokenPanel() {
                     🐍
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)', lineHeight: 1.1 }}>
-                        Game Tokens
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--mc-text-muted)', fontWeight: 700, marginTop: 2, lineHeight: 1.2 }}>
-                        Earn 1/day with 10+ tokens in bank
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)', lineHeight: 1.1 }}>
+                            Game Tokens
+                        </div>
+                        <div
+                            title="Earn 1/day with 10+ tokens in bank"
+                            style={{
+                                background: 'rgba(160,150,230,0.15)',
+                                color: 'var(--mc-text-dim)',
+                                borderRadius: '50%',
+                                width: 16,
+                                height: 16,
+                                fontSize: 10,
+                                fontWeight: 900,
+                                cursor: 'help',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                            }}
+                        >
+                            ?
+                        </div>
                     </div>
                 </div>
 
