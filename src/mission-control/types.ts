@@ -211,4 +211,5 @@ export type MCAction = (
     | { type: 'CONSUME_GAME_TOKEN' }
     | { type: 'RESET_GAME_TOKENS' }
     | { type: 'TRIGGER_ANIMATION'; animation: 'fireworks' | 'confetti' | 'confetti-fireworks' | 'good-job' | 'too-loud' }
+    | { type: 'SNAKE_DIR'; dir: 'up' | 'down' | 'left' | 'right' }
 ) & { isRemote?: boolean };

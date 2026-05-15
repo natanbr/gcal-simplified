@@ -14,6 +14,20 @@ export function useRemoteControl() {
 
         const unsubscribe = ipc.on('remote-control:action', (action: import('../types').MCAction) => {
             console.log('Remote action received:', action);
+            
+            if (action.type === 'SNAKE_DIR') {
+                const keyMap: Record<string, string> = {
+                    up: 'ArrowUp',
+                    down: 'ArrowDown',
+                    left: 'ArrowLeft',
+                    right: 'ArrowRight'
+                };
+                if (keyMap[action.dir]) {
+                    window.dispatchEvent(new KeyboardEvent('keydown', { key: keyMap[action.dir] }));
+                }
+                return;
+            }
+
             dispatch({ ...action, isRemote: true });
         });
 

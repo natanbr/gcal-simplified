@@ -29,6 +29,7 @@
 | UI/UX Mockups | UI/UX | ✅ Done | [Mockup](file:///C:/Users/dev/.gemini/antigravity/brain/b1498d5c-8310-4320-9159-5b55ae0f1196/mc_remote_new_layout_1778699074317.png) |
 | **TDD (RED)** | QA | ✅ Done | 444 unit tests passing |
 | **Implementation** | Developer | ✅ Done | v0.0.26 Released |
+| **Snake Game Remote Controller** | Developer | ✅ Done | Added SnakeController to mc-remote and KeyboardEvent dispatch to gcal-simplified |
 
 ---
 
