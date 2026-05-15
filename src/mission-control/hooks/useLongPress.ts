@@ -27,9 +27,11 @@ export function useLongPress(
     thresholdMs = 2000,
 ): UseLongPressResult {
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isPressedRef = useRef(false);
     const firedRef = useRef(false);
 
     const onPointerDown = useCallback(() => {
+        isPressedRef.current = true;
         firedRef.current = false;
         timerRef.current = setTimeout(() => {
             firedRef.current = true;
@@ -42,12 +44,19 @@ export function useLongPress(
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
-        if (!firedRef.current) {
+        if (isPressedRef.current && !firedRef.current) {
             onShortPress();
         }
+        isPressedRef.current = false;
     }, [onShortPress]);
 
-    const onPointerLeave = onPointerUp; // cancel on leave = same as release
+    const onPointerLeave = useCallback(() => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        isPressedRef.current = false;
+    }, []);
 
     // Cleanup on unmount
     useEffect(() => {

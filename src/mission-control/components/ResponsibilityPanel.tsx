@@ -53,7 +53,6 @@ interface TaskCardProps {
 function ResponsibilityCard({ task }: TaskCardProps) {
     const dispatch = useMCDispatch();
     const isComplete = task.completedAt !== null;
-    const inProgress = !isComplete && task.pointsEarned > 0;
 
     return (
         <motion.div

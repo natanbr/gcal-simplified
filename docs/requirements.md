@@ -156,3 +156,4 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **Subtitles**: Moved card subtitles (Responsibility & Game Tokens) to hoverable `?` help buttons next to titles to reduce visual clutter.
 - **Counters**: Removed redundant `x / y completed` counters from Responsibility cards, relying purely on visual token progress.
 - **Buttons**: Adjusted action buttons to feature a top-right `+1` indicator. Increased emoji icon sizes for the consolidated Activity button.
+- **Bug Fixes**: Fixed an infinite reconnection loop in `RemoteBridge` caused by clearing the Supabase channel. Fixed a bug in `useLongPress` where hovering and leaving the minimize button would accidentally trigger a short-press to minimize the mission overlay.

@@ -45,11 +45,12 @@ export class RemoteBridge {
             this.supabase.removeChannel(this.channel);
         }
 
-        this.channel = this.supabase.channel(`remote-control:${roomId}`);
+        const currentChannel = this.supabase.channel(`remote-control:${roomId}`);
+        this.channel = currentChannel;
         
         console.log(`[RemoteBridge] Initializing. Room ID: ${roomId}`);
 
-        this.channel
+        currentChannel
             .on('broadcast', { event: 'action' }, (payload: { payload: { key: string; action: any; msgId?: string; timestamp?: number } }) => {
                 console.log('[RemoteBridge] Broadcast received:', JSON.stringify(payload, null, 2));
                 const { key: receivedKey, action, msgId, timestamp } = payload.payload || {};
@@ -98,6 +99,8 @@ export class RemoteBridge {
                 }
             })
             .subscribe((status, err) => {
+                if (this.channel !== currentChannel) return;
+                
                 console.log(`[RemoteBridge] Supabase Realtime status: ${status}`, err || '');
                 if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
                     console.error(`[RemoteBridge] Channel disconnected (Status: ${status}). Scheduling reconnect...`);

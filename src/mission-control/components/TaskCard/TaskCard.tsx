@@ -21,7 +21,7 @@ const ICON_MAP: Record<string, string> = {
     Dog:           '🐕',
     Pill:          '💊',
 };
-const iconEmoji = (name: string) => ICON_MAP[name] ?? '⭐';
+const iconEmoji = (name: string) => ICON_MAP[name] ?? (name.match(/^[A-Za-z]+$/) ? '⭐' : name);
 
 interface TaskCardProps {
     task: MissionTask;
