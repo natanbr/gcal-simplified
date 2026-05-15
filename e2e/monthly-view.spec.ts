@@ -28,7 +28,7 @@ test.describe('Monthly View', () => {
         await page.waitForTimeout(2000);
 
         // Wait for either login screen or dashboard to appear
-        const loginScreen = page.locator('[data-testid="login-screen"]');
+        const loginScreen = page.locator('[data-testid="login-button"]');
         const dashboard = page.locator('[data-testid="calendar-grid"]');
         
         await Promise.race([
@@ -70,7 +70,7 @@ test.describe('Monthly View', () => {
         await page.waitForTimeout(2000);
 
         // Wait for either login screen or dashboard to appear
-        const loginScreen = page.locator('[data-testid="login-screen"]');
+        const loginScreen = page.locator('[data-testid="login-button"]');
         const dashboard = page.locator('[data-testid="calendar-grid"]');
         
         await Promise.race([
@@ -121,7 +121,7 @@ test.describe('Monthly View', () => {
         await page.waitForTimeout(2000);
 
         // Wait for either login screen or dashboard to appear
-        const loginScreen = page.locator('[data-testid="login-screen"]');
+        const loginScreen = page.locator('[data-testid="login-button"]');
         const dashboard = page.locator('[data-testid="calendar-grid"]');
         
         await Promise.race([
