@@ -151,4 +151,94 @@ describe('RemoteBridge (Main Process)', () => {
         
         vi.useRealTimers();
     });
+
+    it('ignores duplicate messages with same msgId', () => {
+        const mockWin = { webContents: { send: vi.fn() } };
+        (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+
+        let callback: any;
+        const mockChannel = { 
+            on: vi.fn().mockImplementation((_type, _config, cb) => {
+                callback = cb;
+                return mockChannel;
+            }), 
+            subscribe: vi.fn() 
+        };
+        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+
+        bridge.init();
+
+        // Send first message
+        callback({
+            payload: {
+                key: 'secret-key',
+                action: { type: 'ADD_TOKEN' },
+                msgId: 'unique-123'
+            }
+        });
+        expect(mockWin.webContents.send).toHaveBeenCalledTimes(1);
+
+        // Send same message again
+        callback({
+            payload: {
+                key: 'secret-key',
+                action: { type: 'ADD_TOKEN' },
+                msgId: 'unique-123'
+            }
+        });
+        expect(mockWin.webContents.send).toHaveBeenCalledTimes(1); // Still 1
+    });
+
+    it('ignores stale messages older than 15 seconds', () => {
+        const mockWin = { webContents: { send: vi.fn() } };
+        (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+
+        let callback: any;
+        const mockChannel = { 
+            on: vi.fn().mockImplementation((_type, _config, cb) => {
+                callback = cb;
+                return mockChannel;
+            }), 
+            subscribe: vi.fn() 
+        };
+        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+
+        bridge.init();
+
+        // Simulate message from 20 seconds ago
+        callback({
+            payload: {
+                key: 'secret-key',
+                action: { type: 'ADD_TOKEN' },
+                timestamp: Date.now() - 20000 
+            }
+        });
+        expect(mockWin.webContents.send).not.toHaveBeenCalled();
+    });
+
+    it('forwards SYNC_REQUEST as remote:request-sync event', () => {
+        const mockWin = { webContents: { send: vi.fn() } };
+        (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+
+        let callback: any;
+        const mockChannel = { 
+            on: vi.fn().mockImplementation((_type, _config, cb) => {
+                callback = cb;
+                return mockChannel;
+            }), 
+            subscribe: vi.fn() 
+        };
+        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+
+        bridge.init();
+
+        callback({
+            payload: {
+                key: 'secret-key',
+                action: { type: 'SYNC_REQUEST' }
+            }
+        });
+        
+        expect(mockWin.webContents.send).toHaveBeenCalledWith('remote:request-sync', null);
+    });
 });

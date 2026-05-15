@@ -54,4 +54,25 @@ describe('useRemoteControl', () => {
         unmount();
         expect(unsubscribeMock).toHaveBeenCalled();
     });
+
+    it('dispatches keyboard events for SNAKE_DIR action', () => {
+        const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
+        renderHook(() => useRemoteControl());
+
+        const listener = (window.ipcRenderer.on as unknown as vi.Mock).mock.calls[0][1];
+        
+        listener({ type: 'SNAKE_DIR', dir: 'up' });
+
+        expect(dispatchEventSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: 'keydown',
+                key: 'ArrowUp'
+            })
+        );
+        
+        // Should NOT dispatch to MC store
+        expect(mockDispatch).not.toHaveBeenCalled();
+
+        dispatchEventSpy.mockRestore();
+    });
 });

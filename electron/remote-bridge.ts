@@ -51,7 +51,7 @@ export class RemoteBridge {
         console.log(`[RemoteBridge] Initializing. Room ID: ${roomId}`);
 
         currentChannel
-            .on('broadcast', { event: 'action' }, (payload: { payload: { key: string; action: any; msgId?: string; timestamp?: number } }) => {
+            .on('broadcast', { event: 'action' }, (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => {
                 console.log('[RemoteBridge] Broadcast received:', JSON.stringify(payload, null, 2));
                 const { key: receivedKey, action, msgId, timestamp } = payload.payload || {};
                 
@@ -165,16 +165,20 @@ export class RemoteBridge {
         const config = store.get();
         if (!config.remoteRoomId || !config.remoteKey) return;
 
-        console.log('[RemoteBridge] Broadcasting state update...');
-        await this.channel.send({
-            type: 'broadcast',
-            event: 'state-update',
-            payload: {
-                key: config.remoteKey,
-                state,
-                timestamp: Date.now()
-            }
-        });
+        try {
+            console.log('[RemoteBridge] Broadcasting state update...');
+            await this.channel.send({
+                type: 'broadcast',
+                event: 'state-update',
+                payload: {
+                    key: config.remoteKey,
+                    state,
+                    timestamp: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[RemoteBridge] Broadcast state failed:', e);
+        }
     }
 }
 
