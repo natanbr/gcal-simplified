@@ -30,3 +30,10 @@
 **Anti-Pattern: Hardcoded Colors Bypassing Design System.** The game introduces a standalone `snake.css` with raw hex values instead of utilizing Tailwind or `gcal-simplified` design tokens, violating the styling invariants.
 **Anti-Pattern: Unused Variables Breaking CI.** Leaving variables like `_livesRemaining` defined but unused in `QuizOverlay.tsx` triggers `--max-warnings 0` ESLint failures. Strict lint hygiene must be maintained before merging.
 **Regression Risk: Missing Coverage.** The core game engine (`useSnakeGame.ts`) and React overlays were committed without corresponding Vitest unit tests, while only `additionQuiz.test.ts` was implemented.
+## 2026-05-15 - Snake Game Remote & Dashboard Refactoring
+
+**Pattern: Refactor Large Dashboard Components.** When a dashboard component (like `MainController.tsx`) exceeds the 300-line limit due to multiple distinct sections, extract each logical section (Missions, Responsibilities, etc.) into its own functional component. This maintains clean code hierarchy and makes the main orchestrator easier to scan.
+
+**Pattern: Type-Safe Broadcast Listeners.** When listening for Supabase broadcast events, avoid using `any` in the callback signature. Instead, use `(payload) => { ... }` and cast the internal `payload.payload` to a specific interface or `Record<string, unknown>` to maintain type safety and catch potential data drift from the host.
+
+**Invariant: Remote Keyboard Injection.** To control a complex game engine from a remote source without deep state plumbing, use `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Arrow...' }))`. This allows the existing engine to treat remote inputs identically to physical keyboard events, reducing regression risk.
