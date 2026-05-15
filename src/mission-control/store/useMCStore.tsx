@@ -202,6 +202,8 @@ function useRemoteSync(state: MCState) {
         const syncData = {
             bankCount: stateRef.current.bankCount,
             gameTokens: stateRef.current.gameTokens,
+            activeMission: stateRef.current.activeMission,
+            missionTimeRemaining: stateRef.current.missionTimeRemaining,
             responsibilities: stateRef.current.responsibilities.map(r => ({
                 id: r.id,
                 pointsEarned: r.pointsEarned,
