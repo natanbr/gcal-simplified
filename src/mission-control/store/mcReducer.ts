@@ -390,15 +390,10 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 missions: state.missions.map(m => {
                     if (m.phase !== action.missionPhase) return m;
-                    // Adjust durationMins if mission already started; otherwise adjust endsAt HH:MM
-                    if (m.startedAt && m.durationMins != null) {
-                        return { ...m, durationMins: Math.max(1, m.durationMins + action.deltaMinutes) };
-                    }
-                    const [hh, mm] = m.endsAt.split(':').map(Number);
-                    const totalMins = Math.max(0, Math.min(23 * 60 + 59, hh * 60 + mm + action.deltaMinutes));
-                    const newH = String(Math.floor(totalMins / 60)).padStart(2, '0');
-                    const newM = String(totalMins % 60).padStart(2, '0');
-                    return { ...m, endsAt: `${newH}:${newM}` };
+                    // Ignore adjustments if mission is not actively running
+                    if (!m.active || !m.startedAt || m.durationMins == null) return m;
+                    
+                    return { ...m, durationMins: Math.max(1, m.durationMins + action.deltaMinutes) };
                 }),
             };
         }
