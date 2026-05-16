@@ -324,19 +324,16 @@ describe('mcReducer — ADJUST_MISSION_END', () => {
         expect(morningMission(after).durationMins).toBe(1);
     });
 
-    it('adjusts endsAt HH:MM when mission is NOT started', () => {
+    it('ignores adjustment if the mission is NOT started (BUG FIX VERIFICATION)', () => {
         // initial state has no startedAt
         const before = morningMission(initialState).endsAt; // '06:30'
-        const [bh, bm] = before.split(':').map(Number);
-        const expectedTotal = bh * 60 + bm + 15; // +15 min
-        const expectedEndsAt = `${String(Math.floor(expectedTotal / 60)).padStart(2, '0')}:${String(expectedTotal % 60).padStart(2, '0')}`;
 
         const state = mcReducer(initialState, {
             type: 'ADJUST_MISSION_END',
             missionPhase: 'morning',
             deltaMinutes: 15,
         });
-        expect(morningMission(state).endsAt).toBe(expectedEndsAt);
+        expect(morningMission(state).endsAt).toBe(before);
     });
 
     it('does not affect the other mission phase', () => {
