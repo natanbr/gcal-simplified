@@ -199,10 +199,16 @@ function useRemoteSync(state: MCState) {
     stateRef.current = state;
 
     const broadcast = React.useCallback(() => {
+        const activeMissionObj = stateRef.current.missions.find(
+            m => m.phase === stateRef.current.activeMission && m.active
+        );
+
         const syncData = {
             bankCount: stateRef.current.bankCount,
             gameTokens: stateRef.current.gameTokens,
             activeMission: stateRef.current.activeMission,
+            missionStartedAt: activeMissionObj?.startedAt ?? null,
+            missionDurationMins: activeMissionObj?.durationMins ?? null,
             responsibilities: stateRef.current.responsibilities.map(r => ({
                 id: r.id,
                 pointsEarned: r.pointsEarned,
@@ -220,7 +226,7 @@ function useRemoteSync(state: MCState) {
         // Debounce state sync to avoid flooding Supabase (sync every 1s of stability)
         const timer = setTimeout(broadcast, 1000);
         return () => clearTimeout(timer);
-    }, [state.bankCount, state.gameTokens, state.responsibilities, broadcast]);
+    }, [state.bankCount, state.gameTokens, state.activeMission, state.missions, state.responsibilities, broadcast]);
 
     React.useEffect(() => {
         // Listen for explicit sync requests from remotes
