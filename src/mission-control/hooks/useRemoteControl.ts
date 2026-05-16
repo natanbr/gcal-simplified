@@ -9,10 +9,11 @@ export function useRemoteControl() {
     const dispatch = useMCDispatch();
 
     useEffect(() => {
-        const ipc = (window as unknown as { ipcRenderer: any }).ipcRenderer;
-        if (!ipc) return;
+        if (!window.ipcRenderer) return;
+        const ipc = window.ipcRenderer;
 
-        const unsubscribe = ipc.on('remote-control:action', (action: import('../types').MCAction) => {
+        const unsubscribe = ipc.on('remote-control:action', (...args: unknown[]) => {
+            const action = args[0] as import('../types').MCAction;
             console.log('Remote action received:', action);
             
             if (action.type === 'SNAKE_DIR') {

@@ -54,6 +54,7 @@ export function useCalendarData() {
         fetchingMonthsRef.current.add(cacheKey);
 
         try {
+            if (!window.ipcRenderer) throw new Error('ipcRenderer not available');
             const fetchedEvents = await window.ipcRenderer.invoke(
                 'data:events',
                 gridStart.toISOString(),

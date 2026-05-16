@@ -6,12 +6,10 @@ export const LoginScreen: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
 
     const handleLogin = async () => {
+        if (!window.ipcRenderer) return;
         setIsLoading(true);
         try {
-            // Invoke the IPC handler we defined in main.ts
             await window.ipcRenderer.invoke('auth:login');
-            // The success handling will be done by listening to 'auth:success' 
-            // or relying on the App component's auth check
         } catch (error) {
             console.error("Login failed", error);
             setIsLoading(false);

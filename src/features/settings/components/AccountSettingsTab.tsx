@@ -23,9 +23,11 @@ export const AccountSettingsTab: React.FC<AccountSettingsTabProps> = ({ onLogout
                     <button
                         onClick={async () => {
                             setIsReconnecting(true);
+                            const ipc = window.ipcRenderer;
+                            if (!ipc) return;
                             try {
-                                await window.ipcRenderer.invoke('auth:logout');
-                                await window.ipcRenderer.invoke('auth:login');
+                                await ipc.invoke('auth:logout');
+                                await ipc.invoke('auth:login');
                                 // Reload settings data after re-auth
                                 await loadData();
                             } catch (e) {

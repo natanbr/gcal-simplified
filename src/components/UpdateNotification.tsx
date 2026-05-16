@@ -111,7 +111,7 @@ export const UpdateNotification: React.FC = () => {
     const handleDownload = async () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const info = updateAvailable as any;
-        if (!info) return;
+        if (!info || !window.ipcRenderer) return;
 
         setIsDownloading(true);
         setError(null);
@@ -125,6 +125,7 @@ export const UpdateNotification: React.FC = () => {
     };
 
     const handleInstall = async () => {
+        if (!window.ipcRenderer) return;
         try {
             await window.ipcRenderer.invoke('update:install');
         } catch (e) {

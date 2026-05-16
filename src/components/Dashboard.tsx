@@ -121,12 +121,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
           
           if (isInitial) {
              setLoadingMessage('Fetching Tasks...');
+             if (!window.ipcRenderer) throw new Error('ipcRenderer unavailable');
              const fetchedTasks = await window.ipcRenderer.invoke('data:tasks');
              setTasks(fetchedTasks as AppTask[]);
           }
           
           if (isInitial) {
              setLoadingMessage('Updating Weather...');
+             if (!window.ipcRenderer) throw new Error('ipcRenderer unavailable');
              const fetchedWeather = await window.ipcRenderer.invoke('weather:get', 48.37, -123.72);
              setWeather(fetchedWeather as WeatherData);
           }
@@ -134,6 +136,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
 
           if (isInitial) {
              setLoadingMessage('Loading Settings...');
+             if (!window.ipcRenderer) throw new Error('ipcRenderer unavailable');
              const fetchedSettings = await window.ipcRenderer.invoke('settings:get');
              setConfig(fetchedSettings as UserConfig);
           }
@@ -177,8 +180,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
        refreshEvents(representiveDateForFetch, config.weekStartDay);
        
        // Also background refresh other data
-       window.ipcRenderer.invoke('data:tasks').then(fetchedTasks => setTasks(fetchedTasks as AppTask[])).catch(console.error);
-       window.ipcRenderer.invoke('weather:get', 48.37, -123.72).then(fetchedWeather => setWeather(fetchedWeather as WeatherData)).catch(console.error);
+       const ipc = window.ipcRenderer;
+       if (ipc) {
+           ipc.invoke('data:tasks').then(fetchedTasks => setTasks(fetchedTasks as AppTask[])).catch(console.error);
+           ipc.invoke('weather:get', 48.37, -123.72).then(fetchedWeather => setWeather(fetchedWeather as WeatherData)).catch(console.error);
+       }
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [refreshEvents, viewMode, today, weekOffset, monthOffset, config.weekStartDay]);

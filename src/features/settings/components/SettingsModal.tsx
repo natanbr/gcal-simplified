@@ -24,6 +24,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     const [activeSection, setActiveSection] = useState<'account' | 'general' | 'calendars' | 'tasks' | 'mission-control'>('account');
 
     const loadData = async () => {
+        if (!window.ipcRenderer) return;
         try {
             setIsLoading(true);
             setLoadError(null);
@@ -53,6 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     }, []);
 
     const handleSave = async () => {
+        if (!window.ipcRenderer) return;
         try {
             await window.ipcRenderer.invoke('settings:save', config);
             onSave();
@@ -63,10 +65,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     };
 
     const handleCheckUpdates = async () => {
+        if (!window.ipcRenderer) return;
         setIsCheckingUpdates(true);
         try {
             await window.ipcRenderer.invoke('update:check');
-            // Give visual feedback for at least 2 seconds
             setTimeout(() => setIsCheckingUpdates(false), 2000);
         } catch (e) {
             console.error("Manual update check failed", e);

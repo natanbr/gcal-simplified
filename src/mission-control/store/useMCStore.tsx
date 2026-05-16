@@ -192,71 +192,7 @@ export function loadPersistedState(): MCState {
     }
 }
 
-// ---- Remote Sync Hook ----
 
-function useRemoteSync(state: MCState) {
-    const stateRef = React.useRef(state);
-    stateRef.current = state;
-
-    const broadcast = React.useCallback(() => {
-        const activeMissionObj = stateRef.current.missions.find(
-            m => m.phase === stateRef.current.activeMission && m.active
-        );
-
-        const syncData = {
-            bankCount: stateRef.current.bankCount,
-            gameTokens: stateRef.current.gameTokens,
-            activeMission: stateRef.current.activeMission,
-            missionStartedAt: activeMissionObj?.startedAt ?? null,
-            missionDurationMins: activeMissionObj?.durationMins ?? null,
-            responsibilities: stateRef.current.responsibilities.map(r => ({
-                id: r.id,
-                pointsEarned: r.pointsEarned,
-                pointsRequired: r.pointsRequired,
-                completedAt: r.completedAt
-            }))
-        };
-        // @ts-ignore - ipcRenderer is exposed via preload
-        if (window.ipcRenderer) {
-            window.ipcRenderer.invoke('remote:sync-state', syncData);
-        }
-    }, []);
-
-    React.useEffect(() => {
-        // Debounce state sync to avoid flooding Supabase (sync every 1s of stability)
-        const timer = setTimeout(broadcast, 1000);
-        return () => clearTimeout(timer);
-    }, [state.bankCount, state.gameTokens, state.activeMission, state.missions, state.responsibilities, broadcast]);
-
-    React.useEffect(() => {
-        // Listen for explicit sync requests from remotes
-        // @ts-ignore
-        if (!window.ipcRenderer) return;
-        // @ts-ignore
-        const unsubscribe = window.ipcRenderer.on('remote:request-sync', () => {
-            broadcast();
-        });
-        return () => unsubscribe && unsubscribe();
-    }, [broadcast]);
-}
-
-export function MCStoreProvider({ children }: { children: React.ReactNode }) {
-    const [state, dispatch] = React.useReducer(mcReducer, initialState, loadPersistedState);
-
-    // Persist state to localStorage on every change
-    React.useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }, [state]);
-
-    // Sync state to Remote
-    useRemoteSync(state);
-
-    return (
-        <MCContext.Provider value={{ state, dispatch }}>
-            {children}
-        </MCContext.Provider>
-    );
-}
 
 // ---- Context ----
 

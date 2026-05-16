@@ -537,8 +537,8 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                 <motion.button
                                                     whileTap={{ scale: 0.95 }}
                                                     onClick={async () => {
-                                                        if ((window as any).ipcRenderer) {
-                                                            const newKeys = await (window as any).ipcRenderer.invoke('remote:regenerate') as { roomId: string; remoteKey: string };
+                                                        if (window.ipcRenderer) {
+                                                            const newKeys = await window.ipcRenderer.invoke('remote:regenerate') as { roomId: string; remoteKey: string };
                                                             setDraft(prev => ({ 
                                                                 ...prev, 
                                                                 remoteRoomId: newKeys.roomId, 
