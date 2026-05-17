@@ -25,3 +25,8 @@
 **Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
 **Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
 **Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
+
+## 2025-05-18 - [Weak PRNG for Security Keys and Identifiers]
+**Vulnerability:** `Math.random()` was used to generate `remoteKey` (used for authentication in the Supabase remote control bridge), calendar event fallback IDs, and activity log IDs. `Math.random()` is not cryptographically secure, meaning generated keys can potentially be predicted, leading to unauthorized access.
+**Learning:** Functions like `Math.random()` are predictable. When generating authentication tokens, cryptographic keys, or global unique identifiers, predictable RNGs expose the system to token prediction attacks.
+**Prevention:** Always use cryptographically secure pseudo-random number generators (CSPRNG). Use `crypto.randomBytes().toString('hex')` for random strings and `crypto.randomUUID()` for unique IDs in Node.js/Electron, or `self.crypto.randomUUID()` in the browser.
