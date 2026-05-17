@@ -30,3 +30,8 @@
 **Vulnerability:** Electron apps by default may inherit OS/Chromium defaults for permission handling (camera, mic, geolocation, etc.) if not explicitly denied.
 **Learning:** The application lacked explicit handlers for `setPermissionRequestHandler` and `setPermissionCheckHandler` in `session.defaultSession`, leaving potential openings for unauthorized access to device resources if the renderer process was somehow compromised.
 **Prevention:** Implement a strict, explicit default-deny policy in `electron/main.ts` by returning `false` for all permission requests and checks, following defense-in-depth principles. This pattern should be standard for all secure Electron applications.
+
+## 2025-05-18 - [Weak PRNG for Security Keys and Identifiers]
+**Vulnerability:** `Math.random()` was used to generate `remoteKey` (used for authentication in the Supabase remote control bridge), calendar event fallback IDs, and activity log IDs. `Math.random()` is not cryptographically secure, meaning generated keys can potentially be predicted, leading to unauthorized access.
+**Learning:** Functions like `Math.random()` are predictable. When generating authentication tokens, cryptographic keys, or global unique identifiers, predictable RNGs expose the system to token prediction attacks.
+**Prevention:** Always use cryptographically secure pseudo-random number generators (CSPRNG). Use `crypto.randomBytes().toString('hex')` for random strings and `crypto.randomUUID()` for unique IDs in Node.js/Electron, or `self.crypto.randomUUID()` in the browser.
