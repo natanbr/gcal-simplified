@@ -120,8 +120,6 @@ describe('RemoteBridge (Main Process)', () => {
         expect(mockWin.webContents.send).not.toHaveBeenCalled();
     });
 
-
-
     it('ignores duplicate messages with same msgId', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);

@@ -32,3 +32,7 @@
 ## 2025-05-19 - Removed infinite motion loops
 **Learning:** `framer-motion` `repeat: Infinity` loops trigger JS execution and layout computations on the main thread continuously, significantly degrading React performance and increasing CPU usage, especially on slower devices.
 **Action:** Replace all infinite or long-running `framer-motion` animations with pure CSS `@keyframes` and `.classes` so the browser can offload the work to the compositor thread.
+
+## 2026-03-14 - Optimize Hit Detection during Drag Events
+**Learning:** In components with high-frequency interactions like drag-and-drop (`GlobalBank.tsx`, `GoalPedestal.tsx`), performing object lookups (`cases.find(...)`) inside coordinate boundary checks for each target creates unnecessary O(N) overhead during a hot execution path.
+**Action:** Reorder logic to perform the fast, mathematical bounds check first (`x >= rect.left && ...`). If the bounds check passes, use a memoized `Map` constructed via `useMemo` for O(1) object lookups instead of iterating through arrays with `.find()`.

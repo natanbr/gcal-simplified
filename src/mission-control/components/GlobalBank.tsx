@@ -5,7 +5,7 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch } from '../store/useMCStore.tsx';
 import { Token } from './Token';
@@ -86,18 +86,34 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
   // ------------------------------------------------------------------
   // Drop handler — called by Token via onDrop(id, x, y)
   // ------------------------------------------------------------------
+  // Memoize deposit-eligible cases by ID for O(1) lookup during drag events:
+  // active, not a quick-game case, and not already full.
+  const activeCasesMap = useMemo(() => {
+    const map = new Map<number, DisplayCase>();
+    if (cases) {
+      for (const c of cases) {
+        if (c.status === 'active' && c.reward !== 'quick-game' && c.tokenCount < c.targetCount) {
+          map.set(c.id, c);
+        }
+      }
+    }
+    return map;
+  }, [cases]);
+
   const handleTokenDrop = useCallback(
     (tokenId: string, x: number, y: number): boolean => {
-      // Find the first ACTIVE case whose rect contains the drop point
-      const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
+      // Find the first eligible case whose rect contains the drop point
+      // Reordered logic: Coordinate bounds checks first, then O(1) Map lookup
+      const hit = Object.entries(layoutRects.cases).find(([_id, rect]) => {
         if (!rect) return false;
-        const caseId = Number.parseInt(id);
-        const targetCase = cases.find(c => c.id === caseId);
-        // Only deposit into active, incomplete, non-quick-game cases
-        if (!targetCase || targetCase.status !== 'active') return false;
-        if (targetCase.reward === 'quick-game') return false;
-        if (targetCase.tokenCount >= targetCase.targetCount) return false;
-        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+
+        // Bounds check first (fast)
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+          return false;
+        }
+
+        const caseId = Number.parseInt(_id);
+        return activeCasesMap.has(caseId);
       });
 
       if (!hit) {
@@ -123,7 +139,7 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
 
       return true; // consumed — Token will NOT spring back
     },
-    [cases, layoutRects, dispatch],
+    [activeCasesMap, layoutRects, dispatch],
   );
 
 

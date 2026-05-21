@@ -4,7 +4,7 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch, useMCState } from '../store/useMCStore';
 import { isWakingHour } from '../store/mcReducer';
@@ -185,6 +185,20 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
   }, [case_.tokenCount, case_.id]);
 
+  // Memoize deposit-eligible cases by ID for O(1) lookup during drag events:
+  // active, not a quick-game case, and not already full.
+  const activeCasesMap = useMemo(() => {
+    const map = new Map<number, DisplayCase>();
+    if (cases) {
+      for (const c of cases) {
+        if (c.status === 'active' && c.reward !== 'quick-game' && c.tokenCount < c.targetCount) {
+          map.set(c.id, c);
+        }
+      }
+    }
+    return map;
+  }, [cases]);
+
   const handleTokenDrop = useCallback((tokenId: string, x: number, y: number): boolean => {
     if (!layoutRects) return false;
     
@@ -205,17 +219,19 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
 
     // Check if dropped on another active Case
-    const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
+    // Reordered logic: Coordinate bounds checks first, then O(1) Map lookup
+    const hit = Object.entries(layoutRects.cases).find(([_id, rect]) => {
       if (!rect) return false;
-      const targetCaseId = Number.parseInt(id);
-      if (targetCaseId === case_.id) return false;
-      
-      const targetCase = cases.find(c => c.id === targetCaseId);
-      if (!targetCase || targetCase.status !== 'active') return false;
-      if (targetCase.reward === 'quick-game') return false;
-      if (targetCase.tokenCount >= targetCase.targetCount) return false;
 
-      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      // Bounds check first (fast)
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        return false;
+      }
+
+      const targetCaseId = Number.parseInt(_id);
+      if (targetCaseId === case_.id) return false;
+
+      return activeCasesMap.has(targetCaseId);
     });
 
     if (hit) {
@@ -235,7 +251,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
 
     return false;
-  }, [case_.id, cases, layoutRects, dispatch]);
+  }, [case_.id, activeCasesMap, layoutRects, dispatch]);
 
   const reward = case_.reward ? REWARD_MAP[case_.reward] : null;
   const isComplete = case_.status === 'active' && case_.tokenCount >= case_.targetCount;
