@@ -15,7 +15,7 @@ describe('useRemoteControl', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        (useMCDispatch as unknown as { mockReturnValue: (v: any) => void }).mockReturnValue(mockDispatch);
+        (useMCDispatch as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(mockDispatch);
         
         // Mock window.ipcRenderer
         (window as unknown as { ipcRenderer: unknown }).ipcRenderer = {

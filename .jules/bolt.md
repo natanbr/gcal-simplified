@@ -14,3 +14,7 @@
 ## 2026-03-13 - Module-level singleton state initialization issue
 **Learning:** When using a module-level singleton state pattern for hooks (like `useLiveClock`), initializing the state statically at the module level (`let currentDate = new Date()`) causes components to mount with a stale date if they are loaded much later than the script evaluation time.
 **Action:** Initialize the singleton state dynamically inside the hook when it's first used (e.g. `if (!intervalId) currentDate = new Date()`) to ensure it gets the accurate value at the time the first component actually mounts.
+
+## 2026-03-14 - Optimize Hit Detection during Drag Events
+**Learning:** In components with high-frequency interactions like drag-and-drop (`GlobalBank.tsx`, `GoalPedestal.tsx`), performing object lookups (`cases.find(...)`) inside coordinate boundary checks for each target creates unnecessary O(N) overhead during a hot execution path.
+**Action:** Reorder logic to perform the fast, mathematical bounds check first (`x >= rect.left && ...`). If the bounds check passes, use a memoized `Map` constructed via `useMemo` for O(1) object lookups instead of iterating through arrays with `.find()`.

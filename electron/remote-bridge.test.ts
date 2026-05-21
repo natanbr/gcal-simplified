@@ -123,7 +123,7 @@ describe('RemoteBridge (Main Process)', () => {
         vi.useFakeTimers();
         const initSpy = vi.spyOn(bridge, 'init');
         
-        let subscribeCallback: any;
+        let subscribeCallback: (status: string) => void;
         const mockChannel = {
             on: vi.fn().mockReturnThis(),
             subscribe: vi.fn().mockImplementation((cb) => {
@@ -156,7 +156,7 @@ describe('RemoteBridge (Main Process)', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
 
-        let callback: any;
+        let callback: (payload: { payload: unknown }) => void;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
@@ -193,7 +193,7 @@ describe('RemoteBridge (Main Process)', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
 
-        let callback: any;
+        let callback: (payload: { payload: unknown }) => void;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
@@ -220,7 +220,7 @@ describe('RemoteBridge (Main Process)', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
 
-        let callback: any;
+        let callback: (payload: { payload: unknown }) => void;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
