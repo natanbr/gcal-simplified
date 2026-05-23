@@ -18,6 +18,100 @@ import { REWARD_MAP } from '../rewardCatalogue';
 // ---- Logging Interceptor ----
 // We keep translation logic here to keep mcReducer pure and simple.
 
+function deriveSnapshots(state: MCState, action: Parameters<typeof mcReducer>[1]) {
+    let nextBank = state.bankCount;
+    let nextTotal = selectTotalWealth(state);
+
+    switch (action.type) {
+        case 'ADD_TOKEN':
+            nextBank += 1;
+            nextTotal += 1;
+            break;
+        case 'ADD_TOKENS':
+            nextBank += action.amount;
+            nextTotal += action.amount;
+            break;
+        case 'REMOVE_TOKEN':
+            if (state.bankCount > 0) {
+                nextBank -= 1;
+                nextTotal -= 1;
+            }
+            break;
+        case 'DEPOSIT_TO_CASE': {
+            const amount = Math.min(action.amount, state.bankCount);
+            nextBank -= amount;
+            break;
+        }
+        case 'MOVE_TOKEN': {
+            let valid = true;
+            if (action.from === 'bank' && state.bankCount <= 0) valid = false;
+            if (typeof action.from === 'number') {
+                const sourceCase = state.cases.find(c => c.id === action.from);
+                if (!sourceCase || sourceCase.tokenCount <= 0) valid = false;
+            }
+            if (typeof action.to === 'number') {
+                const targetCase = state.cases.find(c => c.id === action.to);
+                if (!targetCase || targetCase.status !== 'active') valid = false;
+            }
+            if (valid) {
+                if (action.from === 'bank') {
+                    nextBank -= 1;
+                }
+                if (action.to === 'bank') {
+                    nextBank += 1;
+                }
+            }
+            break;
+        }
+        case 'VACUUM_TO_CASE': {
+            if (state.bankCount > 0) {
+                const vacuumTarget = state.cases.find(c => c.id === action.caseId);
+                if (vacuumTarget) {
+                    const canAdd = Math.min(state.bankCount, vacuumTarget.targetCount - vacuumTarget.tokenCount);
+                    if (canAdd > 0) {
+                        nextBank -= canAdd;
+                    }
+                }
+            }
+            break;
+        }
+        case 'REFUND_CASE': {
+            const targetCase = state.cases.find(c => c.id === action.caseId);
+            if (targetCase) {
+                nextBank += targetCase.tokenCount;
+            }
+            break;
+        }
+        case 'CONSUME_CASE': {
+            const targetCase = state.cases.find(c => c.id === action.caseId);
+            if (targetCase) {
+                nextTotal -= targetCase.tokenCount;
+            }
+            break;
+        }
+        case 'RESET_RESPONSIBILITY': {
+            if (action.claimTokens) {
+                nextBank += action.claimTokens;
+                nextTotal += action.claimTokens;
+            }
+            break;
+        }
+        case 'COMPLETE_MISSION_ROUTINE': {
+            nextBank += action.bonusTokens;
+            nextTotal += action.bonusTokens;
+            break;
+        }
+        default:
+            break;
+    }
+
+    return {
+        totalTokens: nextTotal,
+        bankTokens: nextBank,
+        ...(action.isRemote ? { isRemote: true } : {})
+    };
+}
+
 function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState): ActivityLogEntry | null {
     const now = new Date().toISOString();
     const id = Math.random().toString(36).slice(2, 9);
@@ -37,13 +131,8 @@ function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState)
         return bold ? `**${name}**` : name;
     };
 
-    // Calculate next state to get accurate snapshots for the log
-    const nextState = mcReducer(state, action);
-    const snapshots = {
-        totalTokens: selectTotalWealth(nextState),
-        bankTokens: nextState.bankCount,
-        ...(action.isRemote ? { isRemote: true } : {})
-    };
+    const snapshots = deriveSnapshots(state, action);
+
 
     switch (action.type) {
         case 'ADD_TOKEN':

@@ -50,6 +50,7 @@ describe('RemoteBridge (Main Process)', () => {
     });
 
     afterEach(() => {
+        bridge.destroy();
         delete process.env.VITE_SUPABASE_URL;
         delete process.env.VITE_SUPABASE_ANON_KEY;
     });
@@ -125,7 +126,7 @@ describe('RemoteBridge (Main Process)', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
 
-        let callback: any;
+        let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
@@ -162,7 +163,7 @@ describe('RemoteBridge (Main Process)', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
 
-        let callback: any;
+        let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
@@ -189,7 +190,7 @@ describe('RemoteBridge (Main Process)', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
 
-        let callback: any;
+        let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
@@ -220,7 +221,7 @@ describe('RemoteBridge (Main Process)', () => {
             const mockWin = { webContents: { send: vi.fn() } };
             (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
 
-            let subscribeCallback: any;
+            let subscribeCallback!: (status: 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR', err?: string) => void;
             const mockChannel = {
                 on: vi.fn().mockReturnThis(),
                 subscribe: vi.fn().mockImplementation((cb) => {
@@ -244,9 +245,10 @@ describe('RemoteBridge (Main Process)', () => {
 
             // Ensure NO action or ADD_LOG dispatch is sent to renderer (logs suppression)
             const sendCalls = mockWin.webContents.send.mock.calls;
-            const hasAddLogOrAction = sendCalls.some(([channel, arg2]: [string, any]) => {
+            const hasAddLogOrAction = sendCalls.some((call) => {
+                const [channel, arg2] = call as [string, unknown];
                 if (channel === 'remote-control:action') {
-                    return arg2?.type === 'ADD_LOG';
+                    return (arg2 as { type?: string })?.type === 'ADD_LOG';
                 }
                 return false;
             });

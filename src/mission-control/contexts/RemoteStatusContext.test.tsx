@@ -32,7 +32,7 @@ describe('RemoteStatusContext', () => {
       return mockUnsubscribe;
     });
 
-    (window as any).ipcRenderer = {
+    (window as unknown as { ipcRenderer: unknown }).ipcRenderer = {
       invoke: mockInvoke,
       on: mockOn,
     };

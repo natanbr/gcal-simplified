@@ -5,12 +5,24 @@ import { store } from './store';
 export class RemoteBridge {
     private supabase: SupabaseClient | null = null;
     private channel: RealtimeChannel | null = null;
-    private seenIds = new Set<string>();
+    private seenIds = new Map<string, number>();
+    private cleanupInterval: NodeJS.Timeout | null = null;
     private reconnectTimeout: NodeJS.Timeout | null = null;
     private isOnline = false;
 
     getStatus(): boolean {
         return this.isOnline;
+    }
+
+    destroy() {
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+            this.cleanupInterval = null;
+        }
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
     }
 
     init() {
@@ -24,6 +36,17 @@ export class RemoteBridge {
         if (!url || !key) {
             console.error('[RemoteBridge] ERROR: Supabase credentials missing. Remote control disabled.');
             return;
+        }
+
+        if (!this.cleanupInterval) {
+            this.cleanupInterval = setInterval(() => {
+                const now = Date.now();
+                for (const [msgId, timestamp] of this.seenIds.entries()) {
+                    if (now - timestamp > 120000) {
+                        this.seenIds.delete(msgId);
+                    }
+                }
+            }, 60000);
         }
 
         if (this.reconnectTimeout) {
@@ -93,9 +116,7 @@ export class RemoteBridge {
                     
                     // Track seenId to prevent double-dispatch
                     if (msgId) {
-                        this.seenIds.add(msgId);
-                        // Clean up seenIds after 2 minutes to keep memory low
-                        setTimeout(() => this.seenIds.delete(msgId), 120000);
+                        this.seenIds.set(msgId, Date.now());
                     }
 
                     this.sendToRenderer('remote-control:action', action);

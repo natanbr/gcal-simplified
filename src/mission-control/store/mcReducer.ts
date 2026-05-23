@@ -637,12 +637,28 @@ function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: numb
 // Wrapper ensures invariants are always synced after *any* dispatch
 export function mcReducer(state: MCState, action: MCAction): MCState {
     const nextState = _mcReducer(state, action);
-    if (
-        nextState.missions !== state.missions || 
-        nextState.settings !== state.settings || 
-        nextState.creamTaskDaysLeft !== state.creamTaskDaysLeft
-    ) {
-        nextState.missions = syncCreamTask(nextState.missions, nextState.settings, nextState.creamTaskDaysLeft);
+    
+    const shouldSync = 
+        action.type === 'SET_SETTINGS' ||
+        action.type === 'COMPLETE_TASK' ||
+        action.type === 'SET_ACTIVE_MISSION' ||
+        action.type === 'RESET_MISSION' ||
+        action.type === 'RESET_MISSION_WITH_TIMER' ||
+        action.type === 'CANCEL_MISSION' ||
+        action.type === 'COMPLETE_MISSION_ROUTINE' ||
+        action.type === 'LOCK_TASK' ||
+        action.type === 'TOGGLE_WHINING' ||
+        action.type === 'ADJUST_MISSION_END';
+
+    if (shouldSync) {
+        if (
+            nextState.missions !== state.missions || 
+            nextState.settings !== state.settings || 
+            nextState.creamTaskDaysLeft !== state.creamTaskDaysLeft
+        ) {
+            nextState.missions = syncCreamTask(nextState.missions, nextState.settings, nextState.creamTaskDaysLeft);
+        }
     }
     return nextState;
 }
+

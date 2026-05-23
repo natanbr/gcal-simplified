@@ -13,7 +13,7 @@ export function useRemoteControl() {
         const ipc = window.ipcRenderer;
 
         const unsubscribe = ipc.on('remote-control:action', (...args: unknown[]) => {
-            const action = args[0] as import('../types').MCAction;
+            const action = args[0] as import('../types').MCAction | { type: 'SNAKE_DIR'; dir: string };
             console.log('Remote action received:', action);
             
             if (action.type === 'SNAKE_DIR') {

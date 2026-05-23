@@ -37,3 +37,16 @@
 **Pattern: Type-Safe Broadcast Listeners.** When listening for Supabase broadcast events, avoid using `any` in the callback signature. Instead, use `(payload) => { ... }` and cast the internal `payload.payload` to a specific interface or `Record<string, unknown>` to maintain type safety and catch potential data drift from the host.
 
 **Invariant: Remote Keyboard Injection.** To control a complex game engine from a remote source without deep state plumbing, use `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Arrow...' }))`. This allows the existing engine to treat remote inputs identically to physical keyboard events, reducing regression risk.
+
+## 2026-05-22 — Remote Status Isolation & Log Bounding
+
+**Invariant: Transient signals must NOT live in root MCState.** Supabase connection status, heartbeat events, or any high-frequency binary flag that comes from an external system must NOT be placed in `MCState`. Doing so causes every `useMCState()` consumer to re-render on each signal. Instead, use an isolated React context (`RemoteStatusContext`) that only relevant UI components subscribe to.
+
+**Invariant: Bounded Log Arrays.** `activityLogs` MUST be capped at 200 entries in the `ADD_LOG` reducer case via `.slice(0, 200)`. The 7-day age filter alone is insufficient for high-frequency signals. This must be enforced at the reducer level, not at the render level.
+
+**Pattern: Dedicated IPC Channels for Non-Action Signals.** UI status signals (connection state, sync indicators) must use their own IPC channel (e.g., `remote:status-changed`) separate from the validated `remote-control:action` channel. Mixing UI state signals with action-dispatch channels overloads a security-sensitive boundary.
+
+**Pattern: Hydration Migration for Persisted State.** When a class of data is being removed from the data model (e.g., connection log entries), a one-time migration must be applied at the `useMCStore` hydration point before the first render. Always apply both the filter AND the new cap during migration.
+
+**Invariant: `IntersectionObserver` must be mocked in Vitest.** jsdom does not implement `IntersectionObserver`. Add a `vi.fn()` mock to the global Vitest setup file whenever lazy-loading via `IntersectionObserver` is added to any component.
+
