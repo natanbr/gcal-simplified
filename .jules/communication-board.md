@@ -33,6 +33,19 @@
 
 ---
 
+## 🏃 Active Sprint: Log Bounding & Performance (v0.0.31)
+**Goal**: Resolve log list memory/rendering bloat and eliminate speculative reducer bottlenecks.
+
+| Task | Agent | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Log Cap & Suppression** | Developer | ✅ Done | Capped logs at 200, silenced heartbeat logs |
+| **Live Connection Indicator** | Developer | ✅ Done | Isolated status provider and top-bar pulsing status dot |
+| **Log List Lazy Loading** | Developer | ✅ Done | Paginated logs (30 at a time) with IntersectionObserver |
+| **Tech Debt Performance** | Developer | ✅ Done | deriveSnapshots helper (3x faster), syncCreamTask guards, interval cleanups |
+| **Pre-release & Build** | QA/Dev | ✅ Done | Passed tsc, lint, and all 475 unit tests. Deployed v0.0.31 |
+
+---
+
 ## 🏗️ Architect Decision Record (ADR)
 **Topic**: Remote Control Bridge Security
 **Status**: Approved
