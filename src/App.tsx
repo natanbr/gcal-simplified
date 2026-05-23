@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { LoginScreen } from './components/LoginScreen';
 import { MissionControl } from './mission-control/MissionControl';
@@ -6,10 +6,21 @@ import { MCStoreProvider } from './mission-control/store/MCStoreProvider';
 import { DragLayer } from './mission-control/components/DragLayer';
 import { MissionOverlay } from './mission-control/components/MissionOverlay';
 import { useMissionScheduler } from './mission-control/hooks/useMissionScheduler';
+import { useMCAutoReturn } from './mission-control/hooks/useMCAutoReturn';
 
 // ── Scheduler hook — runs at App level so it works on both views ──────────────
 function MissionSchedulerBridge() {
   useMissionScheduler();
+  return null;
+}
+
+// ── Auto-return bridge — runs only while MC view is active ────────────────────
+interface MissionAutoReturnBridgeProps {
+  onReturnToCalendar: () => void;
+}
+
+function MissionAutoReturnBridge({ onReturnToCalendar }: MissionAutoReturnBridgeProps) {
+  useMCAutoReturn(onReturnToCalendar);
   return null;
 }
 
@@ -74,6 +85,8 @@ function App() {
   const initialView: View = params.get('mc') === '1' ? 'mission-control' : 'calendar';
   const [view, setView] = useState<View>(initialView);
 
+  const handleReturnToCalendar = useCallback(() => setView('calendar'), []);
+
   return (
     <MCStoreProvider>
       <DragLayer>
@@ -87,7 +100,11 @@ function App() {
         {view === 'calendar' ? (
           <CalendarApp onSwitchToMC={() => setView('mission-control')} />
         ) : (
-          <MissionControl onBackToCalendar={() => setView('calendar')} />
+          <>
+            {/* Auto-return bridge — only active while MC view is shown */}
+            <MissionAutoReturnBridge onReturnToCalendar={handleReturnToCalendar} />
+            <MissionControl onBackToCalendar={handleReturnToCalendar} />
+          </>
         )}
       </DragLayer>
     </MCStoreProvider>

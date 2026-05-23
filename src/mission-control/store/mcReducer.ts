@@ -520,21 +520,18 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'ADD_LOG': {
-            const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-            const nowTime = new Date().getTime();
-            
-            // 1. Add new log to the front
-            // 2. Filter out anything older than 7 days based on timestamp
-            const filteredLogs = [action.log, ...(state.activityLogs || [])].filter(log => {
-                const logTime = new Date(log.timestamp).getTime();
-                return (nowTime - logTime) <= SEVEN_DAYS_MS;
-            });
-
+            const newLogs = [action.log, ...(state.activityLogs || [])].slice(0, 200);
             return {
                 ...state,
-                activityLogs: filteredLogs
+                activityLogs: newLogs
             };
         }
+
+        case 'CLEAR_LOGS':
+            return {
+                ...state,
+                activityLogs: [],
+            };
 
         case 'CHEAT_ATTEMPT':
             return {

@@ -1,4 +1,4 @@
-import React, { useReducer, useMemo, useEffect } from 'react';
+import React, { useReducer, useMemo, useEffect, useRef } from 'react';
 import { mcReducer } from './mcReducer';
 import { MCContext, loadPersistedState, STORAGE_KEY } from './useMCStore';
 import { useGameTokenScheduler } from './useGameTokenScheduler';
@@ -13,13 +13,18 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     // Sync state to Remote Control
     useRemoteSync(state);
 
-    // Persist state to localStorage on every change
+    // Persist state to localStorage on every change (debounced 500ms)
+    const persistTimerRef = useRef<ReturnType<typeof setTimeout>>();
     useEffect(() => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        } catch {
-            // Storage quota — fail silently
-        }
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = setTimeout(() => {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch {
+                // Storage quota — fail silently
+            }
+        }, 500);
+        return () => clearTimeout(persistTimerRef.current);
     }, [state]);
 
     // Sync remote control keys from Electron store

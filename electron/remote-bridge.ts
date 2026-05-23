@@ -7,6 +7,11 @@ export class RemoteBridge {
     private channel: RealtimeChannel | null = null;
     private seenIds = new Set<string>();
     private reconnectTimeout: NodeJS.Timeout | null = null;
+    private isOnline = false;
+
+    getStatus(): boolean {
+        return this.isOnline;
+    }
 
     init() {
         console.log('[RemoteBridge] --- INIT CALLED ---');
@@ -104,39 +109,13 @@ export class RemoteBridge {
                 console.log(`[RemoteBridge] Supabase Realtime status: ${status}`, err || '');
                 if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
                     console.error(`[RemoteBridge] Channel disconnected (Status: ${status}). Scheduling reconnect...`);
-                    
-                    this.sendToRenderer('remote-control:action', {
-                        type: 'ADD_LOG',
-                        log: {
-                            id: Math.random().toString(36).slice(2, 9),
-                            timestamp: new Date().toISOString(),
-                            icon: '⚠️',
-                            message: 'Remote connection lost. Reconnecting...',
-                            type: 'system',
-                            colorKey: 'system',
-                            totalTokens: 0, // Mock fields for log compatibility
-                            bankTokens: 0
-                        }
-                    });
-
-                    this.reconnectTimeout = setTimeout(() => {
-                        console.log('[RemoteBridge] Attempting to reconnect channel...');
-                        this.init();
-                    }, 5000);
+                    this.isOnline = false;
+                    this.sendToRenderer('remote:status-changed', false);
+                    // Let Supabase handle automatic reconnection natively.
+                    // Do NOT call this.init() here as it tears down the channel and interrupts backoff.
                 } else if (status === 'SUBSCRIBED') {
-                    this.sendToRenderer('remote-control:action', {
-                        type: 'ADD_LOG',
-                        log: {
-                            id: Math.random().toString(36).slice(2, 9),
-                            timestamp: new Date().toISOString(),
-                            icon: '📡',
-                            message: 'Remote control online',
-                            type: 'system',
-                            colorKey: 'system',
-                            totalTokens: 0,
-                            bankTokens: 0
-                        }
-                    });
+                    this.isOnline = true;
+                    this.sendToRenderer('remote:status-changed', true);
                 }
             });
     }

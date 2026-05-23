@@ -110,6 +110,8 @@ export interface MCSettings {
     remoteRoomId?: string;
     /** Remote Control Secret Key */
     remoteKey?: string;
+    /** Minutes of inactivity before auto-returning to Calendar view (0 = disabled). */
+    autoReturnMins?: number;
 }
 
 export const DEFAULT_SETTINGS: MCSettings = {
@@ -121,6 +123,7 @@ export const DEFAULT_SETTINGS: MCSettings = {
     creamTaskDaysTarget: 7,
     creamTaskSchedule: 'evening',
     rewardConfigs: {},
+    autoReturnMins: 5,
 };
 
 // --------------- Responsibilities ---------------
@@ -176,6 +179,7 @@ export interface MCState {
     gameTokensLastGrantedDate: string | null;
     /** Track remote animation triggers */
     lastAnimationTrigger?: { type: 'fireworks' | 'confetti' | 'confetti-fireworks' | 'good-job' | 'too-loud'; timestamp: number };
+    _migrationVersion?: number;
 }
 
 // --------------- Action Discriminated Union ---------------
@@ -211,5 +215,5 @@ export type MCAction = (
     | { type: 'CONSUME_GAME_TOKEN' }
     | { type: 'RESET_GAME_TOKENS' }
     | { type: 'TRIGGER_ANIMATION'; animation: 'fireworks' | 'confetti' | 'confetti-fireworks' | 'good-job' | 'too-loud' }
-    | { type: 'SNAKE_DIR'; dir: 'up' | 'down' | 'left' | 'right' }
+    | { type: 'CLEAR_LOGS' }
 ) & { isRemote?: boolean };

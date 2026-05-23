@@ -9,6 +9,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { ActivityLogView } from './components/ActivityLogView';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { CheatTrapOverlay } from './components/CheatTrapOverlay';
@@ -22,11 +23,47 @@ import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
 import { useRemoteControl } from './hooks/useRemoteControl';
 import { useMCDispatch, useMCState } from './store/useMCStore.tsx';
+import { RemoteStatusProvider, useRemoteStatus } from './contexts/RemoteStatusContext';
 import './styles/mc.css';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
 interface MCLayoutProps {
   readonly onBackToCalendar?: () => void;
+}
+
+function RemoteIndicator() {
+  const status = useRemoteStatus();
+  const isOnline = status === 'online';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: 12,
+        padding: '6px 12px',
+        fontSize: 13,
+        fontWeight: 800,
+        color: 'var(--mc-text-muted)',
+      }}
+    >
+      <motion.span
+        animate={isOnline ? { scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] } : {}}
+        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          backgroundColor: isOnline ? '#10B981' : '#EF4444',
+          boxShadow: isOnline ? '0 0 8px rgba(16, 185, 129, 0.8)' : 'none',
+        }}
+      />
+      <span style={{ color: 'var(--mc-text)' }}>Remote</span>
+    </div>
+  );
 }
 
 function MCLayout({ onBackToCalendar }: MCLayoutProps) {
@@ -172,6 +209,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           }}>
             ⭐ Command Center
           </span>
+          <RemoteIndicator />
           <ActivityLogView />
           <button
             data-testid="mc-settings-btn"
@@ -332,5 +370,9 @@ export interface MissionControlProps {
 }
 
 export function MissionControl({ onBackToCalendar }: MissionControlProps) {
-  return <MCLayout onBackToCalendar={onBackToCalendar} />;
+  return (
+    <RemoteStatusProvider>
+      <MCLayout onBackToCalendar={onBackToCalendar} />
+    </RemoteStatusProvider>
+  );
 }

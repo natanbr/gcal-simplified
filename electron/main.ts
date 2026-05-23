@@ -163,6 +163,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('remote:regenerate', () => remoteBridge.regenerateKeys());
   ipcMain.handle('remote:sync-state', (_, state) => remoteBridge.broadcastState(state));
+  ipcMain.handle('remote:get-status', () => remoteBridge.getStatus());
 
   // Data Handlers (Updated)
 

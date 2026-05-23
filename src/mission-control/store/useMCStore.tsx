@@ -144,8 +144,25 @@ const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 export function loadPersistedState(): MCState {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return initialState;
+        if (!raw) return { ...initialState, _migrationVersion: 1 };
         const parsed = JSON.parse(raw) as Partial<MCState>;
+
+        const MIGRATION_VERSION = 1;
+        const storedMigrationVersion = parsed._migrationVersion ?? 0;
+
+        let activityLogs = parsed.activityLogs || [];
+        if (storedMigrationVersion < MIGRATION_VERSION) {
+            const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+            activityLogs = activityLogs
+                .filter(log =>
+                    !log.message.includes('Remote connection lost') &&
+                    !log.message.includes('Remote control online') &&
+                    (now - new Date(log.timestamp).getTime()) <= sevenDaysMs
+                )
+                .slice(0, 200);
+        }
+
         return {
             ...initialState,
             ...parsed,
@@ -183,9 +200,10 @@ export function loadPersistedState(): MCState {
                 const savedR = parsed.responsibilities?.find(r => r.id === defaultR.id);
                 return savedR ? { ...defaultR, ...savedR } : defaultR;
             }),
-            activityLogs: parsed.activityLogs || [],
+            activityLogs,
             gameTokens: parsed.gameTokens ?? 0,
             gameTokensLastGrantedDate: parsed.gameTokensLastGrantedDate ?? null,
+            _migrationVersion: MIGRATION_VERSION,
         };
     } catch {
         return initialState;

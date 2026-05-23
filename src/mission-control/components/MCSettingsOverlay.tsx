@@ -11,6 +11,7 @@ import { useMCState, useMCDispatch } from '../store/useMCStore';
 import type { MCSettings } from '../types';
 import { REWARDS } from '../rewardCatalogue';
 import { QRCodeCanvas } from 'qrcode.react';
+import { useRemoteStatus } from '../contexts/RemoteStatusContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -137,6 +138,72 @@ function DurationStepper({
     );
 }
 
+function AutoReturnStepper({
+    value,
+    onChange,
+}: {
+    value: number;
+    onChange: (v: number) => void;
+}) {
+    const chips: { label: string; value: number }[] = [
+        { label: 'Off', value: 0 },
+        { label: '1m',  value: 1 },
+        { label: '2m',  value: 2 },
+        { label: '5m',  value: 5 },
+        { label: '10m', value: 10 },
+        { label: '15m', value: 15 },
+        { label: '30m', value: 30 },
+    ];
+    const displayLabel = value === 0 ? 'Disabled' : `${value} min`;
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
+                    Timeout
+                </span>
+                <span style={{ fontSize: 18, fontWeight: 900, color: value === 0 ? 'var(--mc-text-muted)' : 'var(--mc-text)', fontVariantNumeric: 'tabular-nums' }}>
+                    {displayLabel}
+                </span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {chips.map(chip => (
+                    <motion.button
+                        key={chip.value}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => onChange(chip.value)}
+                        style={{
+                            background: value === chip.value
+                                ? chip.value === 0
+                                    ? 'linear-gradient(180deg,#ff9a9a,#e74c3c)'
+                                    : 'linear-gradient(180deg,#c5a8ff,#a57dff)'
+                                : 'rgba(255,255,255,0.7)',
+                            border: value === chip.value
+                                ? chip.value === 0 ? '1.5px solid #e74c3c' : '1.5px solid #a57dff'
+                                : '1.5px solid rgba(130,120,200,0.2)',
+                            borderRadius: 8,
+                            padding: '4px 10px',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            color: value === chip.value ? '#fff' : 'var(--mc-text-muted)',
+                            cursor: 'pointer',
+                            fontFamily: "'Nunito', sans-serif",
+                            boxShadow: value === chip.value ? '0 2px 0 rgba(0,0,0,0.15)' : 'none',
+                        }}
+                    >
+                        {chip.label}
+                    </motion.button>
+                ))}
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--mc-text-muted)', margin: 0, lineHeight: 1.4 }}>
+                {value === 0
+                    ? 'Auto-return is disabled. The screen stays on Mission Control indefinitely.'
+                    : `Automatically switches back to Calendar after ${value} min of inactivity. Paused during active missions.`}
+            </p>
+        </div>
+    );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 interface MCSettingsOverlayProps {
@@ -147,6 +214,7 @@ interface MCSettingsOverlayProps {
 export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
     const state   = useMCState();
     const dispatch = useMCDispatch();
+    const remoteStatus = useRemoteStatus();
 
     // Local draft — only committed on "Save"
     const [draft, setDraft] = useState<MCSettings>(() => state.settings);
@@ -296,6 +364,18 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                             </div>
                                             <TimeInput label="Auto-trigger at" value={draft.eveningStartsAt} onChange={v => set('eveningStartsAt', v)} />
                                             <DurationStepper label="Duration" value={draft.eveningDurationMins} onChange={v => set('eveningDurationMins', v)} />
+                                        </section>
+
+                                        {/* Auto-Return to Calendar */}
+                                        <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                                <span style={{ fontSize: 18 }}>⏱️</span>
+                                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Auto-Return to Calendar</span>
+                                            </div>
+                                            <AutoReturnStepper
+                                                value={draft.autoReturnMins ?? 5}
+                                                onChange={v => set('autoReturnMins', v)}
+                                            />
                                         </section>
                                     </div>
                                 )}
@@ -566,11 +646,11 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
 
                                         <div style={{ marginTop: 12, padding: 12, background: 'rgba(130,110,200,0.05)', borderRadius: 12, border: '1px dashed rgba(130,110,200,0.2)' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6de89e' }} />
+                                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: remoteStatus === 'online' ? '#6de89e' : '#e74c3c' }} />
                                                 <span style={{ fontSize: 11, fontWeight: 900, textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>Connection Status</span>
                                             </div>
                                             <span style={{ fontSize: 12, color: 'var(--mc-text)', fontWeight: 700 }}>
-                                                Supabase Realtime Bridge is active.
+                                                {remoteStatus === 'online' ? 'Remote control connected.' : 'Remote control disconnected. Reconnecting...'}
                                             </span>
                                         </div>
                                     </div>

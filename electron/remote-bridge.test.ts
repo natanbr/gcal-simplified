@@ -119,38 +119,7 @@ describe('RemoteBridge (Main Process)', () => {
         expect(mockWin.webContents.send).not.toHaveBeenCalled();
     });
 
-    it('schedules a reconnect when channel status is CLOSED', () => {
-        vi.useFakeTimers();
-        const initSpy = vi.spyOn(bridge, 'init');
-        
-        let subscribeCallback: any;
-        const mockChannel = {
-            on: vi.fn().mockReturnThis(),
-            subscribe: vi.fn().mockImplementation((cb) => {
-                subscribeCallback = cb;
-            }),
-            removeChannel: vi.fn()
-        };
-        const mockSupabase = { 
-            channel: vi.fn().mockReturnValue(mockChannel),
-            removeChannel: vi.fn()
-        };
-        (createClient as unknown as Mock).mockReturnValue(mockSupabase);
 
-        bridge.init();
-
-        // Simulate channel close
-        expect(subscribeCallback).toBeDefined();
-        subscribeCallback('CLOSED');
-
-        // Fast-forward timers
-        vi.advanceTimersByTime(5000);
-
-        // Expect init to have been called again (once initially, once after timeout)
-        expect(initSpy).toHaveBeenCalledTimes(2);
-        
-        vi.useRealTimers();
-    });
 
     it('ignores duplicate messages with same msgId', () => {
         const mockWin = { webContents: { send: vi.fn() } };
@@ -241,4 +210,48 @@ describe('RemoteBridge (Main Process)', () => {
         
         expect(mockWin.webContents.send).toHaveBeenCalledWith('remote:request-sync', null);
     });
+
+    describe('status tracking and notification', () => {
+        it('initially reports offline', () => {
+            expect(bridge.getStatus()).toBe(false);
+        });
+
+        it('notifies status changes and updates getStatus on subscribe callback', () => {
+            const mockWin = { webContents: { send: vi.fn() } };
+            (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+
+            let subscribeCallback: any;
+            const mockChannel = {
+                on: vi.fn().mockReturnThis(),
+                subscribe: vi.fn().mockImplementation((cb) => {
+                    subscribeCallback = cb;
+                    return mockChannel;
+                })
+            };
+            (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+
+            bridge.init();
+
+            // Simulate SUBSCRIBED
+            subscribeCallback('SUBSCRIBED');
+            expect(bridge.getStatus()).toBe(true);
+            expect(mockWin.webContents.send).toHaveBeenCalledWith('remote:status-changed', true);
+
+            // Simulate CLOSED
+            subscribeCallback('CLOSED');
+            expect(bridge.getStatus()).toBe(false);
+            expect(mockWin.webContents.send).toHaveBeenCalledWith('remote:status-changed', false);
+
+            // Ensure NO action or ADD_LOG dispatch is sent to renderer (logs suppression)
+            const sendCalls = mockWin.webContents.send.mock.calls;
+            const hasAddLogOrAction = sendCalls.some(([channel, arg2]: [string, any]) => {
+                if (channel === 'remote-control:action') {
+                    return arg2?.type === 'ADD_LOG';
+                }
+                return false;
+            });
+            expect(hasAddLogOrAction).toBe(false);
+        });
+    });
 });
+

@@ -18,6 +18,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'update:install',
   'remote:regenerate',
   'remote:sync-state',
+  'remote:get-status',
 ];
 
 const ALLOWED_ON_CHANNELS = [
@@ -30,6 +31,7 @@ const ALLOWED_ON_CHANNELS = [
   'update:error',
   'remote-control:action',
   'remote:request-sync',
+  'remote:status-changed',
 ];
 
 // --------- Expose some API to the Renderer process ---------

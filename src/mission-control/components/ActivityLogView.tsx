@@ -1,21 +1,61 @@
-import { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useMCState } from '../store/useMCStore';
+import { useMCState, useMCDispatch } from '../store/useMCStore';
 import { Activity, X } from 'lucide-react';
 import { ActivityLogEntry } from '../types';
-import { useMCDispatch } from '../store/useMCStore';
 
-export function ActivityLogView() {
+const TOKEN_TYPES = new Set<ActivityLogEntry['type']>(['manual', 'reward', 'responsibility']);
+
+export function ActivityLogView(): React.JSX.Element {
     const { activityLogs, hasUnreviewedCheatAttempt } = useMCState();
     const dispatch = useMCDispatch();
     const [isOpen, setIsOpen] = useState(false);
+    const [filterMode, setFilterMode] = useState<'tokens' | 'all'>('tokens');
+    const [visibleCount, setVisibleCount] = useState(30);
+    const sentinelRef = useRef<HTMLDivElement>(null);
 
     const handleOpen = () => {
         setIsOpen(true);
+        setVisibleCount(30);
         if (hasUnreviewedCheatAttempt) {
             dispatch({ type: 'CLEAR_CHEAT_FLAG' });
         }
     };
+
+    // Reset visibleCount when filterMode changes
+    useEffect(() => {
+        setVisibleCount(30);
+    }, [filterMode]);
+
+    // Compute the filtered logs list lazily
+    const visibleLogs = useMemo(() => {
+        if (!isOpen) return []; // guard: skip when closed
+        const base = filterMode === 'tokens'
+            ? activityLogs.filter(log => TOKEN_TYPES.has(log.type))
+            : activityLogs;
+        return base.slice(0, visibleCount);
+    }, [isOpen, activityLogs, filterMode, visibleCount]);
+
+    // Infinite scrolling / Lazy loading
+    useEffect(() => {
+        if (!isOpen || !sentinelRef.current) return;
+        const totalFiltered = filterMode === 'tokens'
+            ? activityLogs.filter(log => TOKEN_TYPES.has(log.type)).length
+            : activityLogs.length;
+
+        if (visibleCount >= totalFiltered) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    setVisibleCount(prev => Math.min(prev + 30, totalFiltered));
+                }
+            },
+            { rootMargin: '0px 0px 200px 0px', threshold: 0.1 }
+        );
+        observer.observe(sentinelRef.current);
+        return () => observer.disconnect();
+    }, [isOpen, visibleCount, activityLogs, filterMode]);
 
     return (
         <div style={{ position: 'relative' }}>
@@ -50,13 +90,43 @@ export function ActivityLogView() {
                                     7 Days
                                 </span>
                             </div>
-                            <button 
-                                onClick={() => setIsOpen(false)}
-                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition"
-                                title="Close"
-                            >
-                                <X size={20} />
-                            </button>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                                    <button 
+                                        onClick={() => setFilterMode('tokens')} 
+                                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                                            filterMode === 'tokens' 
+                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50' 
+                                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/40'
+                                        }`}
+                                    >
+                                        💰 Tokens
+                                    </button>
+                                    <button 
+                                        onClick={() => setFilterMode('all')} 
+                                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                                            filterMode === 'all' 
+                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50' 
+                                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/40'
+                                        }`}
+                                    >
+                                        📋 All
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={() => dispatch({ type: 'CLEAR_LOGS' })}
+                                    className="px-3 py-1 text-xs font-bold text-red-500 hover:bg-red-50 hover:text-red-600 rounded-md transition"
+                                >
+                                    CLEAR
+                                </button>
+                                <button 
+                                    onClick={() => setIsOpen(false)}
+                                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition"
+                                    title="Close"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Log List */}
@@ -67,20 +137,24 @@ export function ActivityLogView() {
                                     <p className="text-sm font-medium">No activity recorded yet</p>
                                 </div>
                             ) : (
-                                <table className="w-full text-left text-sm text-slate-600">
-                                    <thead className="text-xs text-slate-400 uppercase bg-slate-50/50 sticky top-0 border-b border-slate-100">
-                                        <tr>
-                                            <th className="px-6 py-3 font-bold tracking-wider rounded-tl-lg w-32">Time</th>
-                                            <th className="px-6 py-3 font-bold tracking-wider">Event</th>
-                                            <th className="px-6 py-3 font-bold tracking-wider rounded-tr-lg text-right w-24">Tokens</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {activityLogs.map(log => (
-                                            <LogItemRow key={log.id} log={log} />
-                                        ))}
-                                    </tbody>
-                                </table>
+                                <>
+                                    <table className="w-full text-left text-sm text-slate-600">
+                                        <thead className="text-xs text-slate-400 uppercase bg-slate-50/50 sticky top-0 border-b border-slate-100">
+                                            <tr>
+                                                <th className="px-6 py-3 font-bold tracking-wider rounded-tl-lg w-32">Time</th>
+                                                <th className="px-6 py-3 font-bold tracking-wider">Event</th>
+                                                <th className="px-6 py-3 font-bold tracking-wider rounded-tr-lg text-right w-24">Tokens</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {visibleLogs.map(log => (
+                                                <LogItemRow key={log.id} log={log} />
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {/* Sentinel: must be OUTSIDE <table>, INSIDE scroll container */}
+                                    <div ref={sentinelRef} style={{ height: 1 }} />
+                                </>
                             )}
                         </div>
                     </div>
@@ -116,7 +190,7 @@ function renderHighlightedMessage(message: string) {
     );
 }
 
-function LogItemRow({ log }: { log: ActivityLogEntry }) {
+const LogItemRow = React.memo(function LogItemRow({ log }: { log: ActivityLogEntry }) {
     // Determine colors based on type
     let titleColor = "text-slate-700";
     let bgClass = "hover:bg-slate-50/80 transition-colors";
@@ -177,7 +251,7 @@ function LogItemRow({ log }: { log: ActivityLogEntry }) {
                         {/* Total Tokens (Wealth) */}
                         {log.totalTokens !== undefined && (
                             <div className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="Total Tokens (Bank + Goals)">
-                                <span className="text-[10px] opacity-60">Σ</span>
+                               <span className="text-[10px] opacity-60">Σ</span>
                                 <span className="text-[10px] font-black text-slate-700">{log.totalTokens}</span>
                             </div>
                         )}
@@ -194,4 +268,4 @@ function LogItemRow({ log }: { log: ActivityLogEntry }) {
             </td>
         </tr>
     );
-}
+});
