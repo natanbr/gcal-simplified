@@ -14,3 +14,18 @@
 ## 2026-03-13 - Module-level singleton state initialization issue
 **Learning:** When using a module-level singleton state pattern for hooks (like `useLiveClock`), initializing the state statically at the module level (`let currentDate = new Date()`) causes components to mount with a stale date if they are loaded much later than the script evaluation time.
 **Action:** Initialize the singleton state dynamically inside the hook when it's first used (e.g. `if (!intervalId) currentDate = new Date()`) to ensure it gets the accurate value at the time the first component actually mounts.
+
+## 2026-05-22 - Speculative Reducer Runs and React Context Status Isolation
+**Learning:**
+1. Running `mcReducer(state, action)` inside log formatting helper `createLogEntry` to compute state wealth snapshots causes the entire reducer to execute 3x per dispatch (once for the action dispatch, once for formatting the log entry, and once inside other calculations).
+2. Placing transient network connection flags directly in global store states causes wide-scale re-renders of unrelated components.
+3. Unbounded log arrays can grow past 1000+ entries, causing memory bloat and slow modal rendering.
+4. Active timers instantiated per remote action in the main process leak memory and cause Vitest run errors if not batched or cleaned up in test boundaries.
+
+**Action:**
+1. Extract a lightweight, O(1) state projection function (`deriveSnapshots`) to compute wealth changes from the action type instead of evaluating the full `mcReducer` state tree.
+2. Restrict invariant task syncing (`syncCreamTask`) inside the reducer to run only on actions that modify relevant attributes (tasks, settings).
+3. Use a dedicated React Context (`RemoteStatusContext`) for UI status indicators instead of placing transient/connection signals in the root state.
+4. Enforce a strict log capping limit of 200 elements in the reducer.
+5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
+
