@@ -29,3 +29,7 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+
+## 2024-05-25 - [Frontend Performance: Replacing Framer Motion Infinity Animations]
+**Learning:** Using Framer Motion's `repeat: Infinity` for permanently mounted and continuous animations (like pulsing indicators) causes constant JS main thread activity via `requestAnimationFrame`, elevating background CPU usage even when the component is technically idle.
+**Action:** Replace `repeat: Infinity` animations in React components with pure CSS `@keyframes` and classes for continuous looping animations to keep the main thread free and let the browser compositing handle the animation efficiently.

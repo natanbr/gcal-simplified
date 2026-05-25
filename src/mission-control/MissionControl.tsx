@@ -9,7 +9,6 @@
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import { ActivityLogView } from './components/ActivityLogView';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { CheatTrapOverlay } from './components/CheatTrapOverlay';
@@ -50,9 +49,8 @@ function RemoteIndicator() {
         color: 'var(--mc-text-muted)',
       }}
     >
-      <motion.span
-        animate={isOnline ? { scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] } : {}}
-        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+      <span
+        className={isOnline ? 'mc-anim-remote-pulse' : ''}
         style={{
           width: 8,
           height: 8,
