@@ -50,3 +50,8 @@
 
 **Invariant: `IntersectionObserver` must be mocked in Vitest.** jsdom does not implement `IntersectionObserver`. Add a `vi.fn()` mock to the global Vitest setup file whenever lazy-loading via `IntersectionObserver` is added to any component.
 
+## 2026-05-26 - E2E Playwright State Isolation & Visual Progress Assertions
+
+**Invariant: LocalStorage Isolation in Electron E2E Tests.** Stale/cached local storage state (like an active mission) can bleed across runs or host environments and mount blocking overlays (like the MC mission overlay) that obscure main UI settings. E2E tests running on the main calendar screen must explicitly call `localStorage.clear()` in a `beforeEach` block to guarantee a clean slate.
+
+**Pattern: Visual Token Progress Assertions.** When redundant text counters (e.g. `x / y completed`) are removed from the UI in favor of visual tokens, E2E tests should verify progress by asserting the counts of the respective emoji element (e.g. `♻️` for recycling) on the page. Be sure to account for header icons and button fallbacks in the expected element count.
