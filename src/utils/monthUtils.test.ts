@@ -50,9 +50,9 @@ describe('getMonthViewStartDate — monday mode', () => {
 // ── getMonthViewDates ─────────────────────────────────────────────────────────
 
 describe('getMonthViewDates', () => {
-    it('always returns exactly 35 dates', () => {
+    it('always returns exactly 42 dates', () => {
         const dates = getMonthViewDates(REF, 0, 'sunday');
-        expect(dates).toHaveLength(35);
+        expect(dates).toHaveLength(42);
     });
 
     it('first date equals getMonthViewStartDate', () => {
@@ -74,17 +74,17 @@ describe('getMonthViewDates', () => {
 
     it('grid for March 2025 contains at least 28 March days (grid may not include all 31)', () => {
         // March 2025 starts on a Saturday → Sunday-mode grid starts Feb 23.
-        // The 35-slot grid (Feb 23 – Mar 29) contains 29 March days.
+        // The 42-slot grid (Feb 23 – Apr 5) contains all 31 March days.
         const dates = getMonthViewDates(REF, 0, 'sunday');
         const marchDays = dates.filter(d => d.getMonth() === 2 && d.getFullYear() === 2025);
         expect(marchDays.length).toBeGreaterThanOrEqual(28);
         expect(marchDays.length).toBeLessThanOrEqual(31);
     });
 
-    it('works for february (short month) — still 35 days', () => {
+    it('works for february (short month) — still 42 days', () => {
         const feb = new Date(2025, 1, 15); // Feb 15, 2025
         const dates = getMonthViewDates(feb, 0, 'sunday');
-        expect(dates).toHaveLength(35);
+        expect(dates).toHaveLength(42);
     });
 
     it('positive offset advances the month', () => {

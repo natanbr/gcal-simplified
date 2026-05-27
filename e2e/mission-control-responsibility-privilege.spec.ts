@@ -53,9 +53,8 @@ test.describe('Mission Control — Responsibility panel', () => {
         const recyclingHeader = page.locator('text=Recycling');
         await expect(recyclingHeader).toBeVisible({ timeout: 10_000 });
 
-        // Initial progress label should be 0 / 3
-        const progressLabel = page.locator('text=0 / 3 completed').first();
-        await expect(progressLabel).toBeVisible({ timeout: 5000 });
+        // Initial progress: 2 ♻️ emojis should be visible (1 header icon + 1 button icon), no filled progress dots
+        await expect(page.locator('text=♻️')).toHaveCount(2, { timeout: 5000 });
 
         await app.close();
     });
@@ -82,8 +81,8 @@ test.describe('Mission Control — Responsibility panel', () => {
         await addBtn.click();
         await page.waitForTimeout(500);
 
-        // Progress should now read 1 / 3
-        await expect(page.locator('text=1 / 3 completed')).toBeVisible({ timeout: 5000 });
+        // Progress should now have 3 ♻️ emojis (1 header icon + 1 button icon + 1 filled progress dot)
+        await expect(page.locator('text=♻️')).toHaveCount(3, { timeout: 5000 });
 
         await app.close();
     });

@@ -214,7 +214,7 @@ Covers explicit verification of effect cleanups and memory leak preventions in c
 | 9     | ⏳ Pending | `mc-token-movement.spec.ts` (E2E drag-and-drop tests)                       |
 | 10    | ✅ Done    | `useLiveClock`, `useMinuteClock`, `MissionTimerDisplay` memory leak checks  |
 
-### Unit test count: **438 ✅ (0 failures)** across 45 test files
+### Unit test count: **452 ✅ (0 failures)** across 48 test files
 
 ### E2E tests added: 3 new spec files (9 new tests, run against built Electron app)
 

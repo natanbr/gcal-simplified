@@ -26,13 +26,13 @@ export function getMonthViewStartDate(referenceDate: Date, monthOffset: number, 
 }
 
 /**
- * Get all 35 days for a 7x5 monthly grid
+ * Get all 42 days for a 7x6 monthly grid
  */
 export function getMonthViewDates(referenceDate: Date, monthOffset: number, weekStartDay: WeekStartDay = 'sunday'): Date[] {
     const startDate = getMonthViewStartDate(referenceDate, monthOffset, weekStartDay);
 
     const days: Date[] = [];
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 42; i++) {
         days.push(addDays(startDate, i));
     }
 
