@@ -18,7 +18,7 @@ import { GlobalBank } from './components/GlobalBank';
 import { GoalPedestal } from './components/GoalPedestal';
 import { LiveClockDisplay } from './components/LiveClockDisplay';
 import { MCSettingsOverlay } from './components/MCSettingsOverlay';
-import { PrivilegeCardButton } from './components/PrivilegeCardButton';
+import { PrivilegesPanel } from './components/PrivilegesPanel';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
 import { useMCDispatch, useMCState } from './store/useMCStore.tsx';
@@ -227,13 +227,6 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           </button>
         </div>
 
-        {/* Privilege Cards */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          {state.privileges.map(p => (
-            <PrivilegeCardButton key={p.id} p={p} />
-          ))}
-        </div>
-
         {/* Clock + Manual mission triggers */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Manual triggers */}
@@ -339,6 +332,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
               <ResponsibilityPanel />
               <GameTokenPanel />
+              <PrivilegesPanel interactive={false} />
             </div>
           </div>
         </div>

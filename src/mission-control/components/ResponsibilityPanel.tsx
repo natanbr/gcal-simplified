@@ -16,6 +16,7 @@ function PointDot({ filled, index, icon = '⭐' }: { filled: boolean; index: num
     return (
         <motion.div
             key={index}
+            data-testid={`mc-point-dot-${filled ? 'filled' : 'empty'}`}
             initial={false}
             animate={filled
                 ? { scale: [1.4, 1], opacity: 1 }
@@ -156,7 +157,7 @@ function ResponsibilityCard({ task }: TaskCardProps) {
             {/* Left side: Progress (Row 2) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, gridColumn: 1, gridRow: 2 }}>
                 {/* Progress dots */}
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }} data-testid={`mc-responsibility-dots-${task.id}`}>
                     {Array.from({ length: task.pointsRequired }, (_, i) => (
                         <PointDot key={i} filled={i < task.pointsEarned} index={i} icon={task.pointIcon} />
                     ))}

@@ -289,6 +289,11 @@ export function loadPersistedState(): MCState {
                 const savedR = parsed.responsibilities?.find(r => r.id === defaultR.id);
                 return savedR ? { ...defaultR, ...savedR } : defaultR;
             }),
+            // Merge privileges from defaults so new privileges (e.g. phone-games) always appear
+            privileges: initialState.privileges.map(defaultPriv => {
+                const savedPriv = parsed.privileges?.find(p => p.id === defaultPriv.id);
+                return savedPriv ? { ...defaultPriv, ...savedPriv } : defaultPriv;
+            }),
             activityLogs,
             gameTokens: parsed.gameTokens ?? 0,
             gameTokensLastGrantedDate: parsed.gameTokensLastGrantedDate ?? null,

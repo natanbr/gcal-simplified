@@ -56,6 +56,14 @@
 
 **Pattern: Visual Token Progress Assertions.** When redundant text counters (e.g. `x / y completed`) are removed from the UI in favor of visual tokens, E2E tests should verify progress by asserting the counts of the respective emoji element (e.g. `♻️` for recycling) on the page. Be sure to account for header icons and button fallbacks in the expected element count.
 
+## 2026-05-27 — Phone Games Privileges & Idle Auto-Return Review
+
+**Pattern: True Interaction Idle Timer.** An idle timer (such as `useMCAutoReturn`) must listen to DOM interaction events (`pointerdown`, `keydown`, `click`) to detect active user sessions, rather than relying on React state dependency updates that don't trigger on unrelated state dispatches.
+
+**Invariant: Git Worktree Test Co-location.** When writing new test files (e.g. `mcReducer.auto-return.test.ts`), verify they are tracked and committed directly within the active worktree directory rather than left as untracked files in the parent repo, ensuring test suite parity.
+
+**Pattern: Shared Time Formatting Helpers.** Keep date/time remaining calculations (such as countdowns for suspended privileges) in shared utilities to prevent copy-pasting code between panels and button components.
+
 ## 2026-05-28 - Global Listener Lifecycle Alignment
 
 **Pattern: Global Listeners for Global Stores.** When an event listener updates a global state store (e.g. IPC, WebSocket, or Supabase listeners targeting `MCStore`), avoid registering the listener hook within individual view/layout components that mount and unmount during routing. Instead, mount the listener at the same high-level scope as the store provider (e.g., via a bridge component in `App.tsx`), ensuring events are continuously captured and state is updated even when the primary UI view changes.

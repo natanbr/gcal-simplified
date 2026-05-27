@@ -117,4 +117,48 @@ describe('GoalPedestal', () => {
         renderPedestal(completedCase);
         expect(screen.getByText(/Done!/i)).toBeInTheDocument();
     });
+
+    it('hides the "Game" reward from picker if "phone-games" privilege is suspended', async () => {
+        const suspendedState = {
+            privileges: [
+                { id: 'knife', label: 'Knife', icon: 'Utensils', status: 'active', suspendedUntil: null },
+                { id: 'scissors', label: 'Scissors', icon: 'Scissors', status: 'active', suspendedUntil: null },
+                { id: 'fire', label: 'Fire Tongs', icon: 'Flame', status: 'active', suspendedUntil: null },
+                { id: 'garden', label: 'Garden', icon: 'Sprout', status: 'active', suspendedUntil: null },
+                { id: 'phone-games', label: 'Phone Games', icon: 'Smartphone', status: 'suspended', suspendedUntil: new Date(Date.now() + 3600000).toISOString() },
+            ]
+        };
+        localStorage.setItem('mc-state-v5', JSON.stringify(suspendedState));
+
+        renderPedestal(emptyCase);
+        await act(async () => {
+            fireEvent.click(screen.getByLabelText('Add a new goal'));
+        });
+        
+        expect(screen.queryByText('Game')).not.toBeInTheDocument();
+        expect(screen.getByText('Short Show')).toBeInTheDocument();
+        
+        localStorage.clear();
+    });
+
+    it('disables and locks the "Use!" button on completed Game goal if "phone-games" privilege is suspended', () => {
+        const suspendedState = {
+            privileges: [
+                { id: 'knife', label: 'Knife', icon: 'Utensils', status: 'active', suspendedUntil: null },
+                { id: 'scissors', label: 'Scissors', icon: 'Scissors', status: 'active', suspendedUntil: null },
+                { id: 'fire', label: 'Fire Tongs', icon: 'Flame', status: 'active', suspendedUntil: null },
+                { id: 'garden', label: 'Garden', icon: 'Sprout', status: 'active', suspendedUntil: null },
+                { id: 'phone-games', label: 'Phone Games', icon: 'Smartphone', status: 'suspended', suspendedUntil: new Date(Date.now() + 3600000).toISOString() },
+            ]
+        };
+        localStorage.setItem('mc-state-v5', JSON.stringify(suspendedState));
+
+        renderPedestal(completedCase);
+        
+        const lockBtn = screen.getByText('🔒 Locked');
+        expect(lockBtn).toBeInTheDocument();
+        expect(screen.queryByText('🎁 Use!')).not.toBeInTheDocument();
+        
+        localStorage.clear();
+    });
 });

@@ -28,6 +28,13 @@ export function useRemoteSync(state: MCState) {
                 pointsEarned: r.pointsEarned,
                 pointsRequired: r.pointsRequired,
                 completedAt: r.completedAt
+            })),
+            privileges: stateRef.current.privileges.map(p => ({
+                id: p.id,
+                label: p.label,
+                icon: p.icon,
+                status: p.status,
+                suspendedUntil: p.suspendedUntil
             }))
         };
 
@@ -40,7 +47,7 @@ export function useRemoteSync(state: MCState) {
         // Debounce state sync to avoid flooding Supabase (sync every 1s of stability)
         const timer = setTimeout(broadcast, 1000);
         return () => clearTimeout(timer);
-    }, [state.bankCount, state.gameTokens, state.activeMission, state.missions, state.responsibilities, broadcast]);
+    }, [state.bankCount, state.gameTokens, state.activeMission, state.missions, state.responsibilities, state.privileges, broadcast]);
 
     useEffect(() => {
         // Listen for explicit sync requests from remotes

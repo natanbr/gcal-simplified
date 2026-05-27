@@ -16,6 +16,7 @@ const PRIV_ICON: Record<string, string> = {
     Scissors: '✂️',
     Flame:    '🔥',
     Sprout:   '🌱',
+    Smartphone: '📱',
 };
 
 // ── Countdown display ─────────────────────────────────────────────────────────
@@ -36,14 +37,16 @@ const DURATIONS: { label: string; hours: number }[] = [
     { label: '1 Day',  hours: 24 },
     { label: '3 Days', hours: 72 },
     { label: '1 Week', hours: 168 },
+    { label: '2 Weeks', hours: 336 },
 ];
 
 // ── Single privilege card + popup ─────────────────────────────────────────────
 interface PrivCardProps {
     p: PrivilegeCard;
+    interactive?: boolean;
 }
 
-export function PrivilegeCardButton({ p }: PrivCardProps) {
+export function PrivilegeCardButton({ p, interactive = false }: PrivCardProps) {
     const dispatch   = useMCDispatch();
     const [popupOpen, setPopupOpen] = useState(false);
     // Store card's viewport position so the fixed popup can appear below it
@@ -54,6 +57,7 @@ export function PrivilegeCardButton({ p }: PrivCardProps) {
     const countdown   = suspendedCountdown(p.suspendedUntil);
 
     const handleClick = () => {
+        if (!interactive) return;
         if (cardRef.current) {
             const rect = cardRef.current.getBoundingClientRect();
             setPopupPos({ top: rect.bottom + 8, left: rect.left });
@@ -77,19 +81,21 @@ export function PrivilegeCardButton({ p }: PrivCardProps) {
             {/* The card */}
             <motion.button
                 ref={cardRef}
-                whileTap={{ scale: 0.9 }}
-                whileHover={{ scale: 1.08, y: -2 }}
-                onClick={handleClick}
+                whileTap={interactive ? { scale: 0.9 } : undefined}
+                whileHover={interactive ? { scale: 1.08, y: -2 } : undefined}
+                onClick={interactive ? handleClick : undefined}
+                disabled={!interactive}
                 title={p.label}
                 style={{
-                    width: 56, height: 52,
+                    width: 56, height: 58,
                     display: 'flex', flexDirection: 'column',
                     alignItems: 'center', justifyContent: 'center',
-                    gap: 2,
+                    gap: isSuspended && !interactive ? 1 : 2,
                     fontSize: 22, borderRadius: 14,
                     border: isSuspended ? '2px solid #ff8888' : '2px solid rgba(160,150,230,0.25)',
                     background: isSuspended ? 'linear-gradient(160deg,#ffe8e8,#ffcece)' : '#fff',
-                    cursor: 'pointer',
+                    cursor: interactive ? 'pointer' : 'default',
+                    pointerEvents: interactive ? 'auto' : 'none',
                     position: 'relative', overflow: 'hidden',
                     boxShadow: isSuspended
                         ? '0 4px 12px rgba(255,100,100,0.2)'
@@ -108,18 +114,31 @@ export function PrivilegeCardButton({ p }: PrivCardProps) {
                     {PRIV_ICON[p.icon] ?? '⭐'}
                 </span>
                 {countdown && (
-                    <span style={{
-                        fontSize: 8, fontWeight: 900,
-                        color: '#c0392b',
-                        background: '#ffd6d6',
-                        borderRadius: 99,
-                        padding: '1px 4px',
-                        lineHeight: 1.2,
-                        position: 'relative',
-                        zIndex: 1,
-                    }}>
-                        {countdown}
-                    </span>
+                    interactive ? (
+                        <span style={{
+                            fontSize: 8, fontWeight: 900,
+                            color: '#c0392b',
+                            background: '#ffd6d6',
+                            borderRadius: 99,
+                            padding: '1px 4px',
+                            lineHeight: 1.2,
+                            position: 'relative',
+                            zIndex: 1,
+                        }}>
+                            {countdown}
+                        </span>
+                    ) : (
+                        <span style={{
+                            fontSize: 11, fontWeight: 900,
+                            color: '#c0392b',
+                            lineHeight: 1.1,
+                            position: 'relative',
+                            zIndex: 1,
+                            marginTop: 1,
+                        }}>
+                            {countdown}
+                        </span>
+                    )
                 )}
             </motion.button>
 
