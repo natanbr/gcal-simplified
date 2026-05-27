@@ -389,8 +389,11 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-              {REWARDS.filter(() => {
-                  return true; // we will check rewards using the state accessed before the return
+              {REWARDS.filter(r => {
+                  const phoneGamesPriv = state.privileges.find(p => p.id === 'phone-games');
+                  const isBlocked = phoneGamesPriv ? phoneGamesPriv.status === 'suspended' : false;
+                  if (r.id === 'game' && isBlocked) return false;
+                  return true;
                 }).map(r => {
                 const config = state.settings.rewardConfigs?.[r.id];
                 const isEnabled = config ? config.enabled : true;
@@ -535,42 +538,54 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                 </>
               ) : isComplete ? (
                 // Regular reward complete: Use! + Refund
-                <div style={{ display: 'flex', gap: 5, width: '100%' }}>
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    style={{ flex: 1 }}
-                  >
-                    <Button3D
-                      variant="primary"
-                      onClick={handleUse}
-                      aria-label="Use this reward"
-                      style={{
-                        flex: 1, width: '100%', justifyContent: 'center', display: 'flex',
-                        alignItems: 'center', gap: 4, fontSize: 11,
-                        background: 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
-                        borderColor: 'rgba(61,206,118,0.5)',
-                        color: '#0b4a20',
-                      }}
-                    >
-                      🎁 Use!
-                    </Button3D>
-                  </motion.div>
-                  <motion.div
-                    animate={{ rotate: leverTilted ? 45 : 0 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                    style={{ transformOrigin: 'bottom center' }}
-                  >
-                    <Button3D
-                      variant="danger"
-                      onClick={handleRefund}
-                      aria-label="Refund all coins back to bank"
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
-                    >
-                      🗑️
-                    </Button3D>
-                  </motion.div>
-                </div>
+                (() => {
+                  const phoneGamesPriv = state.privileges.find(p => p.id === 'phone-games');
+                  const isPhoneGamesBlocked = phoneGamesPriv ? phoneGamesPriv.status === 'suspended' : false;
+                  const isUseBlocked = case_.reward === 'game' && isPhoneGamesBlocked;
+
+                  return (
+                    <div style={{ display: 'flex', gap: 5, width: '100%' }}>
+                      <motion.div
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        style={{ flex: 1 }}
+                      >
+                        <Button3D
+                          variant="primary"
+                          onClick={isUseBlocked ? undefined : handleUse}
+                          disabled={isUseBlocked}
+                          aria-label={isUseBlocked ? "Phone games are locked" : "Use this reward"}
+                          style={{
+                            flex: 1, width: '100%', justifyContent: 'center', display: 'flex',
+                            alignItems: 'center', gap: 4, fontSize: 11,
+                            background: isUseBlocked
+                              ? 'rgba(200,200,220,0.4)'
+                              : 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
+                            borderColor: isUseBlocked ? 'rgba(160,150,230,0.2)' : 'rgba(61,206,118,0.5)',
+                            color: isUseBlocked ? 'var(--mc-text-dim)' : '#0b4a20',
+                            cursor: isUseBlocked ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {isUseBlocked ? '🔒 Locked' : '🎁 Use!'}
+                        </Button3D>
+                      </motion.div>
+                      <motion.div
+                        animate={{ rotate: leverTilted ? 45 : 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                        style={{ transformOrigin: 'bottom center' }}
+                      >
+                        <Button3D
+                          variant="danger"
+                          onClick={handleRefund}
+                          aria-label="Refund all coins back to bank"
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+                        >
+                          🗑️
+                        </Button3D>
+                      </motion.div>
+                    </div>
+                  );
+                })()
               ) : (
                 // Regular reward in progress: vacuum + refund
                 <>

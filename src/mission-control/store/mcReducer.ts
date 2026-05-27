@@ -32,6 +32,7 @@ const defaultPrivileges: PrivilegeCard[] = [
     { id: 'scissors', label: 'Scissors', icon: 'Scissors', status: 'active', suspendedUntil: null },
     { id: 'fire', label: 'Fire Tongs', icon: 'Flame', status: 'active', suspendedUntil: null },
     { id: 'garden', label: 'Garden', icon: 'Sprout', status: 'active', suspendedUntil: null },
+    { id: 'phone-games', label: 'Phone Games', icon: 'Smartphone', status: 'active', suspendedUntil: null },
 ];
 
 const defaultMissions: Mission[] = [

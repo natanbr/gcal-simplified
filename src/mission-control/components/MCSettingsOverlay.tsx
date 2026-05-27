@@ -12,6 +12,7 @@ import type { MCSettings } from '../types';
 import { REWARDS } from '../rewardCatalogue';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useRemoteStatus } from '../contexts/RemoteStatusContext';
+import { PrivilegeCardButton } from './PrivilegeCardButton';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -218,7 +219,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
 
     // Local draft — only committed on "Save"
     const [draft, setDraft] = useState<MCSettings>(() => state.settings);
-    const [activeTab, setActiveTab] = useState<'time' | 'tasks' | 'rewards' | 'remote'>('time');
+    const [activeTab, setActiveTab] = useState<'time' | 'tasks' | 'rewards' | 'remote' | 'privileges'>('time');
 
     // Reset draft whenever the panel opens
     const handleOpen = () => setDraft(state.settings);
@@ -255,6 +256,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                     {/* Main Panel — Use grid to divide Sidebar and Content */}
                     <motion.div
                         key="settings-panel"
+                        data-testid="mc-settings-panel"
                         initial={{ opacity: 0, scale: 0.94, y: -24 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.94, y: -16 }}
@@ -339,6 +341,16 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                     }}
                                 >
                                     📱 Remote
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('privileges')}
+                                    style={{
+                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
+                                        background: activeTab === 'privileges' ? 'rgba(165,125,255,0.15)' : 'transparent',
+                                        color: activeTab === 'privileges' ? '#8050e0' : 'var(--mc-text-muted)',
+                                    }}
+                                >
+                                    🛡️ Privileges
                                 </button>
                             </div>
 
@@ -652,6 +664,23 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                             <span style={{ fontSize: 12, color: 'var(--mc-text)', fontWeight: 700 }}>
                                                 {remoteStatus === 'online' ? 'Remote control connected.' : 'Remote control disconnected. Reconnecting...'}
                                             </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'privileges' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                            <span style={{ fontSize: 18 }}>🛡️</span>
+                                            <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Privilege Settings</span>
+                                        </div>
+                                        <p style={{ fontSize: 12, color: 'var(--mc-text-muted)', margin: 0, lineHeight: 1.4 }}>
+                                            Manage child privilege suspensions. Click any card to suspend or reinstate.
+                                        </p>
+                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                                            {state.privileges.map(p => (
+                                                <PrivilegeCardButton key={p.id} p={p} interactive={true} />
+                                            ))}
                                         </div>
                                     </div>
                                 )}

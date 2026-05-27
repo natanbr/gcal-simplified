@@ -45,10 +45,10 @@ const suspendedKnife: PrivilegeCard = {
     suspendedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 1 day from now
 };
 
-function renderPrivCard(card: PrivilegeCard) {
+function renderPrivCard(card: PrivilegeCard, interactive = true) {
     return render(
         <MCStoreProvider>
-            <PrivilegeCardButton p={card} />
+            <PrivilegeCardButton p={card} interactive={interactive} />
         </MCStoreProvider>,
     );
 }

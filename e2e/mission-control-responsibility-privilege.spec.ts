@@ -42,12 +42,37 @@ async function launchMC() {
     return { app, page };
 }
 
+async function openPrivilegesSettings(page: Page): Promise<void> {
+    const settingsBtn = page.locator('[data-testid="mc-settings-btn"]');
+    await expect(settingsBtn).toBeVisible({ timeout: 5000 });
+    await settingsBtn.click();
+    await page.waitForTimeout(400);
+
+    const privilegesTab = page.locator('[data-testid="mc-settings-panel"] button:has-text("Privileges")');
+    await expect(privilegesTab).toBeVisible({ timeout: 5000 });
+    await privilegesTab.click();
+    await page.waitForTimeout(400);
+}
+
 // ── Responsibility tests ──────────────────────────────────────────────────────
 
 test.describe('Mission Control — Responsibility panel', () => {
 
     test('Recycling task displays correct initial progress', async () => {
         const { app, page } = await launchMC();
+
+        // Reset state to fresh (0 points) via localStorage, then reload
+        await page.evaluate(({ key }: { key: string }) => {
+            const raw = localStorage.getItem(key);
+            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+            const responsibilities = (state['responsibilities'] ?? []) as Array<Record<string, unknown>>;
+            state['responsibilities'] = responsibilities.map((r) =>
+                r['id'] === 'recycling' ? { ...r, pointsEarned: 0, completedAt: null } : r,
+            );
+            localStorage.setItem(key, JSON.stringify(state));
+        }, { key: STORAGE_KEY });
+
+        await gotoMC(page);
 
         // Ensure recycling card is visible and shows its starting state
         const recyclingHeader = page.locator('text=Recycling');
@@ -185,7 +210,11 @@ test.describe('Mission Control — Privilege suspension', () => {
     test('clicking a privilege card opens the suspend popup', async () => {
         const { app, page } = await launchMC();
 
-        const knifeCard = page.locator('button[title="Knife"]');
+        // Open privileges tab in settings
+        await openPrivilegesSettings(page);
+
+        // Target the Knife card inside the settings panel specifically
+        const knifeCard = page.locator('[data-testid="mc-settings-panel"] button[title="Knife"]');
         await expect(knifeCard).toBeVisible({ timeout: 10_000 });
         await knifeCard.click();
         await page.waitForTimeout(400);
@@ -213,7 +242,10 @@ test.describe('Mission Control — Privilege suspension', () => {
 
         await gotoMC(page);
 
-        const knifeCard = page.locator('button[title="Knife"]');
+        // Open privileges tab in settings
+        await openPrivilegesSettings(page);
+
+        const knifeCard = page.locator('[data-testid="mc-settings-panel"] button[title="Knife"]');
         await expect(knifeCard).toBeVisible({ timeout: 10_000 });
         await knifeCard.click();
         await page.waitForTimeout(300);
@@ -222,8 +254,12 @@ test.describe('Mission Control — Privilege suspension', () => {
         await page.locator('text=🚫 1 Day').click();
         await page.waitForTimeout(500);
 
-        // Popup closed — countdown badge should appear on the card
-        await expect(page.locator('text=/\\d+[hd] left/')).toBeVisible({ timeout: 5000 });
+        // Close settings
+        await page.locator('text=Cancel ✕').click();
+        await page.waitForTimeout(500);
+
+        // Countdown badge should appear on the dashboard card
+        await expect(page.locator('text=/\\d+[hd] left/').first()).toBeVisible({ timeout: 5000 });
 
         await app.close();
     });
@@ -246,18 +282,74 @@ test.describe('Mission Control — Privilege suspension', () => {
 
         await gotoMC(page);
 
-        // Countdown badge visible
-        await expect(page.locator('text=/\\d+[hd] left/')).toBeVisible({ timeout: 10_000 });
+        // Countdown badge visible on the dashboard card initially
+        await expect(page.locator('text=/\\d+[hd] left/').first()).toBeVisible({ timeout: 10_000 });
 
-        // Open popup and reinstate
-        const knifeCard = page.locator('button[title="Knife"]');
+        // Open privileges tab in settings
+        await openPrivilegesSettings(page);
+
+        // Open popup inside settings and reinstate
+        const knifeCard = page.locator('[data-testid="mc-settings-panel"] button[title="Knife"]');
         await knifeCard.click();
         await page.waitForTimeout(300);
         await page.locator('text=✅ Reinstate').click();
         await page.waitForTimeout(500);
 
-        // Countdown badge gone
-        await expect(page.locator('text=/\\d+[hd] left/')).not.toBeVisible({ timeout: 5000 });
+        // Close settings
+        await page.locator('text=Cancel ✕').click();
+        await page.waitForTimeout(500);
+
+        // Countdown badge gone on the dashboard card
+        await expect(page.locator('text=/\\d+[hd] left/').first()).not.toBeVisible({ timeout: 5000 });
+
+        await app.close();
+    });
+
+    test('suspending Phone Games blocks selection of the Game goal', async () => {
+        const { app, page } = await launchMC();
+
+        // 1. Ensure phone-games is active initially
+        await page.evaluate(({ key }: { key: string }) => {
+            const raw = localStorage.getItem(key);
+            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+            const privs = (state['privileges'] ?? []) as Array<Record<string, unknown>>;
+            state['privileges'] = privs.map((p) =>
+                p['id'] === 'phone-games' ? { ...p, status: 'active', suspendedUntil: null } : p,
+            );
+            localStorage.setItem(key, JSON.stringify(state));
+        }, { key: STORAGE_KEY });
+
+        await gotoMC(page);
+
+        // 2. Open settings and suspend Phone Games
+        await openPrivilegesSettings(page);
+
+        const phoneGamesCard = page.locator('[data-testid="mc-settings-panel"] button[title="Phone Games"]');
+        await expect(phoneGamesCard).toBeVisible({ timeout: 10_000 });
+        await phoneGamesCard.click();
+        await page.waitForTimeout(300);
+
+        // 3. Suspend for 1 Day
+        await page.locator('text=🚫 1 Day').click();
+        await page.waitForTimeout(500);
+
+        // 4. Close settings
+        await page.locator('text=Cancel ✕').click();
+        await page.waitForTimeout(500);
+
+        // 5. Try to click "Add Goal" on an empty pedestal
+        const addGoalBtn = page.locator('button[aria-label="Add a new goal"]').first();
+        await expect(addGoalBtn).toBeVisible({ timeout: 5000 });
+        await addGoalBtn.click();
+        await page.waitForTimeout(500);
+
+        // 6. Verify the "Game" option is NOT visible in the picker, but others are
+        await expect(page.locator('text=Pick a Goal')).toBeVisible();
+        
+        // Find buttons under the Picker to ensure we don't accidentally match another element
+        const gameButton = page.locator('button', { hasText: /^Game$/ });
+        await expect(gameButton).not.toBeVisible();
+        await expect(page.locator('button', { hasText: 'Short Show' })).toBeVisible();
 
         await app.close();
     });
