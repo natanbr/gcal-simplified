@@ -8,19 +8,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState } from '../store/useMCStore.tsx';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
-
-// ── Countdown display helper ─────────────────────────────────────────────────
-function getSuspendedText(suspendedUntil: string | null): string | null {
-    if (!suspendedUntil) return null;
-    const diff = new Date(suspendedUntil).getTime() - Date.now();
-    if (diff <= 0) return null;
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days  = Math.floor(hours / 24);
-    if (days >= 1) return `${days}d left`;
-    if (hours >= 1) return `${hours}h left`;
-    const mins = Math.floor(diff / (1000 * 60));
-    return `${mins}m left`;
-}
+import { formatSuspendedRemainingTime } from '../../utils/timeUtils';
 
 export function PrivilegesPanel({ interactive = false }: { interactive?: boolean }) {
     const state = useMCState();
@@ -156,7 +144,7 @@ export function PrivilegesPanel({ interactive = false }: { interactive?: boolean
                             Active Suspensions:
                         </span>
                         {suspendedList.map(p => {
-                            const timeText = getSuspendedText(p.suspendedUntil) ?? 'expired';
+                            const timeText = formatSuspendedRemainingTime(p.suspendedUntil) ?? 'expired';
                             return (
                                 <div
                                     key={p.id}

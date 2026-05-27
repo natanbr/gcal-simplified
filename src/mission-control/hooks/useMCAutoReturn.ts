@@ -6,7 +6,7 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMCState } from '../store/useMCStore';
 
 /**
@@ -16,21 +16,46 @@ import { useMCState } from '../store/useMCStore';
  * Rules:
  *  - Does nothing if `autoReturnMins` is 0 (disabled).
  *  - Does nothing while `activeMission !== 'none'` (mission in progress).
- *  - Timer resets on every MCState change (any dispatch re-renders this hook).
+ *  - Timer resets on any DOM interaction events (pointerdown, keydown, click) on window.
  */
 export function useMCAutoReturn(onReturn: () => void): void {
     const { activeMission, settings } = useMCState();
     const timeoutMins = settings.autoReturnMins ?? 5;
+    const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         // Disabled explicitly or mission is running — do not schedule a return.
-        if (timeoutMins === 0 || activeMission !== 'none') return;
+        if (timeoutMins === 0 || activeMission !== 'none') {
+            if (timeoutIdRef.current) {
+                clearTimeout(timeoutIdRef.current);
+                timeoutIdRef.current = null;
+            }
+            return;
+        }
 
-        const id = setTimeout(onReturn, timeoutMins * 60 * 1000);
-        return () => clearTimeout(id);
+        const resetTimer = () => {
+            if (timeoutIdRef.current) {
+                clearTimeout(timeoutIdRef.current);
+            }
+            timeoutIdRef.current = setTimeout(onReturn, timeoutMins * 60 * 1000);
+        };
 
-        // NOTE: `onReturn` identity is stable (useCallback in App.tsx).
-        // `activeMission` and `timeoutMins` changes correctly reset the timer
-        // because useEffect re-fires and clears + restarts the timeout.
+        // Start initial timer
+        resetTimer();
+
+        // Listen for true DOM user interaction events on window
+        window.addEventListener('pointerdown', resetTimer);
+        window.addEventListener('keydown', resetTimer);
+        window.addEventListener('click', resetTimer);
+
+        return () => {
+            if (timeoutIdRef.current) {
+                clearTimeout(timeoutIdRef.current);
+                timeoutIdRef.current = null;
+            }
+            window.removeEventListener('pointerdown', resetTimer);
+            window.removeEventListener('keydown', resetTimer);
+            window.removeEventListener('click', resetTimer);
+        };
     }, [timeoutMins, activeMission, onReturn]);
 }
