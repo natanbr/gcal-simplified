@@ -80,6 +80,11 @@ test.describe('Week Display Customization', () => {
 
         });
 
+        // Clear local storage to ensure no active mission overlay blocks settings
+        await window.evaluate(() => {
+            localStorage.clear();
+        });
+
         // Reload window to apply mocked handlers
         await window.reload();
         await window.waitForLoadState('domcontentloaded');

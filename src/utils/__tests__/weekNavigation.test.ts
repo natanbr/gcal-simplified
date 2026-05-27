@@ -12,10 +12,18 @@ describe('weekNavigation', () => {
                 expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-04');
             });
 
-            it('should return same day next week when offset is 1', () => {
+            it('should return Monday of next week when offset is 1', () => {
+                // Wednesday, Feb 4, 2026 -> next week Monday should be Feb 9, 2026
                 const wednesday = new Date(2026, 1, 4, 18, 41, 50);
                 const result = getWeekStartDate(wednesday, 1, 'today');
-                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-11');
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-09');
+            });
+
+            it('should return Monday of two weeks later when offset is 2', () => {
+                // Wednesday, Feb 4, 2026 -> two weeks later Monday should be Feb 16, 2026
+                const wednesday = new Date(2026, 1, 4, 18, 41, 50);
+                const result = getWeekStartDate(wednesday, 2, 'today');
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-16');
             });
         });
 

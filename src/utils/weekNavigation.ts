@@ -6,8 +6,8 @@ export type WeekStartDay = 'sunday' | 'monday' | 'today';
  * Get the start date for a week view
  */
 export function getWeekStartDate(referenceDate: Date, weekOffset: number, weekStartDay: WeekStartDay = 'today'): Date {
-    if (weekStartDay === 'today') {
-        return addWeeks(referenceDate, weekOffset);
+    if (weekStartDay === 'today' && weekOffset === 0) {
+        return referenceDate;
     }
 
     const weekStartsOn = weekStartDay === 'sunday' ? 0 : 1;

@@ -18,7 +18,7 @@ export const MonthlyView: React.FC<MonthlyViewProps> = ({ days, events, onEventC
     const firstDay = days[0].getDay();
     const orderedDayNames = [...dayNames.slice(firstDay), ...dayNames.slice(0, firstDay)];
 
-    // Pre-calculate events per day to avoid O(35 * N) filtering and redundant Date object creation
+    // Pre-calculate events per day to avoid O(42 * N) filtering and redundant Date object creation
     const eventsByDayMap = useMemo(() => {
         const map = new Map<string, AppEvent[]>();
 
@@ -49,7 +49,7 @@ export const MonthlyView: React.FC<MonthlyViewProps> = ({ days, events, onEventC
             </div>
 
             {/* Grid */}
-            <div className="flex-1 grid grid-cols-7 grid-rows-5 divide-x divide-y divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex-1 grid grid-cols-7 grid-rows-6 divide-x divide-y divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800">
                 {days.map((day) => {
                     const dateStr = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
                     const dayEvents = eventsByDayMap.get(dateStr) || [];
