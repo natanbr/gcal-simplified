@@ -7,10 +7,17 @@ import { DragLayer } from './mission-control/components/DragLayer';
 import { MissionOverlay } from './mission-control/components/MissionOverlay';
 import { useMissionScheduler } from './mission-control/hooks/useMissionScheduler';
 import { useMCAutoReturn } from './mission-control/hooks/useMCAutoReturn';
+import { useRemoteControl } from './mission-control/hooks/useRemoteControl';
 
 // ── Scheduler hook — runs at App level so it works on both views ──────────────
 function MissionSchedulerBridge() {
   useMissionScheduler();
+  return null;
+}
+
+// ── Remote control bridge — runs at App level so it works on both views ───────
+function RemoteControlBridge() {
+  useRemoteControl();
   return null;
 }
 
@@ -92,6 +99,9 @@ function App() {
       <DragLayer>
         {/* Scheduler always running */}
         <MissionSchedulerBridge />
+
+        {/* Remote control listener always running */}
+        <RemoteControlBridge />
 
         {/* Mission overlay always mounted — position:fixed, overlays any view */}
         <MissionOverlay />

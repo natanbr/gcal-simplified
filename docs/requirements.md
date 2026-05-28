@@ -105,6 +105,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **QR Code Pairing**: Displayed in Settings for easy mobile connection.
   - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
   - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
+  - **Global Listener**: The remote action listener is registered globally in the application shell. This guarantees that remote commands are processed continuously, even when viewing the calendar or when the mission overlay is active.
 
 ## UX / UI Enhancements
 

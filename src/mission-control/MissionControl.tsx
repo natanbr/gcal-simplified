@@ -21,7 +21,6 @@ import { MCSettingsOverlay } from './components/MCSettingsOverlay';
 import { PrivilegeCardButton } from './components/PrivilegeCardButton';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
-import { useRemoteControl } from './hooks/useRemoteControl';
 import { useMCDispatch, useMCState } from './store/useMCStore.tsx';
 import { RemoteStatusProvider, useRemoteStatus } from './contexts/RemoteStatusContext';
 import './styles/mc.css';
@@ -70,9 +69,6 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const state    = useMCState();
   const dispatch  = useMCDispatch();
   
-  // Start listening for remote control actions
-  useRemoteControl();
-
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [snakeGameOpen, setSnakeGameOpen] = useState(false);
   const snakeGameStartRef = useRef<string | null>(null);

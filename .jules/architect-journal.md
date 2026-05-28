@@ -55,3 +55,8 @@
 **Invariant: LocalStorage Isolation in Electron E2E Tests.** Stale/cached local storage state (like an active mission) can bleed across runs or host environments and mount blocking overlays (like the MC mission overlay) that obscure main UI settings. E2E tests running on the main calendar screen must explicitly call `localStorage.clear()` in a `beforeEach` block to guarantee a clean slate.
 
 **Pattern: Visual Token Progress Assertions.** When redundant text counters (e.g. `x / y completed`) are removed from the UI in favor of visual tokens, E2E tests should verify progress by asserting the counts of the respective emoji element (e.g. `♻️` for recycling) on the page. Be sure to account for header icons and button fallbacks in the expected element count.
+
+## 2026-05-28 - Global Listener Lifecycle Alignment
+
+**Pattern: Global Listeners for Global Stores.** When an event listener updates a global state store (e.g. IPC, WebSocket, or Supabase listeners targeting `MCStore`), avoid registering the listener hook within individual view/layout components that mount and unmount during routing. Instead, mount the listener at the same high-level scope as the store provider (e.g., via a bridge component in `App.tsx`), ensuring events are continuously captured and state is updated even when the primary UI view changes.
+
