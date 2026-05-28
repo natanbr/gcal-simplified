@@ -16,46 +16,43 @@ import { useMCState } from '../store/useMCStore';
  * Rules:
  *  - Does nothing if `autoReturnMins` is 0 (disabled).
  *  - Does nothing while `activeMission !== 'none'` (mission in progress).
- *  - Timer resets on any DOM interaction events (pointerdown, keydown, click) on window.
+ *  - Timer resets on every user interaction (pointerdown, keydown, click).
  */
 export function useMCAutoReturn(onReturn: () => void): void {
     const { activeMission, settings } = useMCState();
     const timeoutMins = settings.autoReturnMins ?? 5;
-    const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+    const onReturnRef = useRef(onReturn);
+    onReturnRef.current = onReturn;
 
     useEffect(() => {
         // Disabled explicitly or mission is running — do not schedule a return.
-        if (timeoutMins === 0 || activeMission !== 'none') {
-            if (timeoutIdRef.current) {
-                clearTimeout(timeoutIdRef.current);
-                timeoutIdRef.current = null;
-            }
-            return;
-        }
+        if (timeoutMins === 0 || activeMission !== 'none') return;
+
+        let timerId: NodeJS.Timeout;
 
         const resetTimer = () => {
-            if (timeoutIdRef.current) {
-                clearTimeout(timeoutIdRef.current);
-            }
-            timeoutIdRef.current = setTimeout(onReturn, timeoutMins * 60 * 1000);
+            if (timerId) clearTimeout(timerId);
+            timerId = setTimeout(() => {
+                onReturnRef.current();
+            }, timeoutMins * 60 * 1000);
         };
 
-        // Start initial timer
+        // Initialize timer
         resetTimer();
 
-        // Listen for true DOM user interaction events on window
-        window.addEventListener('pointerdown', resetTimer);
-        window.addEventListener('keydown', resetTimer);
-        window.addEventListener('click', resetTimer);
+        // Listen for user interaction events to reset the idle timer
+        const events = ['pointerdown', 'keydown', 'click'];
+        const eventOptions = { passive: true };
+
+        events.forEach(event => {
+            window.addEventListener(event, resetTimer, eventOptions);
+        });
 
         return () => {
-            if (timeoutIdRef.current) {
-                clearTimeout(timeoutIdRef.current);
-                timeoutIdRef.current = null;
-            }
-            window.removeEventListener('pointerdown', resetTimer);
-            window.removeEventListener('keydown', resetTimer);
-            window.removeEventListener('click', resetTimer);
+            if (timerId) clearTimeout(timerId);
+            events.forEach(event => {
+                window.removeEventListener(event, resetTimer);
+            });
         };
-    }, [timeoutMins, activeMission, onReturn]);
+    }, [timeoutMins, activeMission]);
 }
