@@ -4,7 +4,7 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch, useMCState, selectTotalWealth, MIN_WEALTH_FOR_GAMES } from '../store/useMCStore';
 import { Button3D } from './Button3D';
@@ -170,6 +170,19 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
   );
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
 
+  // Cache active cases for O(1) lookup during high-frequency drag events
+  const activeCasesMap = useMemo(() => {
+    const map = new Map<number, boolean>();
+    if (cases) {
+      cases.forEach(c => {
+        if (c.status === 'active') {
+          map.set(c.id, true);
+        }
+      });
+    }
+    return map;
+  }, [cases]);
+
   // Sync token length
   const prevCount = useRef(case_.tokenCount);
   useEffect(() => {
@@ -205,13 +218,17 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     // Check if dropped on another active Case
     const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
       if (!rect) return false;
+
+      // Bounds check FIRST to short-circuit O(1) lookups
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        return false;
+      }
+
       const targetCaseId = Number.parseInt(id);
       if (targetCaseId === case_.id) return false;
       
-      const targetCase = cases.find(c => c.id === targetCaseId);
-      if (!targetCase || targetCase.status !== 'active') return false;
-
-      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      // Only deposit into active cases
+      return activeCasesMap.has(targetCaseId);
     });
 
     if (hit) {
@@ -231,7 +248,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
 
     return false;
-  }, [case_.id, cases, layoutRects, dispatch]);
+  }, [case_.id, layoutRects, dispatch, activeCasesMap]);
 
   const reward = case_.reward ? REWARD_MAP[case_.reward] : null;
   const isComplete = case_.status === 'active' && case_.tokenCount >= case_.targetCount;
