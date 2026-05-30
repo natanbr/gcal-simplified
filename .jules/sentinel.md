@@ -25,3 +25,8 @@
 **Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
 **Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
 **Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
+
+## 2026-05-03 - [Predictable Math.random() UUIDs]
+**Vulnerability:** `Math.random()` was used to generate UUIDs/IDs for fallback events and activity logs.
+**Learning:** `Math.random()` is pseudorandom and predictable, leading to potential ID collisions and exposing state if an attacker can guess IDs. It should never be used where uniqueness or security is expected.
+**Prevention:** Use `crypto.randomUUID()` (Node) or `self.crypto.randomUUID()` (Browser) to generate cryptographically secure UUID v4s.
