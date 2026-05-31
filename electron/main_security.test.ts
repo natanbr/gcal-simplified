@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => {
   // Session Mock
   const mockSession = {
     defaultSession: {
+      setPermissionRequestHandler: vi.fn(),
+      setPermissionCheckHandler: vi.fn(),
       webRequest: {
         onHeadersReceived: vi.fn()
       }
@@ -171,11 +173,33 @@ describe('Main Process Security Configuration', () => {
     // We expect the CSP to allow fonts.gstatic.com in img-src
     expect(csp).toContain("img-src");
     expect(csp).toContain("https://fonts.gstatic.com");
-    
+
     // Ensure fonts.gstatic.com is specifically whitelisted inside the img-src directive
     const imgSrcMatch = csp.match(/img-src\s+([^;]+)/);
     expect(imgSrcMatch).not.toBeNull();
     expect(imgSrcMatch[1]).toContain("https://fonts.gstatic.com");
+  });
+
+  it('should enforce default-deny permissions', async () => {
+    // Import main.ts to trigger the logic
+    await import('./main');
+
+    // Wait briefly for the promise resolution in main.ts
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(mocks.mockSession.defaultSession.setPermissionRequestHandler).toHaveBeenCalled();
+    expect(mocks.mockSession.defaultSession.setPermissionCheckHandler).toHaveBeenCalled();
+
+    // Verify setPermissionRequestHandler denies
+    const requestHandler = mocks.mockSession.defaultSession.setPermissionRequestHandler.mock.calls[0][0];
+    const mockCallback = vi.fn();
+    requestHandler({}, 'geolocation', mockCallback);
+    expect(mockCallback).toHaveBeenCalledWith(false);
+
+    // Verify setPermissionCheckHandler denies
+    const checkHandler = mocks.mockSession.defaultSession.setPermissionCheckHandler.mock.calls[0][0];
+    const checkResult = checkHandler({}, 'geolocation', 'https://example.com', {});
+    expect(checkResult).toBe(false);
   });
 });
 
