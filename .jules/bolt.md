@@ -29,3 +29,6 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+## 2023-10-27 - Offload Continuous Animations to CSS
+**Learning:** Framer Motion`s `repeat: Infinity` causes continuous JS main thread activity via `requestAnimationFrame`, leading to constant background CPU usage for permanently mounted or frequent animations (like pulsing indicators).
+**Action:** Use pure CSS `@keyframes` and classes for infinite or long-running repeating animations to offload work to the browser`s compositor thread, saving CPU cycles.

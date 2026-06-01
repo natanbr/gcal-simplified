@@ -154,12 +154,9 @@ function GoodJobEffect() {
                 filter: 'drop-shadow(0 10px 25px rgba(0,0,0,0.3))'
             }}
         >
-            <motion.div 
-                animate={{ y: [0, -20, 0] }} 
-                transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
-            >
+            <div className="mc-anim-good-job-bounce">
                 😊👍
-            </motion.div>
+            </div>
         </motion.div>
     );
 }
