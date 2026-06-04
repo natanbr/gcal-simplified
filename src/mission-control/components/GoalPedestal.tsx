@@ -205,13 +205,18 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     // Check if dropped on another active Case
     const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
       if (!rect) return false;
+
+      // 1. Coordinate bounds check first (short-circuit)
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return false;
+
       const targetCaseId = Number.parseInt(id);
       if (targetCaseId === case_.id) return false;
       
+      // 2. Lookup after bounds check
       const targetCase = cases.find(c => c.id === targetCaseId);
       if (!targetCase || targetCase.status !== 'active') return false;
 
-      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      return true;
     });
 
     if (hit) {
