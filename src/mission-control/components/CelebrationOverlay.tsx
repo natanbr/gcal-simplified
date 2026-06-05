@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState } from '../store/useMCStore';
+import { MCAnimationType } from '../types';
 
 export function CelebrationOverlay() {
     const state = useMCState();
-    const [active, setActive] = useState<string | null>(null);
+    const [active, setActive] = useState<MCAnimationType | null>(null);
     const [triggerId, setTriggerId] = useState<number>(0);
 
     useEffect(() => {
@@ -37,6 +38,7 @@ export function CelebrationOverlay() {
             )}
             {active === 'good-job' && <GoodJobEffect key={triggerId} />}
             {active === 'too-loud' && <TooLoudEffect key={triggerId} />}
+            {active && active in NOTO_EMOJI_MAP && <NotoEmojiEffect key={triggerId} type={active} />}
         </div>
     );
 }
@@ -215,5 +217,58 @@ function TooLoudEffect() {
                 )}
             </AnimatePresence>
         </div>
+    );
+}
+
+const NOTO_EMOJI_MAP: Record<string, { codepoint: string; fallback: string }> = {
+    'clap': { codepoint: '1f44f', fallback: '👏' },
+    'thumbs-up': { codepoint: '1f44d', fallback: '👍' },
+    'slightly-happy': { codepoint: '1f642', fallback: '🙂' },
+    'triumph': { codepoint: '1f624', fallback: '😤' },
+    'scrunched': { codepoint: '1f616', fallback: '😖' },
+    'shaking-face': { codepoint: '1fae8', fallback: '🫨' },
+    'hear-no-evil': { codepoint: '1f649', fallback: '🙉' },
+    'hourglass': { codepoint: '23f3', fallback: '⏳' },
+    'check-mark': { codepoint: '2705', fallback: '✅' },
+    'cross-mark': { codepoint: '274c', fallback: '❌' },
+};
+
+function NotoEmojiEffect({ type }: { type: string }) {
+    const emojiInfo = NOTO_EMOJI_MAP[type];
+    if (!emojiInfo) return null;
+
+    const webpUrl = `https://fonts.gstatic.com/s/e/notoemoji/latest/${emojiInfo.codepoint}/512.webp`;
+    const gifUrl = `https://fonts.gstatic.com/s/e/notoemoji/latest/${emojiInfo.codepoint}/512.gif`;
+
+    return (
+        <motion.div
+            initial={{ scale: 0, y: 100, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+            style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                filter: 'drop-shadow(0 15px 30px rgba(0,0,0,0.4))'
+            }}
+        >
+            <motion.div 
+                animate={{ y: [0, -15, 0] }} 
+                transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                style={{ width: 160, height: 160 }}
+            >
+                <picture>
+                    <source srcSet={webpUrl} type="image/webp" />
+                    <img src={gifUrl} alt={emojiInfo.fallback} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </picture>
+            </motion.div>
+        </motion.div>
     );
 }
