@@ -29,3 +29,4 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+## 2026-06-04 - Drag-and-Drop Map Creation Anti-Pattern\n**Learning:** Creating a Map inside a render cycle (even with useMemo) for drag-and-drop hit detection trades an infrequent O(N) array lookup (only happens on drop) for an expensive O(N) map creation on every state update. This causes a net performance loss.\n**Action:** Optimize hit detection by keeping the array but reordering the evaluation to do a fast geometric bounds check (O(1)) first, short-circuiting the logic before executing the expensive array find.
