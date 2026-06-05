@@ -52,6 +52,7 @@ function deriveSnapshots(state: MCState, action: Parameters<typeof mcReducer>[1]
             if (typeof action.to === 'number') {
                 const targetCase = state.cases.find(c => c.id === action.to);
                 if (!targetCase || targetCase.status !== 'active') valid = false;
+                if (targetCase && (targetCase.reward === 'quick-game' || targetCase.tokenCount >= targetCase.targetCount)) valid = false;
             }
             if (valid) {
                 if (action.from === 'bank') {
@@ -66,7 +67,7 @@ function deriveSnapshots(state: MCState, action: Parameters<typeof mcReducer>[1]
         case 'VACUUM_TO_CASE': {
             if (state.bankCount > 0) {
                 const vacuumTarget = state.cases.find(c => c.id === action.caseId);
-                if (vacuumTarget) {
+                if (vacuumTarget && vacuumTarget.reward !== 'quick-game') {
                     const canAdd = Math.min(state.bankCount, vacuumTarget.targetCount - vacuumTarget.tokenCount);
                     if (canAdd > 0) {
                         nextBank -= canAdd;

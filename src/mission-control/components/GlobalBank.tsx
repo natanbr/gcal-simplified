@@ -93,8 +93,10 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
         if (!rect) return false;
         const caseId = Number.parseInt(id);
         const targetCase = cases.find(c => c.id === caseId);
-        // Only deposit into active cases
+        // Only deposit into active, incomplete, non-quick-game cases
         if (!targetCase || targetCase.status !== 'active') return false;
+        if (targetCase.reward === 'quick-game') return false;
+        if (targetCase.tokenCount >= targetCase.targetCount) return false;
         return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
       });
 

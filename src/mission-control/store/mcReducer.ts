@@ -175,6 +175,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             if (typeof action.to === 'number') {
                 const targetCase = state.cases.find(c => c.id === action.to);
                 if (!targetCase || targetCase.status !== 'active') return state;
+                if (targetCase.reward === 'quick-game') return state;
+                if (targetCase.tokenCount >= targetCase.targetCount) return state;
             }
 
             let newBankCount = state.bankCount;
@@ -205,6 +207,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             if (state.bankCount === 0) return state;
             const vacuumTarget = state.cases.find(c => c.id === action.caseId);
             if (!vacuumTarget) return state;
+            if (vacuumTarget.reward === 'quick-game') return state;
             const canAdd = Math.min(state.bankCount, vacuumTarget.targetCount - vacuumTarget.tokenCount);
             if (canAdd <= 0) return state;
             return {

@@ -210,6 +210,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
       
       const targetCase = cases.find(c => c.id === targetCaseId);
       if (!targetCase || targetCase.status !== 'active') return false;
+      if (targetCase.reward === 'quick-game') return false;
+      if (targetCase.tokenCount >= targetCase.targetCount) return false;
 
       return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
     });

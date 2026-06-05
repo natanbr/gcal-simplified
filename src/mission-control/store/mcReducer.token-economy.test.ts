@@ -189,6 +189,30 @@ describe('mcReducer — MOVE_TOKEN', () => {
         expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(2);
         expect(state.cases.find(c => c.id === 2)!.tokenCount).toBe(0);
     });
+
+    it('does nothing if target case is already full', () => {
+        const fullState: MCState = {
+            ...activeState,
+            cases: activeState.cases.map(c =>
+                c.id === 0 ? { ...c, tokenCount: 5, targetCount: 5 } : c
+            )
+        };
+        const state = mcReducer(fullState, { type: 'MOVE_TOKEN', from: 'bank', to: 0 });
+        expect(state.bankCount).toBe(5);
+        expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(5);
+    });
+
+    it('does nothing if target case is quick-game', () => {
+        const quickGameState: MCState = {
+            ...activeState,
+            cases: activeState.cases.map(c =>
+                c.id === 0 ? { ...c, reward: 'quick-game', tokenCount: 0, targetCount: 1 } : c
+            )
+        };
+        const state = mcReducer(quickGameState, { type: 'MOVE_TOKEN', from: 'bank', to: 0 });
+        expect(state.bankCount).toBe(5);
+        expect(state.cases.find(c => c.id === 0)!.tokenCount).toBe(0);
+    });
 });
 
 // ── VACUUM_TO_CASE ──────────────────────────────────────────────────────────
@@ -234,6 +258,18 @@ describe('mcReducer — VACUUM_TO_CASE', () => {
         const state = mcReducer(limited, { type: 'VACUUM_TO_CASE', caseId: 0 });
         expect(case0(state).tokenCount).toBe(3);  // 1 + 2
         expect(state.bankCount).toBe(0);
+    });
+
+    it('is a no-op when case is quick-game', () => {
+        const quickGameState: MCState = {
+            ...activeState,
+            cases: activeState.cases.map(c =>
+                c.id === 0 ? { ...c, reward: 'quick-game', tokenCount: 0, targetCount: 1 } : c
+            )
+        };
+        const state = mcReducer(quickGameState, { type: 'VACUUM_TO_CASE', caseId: 0 });
+        expect(case0(state).tokenCount).toBe(0);
+        expect(state.bankCount).toBe(10);
     });
 });
 
