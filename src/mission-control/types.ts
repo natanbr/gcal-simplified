@@ -178,9 +178,26 @@ export interface MCState {
     /** ISO date string (YYYY-MM-DD) of the last day a game token was granted. */
     gameTokensLastGrantedDate: string | null;
     /** Track remote animation triggers */
-    lastAnimationTrigger?: { type: 'fireworks' | 'confetti' | 'confetti-fireworks' | 'good-job' | 'too-loud'; timestamp: number };
+    lastAnimationTrigger?: { type: MCAnimationType; timestamp: number };
     _migrationVersion?: number;
 }
+
+export type MCAnimationType =
+    | 'fireworks'
+    | 'confetti'
+    | 'confetti-fireworks'
+    | 'good-job'
+    | 'too-loud'
+    | 'clap'
+    | 'thumbs-up'
+    | 'slightly-happy'
+    | 'triumph'
+    | 'scrunched'
+    | 'shaking-face'
+    | 'hear-no-evil'
+    | 'hourglass'
+    | 'check-mark'
+    | 'cross-mark';
 
 // --------------- Action Discriminated Union ---------------
 
@@ -214,6 +231,6 @@ export type MCAction = (
     | { type: 'GRANT_GAME_TOKEN'; force?: boolean }
     | { type: 'CONSUME_GAME_TOKEN' }
     | { type: 'RESET_GAME_TOKENS' }
-    | { type: 'TRIGGER_ANIMATION'; animation: 'fireworks' | 'confetti' | 'confetti-fireworks' | 'good-job' | 'too-loud' }
+    | { type: 'TRIGGER_ANIMATION'; animation: MCAnimationType }
     | { type: 'CLEAR_LOGS' }
 ) & { isRemote?: boolean };
