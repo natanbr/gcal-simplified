@@ -5,7 +5,7 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch } from '../store/useMCStore.tsx';
 import { Token } from './Token';
@@ -83,6 +83,17 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
     }
   }, [state.bankCount]);
 
+  // Cache active cases for O(1) lookup during high-frequency drag events
+  const activeCasesMap = useMemo(() => {
+    const map = new Map<number, boolean>();
+    cases.forEach(c => {
+      if (c.status === 'active') {
+        map.set(c.id, true);
+      }
+    });
+    return map;
+  }, [cases]);
+
   // ------------------------------------------------------------------
   // Drop handler — called by Token via onDrop(id, x, y)
   // ------------------------------------------------------------------
@@ -91,11 +102,15 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
       // Find the first ACTIVE case whose rect contains the drop point
       const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
         if (!rect) return false;
+
+        // Bounds check FIRST to short-circuit O(1) lookups
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+          return false;
+        }
+
         const caseId = Number.parseInt(id);
-        const targetCase = cases.find(c => c.id === caseId);
         // Only deposit into active cases
-        if (!targetCase || targetCase.status !== 'active') return false;
-        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        return activeCasesMap.has(caseId);
       });
 
       if (!hit) {
