@@ -279,3 +279,138 @@ describe('Scheduler logic — timer deactivation', () => {
         expect(state.activeMission).toBe('morning');
     });
 });
+
+import { renderHook } from '@testing-library/react';
+import React from 'react';
+import { useMissionScheduler } from './useMissionScheduler';
+import { MCContext } from '../store/useMCStore';
+
+describe('useMissionScheduler hook execution', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    it('mounts the hook and schedules timeouts', () => {
+        const mockDispatch = vi.fn();
+        const mockContextValue = {
+            state: {
+                ...initialState,
+                missions: [
+                    {
+                        phase: 'morning' as const,
+                        startsAt: '06:00',
+                        endsAt: '06:30',
+                        durationMins: 30,
+                        startedAt: null,
+                        tasks: [],
+                    }
+                ]
+            },
+            dispatch: mockDispatch,
+        };
+
+        const wrapper = ({ children }: { children: React.ReactNode }) =>
+            React.createElement(MCContext.Provider, { value: mockContextValue }, children);
+
+        // Advance system time to 05:59:00
+        const d = new Date();
+        d.setHours(5, 59, 0, 0);
+        vi.setSystemTime(d);
+
+        // Mount hook
+        const { unmount } = renderHook(() => useMissionScheduler(), { wrapper });
+
+        // Advance past 06:00 (60 seconds)
+        vi.advanceTimersByTime(60 * 1000);
+
+        // It should have dispatched SET_ACTIVE_MISSION
+        expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+
+        unmount();
+    });
+
+    it('polls duration countdowns and dispatches deactivation when expired', () => {
+        const mockDispatch = vi.fn();
+        
+        // Active morning mission, started 31 minutes ago (duration 30 mins)
+        const startedTime = new Date();
+        startedTime.setMinutes(startedTime.getMinutes() - 31);
+
+        const mockContextValue = {
+            state: {
+                ...initialState,
+                activeMission: 'morning' as const,
+                missions: [
+                    {
+                        phase: 'morning' as const,
+                        startsAt: '06:00',
+                        endsAt: '06:30',
+                        durationMins: 30,
+                        startedAt: startedTime.toISOString(),
+                        tasks: [],
+                    }
+                ]
+            },
+            dispatch: mockDispatch,
+        };
+
+        const wrapper = ({ children }: { children: React.ReactNode }) =>
+            React.createElement(MCContext.Provider, { value: mockContextValue }, children);
+
+        const { unmount } = renderHook(() => useMissionScheduler(), { wrapper });
+
+        // Polling interval is 15 seconds. Advance past it.
+        vi.advanceTimersByTime(15 * 1000);
+
+        // It should have dispatched deactivation
+        expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_ACTIVE_MISSION', phase: 'none' });
+        unmount();
+    });
+
+    it('does not trigger morning mission if already run today', () => {
+        const mockDispatch = vi.fn();
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${month}-${day}`;
+
+        const mockContextValue = {
+            state: {
+                ...initialState,
+                lastCompletedOrFailedMorningDate: todayStr,
+                missions: [
+                    {
+                        phase: 'morning' as const,
+                        startsAt: '06:00',
+                        endsAt: '06:30',
+                        durationMins: 30,
+                        startedAt: null,
+                        tasks: [],
+                    }
+                ]
+            },
+            dispatch: mockDispatch,
+        };
+
+        const wrapper = ({ children }: { children: React.ReactNode }) =>
+            React.createElement(MCContext.Provider, { value: mockContextValue }, children);
+
+        d.setHours(5, 59, 0, 0);
+        vi.setSystemTime(d);
+
+        const { unmount } = renderHook(() => useMissionScheduler(), { wrapper });
+
+        // Advance past 06:00
+        vi.advanceTimersByTime(60 * 1000);
+
+        // It should NOT have dispatched SET_ACTIVE_MISSION
+        expect(mockDispatch).not.toHaveBeenCalled();
+        unmount();
+    });
+});

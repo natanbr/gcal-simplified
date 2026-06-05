@@ -64,8 +64,10 @@ export function TaskCard({ task, phase, accent }: TaskCardProps) {
     const [justDone, setJustDone] = useState(false);
 
     const handleTap = () => {
-        if (task.locked || task.completed) return;
-        setJustDone(true);
+        if (task.locked) return;
+        if (!task.completed) {
+            setJustDone(true);
+        }
         dispatch({ type: 'COMPLETE_TASK', missionPhase: phase, taskId: task.id });
     };
 
@@ -76,8 +78,8 @@ export function TaskCard({ task, phase, accent }: TaskCardProps) {
     }, [justDone]);
 
     const { locked: isLocked, completed: isCompleted } = task;
-    const isInteractive = !isLocked && !isCompleted;
-    const isBlocked     = isLocked || isCompleted;
+    const isInteractive = !isLocked;
+    const isBlocked     = isLocked;
 
     return (
         <motion.button

@@ -18,6 +18,14 @@ import type {
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 
+function getLocalDateString(): string {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // ---- Default State ----
 
 const defaultCases: DisplayCase[] = [
@@ -109,6 +117,9 @@ export const initialState: MCState = {
     hasUnreviewedCheatAttempt: false,
     gameTokens: 0,
     gameTokensLastGrantedDate: null,
+    snakeGameActive: false,
+    lastCompletedOrFailedMorningDate: null,
+    lastCompletedOrFailedEveningDate: null,
 };
 
 // ---- Reducer ----
@@ -235,17 +246,28 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
 
         case 'COMPLETE_TASK': {
             const nextState = { ...state };
+            const currentMission = state.missions.find(m => m.phase === action.missionPhase);
+            const currentTask = currentMission?.tasks.find(t => t.id === action.taskId);
+            if (!currentTask) return state;
+
+            const wasCompleted = currentTask.completed;
+            const nextCompleted = !wasCompleted;
+
             if (action.taskId === 'cream') {
                 const schedule = state.settings.creamTaskSchedule ?? 'evening';
                 const dec = schedule === 'both' ? 0.5 : 1;
-                nextState.creamTaskDaysLeft = Math.max(0, state.creamTaskDaysLeft - dec);
+                if (nextCompleted) {
+                    nextState.creamTaskDaysLeft = Math.max(0, state.creamTaskDaysLeft - dec);
+                } else {
+                    nextState.creamTaskDaysLeft = state.creamTaskDaysLeft + dec;
+                }
             }
             nextState.missions = nextState.missions.map(m =>
                 m.phase === action.missionPhase
                     ? {
                         ...m,
                         tasks: m.tasks.map(t =>
-                            t.id === action.taskId ? { ...t, completed: true } : t,
+                            t.id === action.taskId ? { ...t, completed: nextCompleted } : t,
                         ),
                     }
                     : m,
@@ -369,6 +391,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 activeMission: 'none',
                 bankCount: state.bankCount + action.bonusTokens,
+                ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString() } : {}),
+                ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString() } : {}),
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
                         ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
@@ -379,6 +403,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         case 'MARK_MISSION_TIMEOUT':
             return {
                 ...state,
+                ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString() } : {}),
+                ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString() } : {}),
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
                         ? { ...m, loggedTimeoutAt: new Date().toISOString() }
@@ -578,6 +604,18 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                     type: action.animation,
                     timestamp: Date.now()
                 }
+            };
+
+        case 'START_GAME':
+            return {
+                ...state,
+                snakeGameActive: true
+            };
+
+        case 'END_GAME':
+            return {
+                ...state,
+                snakeGameActive: false
             };
 
         default:

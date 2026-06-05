@@ -43,8 +43,22 @@ export function useMissionScheduler(): void {
                 timeouts.delete(id); // Clean up self first
 
                 const s = stateRef.current;
-                // Only trigger if no mission is currently running
-                if (s.activeMission === 'none') {
+
+                const d = new Date();
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const todayStr = `${year}-${month}-${day}`;
+
+                const alreadyRun =
+                    phase === 'morning'
+                        ? s.lastCompletedOrFailedMorningDate === todayStr
+                        : phase === 'evening'
+                        ? s.lastCompletedOrFailedEveningDate === todayStr
+                        : false;
+
+                // Only trigger if no mission is currently running AND it hasn't run today yet
+                if (s.activeMission === 'none' && !alreadyRun) {
                     dispatch({ type: 'SET_ACTIVE_MISSION', phase });
                 }
 

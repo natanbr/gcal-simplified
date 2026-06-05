@@ -19,14 +19,14 @@ import { useMCState } from '../store/useMCStore';
  *  - Timer resets on every user interaction (pointerdown, keydown, click).
  */
 export function useMCAutoReturn(onReturn: () => void): void {
-    const { activeMission, settings } = useMCState();
+    const { activeMission, settings, snakeGameActive } = useMCState();
     const timeoutMins = settings.autoReturnMins ?? 5;
     const onReturnRef = useRef(onReturn);
     onReturnRef.current = onReturn;
 
     useEffect(() => {
-        // Disabled explicitly or mission is running — do not schedule a return.
-        if (timeoutMins === 0 || activeMission !== 'none') return;
+        // Disabled explicitly, mission is running, or snake game is active — do not schedule a return.
+        if (timeoutMins === 0 || activeMission !== 'none' || snakeGameActive) return;
 
         let timerId: NodeJS.Timeout;
 
@@ -54,5 +54,5 @@ export function useMCAutoReturn(onReturn: () => void): void {
                 window.removeEventListener(event, resetTimer);
             });
         };
-    }, [timeoutMins, activeMission]);
+    }, [timeoutMins, activeMission, snakeGameActive]);
 }

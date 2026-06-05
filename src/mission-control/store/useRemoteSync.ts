@@ -23,6 +23,25 @@ export function useRemoteSync(state: MCState) {
             activeMission: stateRef.current.activeMission,
             missionStartedAt: activeMissionObj?.startedAt ?? null,
             missionDurationMins: activeMissionObj?.durationMins ?? null,
+            whiningDetected: activeMissionObj?.whiningDetected ?? false,
+            missionTasks: activeMissionObj?.tasks?.map(t => ({
+                id: t.id,
+                label: t.label,
+                icon: t.icon,
+                completed: t.completed,
+                locked: t.locked
+            })) ?? [],
+            snakeGameActive: stateRef.current.snakeGameActive,
+            activityLogs: stateRef.current.activityLogs.slice(0, 20).map(log => ({
+                id: log.id,
+                timestamp: log.timestamp,
+                icon: log.icon,
+                message: log.message,
+                delta: log.delta,
+                type: log.type,
+                colorKey: log.colorKey,
+                isRemote: log.isRemote
+            })),
             responsibilities: stateRef.current.responsibilities.map(r => ({
                 id: r.id,
                 pointsEarned: r.pointsEarned,
@@ -47,7 +66,17 @@ export function useRemoteSync(state: MCState) {
         // Debounce state sync to avoid flooding Supabase (sync every 1s of stability)
         const timer = setTimeout(broadcast, 1000);
         return () => clearTimeout(timer);
-    }, [state.bankCount, state.gameTokens, state.activeMission, state.missions, state.responsibilities, state.privileges, broadcast]);
+    }, [
+        state.bankCount,
+        state.gameTokens,
+        state.activeMission,
+        state.missions,
+        state.responsibilities,
+        state.privileges,
+        state.snakeGameActive,
+        state.activityLogs,
+        broadcast
+    ]);
 
     useEffect(() => {
         // Listen for explicit sync requests from remotes

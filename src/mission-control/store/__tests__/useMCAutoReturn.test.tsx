@@ -14,6 +14,7 @@ import { useMCAutoReturn } from '../../hooks/useMCAutoReturn';
 const mockState = {
     activeMission: 'none' as 'none' | 'morning' | 'evening',
     settings: { autoReturnMins: 5 },
+    snakeGameActive: false,
 };
 
 vi.mock('../useMCStore', () => ({
@@ -27,6 +28,7 @@ describe('useMCAutoReturn', () => {
         vi.useFakeTimers();
         mockState.activeMission = 'none';
         mockState.settings.autoReturnMins = 5;
+        mockState.snakeGameActive = false;
     });
 
     afterEach(() => {
@@ -92,6 +94,15 @@ describe('useMCAutoReturn', () => {
         const { unmount } = renderHook(() => useMCAutoReturn(onReturn));
 
         unmount();
+        act(() => { vi.advanceTimersByTime(10 * 60 * 1000); });
+        expect(onReturn).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call onReturn when snakeGameActive is true', () => {
+        mockState.snakeGameActive = true;
+        const onReturn = vi.fn();
+        renderHook(() => useMCAutoReturn(onReturn));
+
         act(() => { vi.advanceTimersByTime(10 * 60 * 1000); });
         expect(onReturn).not.toHaveBeenCalled();
     });

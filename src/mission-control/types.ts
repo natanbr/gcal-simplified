@@ -180,6 +180,9 @@ export interface MCState {
     /** Track remote animation triggers */
     lastAnimationTrigger?: { type: MCAnimationType; timestamp: number };
     _migrationVersion?: number;
+    snakeGameActive: boolean;
+    lastCompletedOrFailedMorningDate: string | null;
+    lastCompletedOrFailedEveningDate: string | null;
 }
 
 export type MCAnimationType =
@@ -233,4 +236,6 @@ export type MCAction = (
     | { type: 'RESET_GAME_TOKENS' }
     | { type: 'TRIGGER_ANIMATION'; animation: MCAnimationType }
     | { type: 'CLEAR_LOGS' }
+    | { type: 'START_GAME' }
+    | { type: 'END_GAME' }
 ) & { isRemote?: boolean };

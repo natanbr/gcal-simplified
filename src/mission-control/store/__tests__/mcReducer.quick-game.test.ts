@@ -93,4 +93,15 @@ describe('mcReducer — Quick Game Token Logic', () => {
         expect(nextState.bankCount).toBe(7); // 5 + 2
         expect(nextState.cases[0].tokenCount).toBe(0);
     });
+
+    it('should set snakeGameActive to true on START_GAME', () => {
+        const nextState = mcReducer(initialState, { type: 'START_GAME' });
+        expect(nextState.snakeGameActive).toBe(true);
+    });
+
+    it('should set snakeGameActive to false on END_GAME', () => {
+        const stateActive: MCState = { ...initialState, snakeGameActive: true };
+        const nextState = mcReducer(stateActive, { type: 'END_GAME' });
+        expect(nextState.snakeGameActive).toBe(false);
+    });
 });

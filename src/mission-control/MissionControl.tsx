@@ -70,7 +70,6 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const dispatch  = useMCDispatch();
   
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [snakeGameOpen, setSnakeGameOpen] = useState(false);
   const snakeGameStartRef = useRef<string | null>(null);
 
   // Refs to each pedestal DOM element for drop-zone hit testing
@@ -116,6 +115,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
 
   const handleQuickGameOpen = useCallback(() => {
     snakeGameStartRef.current = new Date().toISOString();
+    dispatch({ type: 'START_GAME' });
     dispatch({
       type: 'ADD_LOG',
       log: {
@@ -127,7 +127,6 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
         colorKey: 'system',
       },
     });
-    setSnakeGameOpen(true);
   }, [dispatch]);
 
   const handleQuickGameClose = useCallback((score: number) => {
@@ -140,6 +139,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       const secs = Math.floor((durationMs % 60000) / 1000);
       durationLabel = mins > 0 ? ` (${mins}m ${secs}s)` : ` (${secs}s)`;
     }
+    dispatch({ type: 'END_GAME' });
     dispatch({
       type: 'ADD_LOG',
       log: {
@@ -152,7 +152,6 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       },
     });
     snakeGameStartRef.current = null;
-    setSnakeGameOpen(false);
   }, [dispatch]);
 
   return (
@@ -345,7 +344,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       <CheatTrapOverlay show={showCheatTrap} />
 
       {/* ===== QUICK GAME (SNAKE) ===== */}
-      <SnakeGameOverlay open={snakeGameOpen} onClose={handleQuickGameClose} />
+      <SnakeGameOverlay open={state.snakeGameActive} onClose={handleQuickGameClose} />
 
       {/* ===== REMOTE ANIMATIONS ===== */}
       <CelebrationOverlay />

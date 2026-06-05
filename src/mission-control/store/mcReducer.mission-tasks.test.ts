@@ -58,13 +58,13 @@ describe('mcReducer — COMPLETE_TASK', () => {
         eveningMission(state).tasks.forEach(t => expect(t.completed).toBe(false));
     });
 
-    it('is idempotent — completing an already-completed task stays completed', () => {
+    it('toggles a task status — completing an already-completed task uncompletes it', () => {
         const state = applyActions([
             { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: MORNING_TASK_1 },
             { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: MORNING_TASK_1 },
         ]);
         const task = morningMission(state).tasks.find(t => t.id === MORNING_TASK_1)!;
-        expect(task.completed).toBe(true);
+        expect(task.completed).toBe(false);
     });
 
     it('completing all morning tasks makes every task completed', () => {

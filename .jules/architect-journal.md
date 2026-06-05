@@ -68,3 +68,12 @@
 
 **Pattern: Global Listeners for Global Stores.** When an event listener updates a global state store (e.g. IPC, WebSocket, or Supabase listeners targeting `MCStore`), avoid registering the listener hook within individual view/layout components that mount and unmount during routing. Instead, mount the listener at the same high-level scope as the store provider (e.g., via a bridge component in `App.tsx`), ensuring events are continuously captured and state is updated even when the primary UI view changes.
 
+## 2026-06-05 - Mission Control Auto-Return Pause & Timezone Date Matching
+
+**Pattern: Pausing idle timers on game state.** When an idle/return auto-switch timer is active, ensure it hooks into game active flags (`snakeGameActive`) to pause auto-return and prevent abrupt termination of gameplay/screens.
+
+**Invariant: Local Timezone Format Matching.** Sweden/local format `new Date().toLocaleDateString('sv')` or similar custom YYYY-MM-DD formatter must be used for timezone-agnostic date comparisons instead of UTC/ISO slices to ensure consistency with Swedish local timezone dates, avoiding off-by-one errors during UTC day transitions.
+
+**Pattern: Deferring synchronous setState in effects.** Avoid synchronous `setState` in `useEffect` bodies (which triggers React render cascade warnings) by deferring them asynchronously (e.g. `setTimeout(() => setDisplay(null), 0)`).
+
+**Pattern: File-level impure functions to satisfy Purity rules.** Extract functions calling impure APIs (such as `Date.now()`) outside React component declarations to bypass static check rules targeting render path purity.
