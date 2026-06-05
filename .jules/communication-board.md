@@ -46,6 +46,19 @@
 
 ---
 
+## 🏃 Active Sprint: Noto Emoji Animated Reactions (v0.0.33)
+**Goal**: Add 10 new animated emoji reactions to both mobile remote and desktop overlays.
+
+| Task | Agent | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Requirements Brief** | PM | ✅ Done | Added to [requirements.md](file:///C:/Users/dev/.gemini/antigravity/worktrees/gcal-simplified-main/mc-phone-games-privileges/docs/requirements.md) |
+| **Type-Safe Union Definitions** | Developer | ✅ Done | Added `MCAnimationType` to `types.ts` |
+| **High-Performance CDN Overlay** | Developer | ✅ Done | Added `NotoEmojiEffect` to `CelebrationOverlay.tsx` |
+| **Mobile Reactions Grid** | Developer | ✅ Done | Added 5-column grid section in `mc-remote/MainController.tsx` |
+| **Testing & Verification** | QA | ✅ Done | Passed all 467 unit tests and 28 E2E tests |
+
+---
+
 ## 🏗️ Architect Decision Record (ADR)
 **Topic**: Remote Control Bridge Security
 **Status**: Approved
