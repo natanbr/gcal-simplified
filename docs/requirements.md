@@ -572,3 +572,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **Task Checklist Toggling**: Renders a task list showing the current active routine's goals on both the desktop app and the mobile remote, allowing parent controls (or child) to check/uncheck (toggle) their status.
 - **Mobile Whining Indicator**: The Whine button on the mobile remote now dynamically styles itself with a pulsing bright red background when whining is detected on the desktop.
 - **Mobile Activity Logs**: Shows the last 20 activity logs at the bottom of the mobile remote, with styling, formatting highlights, and remote indicators.
+
+### 2026-06-05 Version 0.0.33 Release & Deployment
+
+- **Automated Deployment**: Bumps version to `0.0.33` and deploys packaged installers directly to GitHub Releases.
+- **Pre-release Validations**: Fully type-checked code and ran the comprehensive suite of 476 unit tests and E2E tests before compilation and building.
