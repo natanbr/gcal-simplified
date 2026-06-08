@@ -29,3 +29,6 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+## 2025-05-19 - Removed infinite motion loops
+**Learning:** `framer-motion` `repeat: Infinity` loops trigger JS execution and layout computations on the main thread continuously, significantly degrading React performance and increasing CPU usage, especially on slower devices.
+**Action:** Replace all infinite or long-running `framer-motion` animations with pure CSS `@keyframes` and `.classes` so the browser can offload the work to the compositor thread.
