@@ -281,16 +281,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                 style={{ pointerEvents: 'none' }}
             >
                 <div className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden" data-testid="loading-bar">
-                    <motion.div 
-                        className="h-full bg-family-cyan"
-                        initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ 
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                        }}
-                    />
+                    <div className="h-full bg-family-cyan animate-sync-bar" />
                 </div>
                 <span className="text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 animate-pulse">
                     {isBackgroundLoading && !isEventsLoading && !loading ? 'Refreshing...' : (loadingMessage || 'Syncing...')}

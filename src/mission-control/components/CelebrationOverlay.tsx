@@ -156,12 +156,9 @@ function GoodJobEffect() {
                 filter: 'drop-shadow(0 10px 25px rgba(0,0,0,0.3))'
             }}
         >
-            <motion.div 
-                animate={{ y: [0, -20, 0] }} 
-                transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
-            >
+            <div className="mc-anim-bounce-good-job">
                 😊👍
-            </motion.div>
+            </div>
         </motion.div>
     );
 }
@@ -259,16 +256,15 @@ function NotoEmojiEffect({ type }: { type: string }) {
                 filter: 'drop-shadow(0 15px 30px rgba(0,0,0,0.4))'
             }}
         >
-            <motion.div 
-                animate={{ y: [0, -15, 0] }} 
-                transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+            <div
+                className="mc-anim-bounce-emoji"
                 style={{ width: 160, height: 160 }}
             >
                 <picture>
                     <source srcSet={webpUrl} type="image/webp" />
                     <img src={gifUrl} alt={emojiInfo.fallback} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 </picture>
-            </motion.div>
+            </div>
         </motion.div>
     );
 }
