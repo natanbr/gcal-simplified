@@ -577,3 +577,9 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 - **Automated Deployment**: Bumps version to `0.0.33` and deploys packaged installers directly to GitHub Releases.
 - **Pre-release Validations**: Fully type-checked code and ran the comprehensive suite of 476 unit tests and E2E tests before compilation and building.
+
+### 2026-06-10 Animated Emoji Loading & Sizing Fixes
+
+- **CSP Google Fonts Whitelisting**: Added `https://fonts.gstatic.com` to the `img-src` Content Security Policy directive in both development and production, allowing the desktop app to successfully download and render animated WebP/GIF emojis. Added regression security unit tests to verify the whitelisting.
+- **Remote Reactions Layout**: Replaced layout classes on the `<picture>` wrapper with direct sizing (`w-10 h-10` / 40px) on the underlying `<img>` tag in the mobile remote, resolving browser fallback rendering issues and improving visibility.
+

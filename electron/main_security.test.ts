@@ -143,4 +143,39 @@ describe('Main Process Security Configuration', () => {
     const result = handler({ url: 'https://malicious.com' });
     expect(result).toEqual({ action: 'deny' });
   });
+
+  it('should register a Content-Security-Policy header callback that permits fonts.gstatic.com for img-src', async () => {
+    // Import main.ts to trigger the logic
+    await import('./main');
+
+    // Wait briefly for the promise resolution in main.ts
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(mocks.mockSession.defaultSession.webRequest.onHeadersReceived).toHaveBeenCalled();
+
+    const handler = mocks.mockSession.defaultSession.webRequest.onHeadersReceived.mock.calls[0][0];
+
+    // Simulate headers received callback
+    const details = { responseHeaders: {} };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let returnedHeaders: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    handler(details, (result: any) => {
+      returnedHeaders = result.responseHeaders;
+    });
+
+
+    expect(returnedHeaders).toBeDefined();
+    const csp = returnedHeaders['Content-Security-Policy'][0];
+
+    // We expect the CSP to allow fonts.gstatic.com in img-src
+    expect(csp).toContain("img-src");
+    expect(csp).toContain("https://fonts.gstatic.com");
+    
+    // Ensure fonts.gstatic.com is specifically whitelisted inside the img-src directive
+    const imgSrcMatch = csp.match(/img-src\s+([^;]+)/);
+    expect(imgSrcMatch).not.toBeNull();
+    expect(imgSrcMatch[1]).toContain("https://fonts.gstatic.com");
+  });
 });
+
