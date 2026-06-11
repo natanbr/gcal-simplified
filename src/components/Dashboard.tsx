@@ -284,12 +284,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                     <motion.div 
                         className="h-full bg-family-cyan"
                         initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ 
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                        }}
+                        animate={(loading || isEventsLoading || isBackgroundLoading) ? {
+                            width: ["0%", "100%"],
+                            transition: {
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }
+                        } : { width: "0%" }}
                     />
                 </div>
                 <span className="text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 animate-pulse">
