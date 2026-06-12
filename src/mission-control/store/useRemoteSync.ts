@@ -31,6 +31,20 @@ export function useRemoteSync(state: MCState) {
                 completed: t.completed,
                 locked: t.locked
             })) ?? [],
+            missions: stateRef.current.missions.map(m => ({
+                phase: m.phase,
+                active: m.active,
+                startedAt: m.startedAt ?? null,
+                durationMins: m.durationMins ?? null,
+                whiningDetected: m.whiningDetected ?? false,
+                tasks: m.tasks.map(t => ({
+                    id: t.id,
+                    label: t.label,
+                    icon: t.icon,
+                    completed: t.completed,
+                    locked: t.locked
+                }))
+            })),
             snakeGameActive: stateRef.current.snakeGameActive,
             activityLogs: stateRef.current.activityLogs.slice(0, 20).map(log => ({
                 id: log.id,

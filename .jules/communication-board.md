@@ -46,6 +46,17 @@
 
 ---
 
+## 🏃 Active Sprint: Remote Control Mission State Reflection (v0.0.34)
+**Goal**: Provide detailed reflection of both morning and evening missions on the remote, including whining status and task progress checklists.
+
+| Task | Agent | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Requirements & Brief** | PM | ✅ Done | Documented in `requirements.md` |
+| **Host State Broadcast** | Developer | ✅ Done | Added `missions` detailed array in `useRemoteSync.ts` |
+| **Remote State Interface** | Developer | ✅ Done | Updated `types.ts` and `MainController.tsx` in `mc-remote` |
+| **Redesigned Mission Cards** | Developer | ✅ Done | Implemented dual Morning/Evening card UI in `MissionsSection.tsx` |
+| **Verification & Testing** | QA | ✅ Done | Vitest suite passes (477/477 tests green), build passes |
+
 ## 🏃 Active Sprint: Noto Emoji Animated Reactions (v0.0.33)
 **Goal**: Add 10 new animated emoji reactions to both mobile remote and desktop overlays.
 
