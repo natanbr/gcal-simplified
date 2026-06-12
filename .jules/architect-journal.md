@@ -77,3 +77,9 @@
 **Pattern: Deferring synchronous setState in effects.** Avoid synchronous `setState` in `useEffect` bodies (which triggers React render cascade warnings) by deferring them asynchronously (e.g. `setTimeout(() => setDisplay(null), 0)`).
 
 **Pattern: File-level impure functions to satisfy Purity rules.** Extract functions calling impure APIs (such as `Date.now()`) outside React component declarations to bypass static check rules targeting render path purity.
+
+## 2026-06-12 - Remote Control Mission State Reflection
+
+**Invariant: Dual Mission Broadcasting.** The host must synchronize and broadcast the detailed state of both Morning and Evening missions (tasks checklist, whining detection, durations) simultaneously, allowing the remote control to remain fully interactive for either phase regardless of the globally active state.
+
+**Pattern: Unified Backward-Compatible State Fallbacks.** When introducing new structured arrays (like `missions`) to a realtime remote sync payload, construct fallback data structures in the client component using the legacy individual fields, ensuring the UI does not crash or break if connected to an older version of the host application.
