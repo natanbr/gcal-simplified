@@ -34,6 +34,7 @@ export function useRemoteSync(state: MCState) {
             missions: stateRef.current.missions.map(m => ({
                 phase: m.phase,
                 active: m.active,
+                startsAt: m.startsAt,
                 startedAt: m.startedAt ?? null,
                 durationMins: m.durationMins ?? null,
                 whiningDetected: m.whiningDetected ?? false,
@@ -45,6 +46,8 @@ export function useRemoteSync(state: MCState) {
                     locked: t.locked
                 }))
             })),
+            lastCompletedOrFailedMorningDate: stateRef.current.lastCompletedOrFailedMorningDate ?? null,
+            lastCompletedOrFailedEveningDate: stateRef.current.lastCompletedOrFailedEveningDate ?? null,
             snakeGameActive: stateRef.current.snakeGameActive,
             activityLogs: stateRef.current.activityLogs.slice(0, 20).map(log => ({
                 id: log.id,
@@ -89,6 +92,8 @@ export function useRemoteSync(state: MCState) {
         state.privileges,
         state.snakeGameActive,
         state.activityLogs,
+        state.lastCompletedOrFailedMorningDate,
+        state.lastCompletedOrFailedEveningDate,
         broadcast
     ]);
 
