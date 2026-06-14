@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { BrowserWindow } from 'electron';
+import crypto from 'node:crypto';
 import { store } from './store';
 
 export class RemoteBridge {
@@ -65,7 +66,7 @@ export class RemoteBridge {
         // Auto-generate if missing
         if (!roomId || !remoteKey) {
             roomId = crypto.randomUUID();
-            remoteKey = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+            remoteKey = crypto.randomBytes(20).toString('hex');
             store.set({ ...config, remoteRoomId: roomId, remoteKey });
         }
 
@@ -144,7 +145,7 @@ export class RemoteBridge {
     regenerateKeys() {
         const config = store.get();
         const roomId = crypto.randomUUID();
-        const remoteKey = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+        const remoteKey = crypto.randomBytes(20).toString('hex');
         store.set({ ...config, remoteRoomId: roomId, remoteKey });
         
         // Re-init with new keys
