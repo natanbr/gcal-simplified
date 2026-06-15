@@ -29,3 +29,6 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+## 2024-05-18 - [Framer Motion `repeat: Infinity` Thread Starvation]
+**Learning:** Using Framer Motion's `transition={{ repeat: Infinity }}` as a top-level prop on permanently mounted components (like loading bars hidden by opacity or remote indicators) will keep the JS main thread constantly spinning via `requestAnimationFrame` in the background, even when not visually changing or hidden. This severely degrades CPU/battery performance.
+**Action:** For continuous looping animations on permanently mounted or hidden components, use pure CSS `@keyframes` and classes to offload to the compositor thread. Alternatively, if Framer Motion must be used conditionally, move the `transition: { repeat: Infinity }` inside a conditional `animate` object so the loop stops when the state changes to inactive.
