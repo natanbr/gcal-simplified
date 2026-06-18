@@ -29,3 +29,6 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+## 2026-03-14 - Preventing O(42) re-renders in large Calendar Grid Views
+**Learning:** When generating large DOM grids (like the 42-day `MonthlyView.tsx`), mapping over days and rendering the events inline inside the loop body with inline array fallbacks (e.g. `eventsByDayMap.get(date) || []`) causes the entire calendar grid to be reconciled and every event button to be re-evaluated whenever the parent state changes (even unrelated UI state), leading to significant main thread blocking.
+**Action:** Extract the cell rendering logic into a standalone, `React.memo`-wrapped sub-component (`MonthlyDayCell`). Ensure that fallback empty arrays use a static, module-level reference (e.g. `const EMPTY_EVENTS = []`) rather than an inline `|| []` to preserve referential equality, allowing `React.memo` to skip reconciling unchanged days.
