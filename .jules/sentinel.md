@@ -25,3 +25,8 @@
 **Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
 **Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
 **Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
+
+## 2025-05-25 - [Insecure Random Number Generation]
+**Vulnerability:** Weak, predictable random values generated using `Math.random().toString(36)` were used for creating sensitive IDs and authentication keys (e.g., `remoteKey` in `remote-bridge.ts`).
+**Learning:** `Math.random()` is not cryptographically secure and can be guessed or reverse-engineered, compromising the system (e.g., allowing unauthorized remote access).
+**Prevention:** Always use cryptographically secure modules (`node:crypto` with `crypto.randomBytes` or `crypto.randomUUID`, or the Web Crypto API `self.crypto.randomUUID()`) when generating tokens, keys, or any security-sensitive identifiers.

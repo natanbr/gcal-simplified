@@ -115,7 +115,7 @@ function deriveSnapshots(state: MCState, action: Parameters<typeof mcReducer>[1]
 
 function createLogEntry(action: Parameters<typeof mcReducer>[1], state: MCState): ActivityLogEntry | null {
     const now = new Date().toISOString();
-    const id = Math.random().toString(36).slice(2, 9);
+    const id = self.crypto.randomUUID();
 
     /** Resolve a case id → highlighted goal name (e.g. **🎮 Game**) */
     const goalLabel = (caseId: number, { bold = true } = {}) => {
