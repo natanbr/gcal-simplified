@@ -284,11 +284,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                     <motion.div 
                         className="h-full bg-family-cyan"
                         initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ 
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut"
+                        animate={{
+                            width: "100%",
+                            transition: {
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }
                         }}
                     />
                 </div>

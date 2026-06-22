@@ -157,8 +157,10 @@ function GoodJobEffect() {
             }}
         >
             <motion.div 
-                animate={{ y: [0, -20, 0] }} 
-                transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                animate={{
+                    y: [0, -20, 0],
+                    transition: { repeat: Infinity, duration: 1.5, ease: 'easeInOut' }
+                }}
             >
                 😊👍
             </motion.div>
@@ -260,8 +262,10 @@ function NotoEmojiEffect({ type }: { type: string }) {
             }}
         >
             <motion.div 
-                animate={{ y: [0, -15, 0] }} 
-                transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                animate={{
+                    y: [0, -15, 0],
+                    transition: { repeat: Infinity, duration: 2, ease: 'easeInOut' }
+                }}
                 style={{ width: 160, height: 160 }}
             >
                 <picture>

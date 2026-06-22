@@ -29,3 +29,6 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+## 2024-05-18 - Avoid framer-motion repeat: Infinity prop
+**Learning:** Using `transition={{ repeat: Infinity }}` directly as a top-level prop on `motion` elements forces continuous `requestAnimationFrame` loops on the main thread, leading to high background CPU usage and battery drain, even if the animation is static or unused.
+**Action:** Move continuous transitions inside conditional `animate` configurations (e.g. `animate={{ width: "100%", transition: { repeat: Infinity } }}`). For permanently mounted, non-interactive elements like pulsing dots, eliminate Framer Motion entirely and use pure CSS `@keyframes`.
