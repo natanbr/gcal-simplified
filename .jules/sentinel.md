@@ -25,3 +25,8 @@
 **Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
 **Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
 **Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
+
+## 2025-05-25 - [Predictable Random Number Generators]
+**Vulnerability:** Weak, predictable pseudorandom number generators (`Math.random()`) were used to create sensitive IDs and keys (e.g., remote control authentication keys, activity log identifiers, fallback calendar event IDs).
+**Learning:** `Math.random()` in JavaScript is not cryptographically secure and can be easily guessed or cracked, allowing unauthorized access or collision attacks in systems relying on unguessable values.
+**Prevention:** Always use cryptographically secure RNGs such as `node:crypto` (`crypto.randomBytes()`, `crypto.randomUUID()`) in Node.js environments and `self.crypto.randomUUID()` or `window.crypto.getRandomValues()` in the browser for anything related to security, unique identifiers, or authentication keys.
