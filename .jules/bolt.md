@@ -29,3 +29,6 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+## 2026-06-29 - Stop permanent infinite animations from running on inactive components
+**Learning:** Using `repeat: Infinity` in Framer Motion triggers `requestAnimationFrame` loops on the JS main thread constantly. Doing this on components that are hidden with `opacity: 0` (like a loading bar) or simple persistent indicators (like a pinging status dot) causes heavy, unnecessary background CPU usage.
+**Action:** Avoid `repeat: Infinity` for permanently mounted/idle animations. Use pure CSS `@keyframes` for simple infinite pulses. For loading bars, apply the `transition` conditionally within `animate` so the infinite loop stops when the loading state ends.
