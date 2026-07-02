@@ -29,3 +29,6 @@
 4. Enforce a strict log capping limit of 200 elements in the reducer.
 5. Use a timestamp-mapped `seenIds` interval cleanup pattern inside `RemoteBridge` and implement a `.destroy()` cleanup method called inside test `afterEach` hooks.
 
+## 2026-05-24 - Array Search vs Coordinate Bounds Check Optimization
+**Learning:** During hit detection (e.g. drag and drop) in `GlobalBank.tsx` or similar components, running an expensive array lookup (`cases.find(...)`) inside a high-frequency layout loop `Object.entries(layoutRects.cases).find(...)` before actually checking if the coordinates intersect results in an unnecessary O(N^2) evaluation.
+**Action:** Always perform simple numeric coordinate bounds checks (`x >= rect.left...`) *before* executing object or array searches to short-circuit the execution flow and maintain O(N) evaluation complexity for bounds and O(1) for the singular correct intersecting target.
