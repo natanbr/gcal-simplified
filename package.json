@@ -1,7 +1,7 @@
 {
   "name": "gcal-simplified",
   "private": true,
-  "version": "0.0.37",
+  "version": "0.0.38",
   "description": "A simplified Google Calendar desktop application with weather integration.",
   "repository": {
     "type": "git",
