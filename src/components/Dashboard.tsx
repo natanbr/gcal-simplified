@@ -314,6 +314,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
              )}
              {currentError && <span className="text-red-500 text-xs font-bold">{currentError}</span>}
              
+
              {onSwitchToMC && (
                <button
                  onClick={onSwitchToMC}

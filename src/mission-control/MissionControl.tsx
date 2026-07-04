@@ -21,6 +21,8 @@ import { MCSettingsOverlay } from './components/MCSettingsOverlay';
 import { PrivilegesPanel } from './components/PrivilegesPanel';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
+import { BlocksGameOverlay } from './games/blocks/BlocksGameOverlay';
+import { GameSelectorOverlay } from './components/GameSelectorOverlay';
 import { useMCDispatch, useMCState } from './store/useMCStore.tsx';
 import { RemoteStatusProvider, useRemoteStatus } from './contexts/RemoteStatusContext';
 import './styles/mc.css';
@@ -91,6 +93,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   }, []);
 
   const [showCheatTrap, setShowCheatTrap] = useState(false);
+  const [activeGameType, setActiveGameType] = useState<'snake' | 'blocks' | null>(null);
   const cheatTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -152,6 +155,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       },
     });
     snakeGameStartRef.current = null;
+    setActiveGameType(null);
   }, [dispatch]);
 
   return (
@@ -343,8 +347,15 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       {/* ===== CHEAT TRAP ===== */}
       <CheatTrapOverlay show={showCheatTrap} />
 
-      {/* ===== QUICK GAME (SNAKE) ===== */}
-      <SnakeGameOverlay open={state.snakeGameActive} onClose={handleQuickGameClose} />
+      {/* ===== QUICK GAME SELECTOR & OVERLAYS ===== */}
+      {state.snakeGameActive && activeGameType === null && (
+        <GameSelectorOverlay
+          onSelect={(game) => setActiveGameType(game)}
+          onClose={() => handleQuickGameClose(0)}
+        />
+      )}
+      <SnakeGameOverlay open={state.snakeGameActive && activeGameType === 'snake'} onClose={handleQuickGameClose} />
+      <BlocksGameOverlay open={state.snakeGameActive && activeGameType === 'blocks'} onClose={handleQuickGameClose} />
 
       {/* ===== REMOTE ANIMATIONS ===== */}
       <CelebrationOverlay />

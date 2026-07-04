@@ -10,8 +10,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SnakeCanvas } from './SnakeCanvas';
 import { useSnakeGame } from './useSnakeGame';
 import { QuizOverlay } from '../quiz/QuizOverlay';
-import { generateAdditionQuestion } from '../quiz/additionQuiz';
-import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE, GameLevel } from './types';
+import { generateLevelQuestion } from '../quiz/additionQuiz';
+import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE, GameLevel, LEVEL_LABELS } from './types';
 
 interface SnakeGameOverlayProps {
     open: boolean;
@@ -97,7 +97,7 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                                                 ${gameState.phase !== 'waiting' && gameState.level !== lvl ? 'opacity-30 cursor-not-allowed' : ''}
                                             `}
                                         >
-                                            Speed {lvl}
+                                            {LEVEL_LABELS[lvl]}
                                         </button>
                                     ))}
                                 </div>
@@ -136,7 +136,7 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                                 currentCorrect={gameState.quizCorrectCount}
                                 livesRemaining={gameState.lives}
                                 totalLives={INITIAL_LIVES}
-                                generator={generateAdditionQuestion}
+                                generator={() => generateLevelQuestion(gameState.level)}
                                 onCorrect={onQuizCorrect}
                                 title="🧠 Answer to Revive!"
                             />

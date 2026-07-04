@@ -89,13 +89,15 @@ function buildInitialSnake(cols: number, rows: number): Position[] {
     }));
 }
 
-function moveHead(head: Position, dir: Direction): Position {
+function moveHead(head: Position, dir: Direction, cols: number, rows: number): Position {
+    let { x, y } = head;
     switch (dir) {
-        case 'up':    return { x: head.x, y: head.y - 1 };
-        case 'down':  return { x: head.x, y: head.y + 1 };
-        case 'left':  return { x: head.x - 1, y: head.y };
-        case 'right': return { x: head.x + 1, y: head.y };
+        case 'up':    y -= 1; break;
+        case 'down':  y += 1; break;
+        case 'left':  x -= 1; break;
+        case 'right': x += 1; break;
     }
+    return { x: ((x % cols) + cols) % cols, y: ((y % rows) + rows) % rows };
 }
 
 /** Prevent 180° reversal. */
@@ -110,7 +112,7 @@ function isOpposite(a: Direction, b: Direction): boolean {
 
 // ── Initial State ────────────────────────────────────────────
 
-function createInitialState(level: GameLevel = 1): SnakeGameState {
+function createInitialState(level: GameLevel = 0): SnakeGameState {
     const { cols, rows } = LEVEL_GRID_SIZES[level];
     const snake = buildInitialSnake(cols, rows);
     return {
@@ -168,15 +170,9 @@ export function useSnakeGame(open: boolean) {
                 direction = nextDir;
             }
 
-            const head = prev.snake[0];
-            const newHead = moveHead(head, direction);
-            
             const { cols, rows } = LEVEL_GRID_SIZES[prev.level];
-
-            // Wall collision
-            if (newHead.x < 0 || newHead.x >= cols || newHead.y < 0 || newHead.y >= rows) {
-                return handleDeath(prev);
-            }
+            const head = prev.snake[0];
+            const newHead = moveHead(head, direction, cols, rows);
 
             // Self collision
             if (prev.snake.some(s => s.x === newHead.x && s.y === newHead.y)) {

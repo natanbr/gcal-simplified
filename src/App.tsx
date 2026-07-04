@@ -8,6 +8,7 @@ import { MissionOverlay } from './mission-control/components/MissionOverlay';
 import { useMissionScheduler } from './mission-control/hooks/useMissionScheduler';
 import { useMCAutoReturn } from './mission-control/hooks/useMCAutoReturn';
 import { useRemoteControl } from './mission-control/hooks/useRemoteControl';
+import { MoodWindNotification } from './mission-control/components/MoodWindNotification';
 
 // ── Scheduler hook — runs at App level so it works on both views ──────────────
 function MissionSchedulerBridge() {
@@ -105,6 +106,9 @@ function App() {
 
         {/* Mission overlay always mounted — position:fixed, overlays any view */}
         <MissionOverlay />
+
+        {/* Global Mood Wind Notifications */}
+        <MoodWindNotification />
 
         {/* View switch */}
         {view === 'calendar' ? (

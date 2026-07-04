@@ -56,14 +56,21 @@ export const QUIZ_QUESTIONS_TO_REVIVE = 3;
 
 export type GameLevel = 0 | 1 | 2 | 3;
 export const TICK_INTERVALS: Record<GameLevel, number> = {
-    0: 800, // Ultra Slow
-    1: 500, // Slow
-    2: 300, // Medium
-    3: 150, // Fast
+    0: 800, // Easy
+    1: 500, // Medium
+    2: 300, // Hard
+    3: 150, // Expert
+};
+
+export const LEVEL_LABELS: Record<GameLevel, string> = {
+    0: 'Easy',
+    1: 'Medium',
+    2: 'Hard',
+    3: 'Expert',
 };
 
 export const LEVEL_GRID_SIZES: Record<GameLevel, { cols: number; rows: number }> = {
-    0: { cols: 12, rows: 12 },
+    0: { cols: 20, rows: 15 },
     1: { cols: 20, rows: 15 },
     2: { cols: 20, rows: 15 },
     3: { cols: 20, rows: 15 },
