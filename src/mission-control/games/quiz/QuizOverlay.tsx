@@ -17,7 +17,7 @@ interface QuizOverlayProps {
     /** How many the player has already answered correctly. */
     currentCorrect: number;
     /** How many lives the player has remaining. */
-    livesRemaining: number;
+    livesRemaining?: number;
     /** Maximum total lives (for heart display). Defaults to 3. */
     totalLives?: number;
     /** Function to generate the next question. */

@@ -18,7 +18,7 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
  *  - quiz-revive: Snake died, answering quiz to revive.
  *  - game-over:   All lives exhausted, showing final score.
  */
-export type GamePhase = 'waiting' | 'playing' | 'quiz-revive' | 'game-over';
+export type GamePhase = 'waiting' | 'playing' | 'quiz-revive' | 'quiz-extend' | 'game-over' | 'time-up';
 
 /** A collectible food item on the grid. */
 export interface FoodItem {
@@ -43,6 +43,9 @@ export interface SnakeGameState {
     quizCorrectCount: number;
     /** Current selected speed level */
     level: GameLevel;
+    timeRemainingMs: number;
+    extensionsUsed: number;
+    extendQuizCorrectCount: number;
 }
 
 // ── Grid & Timing Constants ──────────────────────────────────
@@ -53,6 +56,11 @@ export const CANVAS_HEIGHT = 15 * CELL_SIZE;  // 480
 export const INITIAL_LIVES = 3;
 export const INITIAL_SNAKE_LENGTH = 3;
 export const QUIZ_QUESTIONS_TO_REVIVE = 3;
+export const QUIZ_QUESTIONS_TO_EXTEND = 3;
+
+export const INITIAL_TIME_MS = 3 * 60 * 1000;
+export const EXTENSION_TIME_MS = 1 * 60 * 1000;
+export const MAX_GAME_TIME_MS = 10 * 60 * 1000;
 
 export type GameLevel = 0 | 1 | 2 | 3;
 export const TICK_INTERVALS: Record<GameLevel, number> = {

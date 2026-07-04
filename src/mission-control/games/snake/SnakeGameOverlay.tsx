@@ -11,7 +11,7 @@ import { SnakeCanvas } from './SnakeCanvas';
 import { useSnakeGame } from './useSnakeGame';
 import { QuizOverlay } from '../quiz/QuizOverlay';
 import { generateLevelQuestion } from '../quiz/additionQuiz';
-import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE, GameLevel, LEVEL_LABELS } from './types';
+import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE, QUIZ_QUESTIONS_TO_EXTEND, GameLevel, LEVEL_LABELS, INITIAL_TIME_MS } from './types';
 
 interface SnakeGameOverlayProps {
     open: boolean;
@@ -19,7 +19,7 @@ interface SnakeGameOverlayProps {
 }
 
 export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
-    const { gameState, onQuizCorrect, resetGame, setLevel, debugRef } = useSnakeGame(open);
+    const { gameState, onQuizCorrect, onExtendQuizCorrect, handleTimeUpClose, resetGame, setLevel, debugRef } = useSnakeGame(open);
     const scoreRef = useRef(0);
     scoreRef.current = gameState.score;
 
@@ -40,13 +40,25 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
     useEffect(() => {
         if (!open || gameState.phase !== 'game-over') return;
         const handler = (e: KeyboardEvent) => {
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
                 handleClose();
             }
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
     }, [open, gameState.phase, handleClose]);
+
+    const elapsedMs = INITIAL_TIME_MS - gameState.timeRemainingMs + gameState.extensionsUsed * 60000;
+    const quizDifficultyLevel = Math.min(3, Math.floor(elapsedMs / 120000)) as GameLevel;
+
+    const formatTime = (ms: number) => {
+        const totalSec = Math.max(0, Math.ceil(ms / 1000));
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const isTimeLow = gameState.timeRemainingMs <= 30000 && gameState.timeRemainingMs > 0;
 
     // ESC to close
     useEffect(() => {
@@ -115,6 +127,11 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                                         </span>
                                     ))}
                                 </div>
+
+                                {/* Timer */}
+                                <div className={`font-sans text-[15px] font-extrabold flex items-center gap-[5px] ${isTimeLow ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>
+                                    ⏱️ {formatTime(gameState.timeRemainingMs)}
+                                </div>
                             </div>
 
                             <button
@@ -136,10 +153,38 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                                 currentCorrect={gameState.quizCorrectCount}
                                 livesRemaining={gameState.lives}
                                 totalLives={INITIAL_LIVES}
-                                generator={() => generateLevelQuestion(gameState.level)}
+                                generator={() => generateLevelQuestion(quizDifficultyLevel)}
                                 onCorrect={onQuizCorrect}
                                 title="🧠 Answer to Revive!"
                             />
+
+                            {/* Extension quiz overlay */}
+                            <QuizOverlay
+                                open={gameState.phase === 'quiz-extend'}
+                                requiredCorrect={QUIZ_QUESTIONS_TO_EXTEND}
+                                currentCorrect={gameState.extendQuizCorrectCount}
+                                generator={() => generateLevelQuestion(quizDifficultyLevel)}
+                                onCorrect={onExtendQuizCorrect}
+                                title="⏱️ Answer to get +1 minute!"
+                            />
+
+                            {/* Time-up overlay */}
+                            {gameState.phase === 'time-up' && (
+                                <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50 rounded-[28px]">
+                                    <div className="bg-slate-800 border border-white/10 rounded-2xl p-8 text-center max-w-sm">
+                                        <div className="text-5xl mb-4">⏰</div>
+                                        <h2 className="text-2xl font-black text-white mb-2">Time's Up!</h2>
+                                        <p className="text-slate-400 mb-1">Final Score: <span className="text-amber-400 font-bold">{gameState.score}</span></p>
+                                        <p className="text-slate-500 text-sm mb-6">You played the maximum time allowed</p>
+                                        <button
+                                            className="bg-blue-500 hover:bg-blue-400 text-white font-bold py-2.5 px-6 rounded-xl transition-colors"
+                                            onClick={handleTimeUpClose}
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 </motion.div>

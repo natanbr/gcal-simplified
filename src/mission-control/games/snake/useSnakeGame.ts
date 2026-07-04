@@ -17,11 +17,15 @@ import {
     INITIAL_SNAKE_LENGTH,
     TICK_INTERVALS,
     QUIZ_QUESTIONS_TO_REVIVE,
+    QUIZ_QUESTIONS_TO_EXTEND,
     FRUIT_EMOJIS,
     JUNK_FOOD_EMOJIS,
     JUNK_FOOD_PENALTY,
     MIN_SNAKE_LENGTH,
     LEVEL_GRID_SIZES,
+    INITIAL_TIME_MS,
+    EXTENSION_TIME_MS,
+    MAX_GAME_TIME_MS,
 } from './types';
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -127,13 +131,16 @@ function createInitialState(level: GameLevel = 0): SnakeGameState {
         phase: 'waiting',
         quizCorrectCount: 0,
         level,
+        timeRemainingMs: INITIAL_TIME_MS,
+        extensionsUsed: 0,
+        extendQuizCorrectCount: 0,
     };
 }
 
 // ── Hook ─────────────────────────────────────────────────────
 
 export function useSnakeGame(open: boolean) {
-    const [state, setState] = useState<SnakeGameState>(() => createInitialState(1));
+    const [state, setState] = useState<SnakeGameState>(() => createInitialState(0));
     const stateRef = useRef(state);
     stateRef.current = state;
 
@@ -311,6 +318,42 @@ export function useSnakeGame(open: boolean) {
         });
     }, []);
 
+    const canExtend = useCallback(() => {
+        const totalUsed = INITIAL_TIME_MS + state.extensionsUsed * EXTENSION_TIME_MS;
+        return totalUsed + EXTENSION_TIME_MS <= MAX_GAME_TIME_MS;
+    }, [state.extensionsUsed]);
+
+    const onExtendQuizCorrect = useCallback(() => {
+        setState(prev => {
+            const newCount = prev.extendQuizCorrectCount + 1;
+            if (newCount >= QUIZ_QUESTIONS_TO_EXTEND) {
+                return {
+                    ...prev,
+                    phase: 'playing',
+                    extendQuizCorrectCount: 0,
+                    extensionsUsed: prev.extensionsUsed + 1,
+                    timeRemainingMs: prev.timeRemainingMs + EXTENSION_TIME_MS,
+                };
+            }
+            return { ...prev, extendQuizCorrectCount: newCount };
+        });
+    }, []);
+
+    const handleTimeUp = useCallback(() => {
+        setState(prev => {
+            if (prev.phase !== 'playing') return prev;
+            const totalUsed = INITIAL_TIME_MS + prev.extensionsUsed * EXTENSION_TIME_MS;
+            if (totalUsed + EXTENSION_TIME_MS <= MAX_GAME_TIME_MS) {
+                return { ...prev, phase: 'quiz-extend', extendQuizCorrectCount: 0 };
+            }
+            return { ...prev, phase: 'time-up', timeRemainingMs: 0 };
+        });
+    }, []);
+
+    const handleTimeUpClose = useCallback(() => {
+        setState(prev => ({ ...prev, phase: 'game-over' }));
+    }, []);
+
     const resetGame = useCallback(() => {
         dirQueueRef.current = [];
         lastEffectiveDirRef.current = 'right';
@@ -368,10 +411,35 @@ export function useSnakeGame(open: boolean) {
         };
     }, [open, state.phase, tick, state.level]);
 
+    useEffect(() => {
+        if (!open || (state.phase !== 'playing')) return;
+        const TIMER_TICK = 200;
+        const timerInterval = setInterval(() => {
+            setState(prev => {
+                if (prev.phase !== 'playing') return prev;
+                const next = prev.timeRemainingMs - TIMER_TICK;
+                if (next <= 0) {
+                    return prev;
+                }
+                return { ...prev, timeRemainingMs: next };
+            });
+        }, TIMER_TICK);
+        return () => clearInterval(timerInterval);
+    }, [open, state.phase]);
+
+    useEffect(() => {
+        if (state.phase === 'playing' && state.timeRemainingMs <= 0) {
+            handleTimeUp();
+        }
+    }, [state.phase, state.timeRemainingMs, handleTimeUp]);
+
     return {
         gameState: state,
         startGame,
         onQuizCorrect,
+        onExtendQuizCorrect,
+        canExtend,
+        handleTimeUpClose,
         resetGame,
         setLevel,
         debugRef,

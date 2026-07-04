@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMCDispatch, useMCState, selectTotalWealth, MIN_WEALTH_FOR_GAMES } from '../store/useMCStore';
+import { useMCDispatch, useMCState } from '../store/useMCStore';
 import { Button3D } from './Button3D';
 import { MOOD_TOKEN } from '../moodTokenConfig';
 import { Token } from './Token';
@@ -271,7 +271,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
   };
 
-  const canUseQuickGame = true; // Token is consumed on creation, so if it's active, it's usable.
+  const canUseQuickGame = state.moodWind >= 0;
 
   // Pastel accent per pedestal — only used when ACTIVE
   const pastelAccents = [
@@ -401,8 +401,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                 const config = state.settings.rewardConfigs?.[r.id];
                 const isEnabled = config ? config.enabled : true;
                 if (!isEnabled) return null;
-                // Quick Game requires minimum total wealth AND a token to be visible
-                if (r.id === 'quick-game' && (selectTotalWealth(state) < MIN_WEALTH_FOR_GAMES || state.gameTokens < 1)) return null;
+                if (r.id === 'quick-game' && (state.moodWind < 0 || state.gameTokens < 1)) return null;
 
                 const displayTargetCount = config ? config.targetCount : r.targetCount;
                 return (
@@ -522,7 +521,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                       cursor: canUseQuickGame ? 'pointer' : 'not-allowed',
                     }}
                   >
-                    {canUseQuickGame ? '🎁 Use!' : `${MOOD_TOKEN.emoji} No tokens`}
+                    {canUseQuickGame ? '🎁 Use!' : '😡 Mood too low'}
                   </Button3D>
                   <motion.div
                     animate={{ rotate: leverTilted ? 45 : 0 }}
