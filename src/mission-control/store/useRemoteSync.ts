@@ -20,6 +20,8 @@ export function useRemoteSync(state: MCState) {
         const syncData = {
             bankCount: stateRef.current.bankCount,
             gameTokens: stateRef.current.gameTokens,
+            behaviorProgress: stateRef.current.behaviorProgress,
+            moodWind: stateRef.current.moodWind,
             activeMission: stateRef.current.activeMission,
             missionStartedAt: activeMissionObj?.startedAt ?? null,
             missionDurationMins: activeMissionObj?.durationMins ?? null,
@@ -86,6 +88,8 @@ export function useRemoteSync(state: MCState) {
     }, [
         state.bankCount,
         state.gameTokens,
+        state.behaviorProgress,
+        state.moodWind,
         state.activeMission,
         state.missions,
         state.responsibilities,

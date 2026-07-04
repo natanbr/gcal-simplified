@@ -183,6 +183,16 @@ export interface MCState {
     snakeGameActive: boolean;
     lastCompletedOrFailedMorningDate: string | null;
     lastCompletedOrFailedEveningDate: string | null;
+    /** Progress towards next game token (0-100). Increased by good behavior, decreased by whining. */
+    behaviorProgress: number;
+    /** Global whining status (outside of specific missions) */
+    whiningActive: boolean;
+    /** Mood Wind speed (-2 to +2). +1 is default (3 days to token). */
+    moodWind: number;
+    /** ISO timestamp of the last behavior progress calculation */
+    behaviorLastUpdated: string;
+    /** The last calculated delta in behavior progress (used for UI feedback) */
+    behaviorDelta: number;
 }
 
 export type MCAnimationType =
@@ -238,4 +248,8 @@ export type MCAction = (
     | { type: 'CLEAR_LOGS' }
     | { type: 'START_GAME' }
     | { type: 'END_GAME' }
-) & { isRemote?: boolean };
+    | { type: 'ADJUST_BEHAVIOR_PROGRESS'; amount: number; reason: string }
+    | { type: 'BEHAVIOR_TICK' }
+    | { type: 'SET_MOOD_WIND'; level: number }
+    | { type: 'SYNC_BEHAVIOR' }
+) & { isRemote?: boolean; timestamp?: string };

@@ -159,7 +159,7 @@ describe('RemoteBridge (Main Process)', () => {
         expect(mockWin.webContents.send).toHaveBeenCalledTimes(1); // Still 1
     });
 
-    it('ignores stale messages older than 15 seconds', () => {
+    it('ignores stale messages older than 60 seconds', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
 
@@ -175,12 +175,12 @@ describe('RemoteBridge (Main Process)', () => {
 
         bridge.init();
 
-        // Simulate message from 20 seconds ago
+        // Simulate message from 70 seconds ago
         callback({
             payload: {
                 key: 'secret-key',
                 action: { type: 'ADD_TOKEN' },
-                timestamp: Date.now() - 20000 
+                timestamp: Date.now() - 70000 
             }
         });
         expect(mockWin.webContents.send).not.toHaveBeenCalled();

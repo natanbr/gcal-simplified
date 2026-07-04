@@ -94,9 +94,9 @@ export class RemoteBridge {
                     return;
                 }
 
-                // 2. Ignore extremely old messages (older than 15 seconds)
-                // Tightened from 5 minutes to 15 seconds to prevent replaying old actions on connect
-                if (timestamp && Math.abs(Date.now() - timestamp) > 15000) {
+                // 2. Ignore extremely old messages (older than 60 seconds)
+                // Loosened from 15 seconds to 60 seconds to prevent pairing failures from clock drifts
+                if (timestamp && Math.abs(Date.now() - timestamp) > 60000) {
                     console.warn(`[RemoteBridge] Ignoring stale message. Remote time: ${new Date(timestamp).toLocaleTimeString()}, Local time: ${new Date().toLocaleTimeString()}`);
                     return;
                 }

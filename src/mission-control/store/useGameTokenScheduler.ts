@@ -32,7 +32,9 @@ export function useGameTokenScheduler(dispatch: React.Dispatch<MCAction>): void 
 
         scheduleNextMidnight();
 
-        return () => clearTimeout(timeout);
+        return () => {
+            clearTimeout(timeout);
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 }

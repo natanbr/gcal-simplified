@@ -296,7 +296,7 @@ export function loadPersistedState(): MCState {
                 return savedPriv ? { ...defaultPriv, ...savedPriv } : defaultPriv;
             }),
             activityLogs,
-            gameTokens: parsed.gameTokens ?? 0,
+            gameTokens: Math.max(5, parsed.gameTokens ?? 5),
             gameTokensLastGrantedDate: parsed.gameTokensLastGrantedDate ?? null,
             _migrationVersion: MIGRATION_VERSION,
         };
@@ -349,11 +349,17 @@ export function useMCDispatch(): React.Dispatch<Parameters<typeof mcReducer>[1]>
     
     // Command Wrapper / Interceptor
     return React.useCallback((action: Parameters<typeof mcReducer>[1]) => {
+        // Automatically inject timestamp for behavior sync
+        const actionWithTimestamp = {
+            ...action,
+            timestamp: action.timestamp || new Date().toISOString()
+        } as Parameters<typeof mcReducer>[1];
+
         // 1. Generate Log Entry based on CURRENT state and incoming action
-        const logEntry = createLogEntry(action, stateRef.current);
+        const logEntry = createLogEntry(actionWithTimestamp, stateRef.current);
         
         // 2. Dispatch the actual action first
-        dispatch(action);
+        dispatch(actionWithTimestamp);
         
         // 3. Dispatch the logging side-effect if we recorded one
         if (logEntry) {

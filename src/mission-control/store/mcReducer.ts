@@ -115,16 +115,104 @@ export const initialState: MCState = {
     responsibilities: defaultResponsibilities,
     activityLogs: [],
     hasUnreviewedCheatAttempt: false,
-    gameTokens: 0,
+    gameTokens: 5,
     gameTokensLastGrantedDate: null,
     snakeGameActive: false,
     lastCompletedOrFailedMorningDate: null,
     lastCompletedOrFailedEveningDate: null,
+    behaviorProgress: 50, // Start in the middle (Yellow)
+    whiningActive: false,
+    moodWind: 1,
+    behaviorLastUpdated: new Date().toISOString(),
+    behaviorDelta: 0,
 };
+
+// ---- Helpers for Behavior Progress ----
+
+function isWakingHour(isoString: string, settings: MCSettings): boolean {
+    const d = new Date(isoString);
+    const hour = d.getHours();
+    const min = d.getMinutes();
+    const totalMins = hour * 60 + min;
+
+    const [startH, startM] = settings.morningStartsAt.split(':').map(Number);
+    const morningStart = startH * 60 + startM;
+
+    const [endH, endM] = settings.eveningStartsAt.split(':').map(Number);
+    // Evening mission marks the start of the end of the day.
+    // We'll give another 60 mins buffer for the evening routine.
+    const wakingEnd = endH * 60 + endM + (settings.eveningDurationMins || 60);
+
+    return totalMins >= morningStart && totalMins <= wakingEnd;
+}
+
+function calculateBehaviorDelta(state: MCState, nowIso: string): { progressDelta: number; nextLastUpdated: string } {
+    const lastUpdate = new Date(state.behaviorLastUpdated);
+    const now = new Date(nowIso);
+    
+    // Safety check for clock jumps
+    if (now <= lastUpdate) return { progressDelta: 0, nextLastUpdated: nowIso };
+
+    let totalDelta = 0;
+    const moodWind = state.moodWind || 1;
+    if (moodWind === 0) return { progressDelta: 0, nextLastUpdated: nowIso };
+
+    // Normalized "Waking Day" = 12 hours (720 minutes)
+    // +1: 3 days (2160m) to 100%. Rate = 100/2160 = 0.0463
+    // +2: 1.5 days (1080m) to 100%. Rate = 100/1080 = 0.0926
+    
+    const absWind = Math.abs(moodWind);
+    let ratePerMin = 0;
+    if (absWind === 1) ratePerMin = 100 / 2160;
+    else if (absWind >= 2) ratePerMin = 100 / 1080;
+    
+    const direction = moodWind > 0 ? 1 : -1;
+    const rate = ratePerMin * direction;
+
+    // To be perfectly accurate without a timer, we should ideally iterate through
+    // each minute or check waking hour boundaries. For simplicity, we check if
+    // current time is waking. (This assumes status changes trigger a sync).
+    if (isWakingHour(nowIso, state.settings)) {
+        const diffMins = (now.getTime() - lastUpdate.getTime()) / 60000;
+        // Cap the diff to avoid massive jumps if computer was off for days
+        // (Waking hours filter already helps, but let's limit to 14 hours max)
+        const effectiveMins = Math.min(diffMins, 14 * 60);
+        totalDelta = effectiveMins * rate;
+    }
+
+    return { progressDelta: totalDelta, nextLastUpdated: nowIso };
+}
+
+function applyBehaviorSync(state: MCState, nowIso: string): MCState {
+    const { progressDelta, nextLastUpdated } = calculateBehaviorDelta(state, nowIso);
+    if (progressDelta === 0) return { ...state, behaviorLastUpdated: nextLastUpdated };
+
+    let nextProgress = state.behaviorProgress + progressDelta;
+    let nextGameTokens = state.gameTokens;
+
+    if (nextProgress >= 100) {
+        const tokensToGrant = Math.floor(nextProgress / 100);
+        nextProgress = nextProgress % 100;
+        nextGameTokens = Math.min(5, nextGameTokens + tokensToGrant);
+    } else if (nextProgress < 0) {
+        nextProgress = 0;
+    }
+
+    return {
+        ...state,
+        behaviorProgress: nextProgress,
+        gameTokens: nextGameTokens,
+        behaviorLastUpdated: nextLastUpdated,
+        behaviorDelta: progressDelta
+    };
+}
 
 // ---- Reducer ----
 
 function _mcReducer(state: MCState, action: MCAction): MCState {
+    if (action.timestamp) {
+        state = applyBehaviorSync(state, action.timestamp);
+    }
     switch (action.type) {
         case 'ADD_TOKEN':
             return { ...state, bankCount: state.bankCount + 1 };
@@ -337,6 +425,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
                     };
                 }),
+                moodWind: 1, // Reset mood wind to default in the morning
             };
         }
 
@@ -389,11 +478,26 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 )
             };
 
-        case 'COMPLETE_MISSION_ROUTINE':
+        case 'COMPLETE_MISSION_ROUTINE': {
+            const mission = state.missions.find(m => m.phase === action.missionPhase);
+            const whining = mission?.whiningDetected ?? false;
+            
+            // "without wining will add points. with wining will result in no change"
+            const behaviorBonus = whining ? 0 : 25;
+            let nextProgress = state.behaviorProgress + behaviorBonus;
+            let nextGameTokens = state.gameTokens;
+            
+            if (nextProgress >= 100) {
+                nextProgress -= 100;
+                nextGameTokens = Math.min(5, nextGameTokens + 1);
+            }
+
             return {
                 ...state,
                 activeMission: 'none',
                 bankCount: state.bankCount + action.bonusTokens,
+                behaviorProgress: nextProgress,
+                gameTokens: nextGameTokens,
                 ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString() } : {}),
                 ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString() } : {}),
                 missions: state.missions.map(m =>
@@ -402,10 +506,12 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         : m
                 )
             };
+        }
 
         case 'MARK_MISSION_TIMEOUT':
             return {
                 ...state,
+                behaviorProgress: Math.max(0, state.behaviorProgress - 20), // "not completing missions will reduce"
                 ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString() } : {}),
                 ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString() } : {}),
                 missions: state.missions.map(m =>
@@ -440,12 +546,20 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             };
         }
 
-        case 'TOGGLE_WHINING':
+        case 'TOGGLE_WHINING': {
+            const isGlobal = action.missionPhase === 'none';
+            const mission = !isGlobal ? state.missions.find(m => m.phase === action.missionPhase) : null;
+            const nowDetected = isGlobal ? !state.whiningActive : (mission ? !mission.whiningDetected : false);
+            
+            const behaviorDelta = nowDetected ? -10 : 2; 
+            
             return {
                 ...state,
+                behaviorProgress: Math.max(0, Math.min(100, state.behaviorProgress + behaviorDelta)),
+                whiningActive: isGlobal ? nowDetected : state.whiningActive,
                 missions: state.missions.map(m => {
                     if (m.phase !== action.missionPhase) return m;
-                    if (m.whiningLocked && !action.lockedFromUI) return m; // UI clicks ignored if locked
+                    if (m.whiningLocked && !action.lockedFromUI) return m;
                     return {
                         ...m,
                         whiningDetected: !m.whiningDetected,
@@ -453,6 +567,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                     };
                 }),
             };
+        }
 
         case 'SET_SETTINGS': {
             const nextSettings = { ...state.settings, ...action.settings };
@@ -576,16 +691,10 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             };
 
         case 'GRANT_GAME_TOKEN': {
-            const todayStr = new Date().toISOString().slice(0, 10);
-            if (!action.force && state.gameTokensLastGrantedDate === todayStr) return state;
-            
-            const totalWealth = state.bankCount + state.cases.reduce((sum, c) => sum + c.tokenCount, 0);
-            if (totalWealth < 10 && !action.force) return state;
             if (state.gameTokens >= 5) return state;
             return {
                 ...state,
                 gameTokens: Math.min(5, state.gameTokens + 1),
-                gameTokensLastGrantedDate: action.force ? state.gameTokensLastGrantedDate : todayStr,
             };
         }
 
@@ -620,6 +729,35 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 snakeGameActive: false
             };
+
+        case 'ADJUST_BEHAVIOR_PROGRESS': {
+            let nextProgress = state.behaviorProgress + action.amount;
+            let nextGameTokens = state.gameTokens;
+            if (nextProgress >= 100) {
+                nextProgress -= 100;
+                nextGameTokens = Math.min(5, nextGameTokens + 1);
+            }
+            return {
+                ...state,
+                behaviorProgress: Math.max(0, Math.min(100, nextProgress)),
+                gameTokens: nextGameTokens,
+                behaviorDelta: action.amount,
+            };
+        }
+
+        case 'BEHAVIOR_TICK': {
+            // DEPRECATED: We now use event-driven SYNC_BEHAVIOR
+            return state;
+        }
+
+        case 'SET_MOOD_WIND':
+            return {
+                ...state,
+                moodWind: Math.max(-2, Math.min(2, action.level))
+            };
+
+        case 'SYNC_BEHAVIOR':
+            return state; // sync already happened via timestamp wrapper
 
         default:
             return state;

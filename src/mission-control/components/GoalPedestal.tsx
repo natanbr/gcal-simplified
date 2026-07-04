@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch, useMCState, selectTotalWealth, MIN_WEALTH_FOR_GAMES } from '../store/useMCStore';
 import { Button3D } from './Button3D';
+import { MOOD_TOKEN } from '../moodTokenConfig';
 import { Token } from './Token';
 import type { DisplayCase, RewardIcon } from '../types';
 import { REWARDS, REWARD_MAP } from '../rewardCatalogue';
@@ -477,18 +478,18 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                     transition={{ type: 'spring', stiffness: 420, damping: 18 }}
                     style={{
                       width: 40, height: 40, borderRadius: '50%',
-                      background: 'radial-gradient(circle at 35% 32%, #c4b5fd, #7c3aed 60%, #4c1d95)',
-                      border: '2px solid rgba(124,58,237,0.5)',
-                      boxShadow: '0 3px 10px rgba(124,58,237,0.3)',
+                      background: MOOD_TOKEN.filledGradient,
+                      border: MOOD_TOKEN.filledBorder,
+                      boxShadow: MOOD_TOKEN.filledShadow,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 18,
                     }}
                     className="mc-anim-icon-pulse"
                   >
-                    🐍
+                    {MOOD_TOKEN.emoji}
                   </motion.div>
-                  <span style={{ fontSize: 10, color: '#6d28d9', fontWeight: 800 }}>
-                    1 game token ready
+                  <span style={{ fontSize: 10, color: MOOD_TOKEN.darkColor, fontWeight: 800 }}>
+                    1 mood token ready
                   </span>
               </div>
             ) : (
@@ -521,7 +522,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                       cursor: canUseQuickGame ? 'pointer' : 'not-allowed',
                     }}
                   >
-                    {canUseQuickGame ? '🎁 Use!' : '🐍 No tokens'}
+                    {canUseQuickGame ? '🎁 Use!' : `${MOOD_TOKEN.emoji} No tokens`}
                   </Button3D>
                   <motion.div
                     animate={{ rotate: leverTilted ? 45 : 0 }}
