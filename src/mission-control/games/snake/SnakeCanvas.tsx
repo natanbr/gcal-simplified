@@ -205,10 +205,9 @@ function drawGameOverScreen(ctx: CanvasRenderingContext2D, score: number) {
 
 interface SnakeCanvasProps {
     gameState: SnakeGameState;
-    debugRef?: React.RefObject<{ keyCount: number; tickCount: number; lastKey: string; queueLen: number }>;
 }
 
-export function SnakeCanvas({ gameState, debugRef }: SnakeCanvasProps) {
+export function SnakeCanvas({ gameState }: SnakeCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animFrameRef = useRef<number>(0);
     const gameStateRef = useRef(gameState);
@@ -257,28 +256,12 @@ export function SnakeCanvas({ gameState, debugRef }: SnakeCanvasProps) {
                 drawGameOverScreen(ctx, gs.score);
             }
 
-            // ── DEBUG HUD (temporary) ────────────────
-            /*
-            if (debugRef?.current) {
-                const d = debugRef.current;
-                ctx.fillStyle = 'rgba(0,0,0,0.7)';
-                ctx.fillRect(0, 0, 380, 22);
-                ctx.fillStyle = '#4ade80';
-                ctx.font = FONT_DEBUG;
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'top';
-                ctx.fillText(
-                    `Keys:${d.keyCount} Ticks:${d.tickCount} Q:${d.queueLen} Last:${d.lastKey} Phase:${gs.phase} Dir:${gs.direction}`,
-                    4, 4
-                );
-            }
-            */
 
             animFrameRef.current = requestAnimationFrame(loop);
         };
         animFrameRef.current = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(animFrameRef.current);
-    }, [debugRef]); // Stable — ref identities don't change
+    }, []);
 
     return (
         <canvas

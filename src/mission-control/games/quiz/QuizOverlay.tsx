@@ -8,61 +8,15 @@ import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { QuizQuestion, QuizGenerator } from './types';
 import { Fireworks } from './Fireworks';
+import { NumpadButton } from './NumpadButton';
 
 interface QuizOverlayProps {
-    /** Whether the overlay is visible. */
     open: boolean;
-    /** Total correct answers required. */
     requiredCorrect: number;
-    /** How many the player has already answered correctly. */
     currentCorrect: number;
-    /** How many lives the player has remaining. */
-    livesRemaining?: number;
-    /** Maximum total lives (for heart display). Defaults to 3. */
-    totalLives?: number;
-    /** Function to generate the next question. */
     generator: QuizGenerator;
-    /** Called when the player answers a question correctly. */
     onCorrect: () => void;
-    /** Title shown at the top of the quiz card. */
     title?: string;
-}
-
-// ── Numpad Button ────────────────────────────────────────────
-function NumpadButton({ label, onClick, variant = 'digit' }: {
-    label: string;
-    onClick: () => void;
-    variant?: 'digit' | 'action' | 'submit';
-}) {
-    const bgMap = {
-        digit: 'rgba(255,255,255,0.12)',
-        action: 'rgba(239,68,68,0.25)',
-        submit: 'rgba(74,222,128,0.35)',
-    };
-    return (
-        <motion.button
-            whileTap={{ scale: 0.9 }}
-            whileHover={{ scale: 1.05 }}
-            onClick={onClick}
-            style={{
-                width: '100%',
-                aspectRatio: '1',
-                borderRadius: 16,
-                border: '2px solid rgba(255,255,255,0.15)',
-                background: bgMap[variant],
-                color: '#f8fafc',
-                fontSize: variant === 'submit' ? 28 : 26,
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontFamily: "'Nunito', sans-serif",
-            }}
-        >
-            {label}
-        </motion.button>
-    );
 }
 
 export function QuizOverlay({

@@ -364,7 +364,6 @@ export function BlocksCanvas({
                             open={true}
                             requiredCorrect={1}
                             currentCorrect={0}
-                            livesRemaining={3}
                             generator={() => ({ text: gameState.quizQuestion!.text, answer: gameState.quizQuestion!.answer })}
                             onCorrect={() => submitQuizAnswer(gameState.quizQuestion!.answer)}
                             title="Solve Math to Unlock Golden Shape!"

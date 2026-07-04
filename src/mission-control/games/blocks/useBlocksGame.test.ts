@@ -5,10 +5,12 @@ import { HELP_SHAPES } from './types';
 
 describe('useBlocksGame', () => {
     beforeEach(() => {
+        vi.useFakeTimers();
         vi.spyOn(Math, 'random').mockReturnValue(0);
     });
 
     afterEach(() => {
+        vi.useRealTimers();
         vi.restoreAllMocks();
     });
 
@@ -92,7 +94,6 @@ describe('useBlocksGame', () => {
             result.current.startGame();
         });
 
-        // Clear row 0 and pre-fill except coordinate 0,0
         act(() => {
             result.current.gameState.grid[0] = Array(8).fill(0);
             for (let x = 1; x < 8; x++) {
@@ -100,13 +101,17 @@ describe('useBlocksGame', () => {
             }
         });
 
-        // Place a 1x1 shape at 0,0 to complete the row
         const shape = HELP_SHAPES[0];
         act(() => {
             result.current.placeShape(shape, 0, 0, 'standard', 0);
         });
 
-        // Row 1 should be completely cleared (all 0s)
+        expect(result.current.gameState.grid[0].every(c => c === 4)).toBe(true);
+
+        act(() => {
+            vi.advanceTimersByTime(1200);
+        });
+
         expect(result.current.gameState.grid[0].every(c => c === 0)).toBe(true);
         expect(result.current.gameState.score).toBeGreaterThan(0);
         expect(result.current.gameState.altitude).toBeGreaterThan(0);
@@ -164,19 +169,27 @@ describe('useBlocksGame', () => {
             result.current.startGame();
         });
 
-        // Manually push altitude to 55m and level to 1
         act(() => {
             result.current.gameState.altitude = 55;
             result.current.gameState.level = 1;
         });
 
-        // Place a shape to trigger check
-        const shape = HELP_SHAPES[0];
         act(() => {
-            result.current.placeShape(shape, 4, 4, 'standard', 0);
+            result.current.gameState.grid[0] = Array(8).fill(0);
+            for (let x = 1; x < 8; x++) {
+                result.current.gameState.grid[0][x] = 1;
+            }
         });
 
-        // Board should contain at least one asteroid hole cell (value 2)
+        const shape = HELP_SHAPES[0];
+        act(() => {
+            result.current.placeShape(shape, 0, 0, 'standard', 0);
+        });
+
+        act(() => {
+            vi.advanceTimersByTime(1200);
+        });
+
         const hasAsteroidHole = result.current.gameState.grid.some(row => row.includes(2));
         expect(hasAsteroidHole).toBe(true);
     });

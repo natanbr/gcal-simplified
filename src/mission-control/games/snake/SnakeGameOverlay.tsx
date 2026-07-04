@@ -19,7 +19,7 @@ interface SnakeGameOverlayProps {
 }
 
 export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
-    const { gameState, onQuizCorrect, onExtendQuizCorrect, handleTimeUpClose, resetGame, setLevel, debugRef } = useSnakeGame(open);
+    const { gameState, onQuizCorrect, onExtendQuizCorrect, handleTimeUpClose, resetGame, setLevel } = useSnakeGame(open);
     const scoreRef = useRef(0);
     scoreRef.current = gameState.score;
 
@@ -144,15 +144,13 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
 
                         {/* ── Game Area ── */}
                         <div className="relative flex items-center justify-center p-4 flex-1 min-h-0 overflow-hidden">
-                            <SnakeCanvas gameState={gameState} debugRef={debugRef} />
+                            <SnakeCanvas gameState={gameState} />
 
                             {/* Quiz overlay for revival */}
                             <QuizOverlay
                                 open={gameState.phase === 'quiz-revive'}
                                 requiredCorrect={QUIZ_QUESTIONS_TO_REVIVE}
                                 currentCorrect={gameState.quizCorrectCount}
-                                livesRemaining={gameState.lives}
-                                totalLives={INITIAL_LIVES}
                                 generator={() => generateLevelQuestion(quizDifficultyLevel)}
                                 onCorrect={onQuizCorrect}
                                 title="🧠 Answer to Revive!"

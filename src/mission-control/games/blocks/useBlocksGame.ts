@@ -90,7 +90,7 @@ export function useBlocksGame() {
         }
         return {
             ...selected,
-            id: `${selected.id}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `${selected.id}-${Math.random().toString(36).substring(2, 11)}`,
             cells: transformShape(selected.cells),
         };
     }, [hasAnyValidPlacement, canPlaceShape]);
@@ -107,7 +107,7 @@ export function useBlocksGame() {
         }
         return {
             ...selected,
-            id: `${selected.id}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `${selected.id}-${Math.random().toString(36).substring(2, 11)}`,
             cells: transformShape(selected.cells),
         };
     }, [hasAnyValidPlacement]);
