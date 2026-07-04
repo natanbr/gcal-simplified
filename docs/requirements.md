@@ -118,13 +118,19 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     - Adding a new privilege for "Phone Games" (`phone-games` ID, `Smartphone` / `📱` icon).
     - When suspended, it blocks the selection of the "Game" reward (cost 6 tokens) from the Goal Pedestals list of choices, and disables/locks the "Use!" button on any active completed "Game" goals.
     - The "Quick Game" (Snake, cost 1 token) goal remains active and unaffected.
-
-## UX / UI Enhancements
-
-### Enhanced Loading Indicator
-
-- **Visibility**: When navigating between weeks or refreshing data, a more prominent loading indicator should be visible.
-- **Progress Bar**: Implement a Framer Motion-based progress bar (skeleton or linear loader).
+  - **Quick Game Reward Option (Snake & Space Rescue)**:
+    - **Game Choice Selector**: Clicking the completed "Quick Game" pedestal opens a selector overlay allowing children to choose between playing **Snake** 🐍 or **Space Rescue** 🚀.
+    - **Space Rescue Game Rules**:
+      - **8x8 Space Grid**: Renders an 8x8 debris-clearing canvas with 10 handcrafted initial layouts. Cleared horizontal rows or vertical columns clear debris, scoring points and filling a Rocket Flight Path meter.
+      - **Proactive Shapes Generator**: Under the board, 3 active shapes are generated, guaranteed by a solver look-ahead algorithm to always have valid grid placements.
+      - **4th Slot (Golden Rescue Shape)**: Holds a shape that is guaranteed to fit somewhere (ensuring players can always avoid game-over by solving math). Locked behind a math quiz (single-digit addition under 10). Tapping "Refresh" regenerates a new shape but locks the slot. Placing the 4th shape immediately replenishes the slot with a new locked shape.
+      - **Game-Over Condition**: The game is over when none of the 3 standard shapes have any valid placements on the grid, the current Golden Rescue Shape does not fit, AND no other shape in the pool fits (meaning the grid is fully blocked and refreshing the Golden Rescue Shape cannot generate a placement).
+      - **Rocket Path Progression**: As the rocket ascends (score clears), it triggers altitude levels:
+        - *Level 1: Asteroid Impact*: Spawns unfillable locked "asteroid holes" on the grid.
+        - *Level 2: Satellite Orbit*: Spawns a satellite block. Clearing the row/column containing it unlocks the 4th shape slot for free.
+        - *Level 3: Space Storm*: Increases shape sizes (e.g. 3x3 blocks, crosses `+`).
+        - **High-Performance Drag-and-Drop Overlay**: Dragging is executed via native HTML5 pointer capture and direct, uncontrolled DOM style updates (`transform: translate3d`). This completely bypasses React virtual DOM diffing during pointermove, maintaining 1:1 hardware responsiveness with 0ms scripting lag. A `<ProjectionOverlay>` isolates grid projections, and a development-only Performance HUD tracks frame rates and scripting times in real time.
+        - **Unique Shape Instances & Jump-Back Prevention**: All generated shape instances are assigned unique IDs upon selection in `useBlocksGame.ts`, avoiding React key collisions. The slots in the tray are rendered transparent during dragging and unmounted upon successful placement, resolving the used shape "jump-back" visual glitch and ensuring proper state resets.
 - **Status Text**: Display small text indicating the current loading status (e.g., "Fetching Schedule...", "Updating Weather...") next to or under the date range title in the header.
 - **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched.
 
@@ -589,4 +595,34 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 - **CSP Google Fonts Whitelisting**: Added `https://fonts.gstatic.com` to the `img-src` Content Security Policy directive in both development and production, allowing the desktop app to successfully download and render animated WebP/GIF emojis. Added regression security unit tests to verify the whitelisting.
 - **Remote Reactions Layout**: Replaced layout classes on the `<picture>` wrapper with direct sizing (`w-10 h-10` / 40px) on the underlying `<img>` tag in the mobile remote, resolving browser fallback rendering issues and improving visibility.
+
+### 2026-06-29 Space Rescue Blocks Game
+
+- **Quick Game Selector**: Added selection overlay allowing children to choose between Snake 🐍 and Space Rescue 🚀.
+- **Space Rescue Blocks Game**: Implemented an 8x8 block puzzle game with 10 handcrafted initial layouts, proactive look-ahead shape generation, event-based altitude progression (Asteroid holes, Satellite repair), and a 4th slot Golden Rescue shape locked behind simple numeric math.
+
+### 2026-06-30 Space Rescue Blocks Game UI & Alignment Fixes
+
+- **Enlarged Overlay Popups**: Increased the main game popup dimensions to `95vw` / `95vh` limits (`min(1250px, 95vw)` and `min(900px, 95vh)`) to accommodate larger elements comfortably.
+- **Side Panel for Rescue Shape**: Moved the 4th slot (Golden Rescue shape) and its refresh button to a dedicated right-hand side panel, separating it from standard shapes.
+- **Fixed-Size Bank Slots**: Stabilized the standard shapes bank slots to a fixed width and height of `240px` to prevent layout movement or shifting when shapes are generated or placed.
+- **Framer Motion Key Regeneration Fix**: Applied shape IDs as unique React keys (`shape ? shape.id : 'empty-idx'`) on slot wrappers, ensuring newly generated shapes initialize directly in the bank instead of flying from the mouse drop coordinate.
+- **Grid-Aligned Drag Calculations**: Updated the coordinate mapping formula to precisely account for CSS Grid cell sizes, gaps, and board padding: `Math.floor((x - padding) / (cellSize + gap))`, eliminating projection shifts as shapes are dragged across the board. Removed dragElastic constraints and scale modifications during drag for a lag-free visual overlay.
+- **Level Difficulty Progression**: Modified the shape generation system to progressive difficulty. Removed small `1x1` and `1x2` shapes from normal pools to introduce them only as fallbacks or special Golden Rescue Shapes. Added staircase (`78523`), U-shape (`14563`), Giant L (`96321`), and Cross (`45862`) shapes appearing dynamically in higher levels.
+- **Z-Index & Lock Interactions**: Configured a `draggable` prop on `ShapeItem` to disable pointer events and interaction when shapes are locked, positioning the lock button cleanly on top.
+- **Full Canvas Quiz Modal**: Re-rendered the math puzzle quiz modal at the root level of `BlocksCanvas` with a backdrop blur and `zIndex: 1000`, blocking interaction and overlapping shapes completely until solved.
+- **Drag Performance Optimization**: Wrapped drag event callbacks in stable `useCallback` hooks and introduced a `lastHoverCoordRef` to skip redundant React renders unless grid cell boundaries are crossed. Wrapped `ShapeItem` in `React.memo` to bypass sub-tree rendering during dragging.
+
+### 2026-07-02 Space Rescue Performance & Animation Polish
+
+- **Performance Architecture (Grid Isolation)**: Extracted the 8x8 game board into a memoized `BlocksGrid` component. This optimization prevents the full grid (64 cells) from re-rendering during drag-and-drop operations, limiting updates to the `ProjectionOverlay` only.
+- **Real-Time Performance HUD**: Integrated a diagnostic HUD in development mode that tracks FPS, JS Scripting execution time (in ms), and render counts for both the grid and the canvas.
+- **Placement Masking (Jump-Back Fix)**: Resolved the "snap-back" visual flicker bug where shapes would momentarily reappear in the bank after placement. Implemented a `pendingPlacement` state that maintains slot transparency until the state transition is confirmed.
+- **Diagonal Clear Animation**: Implemented a staggered block-by-block removal effect. Cells in cleared lines flash white-to-gold and shrink with a diagonal delay based on their coordinate `(r + c)`, creating a wave-like ripple clear.
+- **Combo Feedback HUD**: Added a centered floating glassmorphism overlay that provides immediate performance ratings ("GOOD!", "GREAT!", "EXCELLENT!") and animated stars based on the number of lines cleared simultaneously.
+- **Milestone Altimeter Path**: Enhanced the vertical progress track with horizontal dashed milestone indicators at 50m, 120m, and 180m. Rotated the rocket to 0-degrees (straight up) and added a pulsing neon glow to the destination 🛸 icon.
+- **Adaptive Preview Scaling**: Implemented a `cellSize` property in `ShapeItem` to allow different scales for previews. Standard bank shapes are scaled to `36px` and Rescue shapes to `22px`, ensuring 100% containment within slots and full coverage by the math lock overlay.
+- **Enhanced UI Controls**: Enlarged the rescue slot refresh button with high-contrast neon borders and improved padding for better hit-box accessibility.
+
+
 

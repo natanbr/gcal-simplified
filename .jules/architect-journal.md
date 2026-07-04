@@ -83,3 +83,14 @@
 **Invariant: Dual Mission Broadcasting.** The host must synchronize and broadcast the detailed state of both Morning and Evening missions (tasks checklist, whining detection, durations) simultaneously, allowing the remote control to remain fully interactive for either phase regardless of the globally active state.
 
 **Pattern: Unified Backward-Compatible State Fallbacks.** When introducing new structured arrays (like `missions`) to a realtime remote sync payload, construct fallback data structures in the client component using the legacy individual fields, ensuring the UI does not crash or break if connected to an older version of the host application.
+
+## 2026-06-29 - Space Rescue Blocks Game Implementation
+
+**Pattern: Decouple Subcomponents for File Size Boundaries.** When a custom component with complex helper subcomponents (like `ShapeItem` inside `BlocksCanvas.tsx`) threatens the 300-line file limit, decouple the subcomponents into their own focused files (e.g. `ShapeItem.tsx`) immediately to satisfy the project file length boundaries.
+
+**Pattern: O(1) Grid coordinate lookups to prevent layout thrashing.** In grid-based drag and drop interfaces, avoid reading element boundaries (`getBoundingClientRect()`) on every pointer movement event. Cache the canvas dimensions once on drag start (or window resize), and map screen coordinates to cell indices mathematically.
+
+**Pattern: Test-deterministic grid cell clearing.** When testing shape placement on grids that initialize to randomized initial layouts, always manually clear the target coordinate cells to 0 in an `act` block before calling placement methods to avoid random test failures.
+
+**Invariant: Bounded Look-Ahead Game Over Checks.** When checking for grid-based game deadlock/game-over conditions where fallback slots (like a Golden Rescue shape) can be refreshed, verify that *both* standard shapes and current rescue shapes cannot be placed, AND that no shapes in the active shape pool can fit. This prevents early game termination when the user has moves available via fallback shape regeneration.
+

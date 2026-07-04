@@ -70,6 +70,29 @@
 
 ---
 
+## 🏃 Active Sprint: Space Rescue Blocks UI & Alignment (v0.0.35)
+**Goal**: Optimize blocks game container size, tray layout, and drag shadow projection math.
+
+| Task | Agent | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Requirements & Brief** | PM | ✅ Done | Documented in `requirements.md` |
+| **Layout Adjustments** | UI/UX / Developer | ✅ Done | Move 4th shape to right panel, increase popup size |
+| **Perfect Drag Alignment** | Developer | ✅ Done | Use grab offsets to align drag shadow projection |
+| **Verification & Testing** | QA | ✅ Done | Verify unit and E2E tests |
+
+## 🏃 Active Sprint: Space Rescue Performance & Animation Tuning (v0.0.36)
+**Goal**: Resolve drag performance lag and shape placement "jump-back" visual animation glitch.
+
+| Task | Agent | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Performance Bottlenecks Review** | Architect | ✅ Done | Identified 4 key bottlenecks; authored performance brief |
+| **Grid Cell Decoupling** | Developer | ✅ Done | Extracted subcomponents (under 300 lines) and decoupled projection overlays |
+| **Snap-Back Animation Hide** | Developer | ✅ Done | Implemented fast visual placement masking in ShapeItem |
+| **Performance Benchmarking** | Architect | 🏃 In Progress | Adding measurable metrics and grid isolation |
+| **Verification & Testing** | QA | ✅ Done | Passed tsc type check, eslint, and all 496 unit tests |
+
+---
+
 ## 🏗️ Architect Decision Record (ADR)
 **Topic**: Remote Control Bridge Security
 **Status**: Approved
@@ -79,6 +102,14 @@
 - IPC Channel: `remote-control:action`.
 - Payload: `MCAction`.
 - Verification: Room ID and Key must match local `electron-store` values.
+
+**Topic**: Space Rescue Performance & Grid Isolation
+**Status**: Proposed
+**Details**:
+- Extract 8x8 Grid to `BlocksGrid` (memoized by grid data).
+- Decouple `ProjectionOverlay` state updates from main Canvas.
+- Add `PerformanceHUD` with real-time scripting/FPS tracking.
+- Fix "jump-back" via `pendingPlacement` masking state.
 
 ---
 
