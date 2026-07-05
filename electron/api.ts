@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { authService } from './auth';
 import { store, UserConfig } from './store';
+import crypto from 'node:crypto';
 
 // Duplicate definition to avoid import issues from src in electron context if needed
 // but we will try to stick to local types or basic mapping.
@@ -117,7 +118,7 @@ export class ApiService {
                         (allDay && event.transparency === 'transparent');
 
                     return {
-                        id: event.id || Math.random().toString(),
+                        id: event.id || crypto.randomUUID(),
                         title: event.summary || 'No Title',
                         start: new Date(start!),
                         end: new Date(end!),

@@ -12,6 +12,7 @@
 **Vulnerability:** The OAuth2 callback handler echoed the `error` parameter back to the user without sanitization or setting a safe Content-Type, allowing script execution via XSS if the user visited a malicious localhost link.
 **Learning:** Local servers created for OAuth flows are susceptible to XSS if they serve user input. Browsers treat localhost responses just like any other web server response.
 **Prevention:** Always set `Content-Type: text/plain` (or sanitize HTML) for dynamic responses in local servers. Never trust query parameters, even on localhost.
+
 ## 2025-03-15 - [IPC Input Validation for Date Strings]
 **Vulnerability:** The `data:events` IPC handler parsed `timeMin` and `timeMax` directly with `new Date()` without verifying their string type or the validity of the resulting timestamp.
 **Learning:** If invalid inputs are sent over IPC, creating a `Date` object results in `Invalid Date`. Downstream logic invoking `toISOString()` on these objects throws a `RangeError`, potentially crashing the main process or leading to denial-of-service conditions.
@@ -21,7 +22,13 @@
 **Vulnerability:** The main Electron window's `webContents` did not implement a `setWindowOpenHandler` handler, allowing potentially unauthorized opening of new browser windows (`window.open`) from the renderer process.
 **Learning:** By default, Electron permits `window.open` requests, which can open unrestricted secondary windows exposing vulnerabilities if the renderer script is compromised or injected (e.g. bypassing sandboxes, executing malicious scripts).
 **Prevention:** Always implement `setWindowOpenHandler` on `webContents` to return `{ action: 'deny' }` for unneeded scenarios, preventing unauthorized new windows.
+
 ## 2025-05-24 - [Unbounded OAuth Callbacks and DoS]
 **Vulnerability:** The local `http.createServer` used for receiving the OAuth redirect had no concurrency limits or timeout, allowing multiple `startAuth()` calls to spawn indefinite HTTP servers, leading to potential resource exhaustion (DoS) or unexpected behavior.
 **Learning:** Functions creating network servers inside desktop application boundaries must enforce concurrency constraints (e.g., single active flow) and finite lifetimes (timeouts) to prevent accumulating zombie listeners.
 **Prevention:** Always maintain internal state to track ongoing asynchronous flows that allocate system resources (like ports) and implement `setTimeout` to forcibly close them and reject the operation if abandoned.
+
+## 2026-09-02 - [Weak Random Number Generation]
+**Vulnerability:** `Math.random()` was used to generate security-sensitive values, including remote control pairing keys in `electron/remote-bridge.ts`, fallback calendar event IDs in `electron/api.ts`, and activity log entry IDs in `src/mission-control/store/useMCStore.tsx`.
+**Learning:** `Math.random()` utilizes a weak pseudo-random number generator (PRNG) that is easily predictable. Using it for keys, tokens, or unique identifiers can allow attackers to predict session keys, perform replay attacks, or guess IDs.
+**Prevention:** Always use cryptographically secure random number generators (CSPRNG). Use `crypto.randomBytes().toString('hex')` or `crypto.randomUUID()` in Node.js (main process) and `self.crypto.randomUUID()` in the browser (renderer process).

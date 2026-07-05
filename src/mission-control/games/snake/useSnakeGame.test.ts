@@ -267,7 +267,7 @@ describe('useSnakeGame – wrap-around walls', () => {
 
     it('snake wraps from right edge to left', () => {
         const { result } = renderHook(() => useSnakeGame(true));
-        const { cols, rows } = LEVEL_GRID_SIZES[0];
+        const { cols } = LEVEL_GRID_SIZES[0];
         act(() => {
             result.current.startGame('right');
         });
