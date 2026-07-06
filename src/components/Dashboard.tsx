@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { addDays, addMonths, format, isSameDay, isWeekend } from 'date-fns';
 import { SettingsModal } from '../features/settings/components/SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -105,38 +105,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   }, [days, eventsByDay, config.activeHoursStart, config.activeHoursEnd]);
 
 
+  // A date inside the currently visible week/month — used to fetch the correct month's grid
+  const representativeDate = useMemo(() => (
+      viewMode === 'week'
+        ? getWeekStartDate(today, weekOffset, config.weekStartDay)
+        : addMonths(today, monthOffset)
+  ), [viewMode, today, weekOffset, monthOffset, config.weekStartDay]);
+
   const fetchData = useCallback(async (isInitial: boolean = false) => {
       setLoading(true);
       setError(null);
       try {
-          // Pass a representative date inside the month to ensure we fetch the correct month's grid
-          const representiveDateForFetch = viewMode === 'week'
-            ? getWeekStartDate(today, weekOffset, config.weekStartDay)
-            : addMonths(today, monthOffset);
-
           if (isInitial) {
              setLoadingMessage('Fetching Events...');
           }
-          await fetchEventsForMonth(representiveDateForFetch, config.weekStartDay);
-          
-          if (isInitial) {
-             setLoadingMessage('Fetching Tasks...');
-             if (!window.ipcRenderer) throw new Error('ipcRenderer unavailable');
-             const fetchedTasks = await window.ipcRenderer.invoke('data:tasks');
-             setTasks(fetchedTasks as AppTask[]);
-          }
-          
-          if (isInitial) {
-             setLoadingMessage('Updating Weather...');
-             if (!window.ipcRenderer) throw new Error('ipcRenderer unavailable');
-             const fetchedWeather = await window.ipcRenderer.invoke('weather:get', 48.37, -123.72);
-             setWeather(fetchedWeather as WeatherData);
-          }
-          
+          await fetchEventsForMonth(representativeDate, config.weekStartDay);
 
           if (isInitial) {
-             setLoadingMessage('Loading Settings...');
              if (!window.ipcRenderer) throw new Error('ipcRenderer unavailable');
+
+             setLoadingMessage('Fetching Tasks...');
+             const fetchedTasks = await window.ipcRenderer.invoke('data:tasks');
+             setTasks(fetchedTasks as AppTask[]);
+
+             setLoadingMessage('Updating Weather...');
+             const fetchedWeather = await window.ipcRenderer.invoke('weather:get');
+             setWeather(fetchedWeather as WeatherData);
+
+             setLoadingMessage('Loading Settings...');
              const fetchedSettings = await window.ipcRenderer.invoke('settings:get');
              setConfig(fetchedSettings as UserConfig);
           }
@@ -146,48 +142,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
       } finally {
           setLoading(false);
       }
-  }, [weekOffset, monthOffset, viewMode, today, config.weekStartDay, fetchEventsForMonth]);
+  }, [representativeDate, config.weekStartDay, fetchEventsForMonth]);
 
+  // Keep a stable reference so mount/auth effects don't refire on every
+  // navigation (fetchData identity changes with the visible date).
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
 
-  // Initial Data Load
+  // Initial Data Load — run once on mount. Subsequent navigation is handled
+  // by the soft-reload effect below (cached, no full loading state).
   useEffect(() => {
-    fetchData(true);
-  }, [fetchData]);
+    fetchDataRef.current(true);
+  }, []);
 
   // Listen for login success (e.g., from reconnect in Settings) to refetch data
   useEffect(() => {
     if (!window.ipcRenderer) return;
     const cleanup = window.ipcRenderer.on('auth:success', () => {
-        fetchData(true);
+        fetchDataRef.current(true);
     });
     return () => cleanup();
-  }, [fetchData]);
+  }, []);
 
   // Soft reload events on date change (uses cache)
   useEffect(() => {
-    const representiveDateForFetch = viewMode === 'week'
-            ? getWeekStartDate(today, weekOffset, config.weekStartDay)
-            : addMonths(today, monthOffset);
-    fetchEventsForMonth(representiveDateForFetch, config.weekStartDay);
-  }, [weekOffset, monthOffset, viewMode, fetchEventsForMonth, today, config.weekStartDay]);
+    fetchEventsForMonth(representativeDate, config.weekStartDay);
+  }, [representativeDate, fetchEventsForMonth, config.weekStartDay]);
 
   // Periodic global refresh
   useEffect(() => {
     const interval = setInterval(() => {
-       const representiveDateForFetch = viewMode === 'week'
-            ? getWeekStartDate(today, weekOffset, config.weekStartDay)
-            : addMonths(today, monthOffset);
-       refreshEvents(representiveDateForFetch, config.weekStartDay);
-       
+       refreshEvents(representativeDate, config.weekStartDay);
+
        // Also background refresh other data
        const ipc = window.ipcRenderer;
        if (ipc) {
            ipc.invoke('data:tasks').then(fetchedTasks => setTasks(fetchedTasks as AppTask[])).catch(console.error);
-           ipc.invoke('weather:get', 48.37, -123.72).then(fetchedWeather => setWeather(fetchedWeather as WeatherData)).catch(console.error);
+           ipc.invoke('weather:get').then(fetchedWeather => setWeather(fetchedWeather as WeatherData)).catch(console.error);
        }
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [refreshEvents, viewMode, today, weekOffset, monthOffset, config.weekStartDay]);
+  }, [refreshEvents, representativeDate, config.weekStartDay]);
 
 
   const isInitialLoading = (loading || isEventsLoading) && events.length === 0 && !error && !eventsError;

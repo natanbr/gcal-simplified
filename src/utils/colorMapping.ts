@@ -130,17 +130,3 @@ export function getEventTitleStyle(
         className: DEFAULT_COLOR.titleText
     };
 }
-
-/**
- * Deprecated: Use getEventColorStyles instead.
- * Kept for backward compatibility if needed, but updated to use new logic fundamentally where possible.
- * Note: Does not support hexColor return as string class names don't support arbitrary values easily.
- */
-export function getEventColorClass(
-    title: string,
-    description?: string,
-    colorId?: string
-): string {
-    const result = getEventColorStyles(title, description, colorId);
-    return result.className;
-}

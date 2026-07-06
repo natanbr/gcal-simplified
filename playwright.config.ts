@@ -5,7 +5,11 @@ export default defineConfig({
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
-    workers: process.env.CI ? 1 : undefined,
+    // Each test launches a real fullscreen Electron instance and they all share
+    // the same userData (config.json, localStorage). Parallel instances race on
+    // that shared state (settings-power even writes it), causing phantom
+    // failures — so run the Electron suite one app at a time.
+    workers: 1,
     reporter: 'html',
     timeout: 60000,
     use: {

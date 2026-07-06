@@ -25,6 +25,15 @@ interface AppTask {
 
 export class ApiService {
 
+    /** Public holidays are static per year — cache them so navigation and the
+     *  5-minute refresh loop don't hammer the external API (and keep working offline). */
+    private holidayCache = new Map<number, AppEvent[]>();
+
+    /** Calendar colors change rarely — refresh at most once per hour instead of
+     *  adding a calendarList round-trip to every event fetch. */
+    private calendarColorsCache: { colors: Map<string, string>; fetchedAt: number } | null = null;
+    private static readonly CALENDAR_COLORS_TTL_MS = 60 * 60 * 1000;
+
     getSettings(): UserConfig {
         return store.get();
     }
@@ -68,22 +77,30 @@ export class ApiService {
         // Default to 'primary' if nothing selected (first run logic mainly)
         const calendarIds = config.calendarIds.length > 0 ? config.calendarIds : ['primary'];
 
-        // Fetch calendar colors map
-        const calendarColors = new Map<string, string>();
-        try {
-            const calList = await calendar.calendarList.list();
-            if (calList.data.items) {
-                calList.data.items.forEach(c => {
-                    if (c.id && c.backgroundColor) {
-                        calendarColors.set(c.id, c.backgroundColor);
-                        if (c.primary) {
-                            calendarColors.set('primary', c.backgroundColor);
+        // Fetch calendar colors map (cached — colors rarely change)
+        let calendarColors: Map<string, string>;
+        if (this.calendarColorsCache && Date.now() - this.calendarColorsCache.fetchedAt < ApiService.CALENDAR_COLORS_TTL_MS) {
+            calendarColors = this.calendarColorsCache.colors;
+        } else {
+            calendarColors = new Map<string, string>();
+            try {
+                const calList = await calendar.calendarList.list();
+                if (calList.data.items) {
+                    calList.data.items.forEach(c => {
+                        if (c.id && c.backgroundColor) {
+                            calendarColors.set(c.id, c.backgroundColor);
+                            if (c.primary) {
+                                calendarColors.set('primary', c.backgroundColor);
+                            }
                         }
-                    }
-                });
+                    });
+                }
+                this.calendarColorsCache = { colors: calendarColors, fetchedAt: Date.now() };
+            } catch (e) {
+                console.warn("Failed to fetch calendar colors", e);
+                // Keep serving a stale cache (if any) rather than dropping colors entirely
+                if (this.calendarColorsCache) calendarColors = this.calendarColorsCache.colors;
             }
-        } catch (e) {
-            console.warn("Failed to fetch calendar colors", e);
         }
 
         const allEventsPromises = calendarIds.map(async (calId) => {
@@ -151,13 +168,16 @@ export class ApiService {
     }
 
     async getPublicHolidays(year: number): Promise<AppEvent[]> {
+        const cached = this.holidayCache.get(year);
+        if (cached) return cached;
+
         try {
             const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CA`);
             if (!response.ok) return [];
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const data = await response.json() as any[];
 
-            return data
+            const holidays = data
                 .filter(h => h.global || (h.counties && h.counties.includes('CA-BC')))
                 .map(h => ({
                     id: `holiday-${h.date}-${h.name}`,
@@ -167,6 +187,8 @@ export class ApiService {
                     allDay: true,
                     isHoliday: true,
                 }));
+            this.holidayCache.set(year, holidays);
+            return holidays;
         } catch (error) {
             console.warn("Failed to fetch public holidays", error);
             return [];

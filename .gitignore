@@ -35,3 +35,4 @@ playwright-report/
 test_output.json
 lint_output.txt
 test-output.log
+*_out.txt
