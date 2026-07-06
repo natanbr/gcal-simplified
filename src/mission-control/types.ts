@@ -193,6 +193,8 @@ export interface MCState {
     behaviorLastUpdated: string;
     /** The last calculated delta in behavior progress (used for UI feedback) */
     behaviorDelta: number;
+    /** ISO date string (YYYY-MM-DD) of the last day mood was reset to neutral */
+    moodLastResetDate?: string;
 }
 
 export type MCAnimationType =

@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch, useMCState } from '../store/useMCStore';
+import { isWakingHour } from '../store/mcReducer';
 import { Button3D } from './Button3D';
 import { MOOD_TOKEN } from '../moodTokenConfig';
 import { Token } from './Token';
@@ -271,7 +272,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
   };
 
-  const canUseQuickGame = state.moodWind >= 0;
+  const isWithinSessionHours = isWakingHour(new Date().toISOString(), state.settings);
+  const canUseQuickGame = state.moodWind >= 0 && isWithinSessionHours;
 
   // Pastel accent per pedestal — only used when ACTIVE
   const pastelAccents = [
@@ -401,7 +403,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                 const config = state.settings.rewardConfigs?.[r.id];
                 const isEnabled = config ? config.enabled : true;
                 if (!isEnabled) return null;
-                if (r.id === 'quick-game' && (state.moodWind < 0 || state.gameTokens < 1)) return null;
+                if (r.id === 'quick-game' && (state.moodWind < 0 || state.gameTokens < 1 || !isWithinSessionHours)) return null;
 
                 const displayTargetCount = config ? config.targetCount : r.targetCount;
                 return (

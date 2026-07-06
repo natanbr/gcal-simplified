@@ -129,7 +129,7 @@ export const initialState: MCState = {
 
 // ---- Helpers for Behavior Progress ----
 
-function isWakingHour(isoString: string, settings: MCSettings): boolean {
+export function isWakingHour(isoString: string, settings: MCSettings): boolean {
     const d = new Date(isoString);
     const hour = d.getHours();
     const min = d.getMinutes();
@@ -139,51 +139,97 @@ function isWakingHour(isoString: string, settings: MCSettings): boolean {
     const morningStart = startH * 60 + startM;
 
     const [endH, endM] = settings.eveningStartsAt.split(':').map(Number);
-    // Evening mission marks the start of the end of the day.
-    // We'll give another 60 mins buffer for the evening routine.
     const wakingEnd = endH * 60 + endM + (settings.eveningDurationMins || 60);
 
     return totalMins >= morningStart && totalMins <= wakingEnd;
 }
 
+function getWakingBounds(settings: MCSettings): { startMins: number; endMins: number } {
+    const [startH, startM] = settings.morningStartsAt.split(':').map(Number);
+    const [endH, endM] = settings.eveningStartsAt.split(':').map(Number);
+    return {
+        startMins: startH * 60 + startM,
+        endMins: endH * 60 + endM + (settings.eveningDurationMins || 60),
+    };
+}
+
+function shouldResetMood(state: MCState, nowIso: string): boolean {
+    const now = new Date(nowIso);
+    const todayDate = now.toISOString().slice(0, 10);
+
+    if (state.moodLastResetDate === todayDate) return false;
+
+    const { startMins } = getWakingBounds(state.settings);
+    const resetMins = startMins - 60;
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+
+    return nowMins >= resetMins;
+}
+
+function clampToWakingMinutes(lastUpdate: Date, now: Date, settings: MCSettings): number {
+    const { startMins, endMins } = getWakingBounds(settings);
+    const wakingDurationMins = endMins - startMins;
+    if (wakingDurationMins <= 0) return 0;
+
+    const lastDay = lastUpdate.toISOString().slice(0, 10);
+    const nowDay = now.toISOString().slice(0, 10);
+
+    if (lastDay === nowDay) {
+        const lastMins = lastUpdate.getHours() * 60 + lastUpdate.getMinutes();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const clampedStart = Math.max(lastMins, startMins);
+        const clampedEnd = Math.min(nowMins, endMins);
+        return Math.max(0, clampedEnd - clampedStart);
+    }
+
+    const lastMins = lastUpdate.getHours() * 60 + lastUpdate.getMinutes();
+    const remainingFirstDay = Math.max(0, Math.min(endMins, endMins) - Math.max(lastMins, startMins));
+
+    const daysBetween = Math.max(0, Math.floor((now.getTime() - lastUpdate.getTime()) / 86400000) - 1);
+    const fullDaysMins = Math.min(daysBetween, 7) * wakingDurationMins;
+
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const todayMins = Math.max(0, Math.min(nowMins, endMins) - startMins);
+
+    return Math.max(0, remainingFirstDay) + fullDaysMins + Math.max(0, todayMins);
+}
+
 function calculateBehaviorDelta(state: MCState, nowIso: string): { progressDelta: number; nextLastUpdated: string } {
     const lastUpdate = new Date(state.behaviorLastUpdated);
     const now = new Date(nowIso);
-    
-    // Safety check for clock jumps
+
     if (now <= lastUpdate) return { progressDelta: 0, nextLastUpdated: nowIso };
 
-    let totalDelta = 0;
     const moodWind = state.moodWind || 1;
     if (moodWind === 0) return { progressDelta: 0, nextLastUpdated: nowIso };
 
-    // Normalized "Waking Day" = 12 hours (720 minutes)
-    // +1: 3 days (2160m) to 100%. Rate = 100/2160 = 0.0463
-    // +2: 1.5 days (1080m) to 100%. Rate = 100/1080 = 0.0926
-    
     const absWind = Math.abs(moodWind);
     let ratePerMin = 0;
     if (absWind === 1) ratePerMin = 100 / 2160;
     else if (absWind >= 2) ratePerMin = 100 / 1080;
-    
+
     const direction = moodWind > 0 ? 1 : -1;
     const rate = ratePerMin * direction;
 
-    // To be perfectly accurate without a timer, we should ideally iterate through
-    // each minute or check waking hour boundaries. For simplicity, we check if
-    // current time is waking. (This assumes status changes trigger a sync).
-    if (isWakingHour(nowIso, state.settings)) {
-        const diffMins = (now.getTime() - lastUpdate.getTime()) / 60000;
-        // Cap the diff to avoid massive jumps if computer was off for days
-        // (Waking hours filter already helps, but let's limit to 14 hours max)
-        const effectiveMins = Math.min(diffMins, 14 * 60);
-        totalDelta = effectiveMins * rate;
-    }
+    const effectiveMins = clampToWakingMinutes(lastUpdate, now, state.settings);
+    const cappedMins = Math.min(effectiveMins, 14 * 60);
+    const totalDelta = cappedMins * rate;
 
     return { progressDelta: totalDelta, nextLastUpdated: nowIso };
 }
 
 function applyBehaviorSync(state: MCState, nowIso: string): MCState {
+    if (shouldResetMood(state, nowIso)) {
+        const todayDate = new Date(nowIso).toISOString().slice(0, 10);
+        state = {
+            ...state,
+            moodWind: 0,
+            moodLastResetDate: todayDate,
+            behaviorLastUpdated: nowIso,
+            behaviorDelta: 0,
+        };
+    }
+
     const { progressDelta, nextLastUpdated } = calculateBehaviorDelta(state, nowIso);
     if (progressDelta === 0) return { ...state, behaviorLastUpdated: nextLastUpdated };
 
@@ -425,7 +471,6 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
                     };
                 }),
-                moodWind: 1, // Reset mood wind to default in the morning
             };
         }
 
