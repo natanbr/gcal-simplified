@@ -157,8 +157,8 @@ function GoodJobEffect() {
             }}
         >
             <motion.div 
-                animate={{ y: [0, -20, 0] }} 
-                transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                /* Keep transition inside animate to prevent infinite background CPU loops when inactive */
+                animate={{ y: [0, -20, 0], transition: { repeat: Infinity, duration: 1.5, ease: 'easeInOut' } }}
             >
                 😊👍
             </motion.div>
@@ -260,8 +260,8 @@ function NotoEmojiEffect({ type }: { type: string }) {
             }}
         >
             <motion.div 
-                animate={{ y: [0, -15, 0] }} 
-                transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                /* Keep transition inside animate to prevent infinite background CPU loops when inactive */
+                animate={{ y: [0, -15, 0], transition: { repeat: Infinity, duration: 2, ease: 'easeInOut' } }}
                 style={{ width: 160, height: 160 }}
             >
                 <picture>

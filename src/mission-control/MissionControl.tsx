@@ -52,8 +52,8 @@ function RemoteIndicator() {
       }}
     >
       <motion.span
-        animate={isOnline ? { scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] } : {}}
-        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+        /* Keep transition inside animate to prevent infinite background CPU loops when inactive */
+        animate={isOnline ? { scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6], transition: { repeat: Infinity, duration: 2, ease: "easeInOut" } } : {}}
         style={{
           width: 8,
           height: 8,

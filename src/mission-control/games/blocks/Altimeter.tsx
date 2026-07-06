@@ -23,11 +23,12 @@ export const Altimeter = memo(function Altimeter({ altitude }: { altitude: numbe
         }}>
             {/* Rescue Destination at the Top */}
             <motion.div 
+                /* Keep transition inside animate to prevent infinite background CPU loops when inactive */
                 animate={altitude >= 200 ? {
                     scale: [1, 1.2, 1],
-                    filter: ['drop-shadow(0 0 5px #4ade80)', 'drop-shadow(0 0 15px #4ade80)', 'drop-shadow(0 0 5px #4ade80)']
+                    filter: ['drop-shadow(0 0 5px #4ade80)', 'drop-shadow(0 0 15px #4ade80)', 'drop-shadow(0 0 5px #4ade80)'],
+                    transition: { repeat: Infinity, duration: 2 }
                 } : {}}
-                transition={{ repeat: Infinity, duration: 2 }}
                 style={{ fontSize: 28, marginBottom: 8 }}
             >
                 🛸
