@@ -335,9 +335,11 @@
   50% { transform: scale(1.3); opacity: 1; }
 }
 .mc-anim-remote-pulse {
-  /* 15 times * 2s = 30s */
-  animation: mc-remote-pulse 2s ease-in-out 15;
-  animation-fill-mode: forwards;
+  /* Runs for as long as the indicator is mounted (i.e. while online) —
+     CSS infinite animations are compositor-driven and don't cause the
+     main-thread CPU cost this migration is fixing, so unlike the
+     Framer Motion loop it replaces, an unbounded duration is safe here. */
+  animation: mc-remote-pulse 2s ease-in-out infinite;
 }
 
 /* 10. Good Job Bounce */
