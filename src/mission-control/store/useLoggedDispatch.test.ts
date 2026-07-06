@@ -1,80 +1,107 @@
 // ============================================================
-// Mission Control — Activity Logs (Command Interceptor) Tests
+// Mission Control — Activity Log (Command Interceptor) Tests
+// Tests the REAL createLogEntry implementation (store/activityLog),
+// including the bank/total snapshots derived via the reducer.
 // ============================================================
 
-import { initialState } from './mcReducer';
+import { describe, it, expect } from 'vitest';
+import { createLogEntry } from './activityLog';
+import { mcReducer, initialState, selectTotalWealth } from './mcReducer';
 import type { MCAction, MCState } from '../types';
 
-// Extract the translation logic from useMCStore (replicated for testing or exported if refactored)
-// To keep things simple without refactoring useMCStore, we test the logic behavior.
-function createLogEntry(action: MCAction, state: MCState) {
-    const now = new Date().toISOString();
-    const id = "test-id";
-
-    switch (action.type) {
-        case 'ADD_TOKEN':
-            return { id, timestamp: now, icon: 'plus-circle', message: 'Manual token added', delta: +1, type: 'manual' };
-        case 'REMOVE_TOKEN':
-            return { id, timestamp: now, icon: 'minus-circle', message: 'Manual token removed', delta: -1, type: 'manual' };
-        case 'SELECT_CASE':
-            return { id, timestamp: now, icon: 'target', message: `Goal selected: ${action.reward}`, type: 'system' };
-        case 'DEPOSIT_TO_CASE':
-            return { id, timestamp: now, icon: 'arrow-down-to-line', message: `Deposited tokens to goal`, delta: -action.amount, type: 'system' };
-        case 'MOVE_TOKEN':
-            if (action.from === 'bank') return { id, timestamp: now, icon: 'arrow-right-left', message: `Token transferred to goal`, delta: -1, type: 'system' };
-            if (action.to === 'bank') return { id, timestamp: now, icon: 'arrow-right-left', message: `Token transferred to bank`, delta: +1, type: 'system' };
-            return null;
-        case 'VACUUM_TO_CASE': {
-            const target = state.cases.find(c => c.id === action.caseId);
-            if (!target) return null;
-            const amount = Math.min(state.bankCount, target.targetCount - target.tokenCount);
-            return { id, timestamp: now, icon: 'arrow-down-to-line', message: `Vacuumed tokens to goal`, delta: -amount, type: 'system' };
-        }
-        case 'REFUND_CASE': {
-             const target = state.cases.find(c => c.id === action.caseId);
-             return target ? { id, timestamp: now, icon: 'undo', message: `Goal tokens refunded`, delta: +(target.tokenCount || 0), type: 'system' } : null;
-        }
-        case 'SET_ACTIVE_MISSION':
-             return action.phase === 'none' 
-                ? { id, timestamp: now, icon: 'square', message: `Mission stopped`, type: 'mission' }
-                : { id, timestamp: now, icon: 'play', message: `${action.phase} mission started`, type: 'mission' };
-        case 'COMPLETE_TASK': {
-             const m = state.missions.find(m => m.phase === action.missionPhase);
-             const t = m?.tasks.find(t => t.id === action.taskId);
-             return { id, timestamp: now, icon: 'check-square', message: `${t?.label || 'Task'} completed`, type: 'mission' };
-        }
-        case 'ADD_RESPONSIBILITY_POINT': {
-             const resp = state.responsibilities.find(r => r.id === action.taskId);
-             return { id, timestamp: now, icon: 'star', message: `Point earned for ${resp?.label || 'responsibility'}`, type: 'responsibility' };
-        }
-        case 'RESET_RESPONSIBILITY': {
-             const resp = state.responsibilities.find(r => r.id === action.taskId);
-             if (!resp) return null;
-             return { id, timestamp: now, icon: 'award', message: `${resp.label} goal claimed!`, delta: +(resp.tokenReward || 0), type: 'reward' };
-        }
-        default:
-            return null;
-    }
+function applyActions(actions: MCAction[], state: MCState = initialState): MCState {
+    return actions.reduce((s, a) => mcReducer(s, a), state);
 }
 
-describe('Activity Logs Translation Logic', () => {
-    it('translates ADD_TOKEN to a manual adding entry', () => {
+describe('createLogEntry — translation', () => {
+    it('translates ADD_TOKEN to a manual entry with delta +1', () => {
         const log = createLogEntry({ type: 'ADD_TOKEN' }, initialState);
         expect(log).not.toBeNull();
-        expect(log?.icon).toBe('plus-circle');
+        expect(log?.type).toBe('manual');
         expect(log?.delta).toBe(1);
     });
 
-    it('translates DEPOSIT_TO_CASE to a system adding entry', () => {
-        const log = createLogEntry({ type: 'DEPOSIT_TO_CASE', caseId: 0, amount: 2 }, initialState);
-        expect(log).not.toBeNull();
-        expect(log?.icon).toBe('arrow-down-to-line');
-        expect(log?.delta).toBe(-2);
+    it('translates REMOVE_TOKEN to a manual entry with delta -1', () => {
+        const log = createLogEntry({ type: 'REMOVE_TOKEN' }, initialState);
+        expect(log?.type).toBe('manual');
+        expect(log?.delta).toBe(-1);
     });
 
-    it('translates COMPLETE_TASK accurately', () => {
+    it('does not log COMPLETE_TASK (only main events are logged)', () => {
         const log = createLogEntry({ type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: 'tshirt' }, initialState);
-        expect(log).not.toBeNull();
-        expect(log?.message).toContain('T-Shirt');
+        expect(log).toBeNull();
+    });
+
+    it('labels mission start with the phase', () => {
+        const log = createLogEntry({ type: 'SET_ACTIVE_MISSION', phase: 'morning' }, initialState);
+        expect(log?.message).toContain('morning mission started');
+        expect(log?.colorKey).toBe('morning');
+    });
+
+    it('does not log mission expiry when no mission is active', () => {
+        const log = createLogEntry({ type: 'SET_ACTIVE_MISSION', phase: 'none' }, initialState);
+        expect(log).toBeNull();
+    });
+
+    it('marks remote actions with isRemote', () => {
+        const log = createLogEntry({ type: 'ADD_TOKEN', isRemote: true }, initialState);
+        expect(log?.isRemote).toBe(true);
+    });
+});
+
+describe('createLogEntry — snapshots match reducer output', () => {
+    it('ADD_TOKENS snapshot reflects the post-action bank and total', () => {
+        const action: MCAction = { type: 'ADD_TOKENS', amount: 3, source: 'manual' };
+        const log = createLogEntry(action, initialState);
+        const nextState = mcReducer(initialState, action);
+        expect(log?.bankTokens).toBe(nextState.bankCount);
+        expect(log?.totalTokens).toBe(selectTotalWealth(nextState));
+    });
+
+    it('MOVE_TOKEN bank→case decrements the bank snapshot but keeps total', () => {
+        const state = applyActions([
+            { type: 'SELECT_CASE', caseId: 0, reward: 'show', targetCount: 5 },
+        ]);
+        const action: MCAction = { type: 'MOVE_TOKEN', from: 'bank', to: 0 };
+        const log = createLogEntry(action, state);
+        expect(log?.bankTokens).toBe(state.bankCount - 1);
+        expect(log?.totalTokens).toBe(selectTotalWealth(state));
+    });
+
+    it('invalid MOVE_TOKEN (empty bank) leaves the snapshot unchanged', () => {
+        const state: MCState = { ...initialState, bankCount: 0 };
+        const withCase = applyActions([
+            { type: 'SELECT_CASE', caseId: 0, reward: 'show', targetCount: 5 },
+        ], state);
+        const log = createLogEntry({ type: 'MOVE_TOKEN', from: 'bank', to: 0 }, withCase);
+        expect(log?.bankTokens).toBe(0);
+    });
+
+    it('CONSUME_CASE reduces total wealth by the case tokens, bank untouched', () => {
+        const state = applyActions([
+            { type: 'SELECT_CASE', caseId: 0, reward: 'show', targetCount: 2 },
+            { type: 'DEPOSIT_TO_CASE', caseId: 0, amount: 2 },
+        ]);
+        const log = createLogEntry({ type: 'CONSUME_CASE', caseId: 0 }, state);
+        expect(log?.bankTokens).toBe(state.bankCount);
+        expect(log?.totalTokens).toBe(selectTotalWealth(state) - 2);
+    });
+});
+
+describe('createLogEntry — COMPLETE_MISSION_ROUTINE idempotency', () => {
+    it('logs the completion while the mission is active', () => {
+        const state = applyActions([{ type: 'SET_ACTIVE_MISSION', phase: 'morning' }]);
+        const log = createLogEntry({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'morning', bonusTokens: 2 }, state);
+        expect(log?.message).toContain('Morning mission completed');
+        expect(log?.delta).toBe(2);
+    });
+
+    it('suppresses a duplicate completion after the mission is already done', () => {
+        const state = applyActions([
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
+            { type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'morning', bonusTokens: 2 },
+        ]);
+        const log = createLogEntry({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'morning', bonusTokens: 2 }, state);
+        expect(log).toBeNull();
     });
 });

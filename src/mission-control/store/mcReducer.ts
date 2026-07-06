@@ -18,8 +18,7 @@ import type {
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 
-function getLocalDateString(): string {
-    const d = new Date();
+function getLocalDateString(d: Date = new Date()): string {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -127,6 +126,31 @@ export const initialState: MCState = {
     behaviorDelta: 0,
 };
 
+// ---- Selectors ----
+
+/** Total tokens owned: bank + everything deposited into goal cases. */
+export function selectTotalWealth(state: MCState): number {
+    return state.bankCount + state.cases.reduce((sum, c) => sum + c.tokenCount, 0);
+}
+
+// ---- Time Helpers ----
+
+function parseHhmmToMins(hhmm: string): number {
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+}
+
+function minsToHhmm(totalMins: number): string {
+    return `${String(Math.floor(totalMins / 60)).padStart(2, '0')}:${String(totalMins % 60).padStart(2, '0')}`;
+}
+
+/** Duration between two HH:MM times, wrapping past midnight when needed. */
+function computeMissionDurationMins(startsAt: string, endsAt: string): number {
+    let durationMins = parseHhmmToMins(endsAt) - parseHhmmToMins(startsAt);
+    if (durationMins < 0) durationMins += 24 * 60; // overnight wrap
+    return durationMins;
+}
+
 // ---- Helpers for Behavior Progress ----
 
 export function isWakingHour(isoString: string, settings: MCSettings): boolean {
@@ -155,7 +179,9 @@ function getWakingBounds(settings: MCSettings): { startMins: number; endMins: nu
 
 function shouldResetMood(state: MCState, nowIso: string): boolean {
     const now = new Date(nowIso);
-    const todayDate = now.toISOString().slice(0, 10);
+    // Local date — using the UTC date (toISOString) would flip mid-afternoon
+    // in western timezones and re-trigger the daily reset a second time.
+    const todayDate = getLocalDateString(now);
 
     if (state.moodLastResetDate === todayDate) return false;
 
@@ -171,8 +197,10 @@ function clampToWakingMinutes(lastUpdate: Date, now: Date, settings: MCSettings)
     const wakingDurationMins = endMins - startMins;
     if (wakingDurationMins <= 0) return 0;
 
-    const lastDay = lastUpdate.toISOString().slice(0, 10);
-    const nowDay = now.toISOString().slice(0, 10);
+    // Compare local calendar days — UTC days flip mid-afternoon in western
+    // timezones, which would misclassify a same-day update as multi-day.
+    const lastDay = getLocalDateString(lastUpdate);
+    const nowDay = getLocalDateString(now);
 
     if (lastDay === nowDay) {
         const lastMins = lastUpdate.getHours() * 60 + lastUpdate.getMinutes();
@@ -183,7 +211,7 @@ function clampToWakingMinutes(lastUpdate: Date, now: Date, settings: MCSettings)
     }
 
     const lastMins = lastUpdate.getHours() * 60 + lastUpdate.getMinutes();
-    const remainingFirstDay = Math.max(0, Math.min(endMins, endMins) - Math.max(lastMins, startMins));
+    const remainingFirstDay = Math.max(0, endMins - Math.max(lastMins, startMins));
 
     const daysBetween = Math.max(0, Math.floor((now.getTime() - lastUpdate.getTime()) / 86400000) - 1);
     const fullDaysMins = Math.min(daysBetween, 7) * wakingDurationMins;
@@ -220,7 +248,7 @@ function calculateBehaviorDelta(state: MCState, nowIso: string): { progressDelta
 
 function applyBehaviorSync(state: MCState, nowIso: string): MCState {
     if (shouldResetMood(state, nowIso)) {
-        const todayDate = new Date(nowIso).toISOString().slice(0, 10);
+        const todayDate = getLocalDateString(new Date(nowIso));
         state = {
             ...state,
             moodWind: 0,
@@ -458,14 +486,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 missions: state.missions.map(m => {
                     if (m.phase !== action.phase) return { ...m, active: false };
                     // Every trigger is a fresh start: new timer, reset checklist.
-                    const [sh, sm] = m.startsAt.split(':').map(Number);
-                    const [eh, em] = m.endsAt.split(':').map(Number);
-                    const durationMins = (eh * 60 + em) - (sh * 60 + sm);
                     return {
                         ...m,
                         active: true,
                         startedAt: now,
-                        durationMins: Math.max(0, durationMins), // no minimum — allows sub-minute test durations
+                        durationMins: computeMissionDurationMins(m.startsAt, m.endsAt), // no minimum — allows sub-minute test durations
                         whiningDetected: false,
                         whiningLocked: false,
                         tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
@@ -494,15 +519,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 missions: state.missions.map(m => {
                     if (m.phase !== action.missionPhase) return m;
-                    const [sh, sm] = m.startsAt.split(':').map(Number);
-                    const [eh, em] = m.endsAt.split(':').map(Number);
-                    let durationMins = (eh * 60 + em) - (sh * 60 + sm);
-                    if (durationMins < 0) durationMins += 24 * 60; // overnight wrap
                     return {
                         ...m,
                         active: true,
                         startedAt: now,
-                        durationMins,
+                        durationMins: computeMissionDurationMins(m.startsAt, m.endsAt),
                         loggedTimeoutAt: undefined,
                         whiningDetected: false,
                         whiningLocked: false,
@@ -525,7 +546,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
 
         case 'COMPLETE_MISSION_ROUTINE': {
             const mission = state.missions.find(m => m.phase === action.missionPhase);
-            const whining = mission?.whiningDetected ?? false;
+            // Idempotency guard: the expiry timers in MissionOverlay and
+            // MissionTimerDisplay can both fire at the same moment — only the
+            // first completion may grant tokens/behavior bonus.
+            if (!mission || !mission.active) return state;
+            const whining = mission.whiningDetected ?? false;
             
             // "without wining will add points. with wining will result in no change"
             const behaviorBonus = whining ? 0 : 25;
@@ -647,33 +672,21 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 // If the start time changes, clear startedAt, durationMins, and active
                 // so the scheduler can re-trigger at the new time without getting stuck.
                 missions: state.missions.map(m => {
-                    if (m.phase === 'morning') {
-                        const dur = action.settings.morningDurationMins ?? state.settings.morningDurationMins;
-                        const start = action.settings.morningStartsAt ?? state.settings.morningStartsAt;
-                        const [h, min] = start.split(':').map(Number);
-                        const endTotal = h * 60 + min + dur;
-                        const endsAt = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
-                        return {
-                            ...m,
-                            startsAt: start,
-                            endsAt,
-                            ...(mornTimeChanged ? { startedAt: undefined, durationMins: undefined, active: false } : {}),
-                        };
-                    }
-                    if (m.phase === 'evening') {
-                        const dur = action.settings.eveningDurationMins ?? state.settings.eveningDurationMins;
-                        const start = action.settings.eveningStartsAt ?? state.settings.eveningStartsAt;
-                        const [h, min] = start.split(':').map(Number);
-                        const endTotal = h * 60 + min + dur;
-                        const endsAt = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
-                        return {
-                            ...m,
-                            startsAt: start,
-                            endsAt,
-                            ...(evenTimeChanged ? { startedAt: undefined, durationMins: undefined, active: false } : {}),
-                        };
-                    }
-                    return m;
+                    if (m.phase !== 'morning' && m.phase !== 'evening') return m;
+                    const isMorning = m.phase === 'morning';
+                    const dur = isMorning
+                        ? action.settings.morningDurationMins ?? state.settings.morningDurationMins
+                        : action.settings.eveningDurationMins ?? state.settings.eveningDurationMins;
+                    const start = isMorning
+                        ? action.settings.morningStartsAt ?? state.settings.morningStartsAt
+                        : action.settings.eveningStartsAt ?? state.settings.eveningStartsAt;
+                    const timeChanged = isMorning ? mornTimeChanged : evenTimeChanged;
+                    return {
+                        ...m,
+                        startsAt: start,
+                        endsAt: minsToHhmm(parseHhmmToMins(start) + dur),
+                        ...(timeChanged ? { startedAt: undefined, durationMins: undefined, active: false } : {}),
+                    };
                 }),
             };
         }

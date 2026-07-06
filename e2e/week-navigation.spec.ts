@@ -149,13 +149,24 @@ test.describe('Week Navigation', () => {
         await expect(firstDayHeader).toHaveText(format(nextWeekSameDay, 'd'), { timeout: 10000 });
     });
 
-    test('should not show weather forecast for future weeks', async () => {
+    // Since a6d448c the app fetches a 16-day forecast, so next week's day
+    // headers intentionally DO show weather when data covers them.
+    test('should keep showing weather forecast for next week (16-day forecast window)', async () => {
+        const weatherContainers = window.locator('[data-testid="weather-forecast-container"]');
+
+        // Weather loads asynchronously after the grid — give it a moment
+        await weatherContainers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+
+        // Only meaningful if weather data loaded for the current week
+        const currentWeekCount = await weatherContainers.count();
+        test.skip(currentWeekCount === 0, 'Weather data unavailable — nothing to verify');
+
         const nextWeekButton = window.getByTestId('next-week-button');
         await nextWeekButton.click();
         await waitForSync();
 
-        const weatherContainer = window.locator('[data-testid="weather-forecast-container"]');
-        await expect(weatherContainer).not.toBeVisible();
+        // Next week is within the 16-day forecast range, so headers still show weather
+        await expect(weatherContainers.first()).toBeVisible();
     });
 
     test('should not highlight Monday in future weeks if today is not Monday', async () => {

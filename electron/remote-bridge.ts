@@ -1,6 +1,15 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { BrowserWindow } from 'electron';
+import crypto from 'node:crypto';
 import { store } from './store';
+
+/** Cryptographically random pairing credentials for the remote channel. */
+function generatePairingKeys(): { roomId: string; remoteKey: string } {
+    return {
+        roomId: crypto.randomUUID(),
+        remoteKey: crypto.randomBytes(15).toString('base64url'),
+    };
+}
 
 export class RemoteBridge {
     private supabase: SupabaseClient | null = null;
@@ -64,8 +73,7 @@ export class RemoteBridge {
 
         // Auto-generate if missing
         if (!roomId || !remoteKey) {
-            roomId = crypto.randomUUID();
-            remoteKey = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+            ({ roomId, remoteKey } = generatePairingKeys());
             store.set({ ...config, remoteRoomId: roomId, remoteKey });
         }
 
@@ -80,8 +88,9 @@ export class RemoteBridge {
 
         currentChannel
             .on('broadcast', { event: 'action' }, (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => {
-                console.log('[RemoteBridge] Broadcast received:', JSON.stringify(payload, null, 2));
                 const { key: receivedKey, action, msgId, timestamp } = payload.payload || {};
+                // Log the action only — the payload also carries the pairing key.
+                console.log(`[RemoteBridge] Broadcast received: ${action?.type ?? 'unknown'} (msgId: ${msgId ?? 'n/a'})`);
                 
                 if (!action) {
                     console.error('[RemoteBridge] No action found in payload');
@@ -121,7 +130,8 @@ export class RemoteBridge {
 
                     this.sendToRenderer('remote-control:action', action);
                 } else {
-                    console.warn(`[RemoteBridge] ❌ INVALID KEY. Expected: ${currentConfig.remoteKey}, Got: ${receivedKey}`);
+                    // Never log the expected key — it's the pairing secret.
+                    console.warn('[RemoteBridge] ❌ Rejected action: pairing key mismatch.');
                 }
             })
             .subscribe((status, err) => {
@@ -143,8 +153,7 @@ export class RemoteBridge {
 
     regenerateKeys() {
         const config = store.get();
-        const roomId = crypto.randomUUID();
-        const remoteKey = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+        const { roomId, remoteKey } = generatePairingKeys();
         store.set({ ...config, remoteRoomId: roomId, remoteKey });
         
         // Re-init with new keys
