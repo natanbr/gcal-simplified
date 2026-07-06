@@ -53,7 +53,6 @@ function RemoteIndicator() {
     >
       <span
         className={isOnline ? 'mc-anim-remote-pulse' : ''}
-
         style={{
           width: 8,
           height: 8,
