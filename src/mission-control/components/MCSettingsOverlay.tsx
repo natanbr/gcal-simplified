@@ -360,9 +360,33 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                                         {/* Morning Mission */}
                                         <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
-                                                <span style={{ fontSize: 18 }}>☀️</span>
-                                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Morning Mission</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <span style={{ fontSize: 18 }}>☀️</span>
+                                                    <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Morning Mission</span>
+                                                </div>
+                                                <motion.button
+                                                    data-testid="mc-settings-start-morning"
+                                                    whileTap={{ scale: 0.9 }}
+                                                    onClick={() => {
+                                                        dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+                                                        onClose();
+                                                    }}
+                                                    style={{
+                                                        background: 'linear-gradient(135deg,#fff7d6,#ffe085)',
+                                                        border: '1.5px solid #f7c948',
+                                                        borderRadius: 10,
+                                                        padding: '5px 14px',
+                                                        fontSize: 12,
+                                                        fontWeight: 900,
+                                                        color: '#7a5800',
+                                                        cursor: 'pointer',
+                                                        fontFamily: "'Nunito', sans-serif",
+                                                        boxShadow: '0 2px 0 #d4a800',
+                                                    }}
+                                                >
+                                                    ▶ Start
+                                                </motion.button>
                                             </div>
                                             <TimeInput label="Auto-trigger at" value={draft.morningStartsAt} onChange={v => set('morningStartsAt', v)} />
                                             <DurationStepper label="Duration" value={draft.morningDurationMins} onChange={v => set('morningDurationMins', v)} />
@@ -370,9 +394,33 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
 
                                         {/* Evening Mission */}
                                         <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
-                                                <span style={{ fontSize: 18 }}>🌙</span>
-                                                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Evening Mission</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <span style={{ fontSize: 18 }}>🌙</span>
+                                                    <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Evening Mission</span>
+                                                </div>
+                                                <motion.button
+                                                    data-testid="mc-settings-start-evening"
+                                                    whileTap={{ scale: 0.9 }}
+                                                    onClick={() => {
+                                                        dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'evening' });
+                                                        onClose();
+                                                    }}
+                                                    style={{
+                                                        background: 'linear-gradient(135deg,#ece8ff,#c8b8ff)',
+                                                        border: '1.5px solid #a98dff',
+                                                        borderRadius: 10,
+                                                        padding: '5px 14px',
+                                                        fontSize: 12,
+                                                        fontWeight: 900,
+                                                        color: '#3d2a80',
+                                                        cursor: 'pointer',
+                                                        fontFamily: "'Nunito', sans-serif",
+                                                        boxShadow: '0 2px 0 #8060cc',
+                                                    }}
+                                                >
+                                                    ▶ Start
+                                                </motion.button>
                                             </div>
                                             <TimeInput label="Auto-trigger at" value={draft.eveningStartsAt} onChange={v => set('eveningStartsAt', v)} />
                                             <DurationStepper label="Duration" value={draft.eveningDurationMins} onChange={v => set('eveningDurationMins', v)} />

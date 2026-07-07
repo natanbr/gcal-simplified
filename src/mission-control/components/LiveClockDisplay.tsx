@@ -7,7 +7,7 @@ export function LiveClockDisplay() {
       data-testid="mc-clock"
       style={{
         color: 'var(--mc-text)',
-        fontSize: 22,
+        fontSize: 40,
         fontVariantNumeric: 'tabular-nums',
         fontWeight: 900,
         letterSpacing: '-0.02em',

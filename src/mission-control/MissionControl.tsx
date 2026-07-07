@@ -229,49 +229,8 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           </button>
         </div>
 
-        {/* Clock + Manual mission triggers */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Manual triggers */}
-          <button
-            data-testid="mc-trigger-morning"
-            title="Trigger Morning Routine"
-            onClick={() => dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'morning' })}
-            style={{
-              background: 'linear-gradient(135deg,#fff7d6,#ffe085)',
-              border: '2px solid #f7c948',
-              borderRadius: 14,
-              padding: '7px 16px',
-              fontSize: 15,
-              fontWeight: 900,
-              color: '#7a5800',
-              cursor: 'pointer',
-              fontFamily: "'Nunito',sans-serif",
-              boxShadow: '0 3px 0 #d4a800',
-            }}
-          >
-            ☀️ AM
-          </button>
-          <button
-            data-testid="mc-trigger-evening"
-            title="Trigger Evening Routine"
-            onClick={() => dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'evening' })}
-            style={{
-              background: 'linear-gradient(135deg,#ece8ff,#c8b8ff)',
-              border: '2px solid #a98dff',
-              borderRadius: 14,
-              padding: '7px 16px',
-              fontSize: 15,
-              fontWeight: 900,
-              color: '#3d2a80',
-              cursor: 'pointer',
-              fontFamily: "'Nunito',sans-serif",
-              boxShadow: '0 3px 0 #8060cc',
-            }}
-          >
-            🌙 PM
-          </button>
-          <LiveClockDisplay />
-        </div>
+        {/* Clock */}
+        <LiveClockDisplay />
       </div>
 
       {/* ===== MAIN STAGE ===== */}
