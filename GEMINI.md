@@ -37,3 +37,21 @@ When instructed or required to validate the codebase, execute the following spec
 ## 6. Git & Version Control
 *   **Rebase Preference**: Always prefer working with rebase over merge. Before starting any new task, you MUST verify you are on the latest and report back.
 *   **No WIP commits**: Do not commit unfinished work.
+
+## 7. Release Flow & Troubleshooting
+*   **Pre-flight token check**: Before running `npm run release`, always validate that `GH_TOKEN` is still accepted by GitHub. Run:
+    ```
+    node -e "require('dotenv').config(); const https = require('https'); https.get('https://api.github.com/user', { headers: { 'Authorization': 'token ' + process.env.GH_TOKEN, 'User-Agent': 'gcal-simplified' } }, res => { let d=''; res.on('data', c => d+=c); res.on('end', () => console.log('Status:', res.statusCode, JSON.parse(d).login || JSON.parse(d).message)); });"
+    ```
+    If status is `401`, extract a working token from the GitHub CLI (which maintains its own OAuth session):
+    ```
+    & "C:\Program Files\GitHub CLI\gh.exe" auth status -t
+    ```
+    Then use that token directly when running the publish step:
+    ```
+    $env:GH_TOKEN = "<token from gh auth>"; node node_modules/electron-builder/cli.js --publish always
+    ```
+*   **Recovering from a partial release failure**: If `npm run release` fails after `npm version patch` has already tagged + pushed but before the build/publish completes:
+    1. Do NOT run `npm run release` again — it will fail on `npm version patch` (tag already exists).
+    2. Instead, run only the build + publish step: `node -r dotenv/config node_modules/electron-builder/cli.js --publish always`
+*   **mc-remote project**: The MC remote control web app lives at `C:\Users\brnat\Documents\Projects\mc-remote` (separate repo). Run its dev server with `npm run dev` from that directory (typically serves on `localhost:5174` when the main app occupies 5173).
