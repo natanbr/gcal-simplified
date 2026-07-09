@@ -22,12 +22,16 @@ export const Altimeter = memo(function Altimeter({ altitude }: { altitude: numbe
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
         }}>
             {/* Rescue Destination at the Top */}
+            {/* ⚡ Bolt Performance Optimization:
+                Moved 'transition' inside the conditional animate block.
+                Why: Prevents Framer Motion from running an infinite requestAnimationFrame loop in the background when the animation is visually inactive (altitude < 200).
+                Impact: Reduces unnecessary JS main thread activity by stopping continuous background polling. */}
             <motion.div 
                 animate={altitude >= 200 ? {
                     scale: [1, 1.2, 1],
-                    filter: ['drop-shadow(0 0 5px #4ade80)', 'drop-shadow(0 0 15px #4ade80)', 'drop-shadow(0 0 5px #4ade80)']
+                    filter: ['drop-shadow(0 0 5px #4ade80)', 'drop-shadow(0 0 15px #4ade80)', 'drop-shadow(0 0 5px #4ade80)'],
+                    transition: { repeat: Infinity, duration: 2 }
                 } : {}}
-                transition={{ repeat: Infinity, duration: 2 }}
                 style={{ fontSize: 28, marginBottom: 8 }}
             >
                 🛸

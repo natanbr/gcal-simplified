@@ -32,3 +32,7 @@
 ## 2025-05-19 - Removed infinite motion loops
 **Learning:** `framer-motion` `repeat: Infinity` loops trigger JS execution and layout computations on the main thread continuously, significantly degrading React performance and increasing CPU usage, especially on slower devices.
 **Action:** Replace all infinite or long-running `framer-motion` animations with pure CSS `@keyframes` and `.classes` so the browser can offload the work to the compositor thread.
+## 2024-07-09 - Scoped Framer Motion Transitions
+
+**Learning:** When using Framer Motion, defining infinite animations (e.g., `repeat: Infinity`) as top-level `transition` props on `motion.div` can cause background polling/requestAnimationFrame loops even when the `animate` conditions evaluate to an empty object `{}`.
+**Action:** When a continuous animation is conditionally triggered based on state, nest the `transition` definition inside the specific variant or `animate` object to ensure it is only evaluated and run when the animation is actually active.
