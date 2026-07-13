@@ -22,12 +22,13 @@ export const Altimeter = memo(function Altimeter({ altitude }: { altitude: numbe
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
         }}>
             {/* Rescue Destination at the Top */}
+            {/* ⚡ Bolt Optimization: Moved transition inside conditional animate to prevent continuous background JS thread CPU usage when altitude < 200 */}
             <motion.div 
                 animate={altitude >= 200 ? {
                     scale: [1, 1.2, 1],
-                    filter: ['drop-shadow(0 0 5px #4ade80)', 'drop-shadow(0 0 15px #4ade80)', 'drop-shadow(0 0 5px #4ade80)']
+                    filter: ['drop-shadow(0 0 5px #4ade80)', 'drop-shadow(0 0 15px #4ade80)', 'drop-shadow(0 0 5px #4ade80)'],
+                    transition: { repeat: Infinity, duration: 2 }
                 } : {}}
-                transition={{ repeat: Infinity, duration: 2 }}
                 style={{ fontSize: 28, marginBottom: 8 }}
             >
                 🛸
