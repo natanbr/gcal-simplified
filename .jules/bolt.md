@@ -32,3 +32,6 @@
 ## 2025-05-19 - Removed infinite motion loops
 **Learning:** `framer-motion` `repeat: Infinity` loops trigger JS execution and layout computations on the main thread continuously, significantly degrading React performance and increasing CPU usage, especially on slower devices.
 **Action:** Replace all infinite or long-running `framer-motion` animations with pure CSS `@keyframes` and `.classes` so the browser can offload the work to the compositor thread.
+## 2024-05-19 - Short-Circuit Object Array Lookups During Iteration
+**Learning:** In components like `GoalPedestal.tsx` and `GlobalBank.tsx`, token drag-and-drop hit detection iterates over boundary rects to find valid drop targets. Inside this iteration, it also performed an `array.find()` to fetch token configuration info BEFORE checking if the token was actually dropped within the boundary rect, leading to a redundant O(N) lookup for every non-hit element per mouse release, scaling to O(N^2).
+**Action:** Always reorder validation logic during pointer/hit detection loops so that the primitive boundary coordinates check (`x >= rect.left...`) executes first. This short-circuits the evaluation and turns O(N^2) checks back into an O(N) evaluation since expensive inner object searches will only execute for the single hovered target.

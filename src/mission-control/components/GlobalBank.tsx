@@ -91,13 +91,15 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
       // Find the first ACTIVE case whose rect contains the drop point
       const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
         if (!rect) return false;
+        if (!(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)) return false;
+
         const caseId = Number.parseInt(id);
         const targetCase = cases.find(c => c.id === caseId);
         // Only deposit into active, incomplete, non-quick-game cases
         if (!targetCase || targetCase.status !== 'active') return false;
         if (targetCase.reward === 'quick-game') return false;
         if (targetCase.tokenCount >= targetCase.targetCount) return false;
-        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        return true;
       });
 
       if (!hit) {

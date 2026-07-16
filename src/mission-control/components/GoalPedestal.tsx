@@ -207,6 +207,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     // Check if dropped on another active Case
     const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
       if (!rect) return false;
+      if (!(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)) return false;
+
       const targetCaseId = Number.parseInt(id);
       if (targetCaseId === case_.id) return false;
       
@@ -215,7 +217,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
       if (targetCase.reward === 'quick-game') return false;
       if (targetCase.tokenCount >= targetCase.targetCount) return false;
 
-      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      return true;
     });
 
     if (hit) {
