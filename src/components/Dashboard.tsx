@@ -276,9 +276,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                 style={{ pointerEvents: 'none' }}
             >
                 <div className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden" data-testid="loading-bar">
-                    <div className="h-full bg-family-cyan animate-sync-bar" />
+                    {/* Only run the infinite width/pulse animations while actually
+                        syncing. The wrapper above merely fades to opacity 0 (it stays
+                        mounted), so without this guard these CSS loops — one of them
+                        animating `width`, i.e. layout-driven — would run forever on an
+                        idle Calendar view. */}
+                    <div className={`h-full bg-family-cyan ${(loading || isEventsLoading || isBackgroundLoading) ? 'animate-sync-bar' : ''}`} />
                 </div>
-                <span className="text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 animate-pulse">
+                <span className={`text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 ${(loading || isEventsLoading || isBackgroundLoading) ? 'animate-pulse' : ''}`}>
                     {isBackgroundLoading && !isEventsLoading && !loading ? 'Refreshing...' : (loadingMessage || 'Syncing...')}
                 </span>
             </motion.div>
