@@ -283,7 +283,13 @@ export function useFruitMergeGame(open: boolean) {
         }));
 
         setTimeout(() => {
-            setState(prev => prev.phase === 'playing' ? { ...prev, canDrop: true } : prev);
+            // Re-enable the drop regardless of the current phase. If the player
+            // opened delete-mode (or its quiz) during the 600ms cooldown, phase is
+            // no longer 'playing' when this fires; gating on 'playing' here would
+            // strand canDrop=false forever (a soft-lock — no more drops that round).
+            // dropFruit itself is still gated on phase==='playing', so flipping
+            // canDrop back on mid-delete is safe.
+            setState(prev => prev.canDrop ? prev : { ...prev, canDrop: true });
         }, DROP_COOLDOWN_MS);
     }, []);
 
@@ -330,14 +336,6 @@ export function useFruitMergeGame(open: boolean) {
         }));
     }, []);
 
-    const onDeleteQuizWrong = useCallback(() => {
-        setState(prev => ({
-            ...prev,
-            phase: 'playing',
-            selectedDeleteBodyId: null,
-        }));
-    }, []);
-
     const getDeleteTier = useCallback((): number => {
         const bodyId = stateRef.current.selectedDeleteBodyId;
         if (bodyId === null) return 0;
@@ -358,7 +356,6 @@ export function useFruitMergeGame(open: boolean) {
         cancelDeleteMode,
         selectFruitForDelete,
         onDeleteQuizCorrect,
-        onDeleteQuizWrong,
         getDeleteTier,
     };
 }

@@ -223,12 +223,23 @@ function activeWindowOverlapMs(from: Date, to: Date, settings: MCSettings): numb
     const { startMins, endMins } = getWakingBounds(settings);
     const midnight = new Date(to);
     midnight.setHours(0, 0, 0, 0);
-    const windowStart = midnight.getTime() + startMins * 60_000;
-    const windowEnd = midnight.getTime() + endMins * 60_000;
+    const midnightMs = midnight.getTime();
+    const DAY_MS = 24 * 60 * 60_000;
 
-    const start = Math.max(from.getTime(), windowStart);
-    const end = Math.min(to.getTime(), windowEnd);
-    return Math.max(0, end - start);
+    // The window can extend past midnight (e.g. eveningStartsAt 23:00 +120min →
+    // 01:00), so a slice just after midnight belongs to *yesterday's* window, not
+    // today's. Measure against both today's and the previous day's window anchor
+    // and sum them — for a same-day window the previous-day term is 0, and the two
+    // windows never overlap, so there is no double counting.
+    const overlapForDay = (dayMidnightMs: number): number => {
+        const windowStart = dayMidnightMs + startMins * 60_000;
+        const windowEnd = dayMidnightMs + endMins * 60_000;
+        const start = Math.max(from.getTime(), windowStart);
+        const end = Math.min(to.getTime(), windowEnd);
+        return Math.max(0, end - start);
+    };
+
+    return overlapForDay(midnightMs) + overlapForDay(midnightMs - DAY_MS);
 }
 
 function calculateBehaviorDelta(state: MCState, nowIso: string): { progressDelta: number; nextLastUpdated: string } {
@@ -241,7 +252,12 @@ function calculateBehaviorDelta(state: MCState, nowIso: string): { progressDelta
     const keep = { progressDelta: 0, nextLastUpdated: state.behaviorLastUpdated };
 
     const elapsedMs = now.getTime() - lastUpdate.getTime();
-    if (elapsedMs <= 0) return keep; // no time passed / clock went backwards
+    // Clock went backwards (DST fall-back, NTP correction, or a remote-synced
+    // state whose anchor is ahead of us): re-anchor to now so accrual self-heals
+    // on the next tick. Keeping the future anchor would freeze progress until the
+    // real clock caught up to it. (elapsedMs === 0 re-anchors to the same instant,
+    // so applyBehaviorSync still returns the same state ref — no churn.)
+    if (elapsedMs <= 0) return { progressDelta: 0, nextLastUpdated: nowIso };
 
     // Use ?? (not ||) so a genuine Neutral mood (0) is preserved — the old
     // `state.moodWind || 1` coerced 0 → 1, silently promoting mood to Good.

@@ -231,7 +231,7 @@ export function FruitMergeCanvas({
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const loop = () => {
+        const render = () => {
             const gs = gameStateRef.current;
             const engine = engineRef.current;
             const now = performance.now();
@@ -295,12 +295,29 @@ export function FruitMergeCanvas({
                 ctx.fillText('Click a fruit to delete', CANVAS_WIDTH / 2, 8);
             }
 
-            renderFrameRef.current = requestAnimationFrame(loop);
         };
 
+        // Static screens (waiting / game-over / time-up) never change — no
+        // physics, hover, drop-guide or animation — so painting them ~60x/sec is
+        // wasted CPU/GPU. Draw them once; the effect re-runs (phase is a dep) and
+        // restarts the rAF loop the moment the game becomes dynamic again.
+        const isStatic =
+            gameState.phase === 'waiting' ||
+            gameState.phase === 'game-over' ||
+            gameState.phase === 'time-up';
+
+        if (isStatic) {
+            render();
+            return;
+        }
+
+        const loop = () => {
+            render();
+            renderFrameRef.current = requestAnimationFrame(loop);
+        };
         renderFrameRef.current = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(renderFrameRef.current);
-    }, [engineRef, fruitMapRef, mergeEffectsRef]);
+    }, [engineRef, fruitMapRef, mergeEffectsRef, gameState.phase]);
 
     return (
         <canvas
