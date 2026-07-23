@@ -4,7 +4,7 @@
 // Composes FruitMergeCanvas + QuizOverlay + game HUD.
 // ============================================================
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FruitMergeCanvas } from './FruitMergeCanvas';
 import { useFruitMergeGame } from './useFruitMergeGame';
@@ -42,8 +42,6 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
     const scoreRef = useRef(0);
     scoreRef.current = gameState.score;
 
-    const [deleteQuizCorrect, setDeleteQuizCorrect] = useState(0);
-
     // Reset when overlay opens
     const prevOpen = useRef(false);
     useEffect(() => {
@@ -70,11 +68,6 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
     }, [open, gameState.phase, handleClose, cancelDeleteMode]);
-
-    const handleDeleteQuizCorrect = useCallback(() => {
-        setDeleteQuizCorrect(0);
-        onDeleteQuizCorrect();
-    }, [onDeleteQuizCorrect]);
 
     const formatTime = (ms: number) => {
         const totalSec = Math.max(0, Math.ceil(ms / 1000));
@@ -125,7 +118,10 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
 
                                 {/* Highest tier */}
                                 <div className="font-sans text-[15px] font-extrabold flex items-center gap-[5px] text-emerald-400">
-                                    👑 {FRUIT_TYPES[gameState.highestTier].emoji}
+                                    {/* highestTier can reach FRUIT_TYPES.length (10) when two
+                                        watermelons merge — clamp so the crown never indexes past
+                                        the last fruit and crashes the header. */}
+                                    👑 {FRUIT_TYPES[Math.min(gameState.highestTier, FRUIT_TYPES.length - 1)].emoji}
                                 </div>
 
                                 {/* Delete button */}
@@ -184,9 +180,9 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
                             <QuizOverlay
                                 open={gameState.phase === 'quiz-delete'}
                                 requiredCorrect={1}
-                                currentCorrect={deleteQuizCorrect}
+                                currentCorrect={0}
                                 generator={() => generateDeleteQuestion(deleteTier)}
-                                onCorrect={handleDeleteQuizCorrect}
+                                onCorrect={onDeleteQuizCorrect}
                                 title={`🧠 Delete ${FRUIT_TYPES[deleteTier].emoji} ${FRUIT_TYPES[deleteTier].name}?`}
                             />
 

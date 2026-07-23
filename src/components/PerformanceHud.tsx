@@ -1,10 +1,17 @@
 // ============================================================
-// Global Performance HUD (production)
+// Global Performance HUD (opt-in profiling tool)
 // ------------------------------------------------------------
-// Always-on, bottom-right readout for both the Calendar and Mission
-// Control views (and during games). Colour is the primary signal —
-// green / yellow / orange / red — so it's readable at a glance without
-// parsing the numbers.
+// Bottom-right readout for both the Calendar and Mission Control views
+// (and during games). Colour is the primary signal — green / yellow /
+// orange / red — so it's readable at a glance without parsing the numbers.
+//
+// ⚠️  OFF by default. A live FPS meter needs a continuous 60fps
+// requestAnimationFrame loop; that loop, by requesting a frame every
+// ~16ms, keeps the CPU/GPU awake and would make the Calendar view busy
+// even when the user is idle — directly violating the app's idle-Calendar
+// performance invariant (see docs/performance.md, CLAUDE.md → Performance).
+// It also makes idle FPS read a misleading ~60 instead of ~0. So it must
+// be explicitly enabled when profiling rather than run for every user.
 //
 // Metrics (all derived from a SINGLE requestAnimationFrame loop, so it
 // adds no setInterval and pushes to React state only ~once per second):
@@ -13,8 +20,8 @@
 //             "did the UI hitch/freeze" signal.
 //   • MEM   — JS heap in use (MB), coloured by fraction of the heap limit.
 //
-// Escape hatch: run `localStorage.setItem('perf-hud','off')` then reload
-// to hide it (no rebuild needed).
+// Enable: run `localStorage.setItem('perf-hud','on')` then reload
+// (no rebuild needed). Remove the key / set anything else to hide it.
 // ============================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -68,9 +75,12 @@ function Chip({ label, value, color }: { label: string; value: string; color: st
 export function PerformanceHud() {
     const [enabled] = useState(() => {
         try {
-            return localStorage.getItem('perf-hud') !== 'off';
+            // Opt-in: only run (and thus only spin up the 60fps rAF loop) when
+            // explicitly enabled for profiling. Default off keeps the idle
+            // Calendar view genuinely idle.
+            return localStorage.getItem('perf-hud') === 'on';
         } catch {
-            return true;
+            return false;
         }
     });
 

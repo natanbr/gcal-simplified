@@ -128,6 +128,39 @@ describe('behavior progress — active-window accrual', () => {
         const next = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(21, 0) });
         expect(next.behaviorProgress).toBe(50);
     });
+
+    it('accrues just after midnight for an evening window that crosses midnight', () => {
+        // eveningStartsAt 23:00 + 120min ends at 01:00 the next day. A 00:00→00:01
+        // tick is inside that window, so it must accrue — the window computation
+        // has to look back to the previous day's anchor, not just today's midnight.
+        const state: MCState = {
+            ...initialState,
+            settings: { ...initialState.settings, eveningStartsAt: '23:00', eveningDurationMins: 120 },
+            moodWind: 1,
+            moodLastResetDate: localDateString(), // suppress the daily reset
+            behaviorProgress: 50,
+            behaviorLastUpdated: todayAtLocal(0, 0),
+        };
+        const next = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(0, 1) });
+        expect(next.behaviorProgress).toBeCloseTo(50 + 4 / 60, 5);
+    });
+
+    it('re-anchors (self-heals) instead of freezing when the clock jumps backwards', () => {
+        // Anchor sits in the future relative to the tick (DST fall-back, NTP
+        // correction, or a remote-synced peer whose clock is ahead). The old code
+        // kept the future anchor and froze accrual until the real clock caught up.
+        const state: MCState = {
+            ...inWindowState(1),
+            behaviorLastUpdated: todayAtLocal(12, 5), // 5 min ahead of the tick below
+        };
+        const healed = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(12, 0) });
+        expect(healed.behaviorProgress).toBe(50);                       // nothing accrued backwards
+        expect(healed.behaviorLastUpdated).toBe(todayAtLocal(12, 0));   // anchor healed to "now"
+
+        // The next forward tick now accrues normally rather than staying frozen.
+        const next = mcReducer(healed, { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(12, 1) });
+        expect(next.behaviorProgress).toBeCloseTo(50 + 4 / 60, 5);
+    });
 });
 
 // ── COMPLETE_MISSION_ROUTINE idempotency ─────────────────────────────────────
