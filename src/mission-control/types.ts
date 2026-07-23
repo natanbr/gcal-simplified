@@ -187,7 +187,11 @@ export interface MCState {
     behaviorProgress: number;
     /** Global whining status (outside of specific missions) */
     whiningActive: boolean;
-    /** Mood Wind speed (-2 to +2). +1 is default (3 days to token). */
+    /**
+     * Mood level (-2 Horrible .. 0 Neutral .. +2 Excellent). Drives how fast
+     * behaviorProgress fills/drains (see MOOD_HOURLY_RATE). Reset to 0 (natural)
+     * at the start of each active day; only changed manually / via remote.
+     */
     moodWind: number;
     /** ISO timestamp of the last behavior progress calculation */
     behaviorLastUpdated: string;

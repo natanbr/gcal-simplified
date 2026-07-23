@@ -68,23 +68,56 @@ describe('mood daily reset — local date handling', () => {
 
 // ── Behavior progress accrual ────────────────────────────────────────────────
 
-describe('behavior progress — same-local-day accrual', () => {
-    it('accrues progress only for waking minutes within the same local day', () => {
-        // 12:00 → 13:00 local, all inside the default 06:00–20:00 waking window
-        const state: MCState = {
+/** A single heartbeat tick (60s) later, still today. */
+function oneTickAfter(hours: number, minutes = 0): string {
+    return todayAtLocal(hours, minutes + 1);
+}
+
+describe('behavior progress — active-window accrual', () => {
+    function inWindowState(moodWind: number): MCState {
+        return {
             ...initialState,
-            moodWind: 1,
+            moodWind,
             moodLastResetDate: localDateString(), // suppress the daily reset
             behaviorProgress: 50,
             behaviorLastUpdated: todayAtLocal(12, 0),
         };
-        const next = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(13, 0) });
-        // moodWind 1 → 100/2160 per minute × 60 minutes ≈ 2.78
-        expect(next.behaviorProgress).toBeCloseTo(50 + (100 / 2160) * 60, 5);
+    }
+
+    it('accrues Good mood (+4%/h) over a one-minute in-window tick', () => {
+        const next = mcReducer(inWindowState(1), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
+        expect(next.behaviorProgress).toBeCloseTo(50 + 4 / 60, 5);
     });
 
-    it('accrues nothing outside waking hours', () => {
-        // 21:00 → 22:00 local is past eveningStartsAt(19:00) + 60m window end
+    it('accrues Neutral mood at +1%/h — never the Good rate (no auto-promotion)', () => {
+        // Regression for the `state.moodWind || 1` bug: Neutral (0) was coerced
+        // to Good (1) and filled at 4%/h. It must fill at 1%/h and stay Neutral.
+        const next = mcReducer(inWindowState(0), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
+        expect(next.behaviorProgress).toBeCloseTo(50 + 1 / 60, 5);
+        expect(next.moodWind).toBe(0);
+    });
+
+    it('accrues Excellent mood at +8.5%/h', () => {
+        const next = mcReducer(inWindowState(2), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
+        expect(next.behaviorProgress).toBeCloseTo(50 + 8.5 / 60, 5);
+    });
+
+    it('drains Bad mood at -3%/h and Horrible mood at -8%/h', () => {
+        const bad = mcReducer(inWindowState(-1), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
+        expect(bad.behaviorProgress).toBeCloseTo(50 - 3 / 60, 5);
+
+        const horrible = mcReducer(inWindowState(-2), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
+        expect(horrible.behaviorProgress).toBeCloseTo(50 - 8 / 60, 5);
+    });
+
+    it('does NOT back-fill a large gap (app was off / machine asleep)', () => {
+        // A one-hour jump is not continuous app-on time — it must count nothing.
+        const next = mcReducer(inWindowState(1), { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(13, 0) });
+        expect(next.behaviorProgress).toBe(50);
+    });
+
+    it('accrues nothing outside the active window, even for a short tick', () => {
+        // 21:00 → 21:01 local is past eveningStartsAt(19:00) + 60m window end.
         const state: MCState = {
             ...initialState,
             moodWind: 1,
@@ -92,7 +125,7 @@ describe('behavior progress — same-local-day accrual', () => {
             behaviorProgress: 50,
             behaviorLastUpdated: todayAtLocal(21, 0),
         };
-        const next = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(22, 0) });
+        const next = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(21, 0) });
         expect(next.behaviorProgress).toBe(50);
     });
 });

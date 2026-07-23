@@ -129,7 +129,9 @@ function ProgressBar({ progress, level, delta }: { progress: number; level: numb
     const mood = getMoodData(level);
     const clampedProgress = Math.max(0, Math.min(100, progress));
 
-    const deltaLabel = delta !== 0
+    // The per-minute accrual drip is tiny (< 1%); only surface deltas big
+    // enough to read, so the label doesn't sit at a permanent "+0.0%".
+    const deltaLabel = Math.abs(delta) >= 1
         ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`
         : null;
 
