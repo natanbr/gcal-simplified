@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 
 interface GameSelectorOverlayProps {
-    onSelect: (game: 'snake' | 'blocks') => void;
+    onSelect: (game: 'snake' | 'blocks' | 'fruits') => void;
     onClose: () => void;
 }
 
@@ -105,6 +105,30 @@ export function GameSelectorOverlay({ onSelect, onClose }: GameSelectorOverlayPr
                             </div>
                             <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0', lineHeight: 1.3 }}>
                                 Drag and drop space debris blocks to clear the rocket path!
+                            </p>
+                        </div>
+                    </motion.button>
+                    {/* Fruit Merge Card */}
+                    <motion.button
+                        whileHover={{ scale: 1.04, border: '2px solid rgba(74, 222, 128, 0.4)' }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => onSelect('fruits')}
+                        style={{
+                            flex: 1, height: 180, borderRadius: 20,
+                            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(22, 163, 74, 0.1))',
+                            border: '2px solid rgba(34, 197, 94, 0.15)',
+                            padding: 20, cursor: 'pointer', display: 'flex',
+                            flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                            gap: 12, textAlign: 'center', transition: 'border-color 0.2s'
+                        }}
+                    >
+                        <span style={{ fontSize: 48 }}>🍉</span>
+                        <div>
+                            <div style={{ fontSize: 16, fontWeight: 900, color: '#4ade80', fontFamily: "'Nunito', sans-serif" }}>
+                                Fruit Merge
+                            </div>
+                            <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0', lineHeight: 1.3 }}>
+                                Drop & merge fruits to make the biggest watermelon!
                             </p>
                         </div>
                     </motion.button>

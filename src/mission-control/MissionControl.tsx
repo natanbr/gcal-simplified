@@ -22,6 +22,7 @@ import { PrivilegesPanel } from './components/PrivilegesPanel';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
 import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
 import { BlocksGameOverlay } from './games/blocks/BlocksGameOverlay';
+import { FruitMergeGameOverlay } from './games/fruits/FruitMergeGameOverlay';
 import { GameSelectorOverlay } from './components/GameSelectorOverlay';
 import { useMCDispatch, useMCState } from './store/useMCStore.tsx';
 import { RemoteStatusProvider, useRemoteStatus } from './contexts/RemoteStatusContext';
@@ -92,7 +93,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   }, []);
 
   const [showCheatTrap, setShowCheatTrap] = useState(false);
-  const [activeGameType, setActiveGameType] = useState<'snake' | 'blocks' | null>(null);
+  const [activeGameType, setActiveGameType] = useState<'snake' | 'blocks' | 'fruits' | null>(null);
   const cheatTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -314,6 +315,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       )}
       <SnakeGameOverlay open={state.snakeGameActive && activeGameType === 'snake'} onClose={handleQuickGameClose} />
       <BlocksGameOverlay open={state.snakeGameActive && activeGameType === 'blocks'} onClose={handleQuickGameClose} />
+      <FruitMergeGameOverlay open={state.snakeGameActive && activeGameType === 'fruits'} onClose={handleQuickGameClose} />
 
       {/* ===== REMOTE ANIMATIONS ===== */}
       <CelebrationOverlay />
