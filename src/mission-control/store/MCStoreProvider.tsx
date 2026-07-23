@@ -2,6 +2,7 @@ import React, { useReducer, useMemo, useEffect, useRef } from 'react';
 import { mcReducer } from './mcReducer';
 import { MCContext, loadPersistedState, STORAGE_KEY } from './useMCStore';
 import { useGameTokenScheduler } from './useGameTokenScheduler';
+import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
 import { useRemoteSync } from './useRemoteSync';
 
 export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -9,6 +10,9 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     const contextValue = useMemo(() => ({ state, dispatch }), [state]);
 
     useGameTokenScheduler(dispatch);
+
+    // Accrue mood progress once a minute while the app is running
+    useBehaviorHeartbeat(dispatch);
 
     // Sync state to Remote Control
     useRemoteSync(state);

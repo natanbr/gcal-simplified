@@ -121,7 +121,7 @@ export const initialState: MCState = {
     lastCompletedOrFailedEveningDate: null,
     behaviorProgress: 50, // Start in the middle (Yellow)
     whiningActive: false,
-    moodWind: 1,
+    moodWind: 0, // Natural/Neutral baseline — reset to this each active day
     behaviorLastUpdated: new Date().toISOString(),
     behaviorDelta: 0,
 };
@@ -152,6 +152,27 @@ function computeMissionDurationMins(startsAt: string, endsAt: string): number {
 }
 
 // ---- Helpers for Behavior Progress ----
+
+/**
+ * Behavior-progress change per *active hour*, keyed by mood level (-2..+2).
+ * Positive fills the gauge toward a game token; negative drains it.
+ * These are the single source of truth for the mood → progress rates.
+ */
+export const MOOD_HOURLY_RATE: Record<number, number> = {
+    2: 8.5,   // Excellent
+    1: 4,     // Good
+    0: 1,     // Neutral
+    [-1]: -3, // Bad
+    [-2]: -8, // Horrible
+};
+
+/**
+ * Largest gap between two behavior syncs still treated as continuous "app is
+ * running" time. The heartbeat ticks every 60s (see useBehaviorHeartbeat), so
+ * any gap beyond this means the app was closed or the machine was asleep — that
+ * span is NOT the child's active time and must not be counted.
+ */
+const MAX_ACTIVE_GAP_MS = 3 * 60 * 1000;
 
 export function isWakingHour(isoString: string, settings: MCSettings): boolean {
     const d = new Date(isoString);
@@ -192,58 +213,54 @@ function shouldResetMood(state: MCState, nowIso: string): boolean {
     return nowMins >= resetMins;
 }
 
-function clampToWakingMinutes(lastUpdate: Date, now: Date, settings: MCSettings): number {
+/**
+ * Milliseconds of the interval [from, to] that fall inside *to*'s local active
+ * window (morning start → end of evening). Because the reducer discards gaps
+ * larger than one heartbeat, this only ever measures a short, same-day slice —
+ * no multi-day back-fill (that would count time the app was closed).
+ */
+function activeWindowOverlapMs(from: Date, to: Date, settings: MCSettings): number {
     const { startMins, endMins } = getWakingBounds(settings);
-    const wakingDurationMins = endMins - startMins;
-    if (wakingDurationMins <= 0) return 0;
+    const midnight = new Date(to);
+    midnight.setHours(0, 0, 0, 0);
+    const windowStart = midnight.getTime() + startMins * 60_000;
+    const windowEnd = midnight.getTime() + endMins * 60_000;
 
-    // Compare local calendar days — UTC days flip mid-afternoon in western
-    // timezones, which would misclassify a same-day update as multi-day.
-    const lastDay = getLocalDateString(lastUpdate);
-    const nowDay = getLocalDateString(now);
-
-    if (lastDay === nowDay) {
-        const lastMins = lastUpdate.getHours() * 60 + lastUpdate.getMinutes();
-        const nowMins = now.getHours() * 60 + now.getMinutes();
-        const clampedStart = Math.max(lastMins, startMins);
-        const clampedEnd = Math.min(nowMins, endMins);
-        return Math.max(0, clampedEnd - clampedStart);
-    }
-
-    const lastMins = lastUpdate.getHours() * 60 + lastUpdate.getMinutes();
-    const remainingFirstDay = Math.max(0, endMins - Math.max(lastMins, startMins));
-
-    const daysBetween = Math.max(0, Math.floor((now.getTime() - lastUpdate.getTime()) / 86400000) - 1);
-    const fullDaysMins = Math.min(daysBetween, 7) * wakingDurationMins;
-
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-    const todayMins = Math.max(0, Math.min(nowMins, endMins) - startMins);
-
-    return Math.max(0, remainingFirstDay) + fullDaysMins + Math.max(0, todayMins);
+    const start = Math.max(from.getTime(), windowStart);
+    const end = Math.min(to.getTime(), windowEnd);
+    return Math.max(0, end - start);
 }
 
 function calculateBehaviorDelta(state: MCState, nowIso: string): { progressDelta: number; nextLastUpdated: string } {
     const lastUpdate = new Date(state.behaviorLastUpdated);
     const now = new Date(nowIso);
 
-    if (now <= lastUpdate) return { progressDelta: 0, nextLastUpdated: nowIso };
+    // Returning the *unchanged* anchor signals applyBehaviorSync to leave state
+    // untouched (same object ref) so idle heartbeat ticks trigger no re-render
+    // or persist. We only advance the anchor when there is something to record.
+    const keep = { progressDelta: 0, nextLastUpdated: state.behaviorLastUpdated };
 
-    const moodWind = state.moodWind || 1;
-    if (moodWind === 0) return { progressDelta: 0, nextLastUpdated: nowIso };
+    const elapsedMs = now.getTime() - lastUpdate.getTime();
+    if (elapsedMs <= 0) return keep; // no time passed / clock went backwards
 
-    const absWind = Math.abs(moodWind);
-    let ratePerMin = 0;
-    if (absWind === 1) ratePerMin = 100 / 2160;
-    else if (absWind >= 2) ratePerMin = 100 / 1080;
+    // Use ?? (not ||) so a genuine Neutral mood (0) is preserved — the old
+    // `state.moodWind || 1` coerced 0 → 1, silently promoting mood to Good.
+    const moodWind = Math.max(-2, Math.min(2, state.moodWind ?? 0));
+    const hourlyRate = MOOD_HOURLY_RATE[moodWind] ?? 0;
 
-    const direction = moodWind > 0 ? 1 : -1;
-    const rate = ratePerMin * direction;
+    // Only the portion of the gap inside the active window counts. Outside it
+    // (night) nothing accrues AND we keep the anchor frozen — this is what makes
+    // the whole night cost-free (no state churn at all).
+    const activeMs = activeWindowOverlapMs(lastUpdate, now, state.settings);
+    if (hourlyRate === 0 || activeMs <= 0) return keep;
 
-    const effectiveMins = clampToWakingMinutes(lastUpdate, now, state.settings);
-    const cappedMins = Math.min(effectiveMins, 14 * 60);
-    const totalDelta = cappedMins * rate;
+    // In-window, but the gap is larger than a heartbeat → the app was closed or
+    // the machine asleep. Don't back-fill that span; re-anchor so the next tick
+    // resumes accrual from now.
+    if (elapsedMs > MAX_ACTIVE_GAP_MS) return { progressDelta: 0, nextLastUpdated: nowIso };
 
-    return { progressDelta: totalDelta, nextLastUpdated: nowIso };
+    const progressDelta = (activeMs / 3_600_000) * hourlyRate;
+    return { progressDelta, nextLastUpdated: nowIso };
 }
 
 function applyBehaviorSync(state: MCState, nowIso: string): MCState {
@@ -259,7 +276,14 @@ function applyBehaviorSync(state: MCState, nowIso: string): MCState {
     }
 
     const { progressDelta, nextLastUpdated } = calculateBehaviorDelta(state, nowIso);
-    if (progressDelta === 0) return { ...state, behaviorLastUpdated: nextLastUpdated };
+    if (progressDelta === 0) {
+        // Nothing accrued. Only allocate a new state object if the anchor
+        // actually moved (a re-anchor after a long gap). Otherwise return the
+        // exact same reference so idle heartbeat ticks trigger no re-render and
+        // no persist — this is what keeps the Calendar view quiet at night.
+        if (nextLastUpdated === state.behaviorLastUpdated) return state;
+        return { ...state, behaviorLastUpdated: nextLastUpdated };
+    }
 
     let nextProgress = state.behaviorProgress + progressDelta;
     let nextGameTokens = state.gameTokens;
