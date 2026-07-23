@@ -9,6 +9,7 @@ import { useMissionScheduler } from './mission-control/hooks/useMissionScheduler
 import { useMCAutoReturn } from './mission-control/hooks/useMCAutoReturn';
 import { useRemoteControl } from './mission-control/hooks/useRemoteControl';
 import { MoodWindNotification } from './mission-control/components/MoodWindNotification';
+import { PerformanceHud } from './components/PerformanceHud';
 
 // ── Scheduler hook — runs at App level so it works on both views ──────────────
 function MissionSchedulerBridge() {
@@ -109,6 +110,9 @@ function App() {
 
         {/* Global Mood Wind Notifications */}
         <MoodWindNotification />
+
+        {/* Always-on performance readout (both views + games) */}
+        <PerformanceHud />
 
         {/* View switch */}
         {view === 'calendar' ? (

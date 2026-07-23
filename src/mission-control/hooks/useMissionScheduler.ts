@@ -111,7 +111,12 @@ export function useMissionScheduler(): void {
 
     // ── 2. Expiry Interval (Duration Countdown) ───────────────────────────────
     // Periodically checks if the currently running mission's duration has expired.
+    // Gated on activeMission: when nothing is running (e.g. the whole time the
+    // user is on the Calendar view) there is nothing to count down, so we run NO
+    // interval at all instead of waking the CPU every 15s to check a no-op.
     useEffect(() => {
+        if (state.activeMission === 'none') return;
+
         function tick() {
             const s = stateRef.current;
             if (s.activeMission !== 'none') {
@@ -129,6 +134,6 @@ export function useMissionScheduler(): void {
         // it doesn't trigger anything, just automatically closes it when time is up.
         const id = setInterval(tick, 15_000);
         return () => clearInterval(id);
-    }, [dispatch]);
+    }, [state.activeMission, dispatch]);
 }
 
