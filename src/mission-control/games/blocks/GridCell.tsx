@@ -9,8 +9,8 @@ interface GridCellProps {
 }
 
 export const GridCell = memo(function GridCell({ r, c, val }: GridCellProps) {
-    let bg = 'rgba(255, 255, 255, 0.015)';
-    let border = '1px solid rgba(255, 255, 255, 0.03)';
+    let bg = 'rgba(255, 255, 255, 0.035)';
+    let border = '1px solid rgba(255, 255, 255, 0.08)';
     let content = null;
     let shadow = 'none';
     const isExploding = val === 4;

@@ -20,7 +20,11 @@ export function generateSubtractionQuestion(maxVal: number = 20): QuizQuestion {
     };
 }
 
-export function generateMultiplicationQuestion(maxFactor: number = 10): QuizQuestion {
+// Kid-friendly cap: multiplication never exceeds MAX_MULT_FACTOR × MAX_MULT_FACTOR
+export const MAX_MULT_FACTOR = 4;
+
+export function generateMultiplicationQuestion(maxFactor: number = MAX_MULT_FACTOR): QuizQuestion {
+    maxFactor = Math.min(maxFactor, MAX_MULT_FACTOR);
     const a = Math.floor(Math.random() * (maxFactor - 1)) + 2;
     const b = Math.floor(Math.random() * (maxFactor - 1)) + 2;
 
@@ -45,11 +49,11 @@ export function generateLevelQuestion(level: number): QuizQuestion {
         const roll = Math.random();
         if (roll < 0.35) return generateAdditionQuestion(50);
         if (roll < 0.7) return generateSubtractionQuestion(30);
-        return generateMultiplicationQuestion(6);
+        return generateMultiplicationQuestion(4);
     }
 
     const roll = Math.random();
     if (roll < 0.3) return generateAdditionQuestion(100);
     if (roll < 0.55) return generateSubtractionQuestion(50);
-    return generateMultiplicationQuestion(10);
+    return generateMultiplicationQuestion(4);
 }

@@ -41,12 +41,20 @@ export const RescueSlot = memo(function RescueSlot({
                                 onClick={triggerRescueQuiz}
                                 style={{
                                     position: 'absolute', inset: 0, zIndex: 10, borderRadius: 18,
-                                    background: 'rgba(15, 23, 42, 0.85)', border: 'none', cursor: 'pointer',
-                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4
+                                    background: 'rgba(15, 23, 42, 0.35)', border: 'none', cursor: 'pointer',
                                 }}
                             >
-                                <span style={{ fontSize: 24 }}>🔒</span>
-                                <span style={{ fontSize: 9, fontWeight: 900, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center', padding: '0 4px' }}>Solve Math</span>
+                                <span style={{
+                                    position: 'absolute', top: 4, right: 4, fontSize: 16, lineHeight: 1,
+                                    background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(245, 158, 11, 0.5)',
+                                    borderRadius: 8, padding: '3px 5px',
+                                }}>🔒</span>
+                                <span style={{
+                                    position: 'absolute', bottom: 4, left: 0, right: 0,
+                                    fontSize: 9, fontWeight: 900, color: '#f59e0b', textTransform: 'uppercase',
+                                    letterSpacing: '0.04em', textAlign: 'center', padding: '0 4px',
+                                    textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+                                }}>Solve Math</span>
                             </motion.button>
                         ) : null}
 

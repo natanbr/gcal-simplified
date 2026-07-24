@@ -58,12 +58,12 @@ export function BlocksGameOverlay({ open, onClose }: BlocksGameOverlayProps) {
                 style={{
                     background: 'linear-gradient(145deg, #1e293b, #0f172a)',
                     border: '2px solid rgba(56, 189, 248, 0.15)',
-                    borderRadius: 28,
-                    padding: '24px 32px 32px',
-                    width: 'min(1250px, 95vw)',
-                    height: 'min(900px, 95vh)',
+                    borderRadius: 20,
+                    padding: '16px 28px 20px',
+                    width: 'min(1250px, 96vw)',
+                    height: 'calc(100vh - 16px)',
                     boxShadow: '0 25px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)',
-                    display: 'flex', flexDirection: 'column', gap: 18,
+                    display: 'flex', flexDirection: 'column', gap: 12,
                     position: 'relative', overflow: 'hidden'
                 }}
             >

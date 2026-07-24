@@ -21,8 +21,8 @@ export const StandardShapesTray = memo(function StandardShapesTray({
                         <div 
                             key={shape ? shape.id : `empty-${idx}`} 
                             style={{ 
-                                width: 240, 
-                                height: 240, 
+                                width: 200,
+                                height: 200,
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center', 

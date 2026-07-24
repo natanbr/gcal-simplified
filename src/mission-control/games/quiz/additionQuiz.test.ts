@@ -135,23 +135,32 @@ describe('generateMultiplicationQuestion', () => {
         }
     });
 
-    it('factors never exceed maxFactor (default 10)', () => {
+    it('factors never exceed maxFactor (default 4)', () => {
         for (let i = 0; i < 100; i++) {
             const q = generateMultiplicationQuestion();
             const match = q.text.match(/^(\d+) × (\d+) = \?$/);
-            expect(Number(match![1])).toBeLessThanOrEqual(10);
-            expect(Number(match![2])).toBeLessThanOrEqual(10);
+            expect(Number(match![1])).toBeLessThanOrEqual(4);
+            expect(Number(match![2])).toBeLessThanOrEqual(4);
         }
     });
 
-    it('respects custom maxFactor', () => {
+    it('respects custom maxFactor below the cap', () => {
         for (let i = 0; i < 100; i++) {
-            const q = generateMultiplicationQuestion(5);
+            const q = generateMultiplicationQuestion(3);
             const match = q.text.match(/^(\d+) × (\d+) = \?$/);
-            expect(Number(match![1])).toBeLessThanOrEqual(5);
-            expect(Number(match![2])).toBeLessThanOrEqual(5);
+            expect(Number(match![1])).toBeLessThanOrEqual(3);
+            expect(Number(match![2])).toBeLessThanOrEqual(3);
             expect(Number(match![1])).toBeGreaterThanOrEqual(2);
             expect(Number(match![2])).toBeGreaterThanOrEqual(2);
+        }
+    });
+
+    it('clamps maxFactor above the cap to 4', () => {
+        for (let i = 0; i < 100; i++) {
+            const q = generateMultiplicationQuestion(10);
+            const match = q.text.match(/^(\d+) × (\d+) = \?$/);
+            expect(Number(match![1])).toBeLessThanOrEqual(4);
+            expect(Number(match![2])).toBeLessThanOrEqual(4);
         }
     });
 });

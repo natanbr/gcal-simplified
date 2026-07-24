@@ -21,10 +21,10 @@ export const BlocksGrid = memo(forwardRef<HTMLDivElement, BlocksGridProps>(funct
                 gridTemplateRows: `repeat(${GRID_SIZE}, ${CELL_DISPLAY_SIZE}px)`,
                 gap: 4,
                 padding: 8,
-                background: 'rgba(15, 23, 42, 0.4)',
-                border: '2px solid rgba(255, 255, 255, 0.08)',
+                background: '#020617',
+                border: '2.5px solid rgba(56, 189, 248, 0.5)',
                 borderRadius: 18,
-                boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.4)',
+                boxShadow: '0 0 20px rgba(56, 189, 248, 0.15), inset 0 4px 20px rgba(0,0,0,0.5)',
                 position: 'relative',
             }}
         >
