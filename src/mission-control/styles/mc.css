@@ -363,3 +363,18 @@
   animation: mc-bounce-emoji 2s ease-in-out 15;
   animation-fill-mode: forwards;
 }
+
+/* 12. Altimeter UFO Pulse */
+@keyframes mc-altimeter-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 5px #4ade80);
+  }
+  50% {
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 15px #4ade80);
+  }
+}
+.mc-anim-altimeter-pulse {
+  animation: mc-altimeter-pulse 2s ease-in-out infinite;
+}

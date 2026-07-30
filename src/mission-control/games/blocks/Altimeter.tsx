@@ -22,19 +22,16 @@ export const Altimeter = memo(function Altimeter({ altitude }: { altitude: numbe
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
         }}>
             {/* Rescue Destination at the Top */}
-            <motion.div 
-                animate={altitude >= 200 ? {
-                    scale: [1, 1.2, 1],
-                    filter: ['drop-shadow(0 0 5px #4ade80)', 'drop-shadow(0 0 15px #4ade80)', 'drop-shadow(0 0 5px #4ade80)'],
-                    // ⚡ Bolt Performance: Place infinite transition inside conditional animate object
-                    // to prevent Framer Motion from running a continuous 60fps loop on the main thread
-                    // when the altitude condition is not met.
-                    transition: { repeat: Infinity, duration: 2 }
-                } : {}}
+            {/* ⚡ Bolt Performance: Place infinite transition inside conditional animate object
+                to prevent Framer Motion from running a continuous 60fps loop on the main thread
+                when the altitude condition is not met. We use a pure CSS class here
+                to move the load off the JS main thread and onto the CSS compositor thread. */}
+            <div
+                className={altitude >= 200 ? 'mc-anim-altimeter-pulse' : ''}
                 style={{ fontSize: 28, marginBottom: 8 }}
             >
                 🛸
-            </motion.div>
+            </div>
             
             {/* The vertical track */}
             <div style={{ 
