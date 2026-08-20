@@ -145,9 +145,74 @@ describe('Single instance enforcement', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (mocks.mockBrowserWindow as any).getAllWindows.mockReturnValue([existingWindow]);
 
-    registration![1]();
+    // (event, argv, workingDirectory, additionalData) — a real second launch
+    // carries headless: false.
+    registration![1]({}, [], '', { headless: false });
 
     expect(existingWindow.restore).toHaveBeenCalled();
     expect(existingWindow.focus).toHaveBeenCalled();
+  });
+
+  describe('does not let the E2E suite steal focus', () => {
+    // Playwright launches the app once per test — 44 times a suite. Each of
+    // those loses the lock and fires `second-instance` on whatever instance is
+    // running, which for a developer with the app open means their window is
+    // restored, shown and focused 44 times in a row. The lock refusal is still
+    // correct and must stay; only the focus grab is conditional.
+
+    /** Mounts main.ts and returns the registered second-instance handler. */
+    async function loadHandler() {
+      await import('./main');
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const registration = mocks.mockApp.on.mock.calls.find(([event]) => event === 'second-instance');
+      expect(registration, 'app.on("second-instance") was never registered').toBeDefined();
+      return registration![1];
+    }
+
+    function stubWindow() {
+      const w = {
+        isMinimized: vi.fn().mockReturnValue(true),
+        restore: vi.fn(),
+        focus: vi.fn(),
+        show: vi.fn(),
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (mocks.mockBrowserWindow as any).getAllWindows.mockReturnValue([w]);
+      return w;
+    }
+
+    it('declares itself in the lock so the running instance can tell them apart', async () => {
+      // Without a payload on requestSingleInstanceLock there is nothing for the
+      // handler to branch on, and the check below cannot work at all.
+      await import('./main');
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(mocks.mockApp.requestSingleInstanceLock).toHaveBeenCalledWith(
+        expect.objectContaining({ headless: expect.any(Boolean) })
+      );
+    });
+
+    it('ignores a headless (E2E) second instance instead of surfacing the window', async () => {
+      const handler = await loadHandler();
+      const existingWindow = stubWindow();
+
+      handler({}, [], '', { headless: true });
+
+      expect(existingWindow.show, 'an E2E launch surfaced the developer window').not.toHaveBeenCalled();
+      expect(existingWindow.focus).not.toHaveBeenCalled();
+      expect(existingWindow.restore).not.toHaveBeenCalled();
+    });
+
+    it('still surfaces the window for a launch with no payload at all', async () => {
+      // An older build, or a launch from a shortcut — absence of data is not
+      // evidence of a test run, so the useful behaviour stays the default.
+      const handler = await loadHandler();
+      const existingWindow = stubWindow();
+
+      handler({}, [], '', undefined);
+
+      expect(existingWindow.show).toHaveBeenCalled();
+      expect(existingWindow.focus).toHaveBeenCalled();
+    });
   });
 });
