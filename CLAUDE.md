@@ -175,7 +175,7 @@ Guards that enforce the above (fail `npm run test:unit`): `src/__tests__/timer-r
 
 - [ai-index.md](ai-index.md) — codebase map (domain boundaries, where things live)
 - [docs/performance.md](docs/performance.md) — idle budget + regression guards
-- [docs/requirements.md](docs/requirements.md) — living spec + dated changelog. **Known issue: the whole document is duplicated three times** (headings at lines 1, 193, 388). Append to the last copy; do not add a fourth.
+- [docs/requirements.md](docs/requirements.md) — living spec + dated changelog. One copy, one `# ` heading, changelog in date order. It was accidentally triplicated for months and the three copies drifted apart; `src/__tests__/docs-integrity.test.ts` now fails if a second copy appears.
 - [docs/test-coverage-plan.md](docs/test-coverage-plan.md) — phased coverage plan (counts are stale)
 - [docs/mission-control.md](docs/mission-control.md), `docs/tasks/*` — feature briefs and ADRs
 

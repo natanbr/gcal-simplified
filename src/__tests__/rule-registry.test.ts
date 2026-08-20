@@ -189,6 +189,14 @@ const REGISTRY: Rule[] = [
     },
 
     {
+        rule: 'docs/requirements.md is one document — one top-level heading, changelog in date order',
+        source: 'CLAUDE.md → Docs',
+        status: 'guarded',
+        guard: 'src/__tests__/docs-integrity.test.ts',
+        verifiedRedBy: 'append a second copy of the file to itself; also verified by duplicating one ### heading, and by adding a backdated changelog entry',
+        defence: 'The file was silently triplicated for months and the three copies drifted — a whole feature section survived only in copy 1 while the newest changelog was in copy 3. Nothing about a duplicated markdown file breaks a build, which is why it needs a test.',
+    },
+    {
         rule: 'E2E specs restore the real userData state they touch',
         source: 'CLAUDE.md → Testing → E2E is a weak signal here',
         status: 'guarded',
