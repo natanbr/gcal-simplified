@@ -14,7 +14,13 @@ function makeCountingGenerator() {
     let calls = 0;
     const generator = (): QuizQuestion => {
         calls += 1;
-        return { text: `${calls} + ${calls} = ?`, answer: calls + calls };
+        return {
+            kind: 'numeric',
+            skill: 'math-add',
+            level: 0,
+            text: `${calls} + ${calls} = ?`,
+            answer: calls + calls,
+        };
     };
     return { generator, callCount: () => calls };
 }
@@ -61,7 +67,9 @@ describe('QuizOverlay — numeric (numpad) behavior guards', () => {
         expect(screen.getByText('1/3')).toBeDefined();
     });
 
-    it('keeps the SAME question after a wrong answer (no regeneration)', () => {
+    // Generous timeout: framer-motion + fake timers make this slow under
+    // full-suite load (it runs in ~1.5s in isolation).
+    it('keeps the SAME question after a wrong answer (no regeneration)', { timeout: 15000 }, () => {
         const { counting } = renderOverlay();
         const callsAfterMount = counting.callCount();
 
@@ -121,5 +129,136 @@ describe('QuizOverlay — numeric (numpad) behavior guards', () => {
 
         rerender(<QuizOverlay {...props} currentCorrect={1} />);
         expect(counting.callCount()).toBe(callsAfterMount + 1);
+    });
+});
+
+// ---- Choice (reading) flow ----
+
+import type { ChoiceQuizQuestion } from './types';
+
+function choiceQuestion(): ChoiceQuizQuestion {
+    return {
+        kind: 'choice',
+        skill: 'read-pic-word',
+        level: 3,
+        wordId: 'dog',
+        prompt: { display: 'emoji', emoji: '🐶' },
+        choices: [
+            { label: 'dig', render: 'word' },
+            { label: 'dog', render: 'word' },
+            { label: 'dot', render: 'word' },
+            { label: 'dug', render: 'word' },
+        ],
+        correctIndex: 1,
+    };
+}
+
+function renderChoiceOverlay(overrides: Partial<React.ComponentProps<typeof QuizOverlay>> = {}) {
+    let generated = 0;
+    const generator = () => {
+        generated += 1;
+        return choiceQuestion();
+    };
+    const onCorrect = vi.fn();
+    const onAnswered = vi.fn();
+    const props: React.ComponentProps<typeof QuizOverlay> = {
+        open: true,
+        requiredCorrect: 3,
+        currentCorrect: 0,
+        generator,
+        onCorrect,
+        onAnswered,
+        ...overrides,
+    };
+    const utils = render(<QuizOverlay {...props} />);
+    return { ...utils, onCorrect, onAnswered, generatedCount: () => generated, props };
+}
+
+describe('QuizOverlay — choice (reading) behavior', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('a clean first tap records firstTry=true and fills the dot after the dwell', () => {
+        const { onCorrect, onAnswered } = renderChoiceOverlay();
+
+        fireEvent.click(screen.getByRole('button', { name: 'dog' }));
+        expect(onAnswered).toHaveBeenCalledTimes(1);
+        expect(onAnswered.mock.calls[0][1]).toBe(true);
+
+        expect(onCorrect).not.toHaveBeenCalled();
+        act(() => {
+            vi.advanceTimersByTime(600);
+        });
+        expect(onCorrect).toHaveBeenCalledTimes(1);
+    });
+
+    it('a wrong first tap records firstTry=false ONCE, locks the choice, and freezes the grid', () => {
+        const { onCorrect, onAnswered } = renderChoiceOverlay();
+
+        fireEvent.click(screen.getByRole('button', { name: 'dig' }));
+        expect(onAnswered).toHaveBeenCalledTimes(1);
+        expect(onAnswered.mock.calls[0][1]).toBe(false);
+        expect((screen.getByRole('button', { name: /dig/ }) as HTMLButtonElement).disabled).toBe(true);
+
+        // Grid frozen for 1.5s — a tap-spam on the right answer does nothing.
+        fireEvent.click(screen.getByRole('button', { name: 'dog' }));
+        expect(onAnswered).toHaveBeenCalledTimes(1);
+        expect(onCorrect).not.toHaveBeenCalled();
+
+        act(() => {
+            vi.advanceTimersByTime(1500);
+        });
+
+        // Now the kid finds it: soft success, NO dot, a fresh question follows.
+        fireEvent.click(screen.getByRole('button', { name: 'dog' }));
+        expect(onAnswered).toHaveBeenCalledTimes(1); // never re-recorded
+        act(() => {
+            vi.advanceTimersByTime(600);
+        });
+        expect(onCorrect).not.toHaveBeenCalled();
+    });
+
+    it('serves a NEW question after a found-late answer', () => {
+        const { generatedCount } = renderChoiceOverlay();
+        const afterMount = generatedCount();
+
+        fireEvent.click(screen.getByRole('button', { name: 'dig' }));
+        act(() => {
+            vi.advanceTimersByTime(1500);
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'dog' }));
+        act(() => {
+            vi.advanceTimersByTime(600);
+        });
+
+        expect(generatedCount()).toBe(afterMount + 1);
+    });
+
+    it('answers with the 1-4 keys', () => {
+        const { onAnswered } = renderChoiceOverlay();
+        fireEvent.keyDown(window, { key: '2' }); // index 1 = 'dog'
+        expect(onAnswered).toHaveBeenCalledTimes(1);
+        expect(onAnswered.mock.calls[0][1]).toBe(true);
+    });
+
+    it('shows a cancel button only when onCancel is provided, and it fires', () => {
+        const { rerender, props } = renderChoiceOverlay();
+        expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+
+        const onCancel = vi.fn();
+        rerender(<QuizOverlay {...props} onCancel={onCancel} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('notifies onClosed when the overlay closes', () => {
+        const onClosed = vi.fn();
+        const { rerender, props } = renderChoiceOverlay({ onClosed });
+        rerender(<QuizOverlay {...props} onClosed={onClosed} open={false} />);
+        expect(onClosed).toHaveBeenCalledTimes(1);
     });
 });

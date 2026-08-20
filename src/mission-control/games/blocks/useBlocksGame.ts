@@ -4,7 +4,6 @@ import {
     GRID_SIZE, SHAPE_POOL, HELP_SHAPES, LEVEL_COMPLEX_SHAPES, INITIAL_LAYOUTS,
     transformShape, applyClearEffects, spawnObstacles
 } from './types';
-import { generateLevelQuestion } from '../quiz/additionQuiz';
 
 export function useBlocksGame() {
     const [state, setState] = useState<BlocksGameState>(createInitialState);
@@ -21,7 +20,7 @@ export function useBlocksGame() {
             score: 0,
             phase: 'waiting',
             level: 0,
-            quizQuestion: null,
+            rescueQuizActive: false,
             clearedFeedback: null,
         };
     }
@@ -127,26 +126,21 @@ export function useBlocksGame() {
     }, [selectProactiveShape, selectRescueShape]);
 
     const triggerRescueQuiz = useCallback(() => {
+        setState(prev => ({ ...prev, rescueQuizActive: true }));
+    }, []);
+
+    /** The engine-driven overlay confirmed a counted correct answer. */
+    const resolveRescueQuiz = useCallback(() => {
         setState(prev => ({
             ...prev,
-            quizQuestion: generateLevelQuestion(prev.level),
+            rescueShapeLocked: false,
+            rescueQuizActive: false,
         }));
     }, []);
 
-    const submitQuizAnswer = useCallback((answer: number) => {
-        setState(prev => {
-            if (prev.quizQuestion && answer === prev.quizQuestion.answer) {
-                return {
-                    ...prev,
-                    rescueShapeLocked: false,
-                    quizQuestion: null,
-                };
-            }
-            return {
-                ...prev,
-                quizQuestion: generateLevelQuestion(prev.level),
-            };
-        });
+    /** Opt-in quiz: backing out costs nothing but the unlock. */
+    const cancelRescueQuiz = useCallback(() => {
+        setState(prev => ({ ...prev, rescueQuizActive: false }));
     }, []);
 
     const refreshRescueShape = useCallback(() => {
@@ -323,7 +317,8 @@ export function useBlocksGame() {
         resetGame,
         placeShape,
         triggerRescueQuiz,
-        submitQuizAnswer,
+        resolveRescueQuiz,
+        cancelRescueQuiz,
         refreshRescueShape,
     };
 }

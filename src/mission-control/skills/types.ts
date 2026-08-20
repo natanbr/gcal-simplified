@@ -21,6 +21,10 @@ export const READING_SKILL_IDS: readonly ReadingSkillId[] = [
     'read-word-pic', 'read-pic-word', 'read-missing-letter',
 ];
 
+export const MATH_SKILL_IDS: readonly MathSkillId[] = [
+    'math-add', 'math-sub', 'math-mul',
+];
+
 export function isReadingSkill(skill: SkillId): skill is ReadingSkillId {
     return (READING_SKILL_IDS as readonly string[]).includes(skill);
 }

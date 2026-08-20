@@ -9,29 +9,24 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FruitMergeCanvas } from './FruitMergeCanvas';
 import { useFruitMergeGame } from './useFruitMergeGame';
 import { QuizOverlay } from '../quiz/QuizOverlay';
-import {
-    generateAdditionQuestion, generateSubtractionQuestion,
-    generateMultiplicationQuestion,
-} from '../quiz/additionQuiz';
+import type { QuizEngineApi } from '../quiz/types';
 import { FRUIT_TYPES, GAME_TIME_MS } from './types';
 
 interface FruitMergeGameOverlayProps {
     open: boolean;
     onClose: (score: number) => void;
+    engine: QuizEngineApi;
 }
 
-/** Quiz difficulty based on fruit tier being deleted. */
-function generateDeleteQuestion(tier: number) {
-    if (tier <= 1) return generateAdditionQuestion(10);
-    if (tier <= 3) {
-        return Math.random() < 0.5
-            ? generateAdditionQuestion(20)
-            : generateSubtractionQuestion(15);
-    }
-    return generateMultiplicationQuestion(4);
+/** Quiz difficulty based on the fruit tier being deleted (was the local
+ *  add/sub/mult roll — the engine's level mix reproduces it). */
+function deleteTierLevel(tier: number): number {
+    if (tier <= 1) return 0;
+    if (tier <= 3) return 1;
+    return 2;
 }
 
-export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayProps) {
+export function FruitMergeGameOverlay({ open, onClose, engine }: FruitMergeGameOverlayProps) {
     const {
         gameState, engineRef, fruitMapRef, mergeEffectsRef,
         startGame, resetGame, dropFruit, setDropX,
@@ -80,6 +75,11 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
     const isEnded = gameState.phase === 'game-over' || gameState.phase === 'time-up';
     const elapsedMs = GAME_TIME_MS - gameState.timeRemainingMs;
     const deleteTier = getDeleteTier();
+
+    useEffect(() => {
+        const level = deleteTierLevel(deleteTier);
+        engine.setDifficulty(level, level);
+    }, [engine, deleteTier]);
 
     return (
         <AnimatePresence>
@@ -176,12 +176,15 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
                                 </div>
                             )}
 
-                            {/* Delete quiz overlay */}
+                            {/* Delete quiz overlay — opt-in, so it can be cancelled */}
                             <QuizOverlay
                                 open={gameState.phase === 'quiz-delete'}
                                 requiredCorrect={1}
                                 currentCorrect={0}
-                                generator={() => generateDeleteQuestion(deleteTier)}
+                                generator={engine.generator}
+                                onAnswered={engine.onAnswered}
+                                onClosed={engine.notifyQuizClosed}
+                                onCancel={cancelDeleteMode}
                                 onCorrect={onDeleteQuizCorrect}
                                 title={`🧠 Delete ${FRUIT_TYPES[deleteTier].emoji} ${FRUIT_TYPES[deleteTier].name}?`}
                             />
