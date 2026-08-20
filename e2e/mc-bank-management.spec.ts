@@ -3,42 +3,20 @@
  *
  * Smoke-tests the GlobalBank admin popup:
  * open the popup, add/remove coins, and close.
+ *
+ * State handling: `mcTest` snapshots and restores the real `mc-state-v5` blob
+ * around each test. The "+1" test mints a real token into the real bank — the
+ * kind of unexplained balance change that is very hard to account for later.
  */
 
-import { test, expect, _electron as electron } from '@playwright/test';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
-import type { Page } from '@playwright/test';
-
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
-
-async function gotoMC(page: Page): Promise<void> {
-    const currentUrl = page.url();
-    const base = currentUrl.split('?')[0];
-    await page.goto(`${base}?mc=1`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
-}
+import { ELECTRON_MAIN, expect, isLoginScreen, mcTest as test } from './helpers/mcApp';
 
 test.describe('Mission Control — Bank Management', () => {
     test.skip(!existsSync(ELECTRON_MAIN), 'Electron build not present');
 
-
-    test('bank popup can be opened by clicking The Bank header', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        await gotoMC(page);
+    test('bank popup can be opened by clicking The Bank header', async ({ mcPage: page }) => {
+        test.skip(await isLoginScreen(page), 'Login required');
 
         // The bank header button
         const bankHeader = page.getByRole('button', { name: /Bank admin/i });
@@ -50,46 +28,24 @@ test.describe('Mission Control — Bank Management', () => {
         // Open
         await bankHeader.click();
         await expect(page.getByText(/Bank Admin/i)).toBeVisible({ timeout: 2000 });
-
-        await app.close();
     });
 
-    test('bank popup shows +1, +2, −1 coin control buttons', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        await gotoMC(page);
+    test('bank popup shows +1, +2, −1 coin control buttons', async ({ mcPage: page }) => {
+        test.skip(await isLoginScreen(page), 'Login required');
 
         await page.getByRole('button', { name: /Bank admin/i }).click();
         const popup = page.locator('[data-testid="mc-bank-admin-popup"]');
         await expect(popup.getByRole('button', { name: '+1' })).toBeVisible({ timeout: 2000 });
         await expect(popup.getByRole('button', { name: '+2' })).toBeVisible();
         await expect(popup.getByRole('button', { name: '−1' })).toBeVisible();
-
-        await app.close();
     });
 
-    test('clicking +1 increments the bank count display', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        await gotoMC(page);
+    test('clicking +1 increments the bank count display', async ({ mcPage: page }) => {
+        test.skip(await isLoginScreen(page), 'Login required');
 
         // Get initial count (the badge inside the header)
         const bankHeader = page.getByRole('button', { name: /Bank admin/i });
-        
+
         // Long press to open the real admin popup (bypass trapMode)
         await bankHeader.dispatchEvent('pointerdown');
         await page.waitForTimeout(700);
@@ -107,21 +63,10 @@ test.describe('Mission Control — Bank Management', () => {
         const newText = await countBadge.textContent();
         const newCount = parseInt(newText ?? '0', 10);
         expect(newCount).toBe(initialCount + 1);
-
-        await app.close();
     });
 
-    test('bank popup can be closed with the close button', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        await gotoMC(page);
+    test('bank popup can be closed with the close button', async ({ mcPage: page }) => {
+        test.skip(await isLoginScreen(page), 'Login required');
 
         await page.getByRole('button', { name: /Bank admin/i }).click();
         await expect(page.getByText(/Bank Admin/i)).toBeVisible({ timeout: 2000 });
@@ -130,7 +75,5 @@ test.describe('Mission Control — Bank Management', () => {
         await page.getByText(/close/i).click();
         await page.waitForTimeout(300);
         await expect(page.getByText(/Bank Admin/i)).not.toBeVisible();
-
-        await app.close();
     });
 });

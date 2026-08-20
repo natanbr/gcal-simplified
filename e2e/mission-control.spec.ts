@@ -2,33 +2,27 @@
  * Mission Control E2E Tests
  *
  * Tests the Mission Overlay and Scheduler features.
- * Launches the Electron app, navigates to ?mc=1, then
- * injects localStorage state to trigger mission overlays
- * without waiting for real clock windows.
+ * Launches the Electron app, navigates to ?mc=1, then injects localStorage
+ * state to trigger mission overlays without waiting for real clock windows.
+ *
+ * State handling: `mcTest` snapshots the real `mc-state-v5` blob before each
+ * test and restores it afterwards. These specs inject an ACTIVE mission with a
+ * 60-minute duration into the developer's own userData directory — without the
+ * restore the resulting overlay covers the UI for every later spec and for the
+ * next hour of real app usage.
  */
 
-import { test, expect, _electron as electron } from '@playwright/test';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
-const STORAGE_KEY = 'mc-state-v5';
-
-/**
- * Helper: Navigate the Electron window to MC mode and wait for it to settle.
- */
-async function gotoMC(page: Page): Promise<void> {
-    // Use goto with a hash to navigate within the same Electron session.
-    // Electron loads file:/// so we need to grab the current URL and append ?mc=1.
-    const currentUrl = page.url();
-    const base = currentUrl.split('?')[0];
-    await page.goto(`${base}?mc=1`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
-}
+import { existsSync } from 'node:fs';
+import {
+    ELECTRON_MAIN,
+    STORAGE_KEY,
+    expect,
+    gotoMC,
+    mcTest as test,
+    patchMCState,
+    readMCField,
+} from './helpers/mcApp';
 
 /**
  * Helper: Inject a morning mission active state into localStorage.
@@ -74,48 +68,30 @@ async function injectActiveMission(page: Page, phase: 'morning' | 'evening' = 'm
     );
 }
 
+/** Inject an active mission and reload so the store picks it up fresh. */
+async function withActiveMission(page: Page, phase: 'morning' | 'evening' = 'morning'): Promise<void> {
+    await injectActiveMission(page, phase);
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2500);
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 test.describe('Mission Control', () => {
+    test.skip(!existsSync(ELECTRON_MAIN), 'Electron build not present');
 
-    test('live clock is visible and formatted correctly', async () => {
-        const app = await electron.launch({
-            args: [ELECTRON_MAIN],
-            timeout: 60_000,
-            env: { ...process.env, NODE_ENV: 'development' },
-        });
-        const page = await app.firstWindow();
-        await page.waitForLoadState('domcontentloaded');
-
-        await gotoMC(page);
-
+    test('live clock is visible and formatted correctly', async ({ mcPage: page }) => {
         const clock = page.locator('[data-testid="mc-clock"]');
         await expect(clock).toBeVisible({ timeout: 10_000 });
 
         const text = (await clock.textContent()) ?? '';
         // Matches "10:34" or "10:34 AM" formats
         expect(text.trim()).toMatch(/^\d{1,2}:\d{2}/);
-
-        await app.close();
     });
 
-    test('mission overlay slides in when mission is activated', async () => {
-        const app = await electron.launch({
-            args: [ELECTRON_MAIN],
-            timeout: 60_000,
-            env: { ...process.env, NODE_ENV: 'development' },
-        });
-        const page = await app.firstWindow();
-        await page.waitForLoadState('domcontentloaded');
-
-        // First navigate to MC so localStorage is in the right origin
-        await gotoMC(page);
-
-        // Inject state then reload so the store picks it up fresh
-        await injectActiveMission(page, 'morning');
-        await page.reload();
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+    test('mission overlay slides in when mission is activated', async ({ mcPage: page }) => {
+        await withActiveMission(page, 'morning');
 
         // Overlay should be visible
         const overlay = page.locator('[data-testid="mc-mission-overlay"]');
@@ -131,24 +107,10 @@ test.describe('Mission Control', () => {
         // At least one task card
         const taskCards = page.locator('[data-testid^="mc-task-card-"]');
         expect(await taskCards.count()).toBeGreaterThan(0);
-
-        await app.close();
     });
 
-    test('tapping a task card marks it complete', async () => {
-        const app = await electron.launch({
-            args: [ELECTRON_MAIN],
-            timeout: 60_000,
-            env: { ...process.env, NODE_ENV: 'development' },
-        });
-        const page = await app.firstWindow();
-        await page.waitForLoadState('domcontentloaded');
-
-        await gotoMC(page);
-        await injectActiveMission(page, 'morning');
-        await page.reload();
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+    test('tapping a task card marks it complete', async ({ mcPage: page }) => {
+        await withActiveMission(page, 'morning');
 
         const overlay = page.locator('[data-testid="mc-mission-overlay"]');
         await expect(overlay).toBeVisible({ timeout: 10_000 });
@@ -165,24 +127,10 @@ test.describe('Mission Control', () => {
             (el: Element) => (el as HTMLElement).style.textDecoration,
         );
         expect(labelDecoration).toContain('line-through');
-
-        await app.close();
     });
 
-    test('minimize button hides overlay and pill appears', async () => {
-        const app = await electron.launch({
-            args: [ELECTRON_MAIN],
-            timeout: 60_000,
-            env: { ...process.env, NODE_ENV: 'development' },
-        });
-        const page = await app.firstWindow();
-        await page.waitForLoadState('domcontentloaded');
-
-        await gotoMC(page);
-        await injectActiveMission(page, 'morning');
-        await page.reload();
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+    test('minimize button hides overlay and pill appears', async ({ mcPage: page }) => {
+        await withActiveMission(page, 'morning');
 
         const overlay = page.locator('[data-testid="mc-mission-overlay"]');
         await expect(overlay).toBeVisible({ timeout: 10_000 });
@@ -198,35 +146,19 @@ test.describe('Mission Control', () => {
         // Click pill re-opens overlay
         await pill.click();
         await expect(overlay).toBeVisible({ timeout: 5000 });
-
-        await app.close();
     });
 
-    test('Use! button permanently removes tokens from bank (CONSUME_CASE)', async () => {
-        const app = await electron.launch({
-            args: [ELECTRON_MAIN],
-            timeout: 60_000,
-            env: { ...process.env, NODE_ENV: 'development' },
-        });
-        const page = await app.firstWindow();
-        await page.waitForLoadState('domcontentloaded');
-        await gotoMC(page);
-
+    test('Use! button permanently removes tokens from bank (CONSUME_CASE)', async ({ mcPage: page }) => {
         // Set up state: 5 bank tokens, first case fully filled (tokenCount == targetCount == 2)
         // so the 'Use!' button is shown instead of 'All'
-        await page.evaluate(({ key }: { key: string }) => {
-            const STORAGE_KEY = key;
-            const raw = localStorage.getItem(STORAGE_KEY);
-            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-
-            state['bankCount'] = 5;
-            state['cases'] = [
+        await patchMCState(page, {
+            bankCount: 5,
+            cases: [
                 { id: 0, status: 'active', reward: 'show', tokenCount: 2, targetCount: 2 },
                 { id: 1, status: 'empty', reward: null, tokenCount: 0, targetCount: 5 },
                 { id: 2, status: 'empty', reward: null, tokenCount: 0, targetCount: 5 },
-            ];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        }, { key: STORAGE_KEY });
+            ],
+        });
 
         // Reload so the injected state is picked up
         await gotoMC(page);
@@ -242,16 +174,7 @@ test.describe('Mission Control', () => {
         await expect(useBtn).not.toBeVisible({ timeout: 5_000 });
 
         // Bank count must STILL be 5 — tokens were consumed, not refunded
-        const bankCount = await page.evaluate(({ key }: { key: string }) => {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const state = JSON.parse(raw) as Record<string, unknown>;
-            return state['bankCount'];
-        }, { key: STORAGE_KEY });
-
-        expect(bankCount).toBe(5); // unchanged — tokens permanently spent
-
-        await app.close();
+        expect(await readMCField(page, 'bankCount')).toBe(5); // unchanged — tokens permanently spent
     });
 
 });
