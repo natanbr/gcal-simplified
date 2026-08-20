@@ -43,7 +43,9 @@ test.describe('Mission Control — Learning Progress tab', () => {
         await page.locator('[data-testid="mc-settings-btn"]').click();
         await expect(page.locator('[data-testid="mc-settings-panel"]')).toBeVisible();
 
-        await page.getByRole('button', { name: '📈 Learning' }).click();
+        // The Learning tab is hold-to-open (600ms) so the kid can't tap into
+        // it; `delay` keeps the button pressed long enough to fire the hold.
+        await page.getByRole('button', { name: '📈 Learning' }).click({ delay: 900 });
 
         // Fresh profile → empty state; played profile → the panel header.
         const emptyState = page.getByText('No practice yet');
