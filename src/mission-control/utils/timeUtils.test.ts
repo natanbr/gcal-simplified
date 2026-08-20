@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { formatSuspendedRemainingTime } from '../timeUtils';
+import { formatSuspendedRemainingTime } from './timeUtils';
 
 describe('formatSuspendedRemainingTime', () => {
     beforeEach(() => {

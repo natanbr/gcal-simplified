@@ -329,7 +329,7 @@ describe('useMissionScheduler hook execution', () => {
         vi.advanceTimersByTime(60 * 1000);
 
         // It should have dispatched SET_ACTIVE_MISSION
-        expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+        expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'SET_ACTIVE_MISSION', phase: 'morning', origin: 'scheduler' }));
 
         unmount();
     });
@@ -368,7 +368,7 @@ describe('useMissionScheduler hook execution', () => {
         vi.advanceTimersByTime(15 * 1000);
 
         // It should have dispatched deactivation
-        expect(mockDispatch).toHaveBeenCalledWith({ type: 'SET_ACTIVE_MISSION', phase: 'none' });
+        expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler' }));
         unmount();
     });
 

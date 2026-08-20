@@ -5,7 +5,7 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { mcReducer, initialState } from './mcReducer';
+import { mcReducer, initialState, moodHourlyRate } from './mcReducer';
 import { loadPersistedState, STORAGE_KEY } from './useMCStore';
 import type { MCState } from '../types';
 
@@ -84,30 +84,39 @@ describe('behavior progress — active-window accrual', () => {
         };
     }
 
-    it('accrues Good mood (+4%/h) over a one-minute in-window tick', () => {
+    /** Progress a single 60s tick adds at the given mood, per the current contract. */
+    function perTick(moodWind: number, settings = initialState.settings): number {
+        return moodHourlyRate(moodWind, settings) / 60;
+    }
+
+    it('accrues Good mood over a one-minute in-window tick', () => {
         const next = mcReducer(inWindowState(1), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
-        expect(next.behaviorProgress).toBeCloseTo(50 + 4 / 60, 5);
+        expect(next.behaviorProgress).toBeCloseTo(50 + perTick(1), 5);
     });
 
-    it('accrues Neutral mood at +1%/h — never the Good rate (no auto-promotion)', () => {
+    it('accrues Neutral mood at the Neutral rate — never the Good rate (no auto-promotion)', () => {
         // Regression for the `state.moodWind || 1` bug: Neutral (0) was coerced
-        // to Good (1) and filled at 4%/h. It must fill at 1%/h and stay Neutral.
+        // to Good (1) and filled at the Good rate. It must stay Neutral.
         const next = mcReducer(inWindowState(0), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
-        expect(next.behaviorProgress).toBeCloseTo(50 + 1 / 60, 5);
+        expect(next.behaviorProgress).toBeCloseTo(50 + perTick(0), 5);
+        expect(next.behaviorProgress).toBeLessThan(50 + perTick(1));
         expect(next.moodWind).toBe(0);
     });
 
-    it('accrues Excellent mood at +8.5%/h', () => {
+    it('accrues Excellent mood faster than Good', () => {
         const next = mcReducer(inWindowState(2), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
-        expect(next.behaviorProgress).toBeCloseTo(50 + 8.5 / 60, 5);
+        expect(next.behaviorProgress).toBeCloseTo(50 + perTick(2), 5);
+        expect(next.behaviorProgress).toBeGreaterThan(50 + perTick(1));
     });
 
-    it('drains Bad mood at -3%/h and Horrible mood at -8%/h', () => {
+    it('drains at negative moods, Horrible faster than Bad', () => {
         const bad = mcReducer(inWindowState(-1), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
-        expect(bad.behaviorProgress).toBeCloseTo(50 - 3 / 60, 5);
+        expect(bad.behaviorProgress).toBeCloseTo(50 + perTick(-1), 5);
+        expect(bad.behaviorProgress).toBeLessThan(50);
 
         const horrible = mcReducer(inWindowState(-2), { type: 'SYNC_BEHAVIOR', timestamp: oneTickAfter(12, 0) });
-        expect(horrible.behaviorProgress).toBeCloseTo(50 - 8 / 60, 5);
+        expect(horrible.behaviorProgress).toBeCloseTo(50 + perTick(-2), 5);
+        expect(horrible.behaviorProgress).toBeLessThan(bad.behaviorProgress);
     });
 
     it('does NOT back-fill a large gap (app was off / machine asleep)', () => {
@@ -142,7 +151,7 @@ describe('behavior progress — active-window accrual', () => {
             behaviorLastUpdated: todayAtLocal(0, 0),
         };
         const next = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(0, 1) });
-        expect(next.behaviorProgress).toBeCloseTo(50 + 4 / 60, 5);
+        expect(next.behaviorProgress).toBeCloseTo(50 + perTick(1, state.settings), 5);
     });
 
     it('re-anchors (self-heals) instead of freezing when the clock jumps backwards', () => {
@@ -159,7 +168,7 @@ describe('behavior progress — active-window accrual', () => {
 
         // The next forward tick now accrues normally rather than staying frozen.
         const next = mcReducer(healed, { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(12, 1) });
-        expect(next.behaviorProgress).toBeCloseTo(50 + 4 / 60, 5);
+        expect(next.behaviorProgress).toBeCloseTo(50 + perTick(1), 5);
     });
 });
 

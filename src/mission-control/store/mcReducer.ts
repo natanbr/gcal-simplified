@@ -15,14 +15,33 @@ import type {
     MissionTask,
     ResponsibilityTask,
     MCSettings,
+    ActivityLogEntry,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
+
+/** Ring-buffer size for the in-app activity log. The durable, uncapped record
+ *  lives on disk in the main process (electron/audit-log.ts). */
+export const MAX_ACTIVITY_LOGS = 200;
 
 function getLocalDateString(d: Date = new Date()): string {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+/**
+ * The wall-clock instant an action happened.
+ *
+ * Reading the clock inside the reducer makes it impure: identical input can
+ * produce different output, which breaks the "pure reducer" contract and makes
+ * the speculative run in `createLogEntry` disagree with the real one. The
+ * dispatch interceptor (`useMCDispatch`) stamps every action with a timestamp,
+ * so in the running app this is always deterministic; the fallback only covers
+ * a raw dispatch that skipped the interceptor.
+ */
+function actionInstant(action: MCAction): string {
+    return action.timestamp ?? new Date().toISOString();
 }
 
 // ---- Default State ----
@@ -153,18 +172,44 @@ function computeMissionDurationMins(startsAt: string, endsAt: string): number {
 
 // ---- Helpers for Behavior Progress ----
 
+/** Progress points that fill the gauge from empty to one game token. */
+export const PROGRESS_PER_TOKEN = 100;
+
+/** Hard cap on banked game tokens. */
+export const MAX_GAME_TOKENS = 5;
+
 /**
- * Behavior-progress change per *active hour*, keyed by mood level (-2..+2).
- * Positive fills the gauge toward a game token; negative drains it.
- * These are the single source of truth for the mood → progress rates.
+ * Game tokens earned per *full active day*, keyed by mood level (-2..+2).
+ * This is the single source of truth for the token economy — the mood gauge is
+ * the ONLY generator of game tokens (there is deliberately no calendar-day
+ * grant; that used to hand out a free token on every app launch).
+ *
+ * Negative moods drain the gauge instead of filling it.
  */
-export const MOOD_HOURLY_RATE: Record<number, number> = {
-    2: 8.5,   // Excellent
-    1: 4,     // Good
-    0: 1,     // Neutral
-    [-1]: -3, // Bad
-    [-2]: -8, // Horrible
+export const MOOD_TOKENS_PER_DAY: Record<number, number> = {
+    2: 1.5,      // Excellent
+    1: 1,        // Good
+    0: 1 / 3,    // Neutral — one token every three days
+    [-1]: -0.4,  // Bad
+    [-2]: -1.0,  // Horrible
 };
+
+/**
+ * Converts the contracted per-day rate into progress-per-hour for the *actual*
+ * configured active window. Expressing the economy in tokens/day keeps the rate
+ * honest when the morning/evening times are changed in settings — a shorter day
+ * accrues faster per hour so it still lands on the same tokens per day.
+ */
+export function moodHourlyRate(moodWind: number, settings: MCSettings): number {
+    const perDay = MOOD_TOKENS_PER_DAY[moodWind] ?? 0;
+    if (perDay === 0) return 0;
+
+    const { startMins, endMins } = getWakingBounds(settings);
+    // Guard against a degenerate/inverted window producing an infinite rate.
+    const activeHours = Math.max(0.5, (endMins - startMins) / 60);
+
+    return (perDay * PROGRESS_PER_TOKEN) / activeHours;
+}
 
 /**
  * Largest gap between two behavior syncs still treated as continuous "app is
@@ -262,7 +307,7 @@ function calculateBehaviorDelta(state: MCState, nowIso: string): { progressDelta
     // Use ?? (not ||) so a genuine Neutral mood (0) is preserved — the old
     // `state.moodWind || 1` coerced 0 → 1, silently promoting mood to Good.
     const moodWind = Math.max(-2, Math.min(2, state.moodWind ?? 0));
-    const hourlyRate = MOOD_HOURLY_RATE[moodWind] ?? 0;
+    const hourlyRate = moodHourlyRate(moodWind, state.settings);
 
     // Only the portion of the gap inside the active window counts. Outside it
     // (night) nothing accrues AND we keep the anchor frozen — this is what makes
@@ -303,11 +348,41 @@ function applyBehaviorSync(state: MCState, nowIso: string): MCState {
 
     let nextProgress = state.behaviorProgress + progressDelta;
     let nextGameTokens = state.gameTokens;
+    let nextMoodWind = state.moodWind;
+    let grantLog: ActivityLogEntry | null = null;
 
-    if (nextProgress >= 100) {
-        const tokensToGrant = Math.floor(nextProgress / 100);
-        nextProgress = nextProgress % 100;
-        nextGameTokens = Math.min(5, nextGameTokens + tokensToGrant);
+    if (nextProgress >= PROGRESS_PER_TOKEN) {
+        const tokensToGrant = Math.floor(nextProgress / PROGRESS_PER_TOKEN);
+        nextProgress = nextProgress % PROGRESS_PER_TOKEN;
+        nextGameTokens = Math.min(MAX_GAME_TOKENS, nextGameTokens + tokensToGrant);
+
+        // Earning a token spends the good mood that earned it: the child starts
+        // the next token from Neutral and has to earn their way back up.
+        nextMoodWind = 0;
+
+        // The grant is written here, inside the reducer, rather than by the
+        // dispatch interceptor — this is the one token movement no user action
+        // triggers, so it is exactly the one that must never go unlogged.
+        // The id is derived from the sync anchor (not random) to keep the
+        // reducer pure and replayable.
+        const granted = nextGameTokens - state.gameTokens;
+        if (granted > 0) {
+            grantLog = {
+                id: `auto-mood-token-${nextLastUpdated}`,
+                timestamp: nextLastUpdated,
+                icon: '😊',
+                message: granted === 1
+                    ? 'Mood token earned (mood gauge full)'
+                    : `${granted} mood tokens earned (mood gauge full)`,
+                delta: 0, // game tokens, not bank tokens
+                type: 'reward',
+                colorKey: 'system',
+                source: 'auto',
+                gameTokens: nextGameTokens,
+                bankTokens: state.bankCount,
+                totalTokens: selectTotalWealth(state),
+            };
+        }
     } else if (nextProgress < 0) {
         nextProgress = 0;
     }
@@ -316,8 +391,12 @@ function applyBehaviorSync(state: MCState, nowIso: string): MCState {
         ...state,
         behaviorProgress: nextProgress,
         gameTokens: nextGameTokens,
+        moodWind: nextMoodWind,
         behaviorLastUpdated: nextLastUpdated,
-        behaviorDelta: progressDelta
+        behaviorDelta: progressDelta,
+        activityLogs: grantLog
+            ? [grantLog, ...(state.activityLogs || [])].slice(0, MAX_ACTIVITY_LOGS)
+            : state.activityLogs,
     };
 }
 
@@ -519,7 +598,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 return state;
             }
 
-            const now = new Date().toISOString();
+            const now = actionInstant(action);
             return {
                 ...state,
                 activeMission: action.phase,
@@ -554,7 +633,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         // Full reset — tasks AND timer restart from scratch.
         // Mission stays active with a fresh startedAt + recalculated durationMins.
         case 'RESET_MISSION_WITH_TIMER': {
-            const now = new Date().toISOString();
+            const now = actionInstant(action);
             return {
                 ...state,
                 missions: state.missions.map(m => {
@@ -626,7 +705,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString() } : {}),
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? { ...m, loggedTimeoutAt: new Date().toISOString() }
+                        ? { ...m, loggedTimeoutAt: actionInstant(action) }
                         : m
                 )
             };
@@ -732,7 +811,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'ADD_RESPONSIBILITY_POINT': {
-            const now = new Date().toISOString();
+            const now = actionInstant(action);
             return {
                 ...state,
                 responsibilities: state.responsibilities.map(r => {
@@ -763,7 +842,10 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'ADD_LOG': {
-            const newLogs = [action.log, ...(state.activityLogs || [])].slice(0, 200);
+            // Ignore an exact replay of the newest entry. The remote channel can
+            // redeliver, and a duplicated log line reads as a duplicated event.
+            if (state.activityLogs?.[0]?.id === action.log.id) return state;
+            const newLogs = [action.log, ...(state.activityLogs || [])].slice(0, MAX_ACTIVITY_LOGS);
             return {
                 ...state,
                 activityLogs: newLogs
@@ -788,11 +870,17 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 hasUnreviewedCheatAttempt: false,
             };
 
+        // Manual grant — a deliberate parent action (the remote app has a button
+        // for it). The AUTOMATIC calendar-day grant that used to also fire this
+        // is gone: it ran on every app launch as well as at midnight and never
+        // recorded the date it granted for, which is where the surplus came
+        // from. Automatic generation now comes only from the mood gauge
+        // (applyBehaviorSync / MOOD_TOKENS_PER_DAY).
         case 'GRANT_GAME_TOKEN': {
-            if (state.gameTokens >= 5) return state;
+            if (state.gameTokens >= MAX_GAME_TOKENS) return state;
             return {
                 ...state,
-                gameTokens: Math.min(5, state.gameTokens + 1),
+                gameTokens: Math.min(MAX_GAME_TOKENS, state.gameTokens + 1),
             };
         }
 
@@ -812,7 +900,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 lastAnimationTrigger: {
                     type: action.animation,
-                    timestamp: Date.now()
+                    timestamp: new Date(actionInstant(action)).getTime()
                 }
             };
 
@@ -831,14 +919,17 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         case 'ADJUST_BEHAVIOR_PROGRESS': {
             let nextProgress = state.behaviorProgress + action.amount;
             let nextGameTokens = state.gameTokens;
-            if (nextProgress >= 100) {
-                nextProgress -= 100;
-                nextGameTokens = Math.min(5, nextGameTokens + 1);
+            let nextMoodWind = state.moodWind;
+            if (nextProgress >= PROGRESS_PER_TOKEN) {
+                nextProgress -= PROGRESS_PER_TOKEN;
+                nextGameTokens = Math.min(MAX_GAME_TOKENS, nextGameTokens + 1);
+                nextMoodWind = 0; // same rule as the heartbeat grant
             }
             return {
                 ...state,
-                behaviorProgress: Math.max(0, Math.min(100, nextProgress)),
+                behaviorProgress: Math.max(0, Math.min(PROGRESS_PER_TOKEN, nextProgress)),
                 gameTokens: nextGameTokens,
+                moodWind: nextMoodWind,
                 behaviorDelta: action.amount,
             };
         }

@@ -45,7 +45,7 @@ describe('useRemoteControl', () => {
         const mockAction = { type: 'ADD_TOKEN' };
         listener(mockAction);
 
-        expect(mockDispatch).toHaveBeenCalledWith({ ...mockAction, isRemote: true });
+        expect(mockDispatch).toHaveBeenCalledWith({ ...mockAction, isRemote: true, origin: 'remote' });
     });
 
     it('unsubscribes on unmount', () => {

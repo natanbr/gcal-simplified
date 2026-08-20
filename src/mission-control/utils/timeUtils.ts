@@ -1,6 +1,9 @@
 // ============================================================
-// Shared Time Formatting Helpers
+// Mission Control - Time Formatting Helpers
 // Pure functions for formatting date/time remaining.
+// Lives inside mission-control because privilege suspension is an MC concept
+// and nothing in the calendar app uses it. Importing it from src/utils/ broke
+// the isolation contract (guarded by src/__tests__/mission-control-isolation.test.ts).
 // ============================================================
 
 /**

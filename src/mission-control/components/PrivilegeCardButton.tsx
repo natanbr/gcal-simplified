@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch } from '../store/useMCStore.tsx';
 import type { PrivilegeCard } from '../types';
-import { formatSuspendedRemainingTime } from '../../utils/timeUtils';
+import { formatSuspendedRemainingTime } from '../utils/timeUtils';
 
 // ── Icon map ──────────────────────────────────────────────────────────────────
 const PRIV_ICON: Record<string, string> = {

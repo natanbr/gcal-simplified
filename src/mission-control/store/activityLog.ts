@@ -10,12 +10,18 @@ import type { MCState, MCAction, ActivityLogEntry } from '../types';
 import { mcReducer, selectTotalWealth } from './mcReducer';
 import { REWARD_MAP } from '../rewardCatalogue';
 
-/** Snapshot of the token economy *after* the action is applied. */
+/**
+ * Snapshot of the token economy *after* the action is applied, plus who caused
+ * it. Attribution matters more than it looks: a token count that moves with no
+ * one at the keyboard is the exact thing a parent needs to be able to see.
+ */
 function deriveSnapshots(state: MCState, action: MCAction) {
     const nextState = mcReducer(state, action);
     return {
         totalTokens: selectTotalWealth(nextState),
         bankTokens: nextState.bankCount,
+        gameTokens: nextState.gameTokens,
+        source: action.origin ?? (action.isRemote ? 'remote' as const : 'local' as const),
         ...(action.isRemote ? { isRemote: true } : {}),
     };
 }
@@ -130,6 +136,35 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         }
         case 'CHEAT_ATTEMPT':
             return { id, timestamp: now, icon: '🚨', message: 'Unauthorized bank access attempt!', type: 'cheat-attempt', colorKey: 'cheat', ...snapshots };
+        case 'LOCK_TASK': {
+            const m = state.missions.find(mm => mm.phase === action.missionPhase);
+            const t = m?.tasks.find(tt => tt.id === action.taskId);
+            if (!t || t.locked || t.completed) return null; // mirror the scheduler guard
+            return { id, timestamp: now, icon: '🔒', message: `Task locked: ${t.label}`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
+        }
+        case 'GRANT_GAME_TOKEN':
+            if (state.gameTokens >= 5) return null; // capped — nothing happened
+            return { id, timestamp: now, icon: '🎁', message: 'Mood token granted manually', type: 'reward', colorKey: 'system', ...snapshots };
+        case 'CONSUME_GAME_TOKEN':
+            if (state.gameTokens <= 0) return null;
+            return { id, timestamp: now, icon: '🎮', message: 'Mood token spent on a game', type: 'reward', colorKey: 'system', ...snapshots };
+        case 'RESET_GAME_TOKENS':
+            return { id, timestamp: now, icon: '🧹', message: 'Mood tokens reset to zero', type: 'system', colorKey: 'system', ...snapshots };
+        case 'SET_MOOD_WIND': {
+            const clamped = Math.max(-2, Math.min(2, action.level));
+            if (clamped === state.moodWind) return null; // no-op, nothing happened
+            const names: Record<number, string> = { 2: 'Excellent', 1: 'Good', 0: 'Normal', [-1]: 'Bad', [-2]: 'Horrible' };
+            return { id, timestamp: now, icon: '🌬️', message: `Mood set to ${names[clamped] ?? clamped}`, type: 'system', colorKey: 'system', ...snapshots };
+        }
+        case 'ADJUST_BEHAVIOR_PROGRESS':
+            return { id, timestamp: now, icon: '📈', message: `Mood gauge adjusted (${action.amount > 0 ? '+' : ''}${action.amount}) — ${action.reason}`, type: 'system', colorKey: 'system', ...snapshots };
+        case 'END_GAME':
+            if (!state.snakeGameActive) return null;
+            return { id, timestamp: now, icon: '🏁', message: 'Game closed', type: 'reward', colorKey: 'system', ...snapshots };
+        case 'CLEAR_LOGS':
+            // Deliberately unlogged here (the entry would be wiped by the very
+            // action that created it). The durable disk trail records it instead.
+            return null;
         default:
             return null;
     }

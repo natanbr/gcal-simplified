@@ -5,6 +5,87 @@
 
 ---
 
+## 2026-08-19 — Why 639 passing tests missed six real bugs
+
+A batch of user-visible bugs shipped while the suite was green. The instinct is
+"we need more coverage". That is the wrong lesson: the suite had *high* coverage
+on the files involved. What it lacked was whole **categories** of test.
+
+| Bug | Test that existed | Why it missed |
+|---|---|---|
+| No single-instance lock — two app copies clobbered each other's state | `main_security.test.ts` (4 tests) | Tests assert what code **does**. An absent guard has no lines to cover; no coverage tool can point at code that was never written. |
+| `snakeGameActive` restored from disk → phantom "remote game" forever | `loadPersistedState` tests for the `gameTokens` clamp | One field was tested. Nobody asked the general question: *which fields must NOT survive a restart?* |
+| Free game token minted on every app launch | **none — `useGameTokenScheduler.ts` had no test file at all** | Never tested. It was small, looked obvious, and was skipped. |
+| Scheduler-driven mission starts wrote no log entry | scheduler tests + `activityLog.ts` at 67% | Tests asserted *the dispatch happened*. None asserted *a log entry was produced*. Observability was never a subject of test. |
+| OAuth refresh_token destroyed on every save | `auth_security.test.ts` (1 test) | Covered the **security** of the login flow (CSRF state). Nothing covered the credential **lifecycle** — refresh, restart, re-auth. |
+| Remote channel accepted any action type | `useRemoteControl.test.ts` (4 tests) | Asserted valid actions dispatch. Never asserted invalid ones are **refused**. |
+
+**The pattern:** the suite tested the happy path of each feature in isolation. It
+had almost no *negative* tests (what must be refused), no *lifecycle* tests
+(restart, resume, re-auth), and no *structural* tests (invariants that span two
+files). Line coverage stays high while every one of those bugs sails through —
+which is exactly why "we had good coverage" and "these bugs shipped" were both
+true at the same time.
+
+### The four test categories now required
+
+Any change touching state, IPC, credentials or scheduling needs to answer all four:
+
+1. **Happy path** — the feature works. (Already the suite's strength.)
+2. **Negative** — the thing it must refuse, refuses. Every allowlist, guard and
+   validation needs a test per rejected case.
+3. **Lifecycle** — survive a restart, a resume, a re-auth, a clock jump. Round-trip
+   real state through persistence rather than asserting single fields.
+4. **Structural / drift** — invariants spanning files, enforced by reading the
+   source. These catch the "declared but unenforced" class, which is where the
+   worst bugs hid.
+
+### Structural guards now in place
+
+| Guard | Enforces |
+|---|---|
+| `src/__tests__/timer-registry.test.ts` | No unregistered `setInterval`; idle-Calendar timer budget (pre-existing) |
+| `src/__tests__/mission-control-isolation.test.ts` | MC never imports from the parent app, and vice versa; no cross-design-system tokens |
+| `electron/preload_contract.test.ts` | Every `ipcMain.handle` is whitelisted and every whitelist entry has a handler; audit trail stays append-only; single-instance lock present |
+| `useRemoteControl.allowlist.test.ts` — drift guard | Every action the companion remote app sends is allowlisted (and nothing more) |
+| `mcReducer.token-generation.test.ts` | No calendar-day token grant can be reintroduced |
+| `scripts/verify-single-instance.mjs` | The lock actually holds, verified by launching the built app twice |
+
+The isolation guard found **two real violations on its first run**
+(`PrivilegeCardButton.tsx` and `PrivilegesPanel.tsx` imported `src/utils/timeUtils`),
+proving the point: the rule had been written in CLAUDE.md and reviewed by hand for
+months, and had already been broken. `timeUtils` now lives in
+`src/mission-control/utils/`.
+
+### Known remaining gaps (deliberate, ranked)
+
+- `electron/api.ts` — 0%. All Google Calendar/Tasks fetching. Highest-value gap left.
+- `electron/store.ts` — 0%. `config.json` read/write and defaults.
+- `src/mission-control/games/fruits/*` — 0%. An entire game module.
+- `power-policy.ts` 19%, `SnakeCanvas.tsx` 0%, several presentational components.
+
+Component *render* coverage is intentionally NOT the priority. It inflates the
+percentage without testing any of the four categories above.
+
+### E2E caveats (read before trusting a run)
+
+- `npm run test:run` is `npx playwright test` — it **never rebuilds**. Specs launch
+  `dist-electron/main.js` directly, so a run can be exercising a months-old bundle.
+  Always `npx tsc && npx vite build` first.
+- The suite runs against the developer's **real** userData — real auth, real
+  `config.json`, real `localStorage` — and specs mutate that shared state. 8 specs
+  fail on a machine with `weekStartDay: "monday"` because they assume the default.
+- It is non-deterministic under load: three runs on identical code gave 8, 24 and 8
+  failures. Compare the *set* of failing specs against a baseline, never the count,
+  and re-run a failing spec alone before concluding anything.
+- Electron windows run offscreen by default (`E2E_HEADLESS`, set by
+  `playwright.config.ts`). `E2E_HEADED=1` to watch a run.
+- **The real fix, not yet done:** give each launch its own `userData` directory.
+  Deferred because a fresh userData has no Google auth, so specs expecting a
+  signed-in Dashboard need a seeded auth fixture first.
+
+---
+
 ## Phase 1 — Calendar & Navigation Utils (Unit) ✅ Priority: High
 
 Covers: `weekNavigation.ts`, `monthUtils.ts` — both are pure functions with zero tests.

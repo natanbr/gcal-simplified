@@ -6,6 +6,10 @@ const mocks = vi.hoisted(() => {
   mockBrowserWindow.prototype.loadURL = vi.fn();
   mockBrowserWindow.prototype.loadFile = vi.fn();
   mockBrowserWindow.prototype.maximize = vi.fn();
+  mockBrowserWindow.prototype.restore = vi.fn();
+  mockBrowserWindow.prototype.focus = vi.fn();
+  mockBrowserWindow.prototype.show = vi.fn();
+  mockBrowserWindow.prototype.isMinimized = vi.fn().mockReturnValue(false);
   mockBrowserWindow.prototype.webContents = {
     on: vi.fn(),
     send: vi.fn(),
@@ -21,6 +25,7 @@ const mocks = vi.hoisted(() => {
     on: vi.fn(),
     quit: vi.fn(),
     getVersion: vi.fn().mockReturnValue('0.0.0'),
+    requestSingleInstanceLock: vi.fn().mockReturnValue(true),
   };
 
   // IPC Main Mock
@@ -31,7 +36,8 @@ const mocks = vi.hoisted(() => {
 
   // Power Monitor Mock
   const mockPowerMonitor = {
-    getSystemIdleTime: vi.fn().mockReturnValue(0)
+    getSystemIdleTime: vi.fn().mockReturnValue(0),
+    on: vi.fn(),
   };
 
   // Session Mock
@@ -73,8 +79,8 @@ vi.mock('electron-updater', () => ({
 }));
 
 vi.mock('node:child_process', () => ({
-  exec: vi.fn(),
-  default: { exec: vi.fn() },
+  execFile: vi.fn(),
+  default: { execFile: vi.fn() },
 }));
 
 // Mock local modules to prevent side effects (like electron-store initialization)
@@ -101,6 +107,20 @@ vi.mock('./weather', () => ({
   weatherService: {
     getWeather: vi.fn(),
   }
+}));
+
+vi.mock('./remote-bridge', () => ({
+  remoteBridge: {
+    init: vi.fn(),
+    regenerateKeys: vi.fn(),
+    broadcastState: vi.fn(),
+    getStatus: vi.fn(),
+    destroy: vi.fn(),
+  }
+}));
+
+vi.mock('./audit-log', () => ({
+  auditLog: { append: vi.fn(), read: vi.fn().mockReturnValue([]) }
 }));
 
 describe('Main Process Security Configuration', () => {

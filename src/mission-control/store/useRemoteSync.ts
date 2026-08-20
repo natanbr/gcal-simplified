@@ -59,7 +59,11 @@ export function useRemoteSync(state: MCState) {
                 delta: log.delta,
                 type: log.type,
                 colorKey: log.colorKey,
-                isRemote: log.isRemote
+                isRemote: log.isRemote,
+                // Attribution travels to the phone too, so the remote log reads
+                // the same as the one on the machine.
+                source: log.source,
+                gameTokens: log.gameTokens
             })),
             responsibilities: stateRef.current.responsibilities.map(r => ({
                 id: r.id,
