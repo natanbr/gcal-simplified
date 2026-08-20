@@ -44,7 +44,6 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     'src/mission-control/games/blocks/BlocksCanvas.tsx': 376,
     'src/mission-control/games/fruits/useFruitMergeGame.ts': 361,
     'src/mission-control/games/fruits/FruitMergeCanvas.tsx': 360,
-    'src/mission-control/MissionControl.tsx': 338,
     'src/mission-control/games/blocks/useBlocksGame.ts': 329,
     'src/mission-control/components/ResponsibilityPanel.tsx': 311,
 };
