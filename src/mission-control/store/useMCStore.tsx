@@ -11,7 +11,7 @@ import type {
     MissionPhase,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
-import { initialState, selectTotalWealth } from './mcReducer';
+import { initialState, selectTotalWealth, MAX_GAME_TOKENS } from './mcReducer';
 import { createLogEntry } from './activityLog';
 import { REWARD_MAP } from '../rewardCatalogue';
 
@@ -20,8 +20,6 @@ export { selectTotalWealth };
 // ---- Persistence ----
 
 export const STORAGE_KEY = 'mc-state-v5'; // bumped: added gameTokens fields
-
-const MAX_GAME_TOKENS = 5;
 
 const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 
@@ -94,6 +92,12 @@ export function loadPersistedState(): MCState {
             // let a restart refund spent game tokens).
             gameTokens: Math.min(MAX_GAME_TOKENS, Math.max(0, parsed.gameTokens ?? initialState.gameTokens)),
             gameTokensLastGrantedDate: parsed.gameTokensLastGrantedDate ?? null,
+            // A game only runs while its overlay is mounted, so an "active" game
+            // can never survive a restart. Restoring it stranded the flag at true
+            // forever (crash/quit mid-game, or a remote START_GAME while the
+            // Calendar view was showing and no overlay existed to close it) —
+            // which is what made the phone remote keep offering a ghost game.
+            snakeGameActive: false,
             _migrationVersion: MIGRATION_VERSION,
         };
     } catch {

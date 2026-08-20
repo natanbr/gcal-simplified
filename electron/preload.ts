@@ -1,7 +1,9 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
 // Allowed channels for communication
-const ALLOWED_INVOKE_CHANNELS = [
+// Exported so the contract guard can import the real values instead of
+// regex-parsing this file. Has no effect at runtime.
+export const ALLOWED_INVOKE_CHANNELS = [
   'auth:login',
   'auth:logout',
   'auth:check',
@@ -19,9 +21,11 @@ const ALLOWED_INVOKE_CHANNELS = [
   'remote:regenerate',
   'remote:sync-state',
   'remote:get-status',
+  'audit:append',
+  'audit:read',
 ];
 
-const ALLOWED_ON_CHANNELS = [
+export const ALLOWED_ON_CHANNELS = [
   'auth:success',
   'main-process-message',
   'update:available',
@@ -32,6 +36,7 @@ const ALLOWED_ON_CHANNELS = [
   'remote-control:action',
   'remote:request-sync',
   'remote:status-changed',
+  'system:resume',
 ];
 
 // --------- Expose some API to the Renderer process ---------

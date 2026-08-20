@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState } from '../store/useMCStore.tsx';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
-import { formatSuspendedRemainingTime } from '../../utils/timeUtils';
+import { formatSuspendedRemainingTime } from '../utils/timeUtils';
 
 export function PrivilegesPanel({ interactive = false }: { interactive?: boolean }) {
     const state = useMCState();

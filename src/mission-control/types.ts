@@ -154,7 +154,20 @@ export interface ActivityLogEntry {
     colorKey?: 'morning' | 'evening' | 'recycling' | 'activity' | 'bank' | 'system' | 'cheat';
     totalTokens?: number;
     bankTokens?: number;
+    /** Game-token balance after the event (mood tokens, not bank tokens). */
+    gameTokens?: number;
     isRemote?: boolean;
+    /**
+     * Who caused this entry. `isRemote` only ever answered "phone or not";
+     * `source` answers the question a parent actually asks when a token moves
+     * on its own: was this a person, the clock, or the app?
+     *   local     — someone pressed something on this machine
+     *   remote    — arrived over the Supabase remote-control channel
+     *   scheduler — the mission scheduler fired on a wall-clock time
+     *   auto      — the app itself (mood gauge filling, mission expiry)
+     *   system    — lifecycle events (startup, resume, migration)
+     */
+    source?: 'local' | 'remote' | 'scheduler' | 'auto' | 'system';
 }
 
 // --------------- Root App State ---------------
@@ -173,9 +186,10 @@ export interface MCState {
     responsibilities: ResponsibilityTask[];
     activityLogs: ActivityLogEntry[];
     hasUnreviewedCheatAttempt: boolean;
-    /** Accumulated game tokens (max 5). Earned 1/day when bankCount >= 10. */
+    /** Accumulated game tokens (max 5). Earned only by filling the mood gauge. */
     gameTokens: number;
-    /** ISO date string (YYYY-MM-DD) of the last day a game token was granted. */
+    /** @deprecated Unused since the calendar-day grant was removed. Kept so old
+     *  persisted blobs still parse; safe to drop after a storage-key bump. */
     gameTokensLastGrantedDate: string | null;
     /** Track remote animation triggers */
     lastAnimationTrigger?: { type: MCAnimationType; timestamp: number };
@@ -189,7 +203,7 @@ export interface MCState {
     whiningActive: boolean;
     /**
      * Mood level (-2 Horrible .. 0 Neutral .. +2 Excellent). Drives how fast
-     * behaviorProgress fills/drains (see MOOD_HOURLY_RATE). Reset to 0 (natural)
+     * behaviorProgress fills/drains (see MOOD_TOKENS_PER_DAY). Reset to 0 (natural)
      * at the start of each active day; only changed manually / via remote.
      */
     moodWind: number;
@@ -220,6 +234,13 @@ export type MCAnimationType =
 
 // --------------- Action Discriminated Union ---------------
 
+/**
+ * Who dispatched an action. Named `origin` rather than `source` because
+ * ADD_TOKENS already carries an unrelated `source` discriminator.
+ * Defaults to 'local' when absent — a person pressed something on this machine.
+ */
+export type ActionOrigin = 'local' | 'remote' | 'scheduler' | 'auto' | 'system';
+
 export type MCAction = (
     | { type: 'ADD_TOKEN' }
     | { type: 'ADD_TOKENS'; amount: number; source: 'manual' | 'mission' | 'responsibility'; label?: string }
@@ -247,7 +268,7 @@ export type MCAction = (
     | { type: 'ADD_LOG'; log: ActivityLogEntry }
     | { type: 'CHEAT_ATTEMPT' }
     | { type: 'CLEAR_CHEAT_FLAG' }
-    | { type: 'GRANT_GAME_TOKEN'; force?: boolean }
+    | { type: 'GRANT_GAME_TOKEN' }
     | { type: 'CONSUME_GAME_TOKEN' }
     | { type: 'RESET_GAME_TOKENS' }
     | { type: 'TRIGGER_ANIMATION'; animation: MCAnimationType }
@@ -258,4 +279,4 @@ export type MCAction = (
     | { type: 'BEHAVIOR_TICK' }
     | { type: 'SET_MOOD_WIND'; level: number }
     | { type: 'SYNC_BEHAVIOR' }
-) & { isRemote?: boolean; timestamp?: string };
+) & { isRemote?: boolean; timestamp?: string; origin?: ActionOrigin };

@@ -1,21 +1,25 @@
 import React, { useReducer, useMemo, useEffect, useRef } from 'react';
 import { mcReducer } from './mcReducer';
 import { MCContext, loadPersistedState, STORAGE_KEY } from './useMCStore';
-import { useGameTokenScheduler } from './useGameTokenScheduler';
 import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
 import { useRemoteSync } from './useRemoteSync';
+import { useAuditTrail } from './useAuditTrail';
 
 export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
     const [state, dispatch] = useReducer(mcReducer, undefined, loadPersistedState);
     const contextValue = useMemo(() => ({ state, dispatch }), [state]);
 
-    useGameTokenScheduler(dispatch);
-
-    // Accrue mood progress once a minute while the app is running
+    // Accrue mood progress once a minute while the app is running.
+    // This heartbeat is the ONLY generator of game tokens — see
+    // MOOD_TOKENS_PER_DAY in mcReducer.ts.
     useBehaviorHeartbeat(dispatch);
 
     // Sync state to Remote Control
     useRemoteSync(state);
+
+    // Mirror every activity-log entry to the append-only file on disk.
+    // Survives restarts, the CLEAR button, and the 200-entry ring buffer.
+    useAuditTrail(state);
 
     // Persist state to localStorage on every change (debounced 500ms)
     const persistTimerRef = useRef<ReturnType<typeof setTimeout>>();

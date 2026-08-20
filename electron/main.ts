@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain, powerMonitor, session } from 'electron'
-import { execFile } from 'node:child_process'
 import 'dotenv/config'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -8,6 +7,8 @@ import { authService } from './auth'
 import { apiService } from './api'
 import { weatherService } from './weather'
 import { remoteBridge } from './remote-bridge'
+import { auditLog } from './audit-log'
+import { startPowerPolicy } from './power-policy'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -31,10 +32,70 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 
+// ── Single instance enforcement ───────────────────────────────────────────────
+// Two instances share one userData directory, which means they share the
+// renderer's localStorage (the Mission Control store, key `mc-state-v5`) AND the
+// same Supabase remote-control room. Both write the whole state blob on a 500ms
+// debounce, so the loser's snapshot silently overwrites the winner's: token
+// counts flip back and forth, activity-log history is eaten, both schedulers
+// fire the same mission, and the phone remote sees two conflicting states.
+// Refusing to boot a second instance is the fix for all of those at once.
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+
+if (!gotSingleInstanceLock) {
+  console.warn('[Main] Another instance is already running - exiting.')
+  app.quit()
+} else {
+  app.on('second-instance', focusExistingWindow)
+  app.on('window-all-closed', handleAllWindowsClosed)
+  app.on('activate', handleActivate)
+  app.whenReady().then(bootstrap)
+}
+
+/** A second launch attempt surfaces the window that is already running. */
+function focusExistingWindow(): void {
+  const [existing] = BrowserWindow.getAllWindows()
+  if (!existing) return
+  if (existing.isMinimized()) existing.restore()
+  existing.show()
+  existing.focus()
+}
+
+// Quit when all windows are closed, except on macOS. There, it's common
+// for applications and their menu bar to stay active until the user quits
+// explicitly with Cmd + Q.
+function handleAllWindowsClosed(): void {
+  if (process.platform !== 'darwin') {
+    app.quit()
+    win = null
+  }
+}
+
+function handleActivate(): void {
+  // On OS X it's common to re-create a window in the app when the
+  // dock icon is clicked and there are no other windows open.
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow()
+  }
+}
+
+/**
+ * Offscreen mode for the E2E suite. Electron cannot run truly headless on
+ * Windows, but an unshown window still loads, renders and is fully drivable
+ * over CDP — which is all Playwright needs. Without this, a suite run throws a
+ * fullscreen window in the developer's face once per test (44 times).
+ * Set E2E_HEADLESS=1 to enable; unset, behaviour is unchanged.
+ */
+const HEADLESS = process.env.E2E_HEADLESS === '1'
+
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
-    fullscreen: true,
+    fullscreen: !HEADLESS,
+    show: !HEADLESS,
+    // An unshown window keeps its configured size, so give it a desktop-sized
+    // viewport — otherwise layout-dependent assertions run against 800x600.
+    ...(HEADLESS ? { width: 1920, height: 1080 } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -44,7 +105,7 @@ function createWindow() {
   })
 
   // Maximize window for better visibility
-  win.maximize()
+  if (!HEADLESS) win.maximize()
 
   // 🛡️ Sentinel: Prevent unauthorized window creation
   win.webContents.setWindowOpenHandler(() => {
@@ -59,56 +120,11 @@ function createWindow() {
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
   } else {
-    // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 }
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-    win = null
-  }
-})
-
-app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
-  }
-})
-
-app.whenReady().then(() => {
-  // Set up Content Security Policy
-  const csp = VITE_DEV_SERVER_URL
-    ? "default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' ws: http: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://fonts.gstatic.com;"
-    : "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';";
-
-  // 🛡️ Sentinel: Enforce default-deny permissions for all device resources (geolocation, camera, etc.)
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
-  });
-  session.defaultSession.setPermissionCheckHandler(() => {
-    return false;
-  });
-
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [csp],
-      },
-    });
-  });
-
-  createWindow()
-  remoteBridge.init()
-
-  // IPC Handlers
+function registerIpcHandlers(): void {
   ipcMain.handle('auth:login', async () => {
     if (win) {
       await authService.startAuth();
@@ -123,8 +139,6 @@ app.whenReady().then(() => {
     return true;
   });
 
-
-
   ipcMain.handle('auth:check', () => {
     return authService.isAuthenticated();
   });
@@ -136,7 +150,6 @@ app.whenReady().then(() => {
 
     if (timeMin && timeMax) {
       // 🛡️ Sentinel: Validate IPC boundary inputs to prevent RangeError crashes downstream
-      // Ensure that inputs are actually strings and can be parsed into valid dates
       if (typeof timeMin !== 'string' || typeof timeMax !== 'string') {
         throw new Error('timeMin and timeMax must be strings');
       }
@@ -161,6 +174,8 @@ app.whenReady().then(() => {
     return await apiService.getEvents(start, end);
   });
 
+  ipcMain.handle('data:tasks', async () => apiService.getTasks());
+
   // Settings
   ipcMain.handle('settings:get', () => apiService.getSettings());
   ipcMain.handle('settings:save', (_, config) => apiService.saveSettings(config));
@@ -169,16 +184,15 @@ app.whenReady().then(() => {
   ipcMain.handle('data:calendars', () => apiService.getCalendars());
   ipcMain.handle('data:tasklists', () => apiService.getTaskLists());
 
+  // Remote control
   ipcMain.handle('remote:regenerate', () => remoteBridge.regenerateKeys());
   ipcMain.handle('remote:sync-state', (_, state) => remoteBridge.broadcastState(state));
   ipcMain.handle('remote:get-status', () => remoteBridge.getStatus());
 
-  // Data Handlers (Updated)
-
-
-  ipcMain.handle('data:tasks', async () => {
-    return await apiService.getTasks();
-  });
+  // Durable audit trail. Append-only by design - there is deliberately no
+  // 'audit:clear' channel, so the in-app CLEAR button cannot erase this record.
+  ipcMain.handle('audit:append', (_, entries) => auditLog.append(entries));
+  ipcMain.handle('audit:read', (_, limit?: number) => auditLog.read(typeof limit === 'number' ? limit : 500));
 
   // Weather
   ipcMain.handle('weather:get', async (_, lat?: number, lng?: number) => {
@@ -201,16 +215,10 @@ app.whenReady().then(() => {
     return autoUpdater.quitAndInstall();
   });
 
-  ipcMain.handle('app:info', () => {
-    return {
-      version: app.getVersion(),
-    };
-  });
+  ipcMain.handle('app:info', () => ({ version: app.getVersion() }));
+}
 
-  // Power Management Loop
-  setInterval(checkPowerPolicy, 60 * 1000); // Check every minute
-
-  // Auto Updater
+function registerAutoUpdater(): void {
   autoUpdater.autoDownload = false;
   autoUpdater.logger = console;
 
@@ -239,71 +247,51 @@ app.whenReady().then(() => {
     win?.webContents.send('update:error', err);
   });
 
-  // Initial Check
   setTimeout(() => {
     console.log('Initial update check');
     autoUpdater.checkForUpdates().catch(err => console.error('Initial update check failed:', err));
   }, 5000);
 
-  // Periodic Check every 4 hours
   setInterval(() => {
     console.log('Periodic update check');
     autoUpdater.checkForUpdates().catch(err => console.error('Periodic update check failed:', err));
   }, 4 * 60 * 60 * 1000);
-})
-
-// Power Management Logic
-function turnOffScreen() {
-    // Prevent repeated firing if likely already off (simple debounce by relying on interval)
-    console.log('Turning off screen due to sleep schedule inactivity...');
-
-    if (process.platform === 'win32') {
-        // PowerShell command to turn off monitor via SendMessage(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2)
-        const psCommand = '(Add-Type -MemberDefinition "[DllImport(\'user32.dll\')] public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);" -Name "Win32SendMessage" -Namespace Win32Functions -PassThru)::SendMessage(0xffff, 0x0112, 0xF170, 2)';
-        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psCommand], (error) => {
-             if (error) console.error('Failed to turn off screen:', error);
-        });
-    } else if (process.platform === 'darwin') {
-        execFile('pmset', ['displaysleepnow'], (error) => {
-            if (error) console.error('Failed to turn off screen:', error);
-        });
-    } else if (process.platform === 'linux') {
-        execFile('xset', ['dpms', 'force', 'off'], (error) => {
-            if (error) console.error('Failed to turn off screen:', error);
-        });
-    }
 }
 
-function checkPowerPolicy() {
-    try {
-        const config = apiService.getSettings();
-        if (config.sleepEnabled === false) return; // Explicit false check, default true
+function bootstrap(): void {
+  // Set up Content Security Policy
+  const csp = VITE_DEV_SERVER_URL
+    ? "default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' ws: http: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://fonts.gstatic.com;"
+    : "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';";
 
-        const now = new Date();
-        const currentHour = now.getHours();
+  // 🛡️ Sentinel: Enforce default-deny permissions for all device resources
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+  session.defaultSession.setPermissionCheckHandler(() => false);
 
-        const start = config.sleepStart ?? 22;
-        const end = config.sleepEnd ?? 6;
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    });
+  });
 
-        let inSleepWindow = false;
-        if (start === end) {
-            inSleepWindow = false; // Disable if start == end
-        } else if (start > end) {
-            // e.g. 22 to 6: 22, 23, 0, 1, 2, 3, 4, 5
-            inSleepWindow = currentHour >= start || currentHour < end;
-        } else {
-            // e.g. 1 to 5
-            inSleepWindow = currentHour >= start && currentHour < end;
-        }
+  createWindow()
+  remoteBridge.init()
 
-        if (inSleepWindow) {
-            const idleTime = powerMonitor.getSystemIdleTime(); // seconds
-            // 5 minutes = 300 seconds
-            if (idleTime >= 300) {
-                 turnOffScreen();
-            }
-        }
-    } catch (e) {
-        console.error("Error in power policy check:", e);
-    }
+  // Sleep/resume is why "missions start at the wrong time": a setTimeout armed
+  // for 07:00 does not survive a suspend intact - it fires late (or instantly)
+  // on resume. Tell the renderer so it can re-arm its schedule against the real
+  // wall clock instead of trusting a timer that slept through the night.
+  powerMonitor.on('resume', () => {
+    console.log('[Main] System resumed - notifying renderer to re-arm schedules.');
+    BrowserWindow.getAllWindows().forEach(w => w.webContents.send('system:resume'));
+  });
+
+  registerIpcHandlers()
+  startPowerPolicy()
+  registerAutoUpdater()
 }

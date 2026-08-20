@@ -626,3 +626,84 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 
 
+
+### 2026-08-19 Data Integrity, Attribution & Token Economy Rebalance
+
+Investigation into four reported symptoms — bank tokens vanishing and reappearing, missions
+starting at wrong times, a phantom "remote game" prompt, and the calendar needing re-sign-in
+every few days — plus the requested slowdown of game-token generation.
+
+**Single instance enforcement (root cause of several symptoms at once)**
+- `electron/main.ts` now calls `app.requestSingleInstanceLock()` before anything else. A second
+  launch quits immediately and focuses the running window via the `second-instance` handler.
+- Two instances shared one userData directory, therefore one `localStorage` blob (`mc-state-v5`)
+  and one Supabase remote-control room. Both wrote the entire state on a 500ms debounce, so the
+  loser's snapshot silently overwrote the winner's. This is what made token counts flip back and
+  forth, ate activity-log history (the log lives inside that same blob), let both schedulers fire
+  the same mission, and showed the phone two conflicting states.
+- Bootstrap logic was restructured into `bootstrap()` / `registerIpcHandlers()` /
+  `registerAutoUpdater()`, and the night-time screen-blanking policy moved to
+  `electron/power-policy.ts`, keeping `main.ts` inside the 300-line limit.
+
+**Token economy — generation slowed and re-expressed in tokens/day**
+- `MOOD_HOURLY_RATE` (magic per-hour numbers) replaced by `MOOD_TOKENS_PER_DAY`:
+  Excellent 1.5/day, Good 1/day, Neutral 1/3 day (one token every three days), Bad −0.4/day,
+  Horrible −1.0/day. `moodHourlyRate(mood, settings)` derives the per-hour rate from the
+  *configured* active window, so changing the morning/evening times cannot silently change the
+  economy.
+- Earning a token now resets `moodWind` to 0 (Normal). The next token has to be earned back up
+  from Neutral.
+- **Removed `useGameTokenScheduler` entirely.** It granted a token on every mount *and* at every
+  midnight, and never wrote `gameTokensLastGrantedDate` — so every app launch minted a free token.
+  This, not the mood rates, was the source of the token surplus. Manual `GRANT_GAME_TOKEN` is
+  retained (the phone remote has a button for it) and is now logged.
+
+**Visibility and attribution**
+- `ActivityLogEntry` gained `source` (`local | remote | scheduler | auto | system`) and
+  `gameTokens`. `MCAction` gained an `origin` field carrying the same information.
+- The mission scheduler now dispatches through the logging interceptor, so scheduler-driven
+  mission starts, task locks and expiries appear in the log instead of happening silently.
+- Automatic mood-token grants write their own log entry from inside the reducer, with a
+  deterministic id — the one token movement no user action triggers is now the one that can
+  never go unlogged.
+- New log coverage: `LOCK_TASK`, `GRANT_GAME_TOKEN`, `CONSUME_GAME_TOKEN`, `RESET_GAME_TOKENS`,
+  `SET_MOOD_WIND`, `ADJUST_BEHAVIOR_PROGRESS`, `END_GAME`.
+- **Durable audit trail**: `electron/audit-log.ts` appends sanitised NDJSON to
+  `<userData>/audit-log.ndjson` (4 MB, one rotation). Append-only by design — there is no
+  `audit:clear` channel, so the in-app CLEAR button cannot erase it. `useAuditTrail` mirrors every
+  log entry plus a `SESSION_START` marker; it adds no timer.
+- **Activity log redesign**: a "today at a glance" summary strip (balances, earned/spent, event
+  counts per source, and a warning row for token movements nobody triggered), a *Who* column with
+  attribution badges, filters (Tokens / Missions / Automatic / Phone / All), an EXPORT button that
+  downloads the on-disk trail, and a two-step confirm on CLEAR.
+
+**Mission timing**
+- `setTimeout` does not survive a machine suspend: a timer armed for 06:00 fires late — or
+  instantly — on resume, which is what started missions at visibly wrong times. The scheduler now
+  records each timer's intended wall-clock target and skips (with a console warning) any firing
+  more than `LATE_FIRE_TOLERANCE_MS` (5 min) late.
+- `powerMonitor.on('resume')` in the main process sends `system:resume`; the scheduler tears down
+  and re-arms its whole schedule against the real clock.
+
+**Remote control hardening**
+- `useRemoteControl` now enforces `REMOTE_ALLOWED_ACTIONS`. The channel previously forwarded any
+  action type straight into the reducer; `CLEAR_LOGS`, `RESET_GAME_TOKENS`, `ADD_LOG`,
+  `SET_SETTINGS` and `START_GAME` are now rejected.
+
+**Ghost game fix**
+- `loadPersistedState` forces `snakeGameActive: false`. The flag was restored verbatim from
+  localStorage, so a crash or quit mid-game — or a remote `START_GAME` arriving while the Calendar
+  view was showing, where no overlay exists to close it — stranded it at `true` forever, which is
+  what made the phone keep offering a game that was not running.
+
+**Google auth session loss**
+- `saveTokens` now preserves an existing `refresh_token` when the incoming credential set omits
+  one (Google issues it only on first consent; every refresh response omits it, and writing the
+  response verbatim destroyed it).
+- Added an `oauth2Client.on('tokens')` listener so refreshed credentials are actually persisted.
+- `generateAuthUrl` now passes `prompt: 'consent'` so a re-auth reliably returns a refresh token.
+- NOTE: if the Google Cloud OAuth consent screen is still in **Testing** publishing status, refresh
+  tokens expire after 7 days regardless of these fixes. That is a console setting, not code.
+
+**IPC surface**: `ALLOWED_INVOKE_CHANNELS` 17 → 19 (`audit:append`, `audit:read`);
+`ALLOWED_ON_CHANNELS` 10 → 11 (`system:resume`).
