@@ -26,6 +26,7 @@ import { test as base, _electron as electron, expect } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { restoreConfig, snapshotConfig } from './appConfig';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -156,11 +157,16 @@ export const mcTest = base.extend<{ mcApp: ElectronApplication; mcPage: Page }>(
     // eslint-disable-next-line no-empty-pattern
     mcApp: async ({}, use) => {
         const { app, page } = await launchMC();
+        // Both shared-state vectors: Mission Control's localStorage blob and the
+        // calendar's config.json. An MC spec is not supposed to touch config,
+        // but "not supposed to" is what got us here.
         const snapshot = await snapshotMCState(page);
+        const config = await snapshotConfig(app);
 
         await use(app);
 
         if (!page.isClosed()) await restoreMCState(page, snapshot);
+        await restoreConfig(app, config);
         await app.close();
     },
 

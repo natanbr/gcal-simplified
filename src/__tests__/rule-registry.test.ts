@@ -102,11 +102,20 @@ const REGISTRY: Rule[] = [
         defence: 'Enforced by Electron/the OS, not by a code path a unit test can call. Presence is checked structurally in electron/preload_contract.test.ts; real behaviour is proven by launching the built app twice: node scripts/verify-single-instance.mjs',
     },
     {
-        rule: 'mcReducer.ts is a pure reducer — no side effects',
+        rule: 'mcReducer.ts and behaviorEngine.ts are pure — no side effects, no wall-clock reads',
         source: 'CLAUDE.md → Conventions',
         status: 'guarded',
         guard: 'src/mission-control/store/mcReducer.purity.test.ts',
-        verifiedRedBy: 'mutate state.bankCount in place inside any case',
+        verifiedRedBy: 'mutate state.bankCount in place inside any case; or read new Date() directly instead of actionInstant(action) — the determinism test goes red',
+        defence: 'behaviorEngine.ts is covered transitively: every reducer call runs applyBehaviorSync, so the purity suite exercises both.',
+    },
+    {
+        rule: 'mcReducer.ts stays the front door — the store split is a refactor, not an API change',
+        source: 'CLAUDE.md → Mission Control → Store layout',
+        status: 'guarded',
+        guard: 'tsconfig.json',
+        verifiedRedBy: 'drop one name from the re-export block in mcReducer.ts — npm run tsc fails at every import site that used it',
+        defence: 'Type-checked rather than asserted: ~20 modules import from ./mcReducer, so a removed re-export cannot compile. A bespoke test would only restate what tsc already proves.',
     },
 
     // ── Token economy / attribution ──────────────────────────────────────────

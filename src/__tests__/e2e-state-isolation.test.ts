@@ -43,9 +43,25 @@ function specs(): Array<{ name: string; source: string }> {
         .map(name => ({ name, source: readFileSync(join(E2E_DIR, name), 'utf-8') }));
 }
 
-/** A spec touches MC state if it names the storage key, directly or via the helper. */
+/**
+ * A spec can pollute MC state if it enters Mission Control at all.
+ *
+ * The discriminator is `?mc=1`, not the storage key. Naming the key is the
+ * OBVIOUS way to write state, but it is not the only one, and the first version
+ * of this guard only looked for the key — which would have missed
+ * mc-bank-management.spec.ts entirely as it was originally written: no
+ * `localStorage` call anywhere in it, just clicks on a +1 button that minted a
+ * real token. A new spec written the same way would slip straight through.
+ *
+ * Entering MC mode is what makes pollution possible, so that is what to test.
+ */
 function touchesMCState(source: string): boolean {
-    return source.includes('mc-state-v5') || source.includes('STORAGE_KEY') || source.includes('mcApp');
+    return (
+        source.includes('mc=1') ||
+        source.includes('gotoMC') ||
+        source.includes('mc-state-v5') ||
+        source.includes('STORAGE_KEY')
+    );
 }
 
 /**
@@ -132,6 +148,35 @@ describe('E2E state isolation', () => {
             `moved mission time, a minted token, an overlay stuck open for an hour.\n\n` +
             `Fix: import { mcTest as test } from './helpers/mcApp' and drop the manual\n` +
             `electron.launch / app.close boilerplate — the fixture owns the lifecycle.\n\n${leaking.join('\n')}`
+        ).toEqual([]);
+    });
+
+    it('restores config.json in every spec that saves settings', () => {
+        // The calendar's half of the shared state: theme mode, sleep schedule,
+        // selected calendars, weekStartDay, and the remote pairing keys. A spec
+        // that clicks Save writes the real file — `themeMode: "manual"` sat in
+        // the developer's config for months because of exactly one such click.
+        //
+        // weekStartDay is the sharp edge: several calendar specs assert on dates
+        // derived from it, so whatever the last run left decides whether they
+        // pass. That is the mechanism behind "the suite is non-deterministic".
+        const SAVE_MARKERS = ['save-settings-button', 'settings:save'];
+
+        const unrestored = all
+            .filter(s => SAVE_MARKERS.some(m => s.source.includes(m)))
+            // Mocking the ipcMain handler in-process is an equally valid
+            // isolation — nothing reaches the file. week-display-customization
+            // does this, and it should not be forced into the other pattern.
+            .filter(s => !s.source.includes('ipcMain'))
+            .filter(s => !s.source.includes('restoreConfig') && !s.source.includes('mcTest'))
+            .map(s => `  e2e/${s.name}`);
+
+        expect(
+            unrestored,
+            `E2E spec(s) save settings without restoring config.json.\n\n` +
+            `Fix: snapshotConfig(app) after launch, restoreConfig(app, snapshot) in afterEach\n` +
+            `(see e2e/helpers/appConfig.ts) — or mock the settings:save ipcMain handler so the\n` +
+            `write never reaches the file.\n\n${unrestored.join('\n')}`
         ).toEqual([]);
     });
 
