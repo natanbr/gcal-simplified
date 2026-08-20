@@ -4,6 +4,8 @@
 //     Do NOT import from parent app src/ directories.
 // ============================================================
 
+import type { QuizAnswerRecord, SkillProgress } from './skills/types';
+
 export type TokenId = string;
 
 export interface LayoutRects {
@@ -213,6 +215,8 @@ export interface MCState {
     behaviorDelta: number;
     /** ISO date string (YYYY-MM-DD) of the last day mood was reset to neutral */
     moodLastResetDate?: string;
+    /** Per-skill practice history + the invisible adaptive reading level. */
+    skillProgress: SkillProgress;
 }
 
 export type MCAnimationType =
@@ -275,6 +279,7 @@ export type MCAction = (
     | { type: 'CLEAR_LOGS' }
     | { type: 'START_GAME' }
     | { type: 'END_GAME' }
+    | ({ type: 'RECORD_QUIZ_ANSWER' } & QuizAnswerRecord)
     | { type: 'ADJUST_BEHAVIOR_PROGRESS'; amount: number; reason: string }
     | { type: 'BEHAVIOR_TICK' }
     | { type: 'SET_MOOD_WIND'; level: number }

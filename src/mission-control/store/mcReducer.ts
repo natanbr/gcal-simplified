@@ -24,6 +24,8 @@ import {
     MAX_GAME_TOKENS,
     PROGRESS_PER_TOKEN,
 } from './behaviorSync';
+import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
+import { createDefaultSkillProgress } from '../skills/types';
 
 // The behavior/token-economy engine lives in behaviorSync.ts; re-export its
 // public names so existing consumers keep importing from this module.
@@ -151,6 +153,7 @@ export const initialState: MCState = {
     moodWind: 0, // Natural/Neutral baseline — reset to this each active day
     behaviorLastUpdated: new Date().toISOString(),
     behaviorDelta: 0,
+    skillProgress: createDefaultSkillProgress(),
 };
 
 // ---- Time Helpers ----
@@ -686,6 +689,27 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 snakeGameActive: false
             };
+
+        case 'RECORD_QUIZ_ANSWER': {
+            const instant = actionInstant(action);
+            const { progress, levelChange } = applyQuizAnswer(
+                state.skillProgress,
+                action,
+                getLocalDateString(new Date(instant)),
+            );
+            if (progress === state.skillProgress) return state;
+            return {
+                ...state,
+                skillProgress: progress,
+                // Level changes are the ONE thing this action logs — per-question
+                // logging would flood the 200-entry ring. Written here, inside the
+                // reducer, on the mood-grant precedent: no user action triggers it,
+                // so it is exactly the movement that must never go unlogged.
+                activityLogs: levelChange
+                    ? [makeLevelChangeLog(levelChange, instant), ...(state.activityLogs || [])].slice(0, MAX_ACTIVITY_LOGS)
+                    : state.activityLogs,
+            };
+        }
 
         case 'ADJUST_BEHAVIOR_PROGRESS': {
             let nextProgress = state.behaviorProgress + action.amount;
