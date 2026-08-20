@@ -179,6 +179,15 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: 'use bg-family-cyan inside a Mission Control component',
     },
 
+    {
+        rule: 'E2E specs restore the real userData state they touch',
+        source: 'CLAUDE.md → Testing → E2E is a weak signal here',
+        status: 'guarded',
+        guard: 'src/__tests__/e2e-state-isolation.test.ts',
+        verifiedRedBy: 'import `test` from @playwright/test in an MC spec instead of `mcTest as test` from helpers/mcApp',
+        defence: 'Containment, not isolation: the suite still runs against the real userData directory. A per-launch userData dir is the proper fix and needs a seeded auth fixture for the calendar specs first.',
+    },
+
     // ── Manual ───────────────────────────────────────────────────────────────
     {
         rule: 'Each game directory follows the types/use[Game]Game/[Game]Canvas/[Game]GameOverlay/index shape',
