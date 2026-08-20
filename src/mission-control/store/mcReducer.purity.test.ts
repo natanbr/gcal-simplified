@@ -69,6 +69,7 @@ const SAMPLE_ACTIONS: MCAction[] = [
     { type: 'TRIGGER_ANIMATION', animation: 'confetti' },
     { type: 'START_GAME' },
     { type: 'END_GAME' },
+    { type: 'RECORD_QUIZ_ANSWER', skill: 'read-pic-word', level: 1, atLevel: true, firstTry: false, wordId: 'dog', gameId: 'snake' },
     { type: 'ADJUST_BEHAVIOR_PROGRESS', amount: 10, reason: 'test' },
     { type: 'BEHAVIOR_TICK' },
     { type: 'SET_MOOD_WIND', level: 1 },

@@ -26,7 +26,20 @@ function deriveSnapshots(state: MCState, action: MCAction) {
     };
 }
 
+/**
+ * Action types that never produce an interceptor log entry. Listed HERE,
+ * before any work happens, because `deriveSnapshots` below runs the full
+ * reducer speculatively — for a per-answer action like RECORD_QUIZ_ANSWER
+ * that would mean every quiz tap pays the reducer twice. (Its level-change
+ * log is written inside the reducer itself, mood-grant style.)
+ */
+const UNLOGGED_ACTIONS = new Set<MCAction['type']>([
+    'RECORD_QUIZ_ANSWER',
+]);
+
 export function createLogEntry(action: MCAction, state: MCState): ActivityLogEntry | null {
+    if (UNLOGGED_ACTIONS.has(action.type)) return null;
+
     const now = new Date().toISOString();
     const id = self.crypto.randomUUID();
 

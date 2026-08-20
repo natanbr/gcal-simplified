@@ -13,6 +13,7 @@ import type {
 import { DEFAULT_SETTINGS } from '../types';
 import { initialState, selectTotalWealth, MAX_GAME_TOKENS } from './mcReducer';
 import { createLogEntry } from './activityLog';
+import { sanitizeSkillProgress } from './skillProgress';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export { selectTotalWealth };
@@ -98,6 +99,9 @@ export function loadPersistedState(): MCState {
             // Calendar view was showing and no overlay existed to close it) —
             // which is what made the phone remote keep offering a ghost game.
             snakeGameActive: false,
+            // Rebuilt field-by-field like settings/cases/missions above — the
+            // bare spread would restore a partial or corrupt slice wholesale.
+            skillProgress: sanitizeSkillProgress(parsed.skillProgress),
             _migrationVersion: MIGRATION_VERSION,
         };
     } catch {
