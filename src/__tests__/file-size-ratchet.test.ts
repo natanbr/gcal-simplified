@@ -32,11 +32,10 @@ const LIMIT = 300;
  * quiet growth the ratchet exists to stop.
  */
 const OVERSIZED_BASELINE: Record<string, number> = {
-    // Raised 1019 → 1033 on 2026-08-19, deliberately: adding `actionInstant()`
-    // removed five wall-clock reads from inside the reducer, which is what made
-    // it genuinely pure. Net +14 lines to fix a real correctness bug is a trade
-    // worth making — and this comment is the reviewable record of the decision.
-    'src/mission-control/store/mcReducer.ts': 1033,
+    // Lowered 1033 → 804 on 2026-08-20: the behavior-sync/token-economy block
+    // (the "top split candidate" named below) moved verbatim to
+    // store/behaviorSync.ts, with mcReducer re-exporting the public names.
+    'src/mission-control/store/mcReducer.ts': 804,
     'src/mission-control/components/MCSettingsOverlay.tsx': 767,
     'src/mission-control/components/GoalPedestal.tsx': 629,
     'src/components/Dashboard.tsx': 504,
