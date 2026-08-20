@@ -19,3 +19,6 @@ export interface QuizQuestion {
  * Each generator type (addition, multiplication, etc.) implements this.
  */
 export type QuizGenerator = () => QuizQuestion;
+
+/** Shared feedback state for the overlay and its answer panels. */
+export type QuizFeedback = 'correct' | 'wrong' | null;

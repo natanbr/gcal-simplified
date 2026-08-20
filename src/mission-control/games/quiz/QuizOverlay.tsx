@@ -1,14 +1,16 @@
 // ============================================================
 // Quiz Module — Quiz Overlay Component
-// Reusable in-game quiz UI with a kid-friendly numpad.
+// The shared revive-quiz shell: dark card, title, progress dots,
+// fireworks, and the correctness/feedback state machine. The
+// answer UI itself lives in per-kind panels (NumericPanel).
 // ⚠️  Internal to src/mission-control/games/quiz/ only.
 // ============================================================
 
 import { useState, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { QuizQuestion, QuizGenerator } from './types';
+import { motion } from 'framer-motion';
+import type { QuizQuestion, QuizGenerator, QuizFeedback } from './types';
 import { Fireworks } from './Fireworks';
-import { NumpadButton } from './NumpadButton';
+import { NumericPanel } from './NumericPanel';
 
 interface QuizOverlayProps {
     open: boolean;
@@ -28,76 +30,41 @@ export function QuizOverlay({
     title = 'Answer to Revive!',
 }: QuizOverlayProps) {
     const [question, setQuestion] = useState<QuizQuestion>(() => generator());
-    const [input, setInput] = useState('');
-    const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+    const [feedback, setFeedback] = useState<QuizFeedback>(null);
 
     // Generate new question when overlay opens or after a correct answer
     useEffect(() => {
         if (open) {
             setQuestion(generator());
-            setInput('');
             setFeedback(null);
         }
     }, [open, currentCorrect, generator]);
 
-    const handleDigit = useCallback((digit: string) => {
-        if (feedback === 'correct') return; // Don't allow input during success flash
-        setInput(prev => {
-            if (prev.length >= 3) return prev; // Max 3 digits
-            return prev + digit;
-        });
-        setFeedback(null);
-    }, [feedback]);
-
-    const handleBackspace = useCallback(() => {
-        setInput(prev => prev.slice(0, -1));
-        setFeedback(null);
-    }, []);
-
-    const handleSubmit = useCallback(() => {
-        if (!input) return;
-        const answer = parseInt(input, 10);
+    const handleSubmit = useCallback((answer: number) => {
         if (answer === question.answer) {
             setFeedback('correct');
-            setTimeout(() => {
-                onCorrect();
-                setInput('');
-                setFeedback(null);
-            }, 600);
         } else {
             setFeedback('wrong');
-            setInput('');
         }
-    }, [input, question, onCorrect]);
+    }, [question]);
 
-    // Keyboard support for numpad
+    const handleDirty = useCallback(() => {
+        setFeedback(prev => (prev === 'wrong' ? null : prev));
+    }, []);
+
+    // Success dwell: let the ✅ flash land, then report up. Effect-scoped so
+    // closing the overlay mid-dwell cancels the timeout instead of firing
+    // onCorrect into an unmounted game.
     useEffect(() => {
-        if (!open) return;
-        const handler = (e: KeyboardEvent) => {
-            if (e.key >= '0' && e.key <= '9') {
-                handleDigit(e.key);
-            } else if (e.key === 'Backspace') {
-                handleBackspace();
-            } else if (e.key === 'Enter') {
-                handleSubmit();
-            }
-        };
-        window.addEventListener('keydown', handler);
-        return () => window.removeEventListener('keydown', handler);
-    }, [open, handleDigit, handleBackspace, handleSubmit]);
+        if (feedback !== 'correct') return;
+        const timer = setTimeout(() => {
+            onCorrect();
+            setFeedback(null);
+        }, 600);
+        return () => clearTimeout(timer);
+    }, [feedback, onCorrect]);
 
     if (!open) return null;
-
-    // Split question text: "14 + 2 = ?" → questionPart = "14 + 2", answer replaces "?"
-    const questionPart = question.text.replace(/\s*=\s*\?$/, '');
-
-    // Answer box border/bg based on feedback
-    const answerBorder = feedback === 'correct' ? '#4ade80'
-        : feedback === 'wrong' ? '#ef4444'
-            : 'rgba(255,255,255,0.25)';
-    const answerBg = feedback === 'correct' ? 'rgba(74,222,128,0.25)'
-        : feedback === 'wrong' ? 'rgba(239,68,68,0.25)'
-            : 'rgba(255,255,255,0.08)';
 
     return (
         <motion.div
@@ -120,7 +87,7 @@ export function QuizOverlay({
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 22 }}
                 style={{
-                    background: 'linear-gradient(145deg, #1e293b, #0f172a)',
+                    background: 'linear-gradient(145deg, var(--mc-quiz-surface-hi), var(--mc-quiz-surface-lo))',
                     borderRadius: 28,
                     border: '2px solid rgba(148,163,184,0.2)',
                     padding: '32px 36px 36px',
@@ -142,7 +109,7 @@ export function QuizOverlay({
                 <div style={{
                     fontSize: 18,
                     fontWeight: 900,
-                    color: '#f8fafc',
+                    color: 'var(--mc-quiz-text)',
                     fontFamily: "'Nunito', sans-serif",
                     textAlign: 'center',
                 }}>
@@ -159,7 +126,7 @@ export function QuizOverlay({
                                 height: 14,
                                 borderRadius: '50%',
                                 background: i < currentCorrect
-                                    ? '#4ade80'
+                                    ? 'var(--mc-quiz-correct)'
                                     : 'rgba(255,255,255,0.15)',
                                 border: '2px solid rgba(255,255,255,0.2)',
                                 transition: 'background 0.3s',
@@ -168,7 +135,7 @@ export function QuizOverlay({
                     ))}
                     <span style={{
                         fontSize: 12,
-                        color: '#94a3b8',
+                        color: 'var(--mc-quiz-text-muted)',
                         fontWeight: 700,
                         marginLeft: 4,
                         fontFamily: "'Nunito', sans-serif",
@@ -177,88 +144,12 @@ export function QuizOverlay({
                     </span>
                 </div>
 
-                {/* Question + inline answer */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 14,
-                    padding: '24px 0',
-                    flexWrap: 'nowrap',
-                }}>
-                    {/* Question text e.g. "14 + 2 =" */}
-                    <span style={{
-                        fontSize: 52,
-                        fontWeight: 900,
-                        color: '#e2e8f0',
-                        fontFamily: "'Nunito', sans-serif",
-                        letterSpacing: '0.03em',
-                        whiteSpace: 'nowrap',
-                    }}>
-                        {questionPart} =
-                    </span>
-
-                    {/* Inline answer box */}
-                    <div style={{
-                        minWidth: 88,
-                        height: 68,
-                        borderRadius: 16,
-                        background: answerBg,
-                        border: `2px solid ${answerBorder}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 44,
-                        fontWeight: 900,
-                        color: '#f8fafc',
-                        fontFamily: "'Nunito', sans-serif",
-                        transition: 'all 0.2s',
-                        padding: '0 12px',
-                    }}>
-                        <AnimatePresence mode="popLayout">
-                            {feedback === 'correct' && (
-                                <motion.span
-                                    key="check"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    style={{ fontSize: 32 }}
-                                >
-                                    ✅
-                                </motion.span>
-                            )}
-                            {feedback === 'wrong' && (
-                                <motion.span
-                                    key="wrong"
-                                    initial={{ x: -10 }}
-                                    animate={{ x: [0, -6, 6, -4, 4, 0] }}
-                                    transition={{ duration: 0.4 }}
-                                    style={{ color: '#ef4444', fontSize: 22 }}
-                                >
-                                    ✗
-                                </motion.span>
-                            )}
-                            {feedback === null && (
-                                <span>{input || <span style={{ color: '#475569' }}>?</span>}</span>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                </div>
-
-                {/* Numpad — large touch-friendly buttons */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: 10,
-                    width: '100%',
-                    maxWidth: 300,
-                }}>
-                    {['1','2','3','4','5','6','7','8','9'].map(d => (
-                        <NumpadButton key={d} label={d} onClick={() => handleDigit(d)} />
-                    ))}
-                    <NumpadButton label="⌫" onClick={handleBackspace} variant="action" />
-                    <NumpadButton label="0" onClick={() => handleDigit('0')} />
-                    <NumpadButton label="✓" onClick={handleSubmit} variant="submit" />
-                </div>
+                <NumericPanel
+                    question={question}
+                    feedback={feedback}
+                    onDirty={handleDirty}
+                    onSubmit={handleSubmit}
+                />
             </motion.div>
         </motion.div>
     );
