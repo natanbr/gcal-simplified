@@ -33,7 +33,7 @@ export function RemoteIndicator() {
                     height: 8,
                     borderRadius: '50%',
                     backgroundColor: isOnline ? 'var(--mc-green)' : 'var(--mc-red)',
-                    boxShadow: isOnline ? '0 0 8px rgba(16, 185, 129, 0.8)' : 'none',
+                    boxShadow: isOnline ? '0 0 8px var(--mc-green)' : 'none',
                 }}
             />
             <span style={{ color: 'var(--mc-text)' }}>Remote</span>

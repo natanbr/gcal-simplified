@@ -18,18 +18,17 @@ import {
     momentumSeries,
     needsWork,
     perGameTotals,
+    shiftDate,
     weeklyAccuracy,
 } from '../../skills/progressSelectors';
 import { READING_SKILL_IDS, type ReadingSkillId } from '../../skills/types';
-import { AccuracyChart, MomentumChart, VolumeChart } from './ProgressCharts';
+import { AccuracyChart, MomentumChart, SERIES_COLORS, VolumeChart } from './ProgressCharts';
 
 const SKILL_LABELS: Record<ReadingSkillId, string> = {
     'read-word-pic': 'word → picture',
     'read-pic-word': 'picture → word',
     'read-missing-letter': 'missing letter',
 };
-
-const SERIES_TOKENS = ['var(--mc-chart-violet)', 'var(--mc-chart-teal)', 'var(--mc-chart-rust)'];
 
 function Panel({ title, sub, children }: { title: string; sub: string; children: ReactNode }) {
     return (
@@ -52,21 +51,26 @@ function SparseNote({ children }: { children: ReactNode }) {
 export function LearningProgressPanel() {
     const { skillProgress } = useMCState();
     const today = getLocalDateString();
-    const since60 = momentumSince(today);
+    const since60 = shiftDate(today, -59);
 
     const momentum = momentumSeries(skillProgress, since60);
     const levelUps = levelUpRows(skillProgress.levelHistory);
+    // Markers outside the 60-day window would pin to the first visible point
+    // and draw on the wrong day — filter them out.
+    const momentumMarkers = levelUps
+        .filter(row => row.date >= since60)
+        .map(row => ({ date: row.date, level: row.level, up: row.level > row.fromLevel }));
     const accuracy = READING_SKILL_IDS.map(skill =>
         weeklyAccuracy(skillProgress.days[skill] ?? [], today));
     const anyAccuracy = accuracy.some(series => series.some(p => p.accuracy !== null));
     const volume = dailyVolume(skillProgress, today);
+    const recentVolume = volume.some(d => d.reading + d.math > 0);
     const games = perGameTotals(skillProgress);
     const words = hardestWords(skillProgress.missedWords);
-    const callout = needsWork(skillProgress, shiftDays(today, -6));
-    const totalAnswers = volume.reduce((sum, d) => sum + d.reading + d.math, 0)
-        || Object.values(skillProgress.days).some(b => b.length > 0);
+    const callout = needsWork(skillProgress, shiftDate(today, -6));
+    const hasAnyPractice = Object.values(skillProgress.days).some(buckets => buckets.length > 0);
 
-    if (!totalAnswers) {
+    if (!hasAnyPractice) {
         return (
             <div style={{ padding: 24, textAlign: 'center' }}>
                 <div style={{ fontSize: 40 }}>📖</div>
@@ -86,7 +90,7 @@ export function LearningProgressPanel() {
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                 <span style={{ fontSize: 15, fontWeight: 900, color: 'var(--mc-text)' }}>📈 Learning Progress</span>
                 <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--mc-text-muted)' }}>
-                    reading level L{skillProgress.readingLevel} · last 60 days · not shown to the kid
+                    reading level L{skillProgress.readingLevel} · last 60 days · parent view (hold the 📈 tab to open)
                 </span>
             </div>
 
@@ -118,7 +122,7 @@ export function LearningProgressPanel() {
                 <Panel title="Reading momentum" sub="daily ups & downs — enough ups trigger a level-up ▲">
                     {momentum.length >= 1 ? (
                         <>
-                            <MomentumChart points={momentum} levelUps={skillProgress.levelHistory.slice(1)} />
+                            <MomentumChart points={momentum} markers={momentumMarkers} />
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
                                 {levelUps.length === 0 && (
                                     <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--mc-text-muted)' }}>
@@ -127,8 +131,8 @@ export function LearningProgressPanel() {
                                 )}
                                 {levelUps.slice(0, 3).map(row => (
                                     <span key={`${row.date}-${row.level}`} style={{ fontSize: 10, fontWeight: 700, color: 'var(--mc-text-muted)' }}>
-                                        → L{row.level} · {row.date}
-                                        {row.daysAtPrev !== null && <> · <b style={{ color: 'var(--mc-text)' }}>{row.daysAtPrev} days at L{row.level > 0 ? row.level - 1 : 0}</b></>}
+                                        {row.level > row.fromLevel ? '▲' : '▼'} L{row.level} · {row.date}
+                                        {row.daysAtPrev !== null && <> · <b style={{ color: 'var(--mc-text)' }}>{row.daysAtPrev} days at L{row.fromLevel}</b></>}
                                         {' '}· {row.correct}/{row.attempts} first-try
                                     </span>
                                 ))}
@@ -146,7 +150,7 @@ export function LearningProgressPanel() {
                             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
                                 {READING_SKILL_IDS.map((skill, i) => (
                                     <span key={skill} style={{ fontSize: 10, fontWeight: 800, color: 'var(--mc-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                        <span style={{ width: 9, height: 9, borderRadius: 3, background: SERIES_TOKENS[i], display: 'inline-block' }} />
+                                        <span style={{ width: 9, height: 9, borderRadius: 3, background: SERIES_COLORS[i], display: 'inline-block' }} />
                                         {SKILL_LABELS[skill]}
                                     </span>
                                 ))}
@@ -158,6 +162,9 @@ export function LearningProgressPanel() {
                 </Panel>
 
                 <Panel title="Practice volume" sub="questions per day, last 14 days">
+                    {!recentVolume && (
+                        <SparseNote>No questions in the last two weeks.</SparseNote>
+                    )}
                     <VolumeChart days={volume} />
                     <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                         <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--mc-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -208,12 +215,3 @@ export function LearningProgressPanel() {
     );
 }
 
-function shiftDays(date: string, days: number): string {
-    const [y, m, d] = date.split('-').map(Number);
-    const t = new Date(Date.UTC(y, m - 1, d + days));
-    return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
-}
-
-function momentumSince(today: string): string {
-    return shiftDays(today, -59);
-}

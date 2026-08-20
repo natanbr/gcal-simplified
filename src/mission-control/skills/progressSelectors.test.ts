@@ -49,9 +49,17 @@ describe('levelUpRows', () => {
             { date: '2026-08-01', level: 2, attempts: 18, correct: 16 },
         ]);
         expect(rows).toEqual([
-            { date: '2026-08-01', level: 2, attempts: 18, correct: 16, daysAtPrev: 19 },
-            { date: '2026-07-13', level: 1, attempts: 5, correct: 5, daysAtPrev: 12 },
+            { date: '2026-08-01', level: 2, fromLevel: 1, attempts: 18, correct: 16, daysAtPrev: 19 },
+            { date: '2026-07-13', level: 1, fromLevel: 0, attempts: 5, correct: 5, daysAtPrev: 12 },
         ]);
+    });
+
+    it('carries the from-level so a demotion is distinguishable', () => {
+        const rows = levelUpRows([
+            { date: '2026-07-01', level: 3, attempts: 0, correct: 0 },
+            { date: '2026-07-20', level: 2, attempts: 15, correct: 4 }, // demotion
+        ]);
+        expect(rows[0]).toMatchObject({ level: 2, fromLevel: 3, daysAtPrev: 19 });
     });
 
     it('yields no rows for a seed-only history', () => {

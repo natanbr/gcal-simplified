@@ -61,9 +61,18 @@ export function QuizOverlay({
 
     // A new question whenever the overlay opens, a dot fills, or a 'found'
     // resolves. Generation happens here (never in render) because the engine's
-    // generator advances session state per call.
+    // generator advances session state per call — and the key-guard makes the
+    // effect idempotent, so StrictMode's dev double-invocation can't burn a
+    // re-queue countdown into a discarded question.
+    const generatedForRef = useRef<string | null>(null);
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            generatedForRef.current = null;
+            return;
+        }
+        const key = `${currentCorrect}:${questionSeq}`;
+        if (generatedForRef.current === key) return;
+        generatedForRef.current = key;
         setQuestion(generator());
         setFeedback(null);
         setDeadChoices([]);
@@ -180,26 +189,27 @@ export function QuizOverlay({
 
                 {/* Cancel — opt-in quizzes only; backing out costs nothing */}
                 {onCancel && (
-                    <button
+                    <motion.button
                         aria-label="Cancel"
+                        whileTap={{ scale: 0.9 }}
                         onClick={onCancel}
                         style={{
                             position: 'absolute',
-                            top: 10,
-                            right: 12,
+                            top: 8,
+                            right: 8,
                             background: 'rgba(255,255,255,0.08)',
                             border: '1.5px solid rgba(148,163,184,0.3)',
-                            borderRadius: 10,
-                            width: 34,
-                            height: 34,
-                            fontSize: 15,
+                            borderRadius: 12,
+                            width: 44,
+                            height: 44,
+                            fontSize: 18,
                             fontWeight: 800,
                             color: 'var(--mc-quiz-text-muted)',
                             cursor: 'pointer',
                         }}
                     >
                         ✕
-                    </button>
+                    </motion.button>
                 )}
 
                 {/* Title */}

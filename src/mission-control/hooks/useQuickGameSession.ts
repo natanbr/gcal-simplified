@@ -8,12 +8,11 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { useMCDispatch } from '../store/useMCStore';
-
-export type QuickGameType = 'snake' | 'blocks' | 'fruits';
+import type { GameId } from '../skills/types';
 
 export function useQuickGameSession() {
     const dispatch = useMCDispatch();
-    const [activeGameType, setActiveGameType] = useState<QuickGameType | null>(null);
+    const [activeGameType, setActiveGameType] = useState<GameId | null>(null);
     const gameStartRef = useRef<string | null>(null);
 
     const handleQuickGameOpen = useCallback(() => {

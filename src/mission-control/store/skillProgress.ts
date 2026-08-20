@@ -86,6 +86,17 @@ function recordMiss(missedWords: Record<string, number>, wordId: string): Record
     return next;
 }
 
+/** A clean first-try success pays one miss back down — without decay, a rough
+ *  first week tops the parent's "hardest words" panel forever. */
+function recordMastery(missedWords: Record<string, number>, wordId: string): Record<string, number> {
+    const count = missedWords[wordId];
+    if (count === undefined) return missedWords;
+    const next = { ...missedWords };
+    if (count <= 1) delete next[wordId];
+    else next[wordId] = count - 1;
+    return next;
+}
+
 /**
  * Applies one answered question. Returns the same `progress` reference when
  * the record is invalid, so the reducer can bail out without churn.
@@ -112,8 +123,10 @@ export function applyQuizAnswer(
     };
 
     const reading = isReadingSkill(record.skill);
-    if (reading && !record.firstTry && record.wordId) {
-        next.missedWords = recordMiss(progress.missedWords, record.wordId);
+    if (reading && record.wordId) {
+        next.missedWords = record.firstTry
+            ? recordMastery(progress.missedWords, record.wordId)
+            : recordMiss(progress.missedWords, record.wordId);
     }
 
     // Only at-level reading answers are promotion evidence.
@@ -172,18 +185,40 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
     return Math.min(max, Math.max(min, Math.round(v)));
 }
 
+const LOCAL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isLocalDate(v: unknown): v is string {
+    return typeof v === 'string' && LOCAL_DATE_PATTERN.test(v);
+}
+
+const GAME_IDS = ['snake', 'blocks', 'fruits'] as const;
+
+/** Rebuilt over the known GameId union with clamped counters — a bare cast
+ *  here once let `byGame: { quiz: "x" }` NaN-poison the per-game chart. */
+function sanitizeByGame(raw: unknown): SkillDayBucket['byGame'] | undefined {
+    if (!isPlainObject(raw)) return undefined;
+    const clean: NonNullable<SkillDayBucket['byGame']> = {};
+    for (const game of GAME_IDS) {
+        const entry = raw[game];
+        if (!isPlainObject(entry)) continue;
+        clean[game] = { a: clampInt(entry.a, 0, 1e6, 0), c: clampInt(entry.c, 0, 1e6, 0) };
+    }
+    return Object.keys(clean).length > 0 ? clean : undefined;
+}
+
 function sanitizeBuckets(raw: unknown): SkillDayBucket[] {
     if (!Array.isArray(raw)) return [];
     const clean: SkillDayBucket[] = [];
     for (const item of raw) {
-        if (!isPlainObject(item) || typeof item.date !== 'string') continue;
+        if (!isPlainObject(item) || !isLocalDate(item.date)) continue;
+        const byGame = sanitizeByGame(item.byGame);
         clean.push({
             date: item.date,
             attempts: clampInt(item.attempts, 0, 1e6, 0),
             firstTry: clampInt(item.firstTry, 0, 1e6, 0),
             offAttempts: clampInt(item.offAttempts, 0, 1e6, 0),
             offFirstTry: clampInt(item.offFirstTry, 0, 1e6, 0),
-            ...(isPlainObject(item.byGame) ? { byGame: item.byGame as SkillDayBucket['byGame'] } : {}),
+            ...(byGame ? { byGame } : {}),
         });
     }
     return clean.slice(-DAY_BUCKET_CAP);
@@ -208,7 +243,7 @@ export function sanitizeSkillProgress(raw: unknown): SkillProgress {
 
     if (Array.isArray(raw.levelHistory)) {
         base.levelHistory = raw.levelHistory
-            .filter((e): e is Record<string, unknown> => isPlainObject(e) && typeof e.date === 'string')
+            .filter((e): e is Record<string, unknown> => isPlainObject(e) && isLocalDate(e.date))
             .map(e => ({
                 date: e.date as string,
                 level: clampInt(e.level, 0, MAX_READING_LEVEL, 0),
@@ -220,7 +255,11 @@ export function sanitizeSkillProgress(raw: unknown): SkillProgress {
 
     if (isPlainObject(raw.missedWords)) {
         for (const [word, count] of Object.entries(raw.missedWords)) {
-            if (typeof count === 'number' && count > 0) base.missedWords[word] = Math.round(count);
+            // clampInt (not a bare typeof check): JSON smuggles Infinity as 1e999,
+            // and an Infinity count is never "coldest", so it could never be evicted.
+            if (typeof count === 'number' && count > 0 && word.length <= 64) {
+                base.missedWords[word] = clampInt(count, 1, 1e6, 1);
+            }
             if (Object.keys(base.missedWords).length >= MISSED_WORDS_CAP) break;
         }
     }

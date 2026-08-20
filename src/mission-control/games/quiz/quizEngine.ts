@@ -11,7 +11,7 @@ import type { Rng } from './reading/readingQuestions';
 
 // The engine is the quiz module's public serving arm — reading/ internals are
 // reachable only through here (guarded by skill-progress-boundaries.test.ts).
-export { generateReadingQuestion, levelSkill, type Rng } from './reading/readingQuestions';
+export { generateReadingQuestion, type Rng } from './reading/readingQuestions';
 
 /** Sampling shares: one level down / current / stretch (+1 or +2). */
 export const DOWN_SHARE = 0.20;
@@ -31,7 +31,8 @@ export const WEIGHTING_LOOKBACK_DAYS = 14;
 
 /** Consecutive first-attempt reading misses that switch the rest of a quiz to math. */
 export const MERCY_MISS_THRESHOLD = 2;
-/** Served questions between a miss and its re-queue. */
+/** Countdown ticked on every served question; the missed word returns as the
+ *  Nth question after the miss (i.e. two other questions come between). */
 export const REQUEUE_AFTER_QUESTIONS = 3;
 
 export interface SampledLevel {

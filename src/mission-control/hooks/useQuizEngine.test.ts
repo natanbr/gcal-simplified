@@ -90,7 +90,7 @@ describe('useQuizEngine', () => {
         expect(result.current.generator().kind).toBe('choice');
     });
 
-    it('re-serves a missed word after exactly three intervening questions, once per session', () => {
+    it('re-serves a missed word as the third question after the miss, once per session', () => {
         const { result } = renderHook(() => useQuizEngine());
         result.current.beginSession('snake');
         vi.spyOn(Math, 'random').mockReturnValue(0.1); // always reading
@@ -118,6 +118,52 @@ describe('useQuizEngine', () => {
         ];
         expect(after.every(q => q.kind === 'choice')).toBe(true);
         expect(after.filter(q => q.wordId === 'dog')).toHaveLength(0);
+    });
+
+    it('steers the mix toward the weaker family, end to end', () => {
+        const today = new Date();
+        const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const bucket = (attempts: number, firstTry: number) =>
+            [{ date: localDate, attempts, firstTry, offAttempts: 0, offFirstTry: 0 }];
+
+        // Reading weak (50%), math strong (100%) → reading share clamps to 0.60.
+        mockState = {
+            skillProgress: {
+                ...createDefaultSkillProgress(),
+                days: {
+                    ...createDefaultSkillProgress().days,
+                    'read-pic-word': bucket(10, 5),
+                    'math-add': bucket(10, 10),
+                },
+            },
+        };
+        const { result, rerender } = renderHook(() => useQuizEngine());
+        result.current.beginSession('snake');
+
+        // 0.55 sits between the base share (0.5) and the weak-reading share
+        // (0.6): with the weighting wired, this roll serves READING. If the
+        // arguments were swapped or the share hardcoded, it would serve math.
+        vi.spyOn(Math, 'random').mockReturnValue(0.55);
+        expect(result.current.generator().kind).toBe('choice');
+
+        // Without evidence, the same roll falls on the math side of the base 0.5.
+        vi.restoreAllMocks();
+        mockState = { skillProgress: createDefaultSkillProgress() };
+        rerender();
+        vi.spyOn(Math, 'random').mockReturnValue(0.55);
+        expect(result.current.generator().kind).toBe('numeric');
+    });
+
+    it('beginSession resets the leftover difficulty from the previous game', () => {
+        const { result } = renderHook(() => useQuizEngine());
+        result.current.beginSession('snake');
+        result.current.setDifficulty(3, 3);
+        vi.spyOn(Math, 'random').mockReturnValue(0.99); // always math
+        expect(result.current.generator().level).toBe(3);
+
+        // Closing snake and opening blocks must not inherit snake's level 3.
+        result.current.beginSession('blocks');
+        expect(result.current.generator().level).toBe(0);
     });
 
     it('beginSession resets the miss queue and mercy state', () => {

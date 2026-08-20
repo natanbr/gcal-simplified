@@ -14,6 +14,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { useRemoteStatus } from '../contexts/RemoteStatusContext';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
 import { LearningProgressPanel } from './progress/LearningProgressPanel';
+import { useLongPress } from '../hooks/useLongPress';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -210,16 +211,22 @@ function AutoReturnStepper({
 
 type SettingsTabId = 'time' | 'tasks' | 'rewards' | 'remote' | 'privileges' | 'learning';
 
-function SettingsTab({ id, label, activeTab, onSelect }: {
+const noop = () => {};
+
+function SettingsTab({ id, label, activeTab, onSelect, holdMs }: {
     id: SettingsTabId;
     label: string;
     activeTab: SettingsTabId;
     onSelect: (id: SettingsTabId) => void;
+    /** Hold-to-open: a short tap does nothing — the deliberate house pattern
+     *  for affordances hidden from the child (see the GlobalBank admin hold). */
+    holdMs?: number;
 }) {
     const active = activeTab === id;
+    const hold = useLongPress(noop, () => onSelect(id), holdMs ?? 0);
     return (
         <button
-            onClick={() => onSelect(id)}
+            {...(holdMs ? hold : { onClick: () => onSelect(id) })}
             style={{
                 textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
                 background: active ? 'rgba(165,125,255,0.15)' : 'transparent',
@@ -331,7 +338,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                 <SettingsTab id="rewards" label="🎁 Rewards" activeTab={activeTab} onSelect={setActiveTab} />
                                 <SettingsTab id="remote" label="📱 Remote" activeTab={activeTab} onSelect={setActiveTab} />
                                 <SettingsTab id="privileges" label="🛡️ Privileges" activeTab={activeTab} onSelect={setActiveTab} />
-                                <SettingsTab id="learning" label="📈 Learning" activeTab={activeTab} onSelect={setActiveTab} />
+                                <SettingsTab id="learning" label="📈 Learning" activeTab={activeTab} onSelect={setActiveTab} holdMs={600} />
                             </div>
 
                             {/* Content Area */}

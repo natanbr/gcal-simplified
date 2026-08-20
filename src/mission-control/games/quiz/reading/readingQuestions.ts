@@ -80,12 +80,6 @@ const L5_TARGETS = WORDS.filter(w =>
     !VOWELS.includes(w.word[0]) &&
     !VOWELS.includes(w.word[2]));
 
-export function levelSkill(level: number): ReadingSkillId {
-    if (level <= 1 || level >= 6) return 'read-word-pic';
-    if (level <= 3) return 'read-pic-word';
-    return 'read-missing-letter';
-}
-
 interface GenerateOptions {
     /** Serve THIS word (the miss re-queue). */
     forceWordId?: string;
@@ -169,12 +163,15 @@ function pictureToWord(level: number, rng: Rng, opts: GenerateOptions): ChoiceQu
     } else if (minimal && MINIMAL_PAIRS[target.word]) {
         words = shuffle(MINIMAL_PAIRS[target.word], rng).slice(0, 3);
     } else {
-        // Clearly-different words: distinct initials, from the short pool.
+        // Clearly-different words: distinct initials, from the short pool —
+        // and never a word whose PICTURE could be the prompt too ("ship" as a
+        // text distractor under a ⛵ prompt is a right answer marked wrong).
         words = [];
         const used = new Set([target.word[0]]);
         for (const w of shuffle(SHORT, rng)) {
             if (words.length === 3) break;
             if (w.word === target.word || used.has(w.word[0])) continue;
+            if (clash(w.word, target.word)) continue;
             used.add(w.word[0]);
             words.push(w.word);
         }

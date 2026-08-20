@@ -38,10 +38,6 @@ export function generateMultiplicationQuestion(maxFactor: number = MAX_MULT_FACT
     };
 }
 
-export function generateLevelQuestion(level: number, rng: Rng = Math.random): NumericQuestionCore {
-    return generateMathQuestion(level, rng);
-}
-
 /**
  * Level-mixed math question with its op attributed — the engine needs to know
  * WHICH skill it just served, which the plain level roll can't tell it.

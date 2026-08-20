@@ -6,7 +6,7 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { generateReadingQuestion, levelSkill, type Rng } from './readingQuestions';
+import { generateReadingQuestion, type Rng } from './readingQuestions';
 import { WORDS, CONFUSABLE_EMOJI_GROUPS } from './wordBank';
 import { MINIMAL_PAIRS, LONG_WORD_DISTRACTORS } from './minimalPairs';
 import type { ChoiceQuizQuestion } from '../types';
@@ -78,6 +78,14 @@ describe('generateReadingQuestion — level contracts', () => {
     });
 
     it('L2: emoji prompt, word choices with distinct first letters', () => {
+        const confusableWith = new Map<string, Set<string>>();
+        for (const group of CONFUSABLE_EMOJI_GROUPS) {
+            for (const member of group) {
+                const set = confusableWith.get(member) ?? new Set<string>();
+                for (const other of group) if (other !== member) set.add(other);
+                confusableWith.set(member, set);
+            }
+        }
         for (const q of draws(2)) {
             expectStructure(q, 2);
             expect(q.skill).toBe('read-pic-word');
@@ -87,6 +95,14 @@ describe('generateReadingQuestion — level contracts', () => {
             expect(q.choices[q.correctIndex].label).toBe(q.wordId);
             const initials = q.choices.map(c => c.label[0]);
             expect(new Set(initials).size, 'L2 choices must not share initials').toBe(4);
+            // Fairness: a "ship" distractor under a ⛵ prompt is a right answer
+            // marked wrong — distractors must not name the prompt's picture.
+            for (const choice of q.choices) {
+                expect(
+                    confusableWith.get(q.wordId)?.has(choice.label) ?? false,
+                    `'${choice.label}' also names the '${q.wordId}' picture`,
+                ).toBe(false);
+            }
         }
     });
 
@@ -180,9 +196,4 @@ describe('generateReadingQuestion — level contracts', () => {
         expect(generateReadingQuestion(99, seeded(1)).level).toBe(6);
     });
 
-    it('maps levels to their skills', () => {
-        expect(levelSkill(0)).toBe('read-word-pic');
-        expect(levelSkill(3)).toBe('read-pic-word');
-        expect(levelSkill(5)).toBe('read-missing-letter');
-    });
 });

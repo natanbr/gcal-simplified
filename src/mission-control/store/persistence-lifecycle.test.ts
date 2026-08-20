@@ -157,3 +157,50 @@ describe('restart lifecycle', () => {
         });
     });
 });
+
+describe('skillProgress hydration round-trip', () => {
+    beforeEach(() => {
+        localStorage.removeItem(STORAGE_KEY);
+    });
+
+    it('repairs a partial slice on load, and the next answer does not crash', () => {
+        // A hand-edited / version-skewed / interrupted-write blob: readingLevel
+        // present, every sub-structure missing. Without the sanitize wiring the
+        // bare spread restores this wholesale and the first RECORD_QUIZ_ANSWER
+        // throws on progress.days[skill].
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            skillProgress: { readingLevel: 3 },
+        }));
+        const reloaded = loadPersistedState();
+
+        expect(reloaded.skillProgress.readingLevel).toBe(3);
+        expect(reloaded.skillProgress.days['read-pic-word']).toEqual([]);
+        expect(reloaded.skillProgress.window).toEqual([]);
+
+        const next = mcReducer(reloaded, {
+            type: 'RECORD_QUIZ_ANSWER',
+            skill: 'read-pic-word',
+            level: 3,
+            atLevel: true,
+            firstTry: true,
+            wordId: 'dog',
+            gameId: 'snake',
+            timestamp: new Date().toISOString(),
+        });
+        expect(next.skillProgress.days['read-pic-word']).toHaveLength(1);
+        expect(next.skillProgress.days['read-pic-word'][0].attempts).toBe(1);
+    });
+
+    it('clamps a hostile readingLevel and a smuggled-Infinity miss count', () => {
+        // Raw JSON on purpose: JSON.parse('1e999') yields Infinity (stringify
+        // would null it), which a bare typeof check waves through — and an
+        // Infinity count is never "coldest", so it could never be evicted.
+        localStorage.setItem(
+            STORAGE_KEY,
+            '{"skillProgress":{"readingLevel":99,"missedWords":{"ship":1e999}}}',
+        );
+        const reloaded = loadPersistedState();
+        expect(reloaded.skillProgress.readingLevel).toBe(6);
+        expect(Number.isFinite(reloaded.skillProgress.missedWords['ship'])).toBe(true);
+    });
+});

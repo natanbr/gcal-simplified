@@ -50,6 +50,10 @@ Real regressions found in `gcal-simplified` and the pattern that fixed each one.
 
 **Action:**
 1. Use a lightweight O(1) projection (`deriveSnapshots`) keyed on action type instead of re-running the reducer.
+   *(Correction 2026-08-20: this overstated the fix — `deriveSnapshots` still calls the full
+   `mcReducer` once per dispatch, before the switch. `createLogEntry` now early-returns `null` for an
+   `UNLOGGED_ACTIONS` set before that speculative run; add any new high-frequency action type — the
+   first was `RECORD_QUIZ_ANSWER` — to that set, or every dispatch of it pays the reducer twice.)*
 2. Restrict invariant syncing (`syncCreamTask`) inside the reducer to actions that actually touch the relevant slices.
 3. Put transient status in a dedicated context (`RemoteStatusContext`), not root state.
 4. Cap logs at 200 entries in the reducer; use a timestamp-mapped `seenIds` cleanup in `RemoteBridge` with a `.destroy()` called from test `afterEach`.
@@ -86,3 +90,18 @@ Real regressions found in `gcal-simplified` and the pattern that fixed each one.
 **Learning:** Putting mutable game state in the dependency array of a `useCallback`/`useEffect` driving `requestAnimationFrame` tears down and restarts the loop on every state change — visible lag.
 
 **Action:** Store state in a ref (`gameStateRef.current = gameState`) and read from the ref inside a single stable rAF loop with `[]` dependencies.
+
+## 2026-08-20 — Every timestamped dispatch is a mood-accrual tick, and was a broadcast trigger
+
+**Learning:** `useMCDispatch` stamps every action with a timestamp, and `mcReducer` runs
+`applyBehaviorSync` for every timestamped action. During active hours every mood level has a
+nonzero rate, so *any* dispatch nudges `behaviorProgress` — and `behaviorProgress` sat in
+`useRemoteSync`'s dependency array, so every dispatch (including, newly, every answered quiz
+question) scheduled a Supabase broadcast. A high-frequency action multiplies whatever is keyed
+on "state changed at all".
+
+**Action:** `behaviorProgress` was removed from the sync dependency list (it still rides each
+broadcast's payload — the phone sees it at the next real change). When adding any per-event
+action, check three fan-outs: the speculative reducer run in `createLogEntry` (UNLOGGED_ACTIONS),
+the remote-sync dependency list, and the persisted-blob size. `skill-progress-boundaries.test.ts`
+pins the second for `skillProgress`.

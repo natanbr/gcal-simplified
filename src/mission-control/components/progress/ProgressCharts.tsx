@@ -8,7 +8,16 @@
 // ============================================================
 
 import type { MomentumPoint, VolumeDay, WeeklyAccuracyPoint } from '../../skills/progressSelectors';
-import type { LevelHistoryEntry } from '../../skills/types';
+
+/** One source of truth for series order — the legend must never lie about the lines. */
+export const SERIES_COLORS = ['var(--mc-chart-violet)', 'var(--mc-chart-teal)', 'var(--mc-chart-rust)'] as const;
+
+export interface MomentumMarker {
+    date: string;
+    level: number;
+    /** false = demotion — rendered ▼, never a celebratory ▲. */
+    up: boolean;
+}
 
 const GRID = 'rgba(130,120,200,0.22)';
 const W = 320;
@@ -25,21 +34,21 @@ function y(value: number, min: number, max: number): number {
     return H - PAD.bottom - ((value - min) / span) * (H - PAD.top - PAD.bottom);
 }
 
-/** The stock-style cumulative line with a ▲ marker per level-up. */
-export function MomentumChart({ points, levelUps }: {
+/** The stock-style cumulative line with a ▲/▼ marker per level change. */
+export function MomentumChart({ points, markers: markerInput }: {
     points: MomentumPoint[];
-    levelUps: readonly LevelHistoryEntry[];
+    markers: readonly MomentumMarker[];
 }) {
     const min = Math.min(0, ...points.map(p => p.cum));
     const max = Math.max(1, ...points.map(p => p.cum));
     const coords = points.map((p, i) => `${x(i, points.length)},${y(p.cum, min, max)}`);
 
-    const markers = levelUps
-        .map(entry => {
-            const index = points.findIndex(p => p.date >= entry.date);
-            return index === -1 ? null : { index, level: entry.level };
+    const markers = markerInput
+        .map(marker => {
+            const index = points.findIndex(p => p.date >= marker.date);
+            return index === -1 ? null : { index, level: marker.level, up: marker.up };
         })
-        .filter((m): m is { index: number; level: number } => m !== null);
+        .filter((m): m is { index: number; level: number; up: boolean } => m !== null);
 
     return (
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Reading momentum: cumulative daily net of first-try successes minus misses, with level-up markers">
@@ -61,11 +70,12 @@ export function MomentumChart({ points, levelUps }: {
             {markers.map(marker => {
                 const px = x(marker.index, points.length);
                 const py = y(points[marker.index].cum, min, max);
+                const tone = marker.up ? 'var(--mc-chart-teal)' : 'var(--mc-chart-rust)';
                 return (
                     <g key={`${marker.index}-${marker.level}`}>
-                        <circle cx={px} cy={py} r={3.5} style={{ fill: 'var(--mc-chart-teal)' }} />
-                        <text x={px} y={py - 8} textAnchor="middle" fontSize={9} fontWeight={800} style={{ fill: 'var(--mc-chart-teal)' }}>
-                            ▲L{marker.level}
+                        <circle cx={px} cy={py} r={3.5} style={{ fill: tone }} />
+                        <text x={px} y={py - 8} textAnchor="middle" fontSize={11} fontWeight={800} style={{ fill: tone }}>
+                            {marker.up ? '▲' : '▼'}L{marker.level}
                         </text>
                     </g>
                 );
@@ -74,8 +84,6 @@ export function MomentumChart({ points, levelUps }: {
     );
 }
 
-const SERIES_COLORS = ['var(--mc-chart-violet)', 'var(--mc-chart-teal)', 'var(--mc-chart-rust)'];
-
 /** Weekly at-level first-try accuracy, one line per reading skill. */
 export function AccuracyChart({ series }: { series: WeeklyAccuracyPoint[][] }) {
     const count = series[0]?.length ?? 0;
@@ -83,7 +91,7 @@ export function AccuracyChart({ series }: { series: WeeklyAccuracyPoint[][] }) {
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Weekly first-try accuracy per reading skill">
             <line x1={PAD.left} y1={y(1, 0, 1)} x2={W - PAD.right} y2={y(1, 0, 1)} style={{ stroke: GRID }} strokeWidth={1} strokeDasharray="3 4" />
             <line x1={PAD.left} y1={H - PAD.bottom} x2={W - PAD.right} y2={H - PAD.bottom} style={{ stroke: GRID }} strokeWidth={1} />
-            <text x={PAD.left} y={y(1, 0, 1) - 3} fontSize={8} style={{ fill: 'var(--mc-text-muted)' }}>100%</text>
+            <text x={PAD.left} y={y(1, 0, 1) - 3} fontSize={11} style={{ fill: 'var(--mc-text-muted)' }}>100%</text>
             {series.map((points, s) => {
                 const visible = points
                     .map((p, i) => ({ ...p, i }))
