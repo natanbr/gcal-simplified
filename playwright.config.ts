@@ -15,10 +15,11 @@ export default defineConfig({
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
-    // Each test launches a real fullscreen Electron instance and they all share
-    // the same userData (config.json, localStorage). Parallel instances race on
-    // that shared state (settings-power even writes it), causing phantom
-    // failures — so run the Electron suite one app at a time.
+    // The Mission Control specs and week-display-customization now get a
+    // throwaway userData directory each (e2e/helpers/userDataDir.ts) and no
+    // longer race — but the 8 calendar specs still share the real profile, and
+    // parallel instances contend on the single-instance lock and clobber
+    // config.json. Until those are isolated too, one app at a time.
     workers: 1,
     // `open: 'never'` matters as much as the offscreen windows above: the html
     // reporter's default is 'on-failure', so any red run launches a browser at

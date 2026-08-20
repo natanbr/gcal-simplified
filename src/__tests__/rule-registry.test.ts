@@ -197,12 +197,12 @@ const REGISTRY: Rule[] = [
         defence: 'The file was silently triplicated for months and the three copies drifted — a whole feature section survived only in copy 1 while the newest changelog was in copy 3. Nothing about a duplicated markdown file breaks a build, which is why it needs a test.',
     },
     {
-        rule: 'E2E specs restore the real userData state they touch',
-        source: 'CLAUDE.md → Testing → E2E is a weak signal here',
+        rule: 'E2E specs isolate their userData, or restore what they write to the real one',
+        source: 'CLAUDE.md → Testing → userData isolation',
         status: 'guarded',
         guard: 'src/__tests__/e2e-state-isolation.test.ts',
-        verifiedRedBy: 'import `test` from @playwright/test in an MC spec instead of `mcTest as test` from helpers/mcApp',
-        defence: 'Containment, not isolation: the suite still runs against the real userData directory. A per-launch userData dir is the proper fix and needs a seeded auth fixture for the calendar specs first.',
+        verifiedRedBy: 'drop --user-data-dir from launchMC; move removeUserData out of the fixture teardown; import `test` from @playwright/test in an MC spec; strip the restoreConfig call from settings-power',
+        defence: 'Eliminated for the 5 specs that can isolate (verified: 24 tests, zero writes to the real profile). Contained by snapshot/restore for the 8 calendar specs that still need real Google credentials — mocking auth:check as week-display-customization does is what would finish the job.',
     },
 
     // ── Manual ───────────────────────────────────────────────────────────────

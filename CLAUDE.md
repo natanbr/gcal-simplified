@@ -136,7 +136,7 @@ Guards that enforce the above (fail `npm run test:unit`): `src/__tests__/timer-r
 ## Testing
 
 - **Unit tests** (Vitest + jsdom): colocated `*.test.ts(x)` next to source, plus some `__tests__/` folders. Covers `src/**` and `electron/**`. Global setup: `src/test/setup.ts` (jest-dom + an `IntersectionObserver` stub — that is the *only* global mock).
-- **E2E tests** (Playwright): `e2e/*.spec.ts` — runs sequentially (`workers: 1`) because Electron instances share userData directory. 60s timeout per test.
+- **E2E tests** (Playwright): `e2e/*.spec.ts` — 60s timeout per test. Runs sequentially (`workers: 1`) because the specs that still use the real userData directory contend on the single-instance lock; the isolated ones no longer do.
 - **Fixtures**: there is no `src/__mocks__/` or `e2e/fixtures/`. The only shared fixture is `src/mock/events.ts`. Create a fixtures location deliberately rather than assuming one exists.
 - **TDD is the default flow** for features and bugs: write the failing test first, confirm it is RED for the right reason, then implement. See `/task` and `/bug`.
 - **Four categories, not a coverage number.** Six real bugs shipped past 639 green tests because the
@@ -164,10 +164,16 @@ Guards that enforce the above (fail `npm run test:unit`): `src/__tests__/timer-r
   and a new violation fails outright. Raising a baseline is allowed but must be an explicit edit with
   a reason — that is the reviewable act. **The raw-hex rule needs a human decision:** the codebase
   does not actually follow it, so either the rule changes or the cleanup gets scheduled.
-- **E2E is a weak signal here.** `npm run test:run` never rebuilds (always `npx tsc && npx vite build`
-  first), it runs against your real userData, and it is non-deterministic under load. Compare the
+- **E2E: rebuild first, and mind which profile a spec uses.** `npm run test:run` never rebuilds —
+  always `npx tsc && npx vite build` first, or you are testing a months-old binary. Compare the
   *set* of failing specs to a baseline, never the count. Windows run offscreen by default;
-  `E2E_HEADED=1` to watch.
+  `E2E_HEADED=1` to watch, `npx playwright show-report` for the report (it no longer auto-opens).
+- **userData isolation.** The 4 Mission Control specs and `week-display-customization` get a
+  throwaway profile per launch (`e2e/helpers/userDataDir.ts`) — they cannot touch your real state.
+  The other 8 calendar specs still need real Google credentials, so they run against your real
+  userData and must restore anything they write (`e2e/helpers/appConfig.ts`). Giving them the
+  `auth:check` mocking treatment `week-display-customization` already has is what would finish the
+  job. Guarded by `src/__tests__/e2e-state-isolation.test.ts`.
 - **`node scripts/verify-single-instance.mjs`** after any change to `main.ts` bootstrap — the lock is
   an OS guarantee that no unit test can verify.
 
