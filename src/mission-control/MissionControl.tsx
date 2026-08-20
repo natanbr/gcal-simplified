@@ -24,8 +24,10 @@ import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
 import { BlocksGameOverlay } from './games/blocks/BlocksGameOverlay';
 import { FruitMergeGameOverlay } from './games/fruits/FruitMergeGameOverlay';
 import { GameSelectorOverlay } from './components/GameSelectorOverlay';
+import { RemoteIndicator } from './components/RemoteIndicator';
 import { useMCDispatch, useMCState } from './store/useMCStore.tsx';
-import { RemoteStatusProvider, useRemoteStatus } from './contexts/RemoteStatusContext';
+import { RemoteStatusProvider } from './contexts/RemoteStatusContext';
+import { useQuickGameSession } from './hooks/useQuickGameSession';
 import './styles/mc.css';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
@@ -33,46 +35,13 @@ interface MCLayoutProps {
   readonly onBackToCalendar?: () => void;
 }
 
-function RemoteIndicator() {
-  const status = useRemoteStatus();
-  const isOnline = status === 'online';
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        background: 'rgba(255, 255, 255, 0.03)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: 12,
-        padding: '6px 12px',
-        fontSize: 13,
-        fontWeight: 800,
-        color: 'var(--mc-text-muted)',
-      }}
-    >
-      <span
-        className={isOnline ? 'mc-anim-remote-pulse' : ''}
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          backgroundColor: isOnline ? '#10B981' : '#EF4444',
-          boxShadow: isOnline ? '0 0 8px rgba(16, 185, 129, 0.8)' : 'none',
-        }}
-      />
-      <span style={{ color: 'var(--mc-text)' }}>Remote</span>
-    </div>
-  );
-}
-
 function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const state    = useMCState();
   const dispatch  = useMCDispatch();
-  
+
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const snakeGameStartRef = useRef<string | null>(null);
+  const { activeGameType, setActiveGameType, handleQuickGameOpen, handleQuickGameClose } =
+    useQuickGameSession();
 
   // Refs to each pedestal DOM element for drop-zone hit testing
   const bankRef = useRef<HTMLDivElement | null>(null);
@@ -93,7 +62,6 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   }, []);
 
   const [showCheatTrap, setShowCheatTrap] = useState(false);
-  const [activeGameType, setActiveGameType] = useState<'snake' | 'blocks' | 'fruits' | null>(null);
   const cheatTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -114,48 +82,6 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
     cheatTimerRef.current = setTimeout(() => {
       setShowCheatTrap(false);
     }, 5000);
-  }, [dispatch]);
-
-  const handleQuickGameOpen = useCallback(() => {
-    snakeGameStartRef.current = new Date().toISOString();
-    dispatch({ type: 'START_GAME' });
-    dispatch({
-      type: 'ADD_LOG',
-      log: {
-        id: `game-start-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        icon: '🕹️',
-        message: 'Quick Game started',
-        type: 'reward',
-        colorKey: 'system',
-      },
-    });
-  }, [dispatch]);
-
-  const handleQuickGameClose = useCallback((score: number) => {
-    const startedAt = snakeGameStartRef.current;
-    const endedAt = new Date().toISOString();
-    let durationLabel = '';
-    if (startedAt) {
-      const durationMs = new Date(endedAt).getTime() - new Date(startedAt).getTime();
-      const mins = Math.floor(durationMs / 60000);
-      const secs = Math.floor((durationMs % 60000) / 1000);
-      durationLabel = mins > 0 ? ` (${mins}m ${secs}s)` : ` (${secs}s)`;
-    }
-    dispatch({ type: 'END_GAME' });
-    dispatch({
-      type: 'ADD_LOG',
-      log: {
-        id: `game-end-${Date.now()}`,
-        timestamp: endedAt,
-        icon: '🏁',
-        message: `Quick Game ended — Score: ${score}${durationLabel}`,
-        type: 'reward',
-        colorKey: 'system',
-      },
-    });
-    snakeGameStartRef.current = null;
-    setActiveGameType(null);
   }, [dispatch]);
 
   return (
