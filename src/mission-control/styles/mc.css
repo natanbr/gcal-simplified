@@ -57,6 +57,24 @@
   --mc-coin-shadow:
     0 2px 0 var(--mc-coin-gold-dark) inset, 0 -1px 0 rgba(0, 0, 0, 0.08) inset,
     0 3px 8px rgba(200, 155, 16, 0.35);
+
+  /* Quiz surface — the games' dark-slate card (QuizOverlay + its panels).
+     A deliberate second world inside Mission Control: the games are dark. */
+  --mc-quiz-surface-hi: #1e293b;
+  --mc-quiz-surface-lo: #0f172a;
+  --mc-quiz-text: #f8fafc;
+  --mc-quiz-text-soft: #e2e8f0;
+  --mc-quiz-text-muted: #94a3b8;
+  --mc-quiz-text-dim: #475569;
+  --mc-quiz-correct: #4ade80;
+  --mc-quiz-wrong: #ef4444;
+
+  /* Chart series — parent Learning Progress view. Deliberately darker than
+     the pastel accents: a 2px polyline in --mc-purple is ~2:1 against white
+     and unreadable as data. CVD-validated triple (deutan ΔE ≥ 10). */
+  --mc-chart-violet: #6d54c8;
+  --mc-chart-teal: #0a9d83;
+  --mc-chart-rust: #c25a35;
 }
 
 /* ---- Reset for MC root ---- */

@@ -65,8 +65,6 @@ const RAW_HEX_BASELINE: Record<string, number> = {
     'src/mission-control/games/fruits/FruitMergeCanvas.tsx': 4,
     'src/mission-control/games/fruits/types.ts': 22,
     'src/mission-control/games/quiz/Fireworks.tsx': 10,
-    'src/mission-control/games/quiz/NumpadButton.tsx': 1,
-    'src/mission-control/games/quiz/QuizOverlay.tsx': 11,
     'src/mission-control/games/snake/SnakeCanvas.tsx': 5,
     'src/mission-control/games/snake/types.ts': 13,
 };
