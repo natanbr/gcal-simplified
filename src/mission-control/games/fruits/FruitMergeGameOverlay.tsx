@@ -53,7 +53,10 @@ export function FruitMergeGameOverlay({ open, onClose, engine }: FruitMergeGameO
         if (!open) return;
         const handler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                if (gameState.phase === 'selecting-delete') {
+                // ESC peels one layer, same as the visible ✕ — from the delete
+                // QUIZ it must back out of the delete, never forfeit the paid
+                // game session.
+                if (gameState.phase === 'selecting-delete' || gameState.phase === 'quiz-delete') {
                     cancelDeleteMode();
                 } else {
                     handleClose();

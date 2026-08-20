@@ -111,13 +111,23 @@ describe('applyQuizAnswer — day buckets', () => {
 });
 
 describe('applyQuizAnswer — missed words', () => {
-    it('counts first-attempt misses per word', () => {
+    it('counts first-attempt misses per word, and successes pay them back down', () => {
         let p = createDefaultSkillProgress();
         p = applyQuizAnswer(p, answer({ firstTry: false, wordId: 'ship' }), DATE).progress;
         p = applyQuizAnswer(p, answer({ firstTry: false, wordId: 'ship' }), DATE).progress;
-        p = applyQuizAnswer(p, answer({ firstTry: true, wordId: 'ship' }), DATE).progress;
-
         expect(p.missedWords).toEqual({ ship: 2 });
+
+        // Mastery decay: a clean first try decrements; at zero the word drops
+        // off the "hardest words" list instead of haunting it forever.
+        p = applyQuizAnswer(p, answer({ firstTry: true, wordId: 'ship' }), DATE).progress;
+        expect(p.missedWords).toEqual({ ship: 1 });
+        p = applyQuizAnswer(p, answer({ firstTry: true, wordId: 'ship' }), DATE).progress;
+        expect(p.missedWords).toEqual({});
+
+        // A success on a never-missed word changes nothing.
+        const before = p.missedWords;
+        p = applyQuizAnswer(p, answer({ firstTry: true, wordId: 'dog' }), DATE).progress;
+        expect(p.missedWords).toBe(before);
     });
 
     it('caps the missed-words map by evicting the smallest count', () => {
@@ -260,13 +270,40 @@ describe('sanitizeSkillProgress — persisted-blob repair (lifecycle)', () => {
 
     it('drops unknown skill keys and caps oversized day arrays', () => {
         const oversized = Array.from({ length: DAY_BUCKET_CAP + 40 }, (_, i) => ({
-            date: `d${i}`, attempts: 1, firstTry: 1, offAttempts: 0, offFirstTry: 0,
+            date: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`,
+            attempts: 1, firstTry: 1, offAttempts: 0, offFirstTry: 0,
         }));
         const repaired = sanitizeSkillProgress({
             days: { 'read-word-pic': oversized, 'skill-from-the-future': [{ date: 'x' }] },
         });
         expect(repaired.days['read-word-pic']).toHaveLength(DAY_BUCKET_CAP);
         expect('skill-from-the-future' in repaired.days).toBe(false);
+    });
+
+    it('rebuilds byGame over known games only, with clamped counters', () => {
+        const repaired = sanitizeSkillProgress({
+            days: {
+                'read-word-pic': [{
+                    date: '2026-08-19', attempts: 2, firstTry: 1, offAttempts: 0, offFirstTry: 0,
+                    byGame: { snake: { a: 'junk', c: 2 }, quiz: { a: 5, c: 5 }, blocks: 'garbage' },
+                }],
+            },
+        });
+        expect(repaired.days['read-word-pic'][0].byGame).toEqual({ snake: { a: 0, c: 2 } });
+    });
+
+    it('rejects malformed dates, smuggled Infinity counts, and oversized word keys', () => {
+        const repaired = sanitizeSkillProgress({
+            days: { 'read-word-pic': [{ date: 'x'.repeat(100000), attempts: 1, firstTry: 1, offAttempts: 0, offFirstTry: 0 }] },
+            levelHistory: [{ date: 'not-a-date', level: 2 }],
+            missedWords: { ship: Infinity, ['w'.repeat(500)]: 3, dog: 2 },
+        });
+        expect(repaired.days['read-word-pic']).toEqual([]);
+        expect(repaired.levelHistory).toEqual([]);
+        // Infinity clamps to a finite value (it could otherwise never be evicted).
+        expect(Number.isFinite(repaired.missedWords['ship'])).toBe(true);
+        expect(Object.keys(repaired.missedWords).some(k => k.length > 64)).toBe(false);
+        expect(repaired.missedWords['dog']).toBe(2);
     });
 
     it('filters junk out of the window and level history', () => {

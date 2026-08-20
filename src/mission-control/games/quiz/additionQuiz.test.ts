@@ -3,7 +3,7 @@ import {
     generateAdditionQuestion,
     generateSubtractionQuestion,
     generateMultiplicationQuestion,
-    generateLevelQuestion,
+    generateMathQuestion,
 } from './additionQuiz';
 
 describe('generateAdditionQuestion', () => {
@@ -165,14 +165,14 @@ describe('generateMultiplicationQuestion', () => {
     });
 });
 
-describe('generateLevelQuestion', () => {
+describe('generateMathQuestion', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
     it('returns a valid question with text and numeric answer for every level', () => {
         for (let level = 0; level <= 4; level++) {
-            const q = generateLevelQuestion(level);
+            const q = generateMathQuestion(level);
             expect(typeof q.text).toBe('string');
             expect(typeof q.answer).toBe('number');
             expect(q.text).toMatch(/= \?$/);
@@ -181,7 +181,7 @@ describe('generateLevelQuestion', () => {
 
     it('level 0 produces only addition with sum <= 10', () => {
         for (let i = 0; i < 50; i++) {
-            const q = generateLevelQuestion(0);
+            const q = generateMathQuestion(0);
             expect(q.text).toContain('+');
             expect(q.text).not.toContain('-');
             expect(q.text).not.toContain('×');
@@ -193,7 +193,7 @@ describe('generateLevelQuestion', () => {
 
     it('negative levels are treated as level 0', () => {
         for (let i = 0; i < 20; i++) {
-            const q = generateLevelQuestion(-1);
+            const q = generateMathQuestion(-1);
             expect(q.text).toContain('+');
             expect(q.answer).toBeLessThanOrEqual(10);
         }
@@ -201,19 +201,19 @@ describe('generateLevelQuestion', () => {
 
     it('level 1 dispatches to addition when random < 0.5', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.1);
-        const q = generateLevelQuestion(1);
+        const q = generateMathQuestion(1);
         expect(q.text).toContain('+');
     });
 
     it('level 1 dispatches to subtraction when random >= 0.5', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.7);
-        const q = generateLevelQuestion(1);
+        const q = generateMathQuestion(1);
         expect(q.text).toContain('-');
     });
 
     it('level 1 only produces + or - operators', () => {
         for (let i = 0; i < 50; i++) {
-            const q = generateLevelQuestion(1);
+            const q = generateMathQuestion(1);
             const hasPlus = q.text.includes('+');
             const hasMinus = q.text.includes('-');
             expect(hasPlus || hasMinus).toBe(true);
@@ -223,14 +223,14 @@ describe('generateLevelQuestion', () => {
 
     it('level 1 addition answers do not exceed 20', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.0);
-        const q = generateLevelQuestion(1);
+        const q = generateMathQuestion(1);
         expect(q.text).toContain('+');
         expect(q.answer).toBeLessThanOrEqual(20);
     });
 
     it('level 1 subtraction operands do not exceed 15', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.9);
-        const q = generateLevelQuestion(1);
+        const q = generateMathQuestion(1);
         expect(q.text).toContain('-');
         const match = q.text.match(/^(\d+) - (\d+) = \?$/);
         expect(Number(match![1])).toBeLessThanOrEqual(15);
@@ -238,50 +238,50 @@ describe('generateLevelQuestion', () => {
 
     it('level 2 dispatches to addition when roll < 0.35', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.1);
-        const q = generateLevelQuestion(2);
+        const q = generateMathQuestion(2);
         expect(q.text).toContain('+');
     });
 
     it('level 2 dispatches to subtraction when 0.35 <= roll < 0.7', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.5);
-        const q = generateLevelQuestion(2);
+        const q = generateMathQuestion(2);
         expect(q.text).toContain('-');
     });
 
     it('level 2 dispatches to multiplication when roll >= 0.7', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.8);
-        const q = generateLevelQuestion(2);
+        const q = generateMathQuestion(2);
         expect(q.text).toContain('×');
     });
 
     it('level 3 dispatches to addition when roll < 0.3', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.1);
-        const q = generateLevelQuestion(3);
+        const q = generateMathQuestion(3);
         expect(q.text).toContain('+');
     });
 
     it('level 3 dispatches to subtraction when 0.3 <= roll < 0.55', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.4);
-        const q = generateLevelQuestion(3);
+        const q = generateMathQuestion(3);
         expect(q.text).toContain('-');
     });
 
     it('level 3 dispatches to multiplication when roll >= 0.55', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.9);
-        const q = generateLevelQuestion(3);
+        const q = generateMathQuestion(3);
         expect(q.text).toContain('×');
     });
 
     it('level 3+ uses the same distribution as level 3', () => {
         vi.spyOn(Math, 'random').mockReturnValueOnce(0.9);
-        const q = generateLevelQuestion(5);
+        const q = generateMathQuestion(5);
         expect(q.text).toContain('×');
     });
 
     it('level question answers are always correct', () => {
         for (let level = 0; level <= 3; level++) {
             for (let i = 0; i < 20; i++) {
-                const q = generateLevelQuestion(level);
+                const q = generateMathQuestion(level);
                 const addMatch = q.text.match(/^(\d+) \+ (\d+) = \?$/);
                 const subMatch = q.text.match(/^(\d+) - (\d+) = \?$/);
                 const mulMatch = q.text.match(/^(\d+) × (\d+) = \?$/);

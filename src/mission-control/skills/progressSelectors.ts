@@ -23,7 +23,7 @@ export function daysBetween(a: string, b: string): number {
     return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
 }
 
-function shiftDate(date: string, days: number): string {
+export function shiftDate(date: string, days: number): string {
     const [y, m, d] = date.split('-').map(Number);
     const t = new Date(Date.UTC(y, m - 1, d + days));
     return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
@@ -66,6 +66,8 @@ export function momentumSeries(progress: SkillProgress, sinceDate: string): Mome
 export interface LevelUpRow {
     date: string;
     level: number;
+    /** The level BEFORE this change — demotions must not render as promotions. */
+    fromLevel: number;
     attempts: number;
     correct: number;
     /** Days spent at the previous level; null when the history was truncated. */
@@ -82,6 +84,7 @@ export function levelUpRows(levelHistory: readonly LevelHistoryEntry[]): LevelUp
         rows.push({
             date: entry.date,
             level: entry.level,
+            fromLevel: prev.level,
             attempts: entry.attempts,
             correct: entry.correct,
             daysAtPrev: daysBetween(prev.date, entry.date),

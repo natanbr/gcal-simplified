@@ -33,15 +33,17 @@ export function BlocksGameOverlay({ open, onClose, engine }: BlocksGameOverlayPr
         prevOpen.current = open;
     }, [open, resetGame]);
 
-    // Keyboard ESC to close
+    // Keyboard ESC: peel the rescue quiz first, only then close the game.
     useEffect(() => {
         if (!open) return;
         const handler = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose(scoreRef.current);
+            if (e.key !== 'Escape') return;
+            if (gameState.rescueQuizActive) cancelRescueQuiz();
+            else onClose(scoreRef.current);
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [open, onClose]);
+    }, [open, onClose, gameState.rescueQuizActive, cancelRescueQuiz]);
 
     if (!open) return null;
 

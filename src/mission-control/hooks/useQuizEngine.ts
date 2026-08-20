@@ -67,6 +67,10 @@ export function useQuizEngine(): QuizEngineApi {
     const beginSession = useCallback((gameId: GameId) => {
         gameIdRef.current = gameId;
         sessionRef.current = freshSession();
+        // Difficulty must not leak between games: snake at minute 6 sets
+        // level 3, and a blocks session opened next would otherwise serve
+        // its first unlock quiz at snake's difficulty.
+        difficultyRef.current = { mathLevel: 0, stage: 0 };
     }, []);
 
     const setDifficulty = useCallback((mathLevel: number, stage: number) => {

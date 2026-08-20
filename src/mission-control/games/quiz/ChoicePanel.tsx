@@ -89,6 +89,9 @@ export function ChoicePanel({ question, feedback, deadChoices, locked, onPick }:
                 {question.choices.map((choice, index) => {
                     const dead = deadChoices.includes(index);
                     const revealed = solved && index === question.correctIndex;
+                    // The freeze must be VISIBLE: live buttons dim while locked, or
+                    // 1.5s of silent disabled taps reads as "the game broke".
+                    const frozen = locked && !dead && !revealed;
                     return (
                         <motion.button
                             key={`${question.wordId}-${index}`}
@@ -105,13 +108,16 @@ export function ChoicePanel({ question, feedback, deadChoices, locked, onPick }:
                                     ? '2px solid var(--mc-quiz-correct)'
                                     : dead
                                         ? '2px solid rgba(239,68,68,0.55)'
-                                        : '2px solid rgba(148,163,184,0.35)',
+                                        : frozen
+                                            ? '2px solid rgba(148,163,184,0.15)'
+                                            : '2px solid rgba(148,163,184,0.35)',
                                 background: revealed
                                     ? 'rgba(74,222,128,0.28)'
                                     : dead
                                         ? 'rgba(239,68,68,0.12)'
                                         : 'rgba(255,255,255,0.07)',
-                                opacity: dead ? 0.45 : 1,
+                                opacity: dead ? 0.45 : frozen ? 0.55 : 1,
+                                transition: 'opacity 0.15s ease, border-color 0.15s ease',
                                 color: 'var(--mc-quiz-text)',
                                 fontSize: CHOICE_FONT[choice.render],
                                 fontWeight: 800,

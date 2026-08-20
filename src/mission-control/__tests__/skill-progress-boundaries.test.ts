@@ -2,8 +2,8 @@
 // Skill progress — structural boundary pins (source-reading
 // tests, timer-registry style). What these protect:
 //   1. skillProgress must NEVER ride the remote broadcast — the
-//      hand-built projection in useRemoteSync would ship ~45KB
-//      per answered question if someone "helpfully" added it.
+//      hand-built projection in useRemoteSync would ship ~68KB
+//      (caps-saturated) per answered question if someone added it.
 //   2. Reading content/data stays inside games/quiz/reading/ —
 //      the curated word bank is the quiz module's private data.
 // verifiedRedBy: adding `state.skillProgress` to useRemoteSync's

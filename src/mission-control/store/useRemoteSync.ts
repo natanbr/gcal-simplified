@@ -98,7 +98,7 @@ export function useRemoteSync(state: MCState) {
         // Supabase message per action — including one per answered quiz
         // question. It still rides every broadcast's payload; the phone just
         // sees it at the next real change. skillProgress must stay out of BOTH
-        // the payload and this list (~45KB per answer if added).
+        // the payload and this list (~68KB per answer at its caps if added).
         state.moodWind,
         state.activeMission,
         state.missions,
