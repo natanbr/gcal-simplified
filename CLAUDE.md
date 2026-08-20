@@ -106,6 +106,10 @@ field-by-field in the main process; never spread an untrusted object into it.
   bug — the whole point is that a parent can see who moved what.
 - **Remote actions**: `REMOTE_ALLOWED_ACTIONS` in `useRemoteControl.ts` is an allowlist. Adding a
   remote button means adding its action type there too.
+- **Skill progress**: `RECORD_QUIZ_ANSWER` is the only writer of `skillProgress` (bounded per-skill
+  day buckets + the invisible reading level). The slice never rides the remote-sync broadcast, and
+  the reading word bank under `games/quiz/reading/` is quiz-internal — everything else reaches it
+  through the engine (`quizEngine.ts` / `useQuizEngine`).
 - **Styling — two disjoint systems, do not mix them**:
   - Calendar app → **Tailwind** (`darkMode: 'class'`; custom tokens `family.*`, `dark.*`, `text-giant/mega/big` in `tailwind.config.js`). Font: Inter.
   - Mission Control → **`src/mission-control/styles/mc.css`**, a kid-friendly pastel token set of `--mc-*` CSS custom properties scoped to `.mc-root`, plus `mc-*` component classes. Font: Nunito. Imported only by `MissionControl.tsx`.

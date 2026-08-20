@@ -138,6 +138,13 @@ const REGISTRY: Rule[] = [
         guard: 'src/mission-control/hooks/useRemoteControl.allowlist.test.ts',
         verifiedRedBy: 'dispatch CLEAR_LOGS over the channel and expect it through',
     },
+    {
+        rule: 'skillProgress never rides the remote broadcast; reading content stays quiz-internal',
+        source: 'CLAUDE.md → Conventions → Skill progress',
+        status: 'guarded',
+        guard: 'src/mission-control/__tests__/skill-progress-boundaries.test.ts',
+        verifiedRedBy: 'caught its own author twice while being written (2026-08-20): a prose "state.skillProgress" mention in useRemoteSync, and useQuizEngine importing reading/ directly',
+    },
 
     // ── Ratcheted: declared, but already broken at scale ──────────────────────
     {

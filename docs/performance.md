@@ -43,8 +43,14 @@ It intentionally runs one `requestAnimationFrame` loop (the only always-on loop 
 
 ## Backlog / optional next steps (not yet done — need a decision)
 
+Done 2026-08-20 (reading-practice change): **`behaviorProgress` dropped from the remote-sync
+dependency list** — it still rides every broadcast's payload, but no longer *triggers* one, so the
+per-minute mood drip (and, new, every answered quiz question) stops pushing Supabase messages.
+Related invariants added in the same change: `skillProgress` never enters the broadcast
+(`skill-progress-boundaries.test.ts`), and `createLogEntry` short-circuits unlogged action types
+before its speculative reducer run, so per-answer recording pays the reducer once, not twice.
+
 - **Gate the main-process 60 s power-policy interval** (`electron/main.ts`) so it only runs when a sleep window is configured, instead of always.
 - **Managed-timer wrapper** (`useManagedInterval(fn, ms, { enabled })`) + an ESLint `no-restricted-syntax` ban on raw `setInterval` in `src/`, to make gating the default and the registry auto-maintained.
 - **Dev-only Performance HUD at the app root** (generalize `games/blocks/PerformanceHUD.tsx`) showing live active-interval count, renders/sec, and idle-work warnings.
-- **Drop `behaviorProgress` from the remote-sync dependency list** so the per-minute mood drip doesn't push a network broadcast every 60 s during active hours (coarsen to a longer cadence).
 - **Consider `backgroundThrottling`** — currently the window is always fullscreen/visible so Chromium never throttles; a hidden/occluded state would.

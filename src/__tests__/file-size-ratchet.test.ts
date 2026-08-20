@@ -37,7 +37,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // practice). Net −205 vs. the pre-split file; the case itself delegates to
     // store/skillProgress.ts and is mostly the in-reducer level-change log.
     'src/mission-control/store/mcReducer.ts': 828,
-    'src/mission-control/components/MCSettingsOverlay.tsx': 767,
+    // Tightened 767 → 748 on 2026-08-20: the five copy-pasted sidebar buttons
+    // became one SettingsTab helper, which also paid for the Learning tab.
+    'src/mission-control/components/MCSettingsOverlay.tsx': 748,
     'src/mission-control/components/GoalPedestal.tsx': 629,
     'src/components/Dashboard.tsx': 504,
     'src/mission-control/components/MissionOverlay.tsx': 493,
