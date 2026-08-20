@@ -9,6 +9,7 @@ import { weatherService } from './weather'
 import { remoteBridge } from './remote-bridge'
 import { auditLog } from './audit-log'
 import { startPowerPolicy } from './power-policy'
+import { acquireSingleInstanceLock } from './single-instance'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -32,33 +33,23 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 
-// ── Single instance enforcement ───────────────────────────────────────────────
-// Two instances share one userData directory, which means they share the
-// renderer's localStorage (the Mission Control store, key `mc-state-v5`) AND the
-// same Supabase remote-control room. Both write the whole state blob on a 500ms
-// debounce, so the loser's snapshot silently overwrites the winner's: token
-// counts flip back and forth, activity-log history is eaten, both schedulers
-// fire the same mission, and the phone remote sees two conflicting states.
-// Refusing to boot a second instance is the fix for all of those at once.
-const gotSingleInstanceLock = app.requestSingleInstanceLock()
+/**
+ * Offscreen mode for the E2E suite. Electron cannot run truly headless on
+ * Windows, but an unshown window still loads, renders and is fully drivable
+ * over CDP — which is all Playwright needs. Without this, a suite run throws a
+ * fullscreen window in the developer's face once per test (44 times).
+ * Set E2E_HEADLESS=1 to enable; unset, behaviour is unchanged.
+ */
+const HEADLESS = process.env.E2E_HEADLESS === '1'
 
-if (!gotSingleInstanceLock) {
-  console.warn('[Main] Another instance is already running - exiting.')
-  app.quit()
-} else {
-  app.on('second-instance', focusExistingWindow)
+
+// Single instance enforcement runs before anything else — see
+// electron/single-instance.ts for why it is load-bearing. The `headless` flag
+// lets the running instance tell an E2E launch from a real one.
+if (acquireSingleInstanceLock({ headless: HEADLESS })) {
   app.on('window-all-closed', handleAllWindowsClosed)
   app.on('activate', handleActivate)
   app.whenReady().then(bootstrap)
-}
-
-/** A second launch attempt surfaces the window that is already running. */
-function focusExistingWindow(): void {
-  const [existing] = BrowserWindow.getAllWindows()
-  if (!existing) return
-  if (existing.isMinimized()) existing.restore()
-  existing.show()
-  existing.focus()
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -78,15 +69,6 @@ function handleActivate(): void {
     createWindow()
   }
 }
-
-/**
- * Offscreen mode for the E2E suite. Electron cannot run truly headless on
- * Windows, but an unshown window still loads, renders and is fully drivable
- * over CDP — which is all Playwright needs. Without this, a suite run throws a
- * fullscreen window in the developer's face once per test (44 times).
- * Set E2E_HEADLESS=1 to enable; unset, behaviour is unchanged.
- */
-const HEADLESS = process.env.E2E_HEADLESS === '1'
 
 function createWindow() {
   win = new BrowserWindow({

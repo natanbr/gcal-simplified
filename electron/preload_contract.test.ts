@@ -94,12 +94,19 @@ describe('IPC channel contract', () => {
     });
 
     describe('single-instance enforcement', () => {
+        // The lock itself lives in single-instance.ts (main.ts would otherwise
+        // be over the 300-line limit); main.ts must still be the thing that
+        // claims it, and claim it first.
+        const singleInstanceSource = readFileSync(join(here, 'single-instance.ts'), 'utf-8');
+
         it('acquires the lock before creating any window', () => {
             // Two instances share one userData dir, therefore one localStorage
             // blob, and their debounced whole-state writes clobber each other.
-            expect(mainSource).toContain('requestSingleInstanceLock');
-            const lockIndex = mainSource.indexOf('requestSingleInstanceLock');
+            expect(singleInstanceSource).toContain('requestSingleInstanceLock');
+
+            const lockIndex = mainSource.indexOf('acquireSingleInstanceLock({');
             const bootstrapIndex = mainSource.indexOf('app.whenReady()');
+            expect(lockIndex, 'main.ts must call acquireSingleInstanceLock').toBeGreaterThan(-1);
             expect(
                 lockIndex,
                 'the lock must be requested before the app bootstraps'
@@ -107,7 +114,18 @@ describe('IPC channel contract', () => {
         });
 
         it('handles a second launch by focusing the existing window', () => {
-            expect(mainSource).toMatch(/app\.on\('second-instance'/);
+            expect(singleInstanceSource).toMatch(/app\.on\('second-instance'/);
+        });
+
+        it('does not surface the window for a headless (E2E) second instance', () => {
+            // Playwright launches the app once per test; without this branch a
+            // suite run restores + shows + focuses the developer's window 44
+            // times. Behaviourally covered in main_single_instance.test.ts —
+            // this is the structural half, so the branch cannot simply vanish.
+            expect(
+                singleInstanceSource,
+                'focusExistingWindow must early-return on a headless second instance'
+            ).toMatch(/if\s*\(from\?\.headless\)/);
         });
     });
 });

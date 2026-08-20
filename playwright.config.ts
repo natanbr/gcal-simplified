@@ -20,7 +20,11 @@ export default defineConfig({
     // that shared state (settings-power even writes it), causing phantom
     // failures — so run the Electron suite one app at a time.
     workers: 1,
-    reporter: 'html',
+    // `open: 'never'` matters as much as the offscreen windows above: the html
+    // reporter's default is 'on-failure', so any red run launches a browser at
+    // the report — which is the OTHER thing that pops up mid-work. Read it with
+    // `npx playwright show-report` when you actually want it.
+    reporter: [['html', { open: 'never' }]],
     timeout: 60000,
     use: {
         trace: 'on-first-retry',
