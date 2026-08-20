@@ -41,7 +41,7 @@ const RAW_HEX_BASELINE: Record<string, number> = {
     'src/mission-control/components/GameTokenPanel.tsx': 9,
     'src/mission-control/components/GlobalBank.tsx': 20,
     'src/mission-control/components/GoalPedestal.tsx': 19,
-    'src/mission-control/components/MCSettingsOverlay.tsx': 49,
+    'src/mission-control/components/MCSettingsOverlay.tsx': 45,
     'src/mission-control/components/MissionOverlay.tsx': 28,
     'src/mission-control/components/MissionTimerDisplay.tsx': 7,
     'src/mission-control/components/MoodWindNotification.tsx': 9,

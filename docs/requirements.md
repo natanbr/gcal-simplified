@@ -707,3 +707,47 @@ every few days — plus the requested slowdown of game-token generation.
 
 **IPC surface**: `ALLOWED_INVOKE_CHANNELS` 17 → 19 (`audit:append`, `audit:read`);
 `ALLOWED_ON_CHANNELS` 10 → 11 (`system:resume`).
+
+### 2026-08-20 Reading Practice in the Game Quizzes
+
+**What shipped**: the revive/unlock quizzes inside snake, blocks and fruit-merge now mix reading
+questions with math, driven by an invisible adaptive engine, with a parent-only progress view.
+
+**Reading modes** (tap-to-answer, 4 choices, lowercase decodable words with one canonical emoji each):
+- L0–L1 word → picture (distractors share the first letter from L1 — full decoding required)
+- L2–L3 picture → word (minimal-pair distractors at L3: dog / dig / dot / dug)
+- L4–L5 missing letter (first/last, then the middle vowel — the picture disambiguates c＿t)
+- L6 five-to-six-letter words, both directions
+
+**Rules**:
+- First-attempt scoring: the revive dot fills only on a clean first tap. A wrong tap greys the
+  choice, freezes the grid for 1.5 s (tap-spam is slower than reading), and the eventual find
+  celebrates softly, counts nothing, and a fresh question follows. Math keeps its numpad and its
+  retry-until-solved dot behavior; its first submit is recorded silently for stats.
+- Adaptive level: sliding 20-answer window of at-level first attempts; ≥85% over 15+ promotes,
+  <40% demotes, a perfect first 5 fast-tracks through L0–L2. Level changes write ONE neutral
+  activity-log entry ("Practice adjusted" — the log is kid-reachable; exact levels are parent-only).
+- Sampling: 20% one level down / 60% current / 20% stretch (+2 once the game stage allows);
+  reading/math mix leans toward the weaker family within a 40–60% band — math is the always-
+  solvable escape valve and never drops below 40%. After two consecutive reading misses the rest
+  of that quiz is math (invisible mercy, reset per quiz). A missed word re-serves after exactly
+  3 questions, once per game session. Opt-in quizzes (blocks unlock, fruits delete) gained a ✕.
+
+**Parent view**: Settings → 📈 Learning tab. Reading-momentum "stock" chart with ▲ level-up markers
+and a level-up log ("→ L3 · date · 9 days at L2 · 18/20 first-try"), weekly at-level accuracy per
+skill, daily practice volume, per-game split, hardest-words top-5, and a NEEDS-WORK callout gated
+on ≥10 recent at-level answers. Charts and callouts count at-level questions only, so stretch
+questions doing their job never read as a reading crisis. Empty and sparse states are designed.
+
+**Storage & perf**: everything lives in a bounded `skillProgress` slice (60-day per-skill day
+buckets with at-level/off-level pairs and per-game splits, capped level history with the window
+evidence that triggered each change, capped missed-word counts). No new timers; recording is
+tap-driven; `createLogEntry` now short-circuits unlogged action types before its speculative
+reducer run; `behaviorProgress` left the remote-sync dependency list (backlog item), so answering
+a question no longer triggers a Supabase broadcast; `skillProgress` never rides the broadcast
+(guarded). `RECORD_QUIZ_ANSWER` is pinned out of the remote allowlist.
+
+**Refactors in the same change**: `mcReducer` shed its behavior-sync block to `behaviorSync.ts`
+(1033 → 828 lines); `MissionControl` shed the quick-game session hook and `RemoteIndicator`
+(338 → under the limit); `QuizOverlay` split into per-kind panels and traded its raw hex for
+`--mc-quiz-*` tokens (its style-ratchet entry is deleted, not raised).

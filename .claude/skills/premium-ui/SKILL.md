@@ -71,6 +71,6 @@ Empty states in Mission Control deserve particular care: a child seeing an empty
 
 ## Libraries
 
-Already available and appropriate: **Framer Motion** (transitions, springs, layout animation), **CSS keyframes** (ambient/looping), **Canvas API** (game rendering), **lucide-react** (icons), **recharts** (charts), **clsx** (conditional classes).
+Already available and appropriate: **Framer Motion** (transitions, springs, layout animation), **CSS keyframes** (ambient/looping), **Canvas API** (game rendering), **lucide-react** (icons), **clsx** (conditional classes). For charts, hand-roll small SVG (`--mc-chart-*` tokens; precedents: `GameTokenPanel.tsx`, `components/progress/ProgressCharts.tsx`) — `recharts` sits in package.json with zero imports and should not be adopted casually; removing it is an open chore.
 
 Do not reach for GSAP, Lenis, ScrollTrigger, React Three Fiber, or a scroll-hijacking library. There is no scroll narrative in a calendar window, and each of those adds bundle weight and main-thread work against a budget this project actively defends. If a design genuinely needs one, that's an architecture decision to raise, not a dependency to add mid-feature.
