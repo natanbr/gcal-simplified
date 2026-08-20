@@ -28,6 +28,7 @@ import { RemoteIndicator } from './components/RemoteIndicator';
 import { useMCDispatch, useMCState } from './store/useMCStore.tsx';
 import { RemoteStatusProvider } from './contexts/RemoteStatusContext';
 import { useQuickGameSession } from './hooks/useQuickGameSession';
+import { useQuizEngine } from './hooks/useQuizEngine';
 import './styles/mc.css';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
@@ -42,6 +43,12 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { activeGameType, setActiveGameType, handleQuickGameOpen, handleQuickGameClose } =
     useQuickGameSession();
+
+  // One quiz brain per game session, injected so game modules stay store-free.
+  const quizEngine = useQuizEngine();
+  useEffect(() => {
+    if (activeGameType) quizEngine.beginSession(activeGameType);
+  }, [activeGameType, quizEngine]);
 
   // Refs to each pedestal DOM element for drop-zone hit testing
   const bankRef = useRef<HTMLDivElement | null>(null);
@@ -239,9 +246,9 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           onClose={() => handleQuickGameClose(0)}
         />
       )}
-      <SnakeGameOverlay open={state.snakeGameActive && activeGameType === 'snake'} onClose={handleQuickGameClose} />
-      <BlocksGameOverlay open={state.snakeGameActive && activeGameType === 'blocks'} onClose={handleQuickGameClose} />
-      <FruitMergeGameOverlay open={state.snakeGameActive && activeGameType === 'fruits'} onClose={handleQuickGameClose} />
+      <SnakeGameOverlay open={state.snakeGameActive && activeGameType === 'snake'} onClose={handleQuickGameClose} engine={quizEngine} />
+      <BlocksGameOverlay open={state.snakeGameActive && activeGameType === 'blocks'} onClose={handleQuickGameClose} engine={quizEngine} />
+      <FruitMergeGameOverlay open={state.snakeGameActive && activeGameType === 'fruits'} onClose={handleQuickGameClose} engine={quizEngine} />
 
       {/* ===== REMOTE ANIMATIONS ===== */}
       <CelebrationOverlay />

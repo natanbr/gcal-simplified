@@ -303,7 +303,7 @@ export function useFruitMergeGame(open: boolean) {
 
     const cancelDeleteMode = useCallback(() => {
         setState(prev => {
-            if (prev.phase !== 'selecting-delete') return prev;
+            if (prev.phase !== 'selecting-delete' && prev.phase !== 'quiz-delete') return prev;
             return { ...prev, phase: 'playing', selectedDeleteBodyId: null };
         });
     }, []);

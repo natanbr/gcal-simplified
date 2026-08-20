@@ -2,12 +2,24 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BlocksGameOverlay } from './BlocksGameOverlay';
+import type { QuizEngineApi } from '../quiz/types';
+
+function stubEngine(): QuizEngineApi {
+    return {
+        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
+        beginSession: vi.fn(),
+        setDifficulty: vi.fn(),
+        onAnswered: vi.fn(),
+        notifyQuizClosed: vi.fn(),
+    };
+}
 
 const mockStartGame = vi.fn();
 const mockResetGame = vi.fn();
 const mockPlaceShape = vi.fn();
 const mockTriggerRescueQuiz = vi.fn();
-const mockSubmitQuizAnswer = vi.fn();
+const mockResolveRescueQuiz = vi.fn();
+const mockCancelRescueQuiz = vi.fn();
 const mockRefreshRescueShape = vi.fn();
 
 const mockGameState = {
@@ -19,7 +31,7 @@ const mockGameState = {
     score: 0,
     phase: 'waiting' as const,
     level: 0,
-    quizQuestion: null,
+    rescueQuizActive: false,
 };
 
 vi.mock('./useBlocksGame', () => ({
@@ -29,7 +41,8 @@ vi.mock('./useBlocksGame', () => ({
         resetGame: mockResetGame,
         placeShape: mockPlaceShape,
         triggerRescueQuiz: mockTriggerRescueQuiz,
-        submitQuizAnswer: mockSubmitQuizAnswer,
+        resolveRescueQuiz: mockResolveRescueQuiz,
+        cancelRescueQuiz: mockCancelRescueQuiz,
         refreshRescueShape: mockRefreshRescueShape,
     })
 }));
@@ -44,18 +57,18 @@ describe('BlocksGameOverlay', () => {
     });
 
     it('renders null when open is false', () => {
-        const { container } = render(<BlocksGameOverlay open={false} onClose={vi.fn()} />);
+        const { container } = render(<BlocksGameOverlay open={false} onClose={vi.fn()} engine={stubEngine()} />);
         expect(container.firstChild).toBeNull();
     });
 
     it('renders overlay when open is true', () => {
-        render(<BlocksGameOverlay open={true} onClose={vi.fn()} />);
+        render(<BlocksGameOverlay open={true} onClose={vi.fn()} engine={stubEngine()} />);
         expect(screen.getByText('Space Rescue')).toBeDefined();
         expect(screen.getByText('Play Game! 🚀')).toBeDefined();
     });
 
     it('triggers startGame when clicking Play Game! 🚀', () => {
-        render(<BlocksGameOverlay open={true} onClose={vi.fn()} />);
+        render(<BlocksGameOverlay open={true} onClose={vi.fn()} engine={stubEngine()} />);
         const playButton = screen.getByText('Play Game! 🚀');
         fireEvent.click(playButton);
         expect(mockStartGame).toHaveBeenCalled();
@@ -64,7 +77,7 @@ describe('BlocksGameOverlay', () => {
     it('renders victory overlay when phase is victory', () => {
         mockGameState.phase = 'victory';
         const mockClose = vi.fn();
-        render(<BlocksGameOverlay open={true} onClose={mockClose} />);
+        render(<BlocksGameOverlay open={true} onClose={mockClose} engine={stubEngine()} />);
         
         expect(screen.getByText('Mission Complete!')).toBeDefined();
         const collectButton = screen.getByText('Collect Bonus! 🏆');
@@ -76,7 +89,7 @@ describe('BlocksGameOverlay', () => {
         mockGameState.phase = 'game-over';
         mockGameState.score = 42;
         const mockClose = vi.fn();
-        render(<BlocksGameOverlay open={true} onClose={mockClose} />);
+        render(<BlocksGameOverlay open={true} onClose={mockClose} engine={stubEngine()} />);
         
         expect(screen.getByText('Mission Failed')).toBeDefined();
         expect(screen.getByText(/Space debris clogged the path! Score: 42/)).toBeDefined();

@@ -117,31 +117,46 @@ describe('useBlocksGame', () => {
         expect(result.current.gameState.altitude).toBeGreaterThan(0);
     });
 
-    it('unlocks the 4th rescue shape after solving visual quiz', () => {
+    it('unlocks the 4th rescue shape after the quiz overlay reports success', () => {
         const { result } = renderHook(() => useBlocksGame());
-        
+
         act(() => {
             result.current.startGame();
         });
 
         expect(result.current.gameState.rescueShapeLocked).toBe(true);
-        expect(result.current.gameState.quizQuestion).toBeNull();
+        expect(result.current.gameState.rescueQuizActive).toBe(false);
 
-        // Trigger quiz
+        // Trigger quiz — questions come from the injected engine, the hook
+        // only tracks that the quiz surface is showing.
         act(() => {
             result.current.triggerRescueQuiz();
         });
 
-        expect(result.current.gameState.quizQuestion).not.toBeNull();
+        expect(result.current.gameState.rescueQuizActive).toBe(true);
 
-        // Solve quiz
-        const answer = result.current.gameState.quizQuestion!.answer;
+        // The engine-driven overlay confirmed a counted correct answer.
         act(() => {
-            result.current.submitQuizAnswer(answer);
+            result.current.resolveRescueQuiz();
         });
 
         expect(result.current.gameState.rescueShapeLocked).toBe(false);
-        expect(result.current.gameState.quizQuestion).toBeNull();
+        expect(result.current.gameState.rescueQuizActive).toBe(false);
+    });
+
+    it('cancelling the rescue quiz closes it without unlocking', () => {
+        const { result } = renderHook(() => useBlocksGame());
+
+        act(() => {
+            result.current.startGame();
+            result.current.triggerRescueQuiz();
+        });
+        act(() => {
+            result.current.cancelRescueQuiz();
+        });
+
+        expect(result.current.gameState.rescueQuizActive).toBe(false);
+        expect(result.current.gameState.rescueShapeLocked).toBe(true);
     });
 
     it('locks and regenerates the 4th shape on refresh', () => {
@@ -267,22 +282,20 @@ describe('useBlocksGame', () => {
 
     it('triggers game over when standard shapes do not fit and rescue shape is unlocked by solving quiz but does not fit', () => {
         const { result } = renderHook(() => useBlocksGame());
-        
+
         act(() => {
             result.current.startGame();
             result.current.triggerRescueQuiz();
         });
-
-        const quizAnswer = result.current.gameState.quizQuestion!.answer;
 
         // Block entire grid (fill with standard blocks value 1)
         act(() => {
             result.current.gameState.grid = Array.from({ length: 8 }, () => Array(8).fill(1));
         });
 
-        // Submit correct quiz answer to unlock the rescue shape
+        // The quiz overlay reports a counted success, unlocking the rescue shape
         act(() => {
-            result.current.submitQuizAnswer(quizAnswer);
+            result.current.resolveRescueQuiz();
         });
 
         expect(result.current.gameState.phase).toBe('game-over');

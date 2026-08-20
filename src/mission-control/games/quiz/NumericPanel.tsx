@@ -8,11 +8,11 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { QuizQuestion, QuizFeedback } from './types';
+import type { NumericQuizQuestion, QuizFeedback } from './types';
 import { NumpadButton } from './NumpadButton';
 
 interface NumericPanelProps {
-    question: QuizQuestion;
+    question: NumericQuizQuestion;
     feedback: QuizFeedback;
     /** Any fresh input after a wrong answer clears the ✗ marker. */
     onDirty: () => void;

@@ -10,15 +10,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SnakeCanvas } from './SnakeCanvas';
 import { useSnakeGame } from './useSnakeGame';
 import { QuizOverlay } from '../quiz/QuizOverlay';
-import { generateLevelQuestion } from '../quiz/additionQuiz';
+import type { QuizEngineApi } from '../quiz/types';
 import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE, QUIZ_QUESTIONS_TO_EXTEND, GameLevel, LEVEL_LABELS, INITIAL_TIME_MS } from './types';
 
 interface SnakeGameOverlayProps {
     open: boolean;
     onClose: (score: number) => void;
+    engine: QuizEngineApi;
 }
 
-export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
+export function SnakeGameOverlay({ open, onClose, engine }: SnakeGameOverlayProps) {
     const { gameState, onQuizCorrect, onExtendQuizCorrect, handleTimeUpClose, resetGame, setLevel } = useSnakeGame(open);
     const scoreRef = useRef(0);
     scoreRef.current = gameState.score;
@@ -50,6 +51,11 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
 
     const elapsedMs = INITIAL_TIME_MS - gameState.timeRemainingMs + gameState.extensionsUsed * 60000;
     const quizDifficultyLevel = Math.min(3, Math.floor(elapsedMs / 120000)) as GameLevel;
+
+    // Math difficulty and stretch stage both scale with elapsed play time.
+    useEffect(() => {
+        engine.setDifficulty(quizDifficultyLevel, quizDifficultyLevel);
+    }, [engine, quizDifficultyLevel]);
 
     const formatTime = (ms: number) => {
         const totalSec = Math.max(0, Math.ceil(ms / 1000));
@@ -151,7 +157,9 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                                 open={gameState.phase === 'quiz-revive'}
                                 requiredCorrect={QUIZ_QUESTIONS_TO_REVIVE}
                                 currentCorrect={gameState.quizCorrectCount}
-                                generator={() => generateLevelQuestion(quizDifficultyLevel)}
+                                generator={engine.generator}
+                                onAnswered={engine.onAnswered}
+                                onClosed={engine.notifyQuizClosed}
                                 onCorrect={onQuizCorrect}
                                 title="🧠 Answer to Revive!"
                             />
@@ -161,7 +169,9 @@ export function SnakeGameOverlay({ open, onClose }: SnakeGameOverlayProps) {
                                 open={gameState.phase === 'quiz-extend'}
                                 requiredCorrect={QUIZ_QUESTIONS_TO_EXTEND}
                                 currentCorrect={gameState.extendQuizCorrectCount}
-                                generator={() => generateLevelQuestion(quizDifficultyLevel)}
+                                generator={engine.generator}
+                                onAnswered={engine.onAnswered}
+                                onClosed={engine.notifyQuizClosed}
                                 onCorrect={onExtendQuizCorrect}
                                 title="⏱️ Answer to get +1 minute!"
                             />

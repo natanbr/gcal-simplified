@@ -2,20 +2,27 @@ import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BlocksCanvas } from './BlocksCanvas';
 import { useBlocksGame } from './useBlocksGame';
+import type { QuizEngineApi } from '../quiz/types';
 
 interface BlocksGameOverlayProps {
     open: boolean;
     onClose: (score: number) => void;
+    engine: QuizEngineApi;
 }
 
-export function BlocksGameOverlay({ open, onClose }: BlocksGameOverlayProps) {
+export function BlocksGameOverlay({ open, onClose, engine }: BlocksGameOverlayProps) {
     const {
-        gameState, startGame, resetGame, placeShape, 
-        triggerRescueQuiz, submitQuizAnswer, refreshRescueShape
+        gameState, startGame, resetGame, placeShape,
+        triggerRescueQuiz, resolveRescueQuiz, cancelRescueQuiz, refreshRescueShape
     } = useBlocksGame();
 
     const scoreRef = useRef(0);
     scoreRef.current = gameState.score;
+
+    // Math difficulty and stretch stage track the board level.
+    useEffect(() => {
+        engine.setDifficulty(gameState.level, gameState.level);
+    }, [engine, gameState.level]);
 
     // Reset when opening
     const prevOpen = useRef(false);
@@ -136,7 +143,9 @@ export function BlocksGameOverlay({ open, onClose }: BlocksGameOverlayProps) {
                             gameState={gameState}
                             placeShape={placeShape}
                             triggerRescueQuiz={triggerRescueQuiz}
-                            submitQuizAnswer={submitQuizAnswer}
+                            resolveRescueQuiz={resolveRescueQuiz}
+                            cancelRescueQuiz={cancelRescueQuiz}
+                            engine={engine}
                             refreshRescueShape={refreshRescueShape}
                         />
                     )}

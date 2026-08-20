@@ -27,7 +27,10 @@ export interface BlocksGameState {
     score: number;
     phase: GamePhase;
     level: number;
-    quizQuestion: { text: string; answer: number } | null;
+    /** The unlock quiz is showing. Questions come from the injected engine —
+     *  storing one here would re-serve it after a miss with the answer already
+     *  revealed by elimination. */
+    rescueQuizActive: boolean;
     clearedFeedback: { text: string; stars: number; id: string } | null;
 }
 

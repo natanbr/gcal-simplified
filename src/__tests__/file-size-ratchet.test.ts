@@ -32,19 +32,22 @@ const LIMIT = 300;
  * quiet growth the ratchet exists to stop.
  */
 const OVERSIZED_BASELINE: Record<string, number> = {
-    // Lowered 1033 → 804 on 2026-08-20: the behavior-sync/token-economy block
-    // (the "top split candidate" named below) moved verbatim to
-    // store/behaviorSync.ts, with mcReducer re-exporting the public names.
-    'src/mission-control/store/mcReducer.ts': 804,
+    // 1033 → 804 on 2026-08-20 (behavior-sync block moved to behaviorSync.ts),
+    // then 804 → 828 the same day for the RECORD_QUIZ_ANSWER case (reading
+    // practice). Net −205 vs. the pre-split file; the case itself delegates to
+    // store/skillProgress.ts and is mostly the in-reducer level-change log.
+    'src/mission-control/store/mcReducer.ts': 828,
     'src/mission-control/components/MCSettingsOverlay.tsx': 767,
     'src/mission-control/components/GoalPedestal.tsx': 629,
     'src/components/Dashboard.tsx': 504,
     'src/mission-control/components/MissionOverlay.tsx': 493,
     'src/mission-control/components/GlobalBank.tsx': 400,
-    'src/mission-control/games/blocks/BlocksCanvas.tsx': 376,
+    // Tightened 376 → 362 on 2026-08-20 (RescueQuizLayer extracted).
+    'src/mission-control/games/blocks/BlocksCanvas.tsx': 362,
     'src/mission-control/games/fruits/useFruitMergeGame.ts': 361,
     'src/mission-control/games/fruits/FruitMergeCanvas.tsx': 360,
-    'src/mission-control/games/blocks/useBlocksGame.ts': 329,
+    // Tightened 329 → 324 on 2026-08-20 (quiz question no longer stored in game state).
+    'src/mission-control/games/blocks/useBlocksGame.ts': 324,
     'src/mission-control/components/ResponsibilityPanel.tsx': 311,
 };
 
