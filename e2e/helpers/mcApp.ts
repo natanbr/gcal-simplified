@@ -1,48 +1,39 @@
 /**
- * Shared Electron launch + state-isolation helpers for the Mission Control E2E specs.
+ * Shared Electron launch helpers for the Mission Control E2E specs.
  *
  * WHY THIS EXISTS
  * ---------------
- * Every Electron instance in this suite shares ONE userData directory — the real
- * one, belonging to the developer running the tests. That directory holds the
- * `mc-state-v5` localStorage blob the app actually lives in.
+ * These specs used to run against the developer's real userData directory and
+ * write to it: one left `activeMission: 'morning'` with a 60-minute duration
+ * behind, so the mission overlay covered the UI for every spec that ran
+ * afterwards AND for the next hour of real app usage; another suspended the
+ * Knife privilege for a day; another minted a token into the real bank.
  *
- * The specs used to inject mission / privilege / bank state into it and never
- * put it back. A spec that activated a morning mission left
- * `activeMission: 'morning'` with a 60-minute duration behind, so the mission
- * overlay covered the UI for every spec that ran afterwards AND for the next
- * hour of real app usage. Another suspended the Knife privilege for a day.
+ * `mcTest` now gives each launch its own throwaway userData directory (see
+ * userDataDir.ts), so there is no real state present to damage and nothing to
+ * put back. Mission Control is reachable at `?mc=1` without signing in — the
+ * route sits outside the calendar's auth gate in App.tsx — so a fresh profile
+ * costs these specs nothing.
  *
- * `mcTest` closes that: it snapshots the blob before the test can touch it and
- * restores it verbatim afterwards, including when the test fails — which is
- * precisely the case most likely to leave a mission running.
+ * A fresh profile also means fresh Supabase pairing keys, so a test instance no
+ * longer joins the household's real remote-control room.
  *
- * This is a containment fix, not the ideal one. The proper fix is a per-launch
- * `userData` directory so the suite never sees real state at all; that needs a
- * seeded auth fixture for the calendar specs first. See docs/test-coverage-plan.md.
+ * Each test therefore starts from `initialState`. Seed what the test needs with
+ * `patchMCState` / `patchMCCollection` and reload; do not assume anything
+ * carries over from a previous test or from the developer's own app.
  */
 
 import { test as base, _electron as electron, expect } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { restoreConfig, snapshotConfig } from './appConfig';
+import { createIsolatedUserData, removeUserData, userDataArg } from './userDataDir';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const ELECTRON_MAIN = path.join(__dirname, '../../dist-electron/main.js');
 export const STORAGE_KEY = 'mc-state-v5';
-
-/**
- * The renderer's persist effect is debounced at 500ms. Teardown has to outwait
- * it: a restore written while a debounce is still pending gets clobbered the
- * moment that debounce fires, which would silently defeat the whole mechanism.
- */
-const PERSIST_DEBOUNCE_SETTLE_MS = 600;
-
-/** A snapshot of the MC blob. `null` means the key did not exist. */
-export type MCSnapshot = string | null;
 
 /** Navigate the current window into Mission Control mode and let it settle. */
 export async function gotoMC(page: Page): Promise<void> {
@@ -54,10 +45,14 @@ export async function gotoMC(page: Page): Promise<void> {
     await page.waitForTimeout(2000);
 }
 
-/** Launch Electron and return the first window, already in MC mode. */
-export async function launchMC(): Promise<{ app: ElectronApplication; page: Page }> {
+/**
+ * Launch Electron against an isolated profile and return the first window,
+ * already in MC mode. The caller owns `userDataDir` and must remove it after
+ * closing the app — `mcTest` does both.
+ */
+export async function launchMC(userDataDir: string): Promise<{ app: ElectronApplication; page: Page }> {
     const app = await electron.launch({
-        args: [ELECTRON_MAIN],
+        args: [ELECTRON_MAIN, userDataArg(userDataDir)],
         timeout: 60_000,
         env: { ...process.env, NODE_ENV: 'development' },
     });
@@ -65,27 +60,6 @@ export async function launchMC(): Promise<{ app: ElectronApplication; page: Page
     await page.waitForLoadState('domcontentloaded');
     await gotoMC(page);
     return { app, page };
-}
-
-/** Read the MC blob exactly as stored, before the test mutates anything. */
-export async function snapshotMCState(page: Page): Promise<MCSnapshot> {
-    return page.evaluate((key: string) => localStorage.getItem(key), STORAGE_KEY);
-}
-
-/**
- * Put the developer's real state back. Absence is a state too — if the key did
- * not exist at snapshot time, restoring must REMOVE it, not write the string
- * "null" (which `JSON.parse` would happily turn into a null state object).
- */
-export async function restoreMCState(page: Page, snapshot: MCSnapshot): Promise<void> {
-    await page.waitForTimeout(PERSIST_DEBOUNCE_SETTLE_MS);
-    await page.evaluate(
-        ({ key, value }: { key: string; value: string | null }) => {
-            if (value === null) localStorage.removeItem(key);
-            else localStorage.setItem(key, value);
-        },
-        { key: STORAGE_KEY, value: snapshot },
-    );
 }
 
 /**
@@ -138,7 +112,12 @@ export async function patchMCCollection(
     );
 }
 
-/** True when the app is sitting on the Google login screen. */
+/**
+ * True when the app is sitting on the Google login screen. Mission Control does
+ * not require auth, so under an isolated profile this should never be true in
+ * `?mc=1` — the checks remain as a guard against a spec landing on the calendar
+ * route by accident.
+ */
 export async function isLoginScreen(page: Page): Promise<boolean> {
     return page
         .locator('[data-testid="login-screen"]')
@@ -147,8 +126,8 @@ export async function isLoginScreen(page: Page): Promise<boolean> {
 }
 
 /**
- * `test` for Mission Control specs: launches the app in MC mode and guarantees
- * the developer's real state is put back, pass or fail.
+ * `test` for Mission Control specs: launches the app in MC mode against a
+ * throwaway userData directory and removes it afterwards, pass or fail.
  *
  * Usage: `mcTest('...', async ({ mcPage: page }) => { ... })` — do NOT call
  * `app.close()` in the body, the fixture owns the lifecycle.
@@ -156,18 +135,16 @@ export async function isLoginScreen(page: Page): Promise<boolean> {
 export const mcTest = base.extend<{ mcApp: ElectronApplication; mcPage: Page }>({
     // eslint-disable-next-line no-empty-pattern
     mcApp: async ({}, use) => {
-        const { app, page } = await launchMC();
-        // Both shared-state vectors: Mission Control's localStorage blob and the
-        // calendar's config.json. An MC spec is not supposed to touch config,
-        // but "not supposed to" is what got us here.
-        const snapshot = await snapshotMCState(page);
-        const config = await snapshotConfig(app);
+        const userDataDir = createIsolatedUserData();
+        const { app } = await launchMC(userDataDir);
 
-        await use(app);
-
-        if (!page.isClosed()) await restoreMCState(page, snapshot);
-        await restoreConfig(app, config);
-        await app.close();
+        try {
+            await use(app);
+        } finally {
+            // Runs on failure too — that is the point.
+            await app.close();
+            removeUserData(userDataDir);
+        }
     },
 
     mcPage: async ({ mcApp }, use) => {

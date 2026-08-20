@@ -2,6 +2,7 @@ import { test, _electron as electron, expect, type ElectronApplication, type Pag
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format, startOfWeek } from 'date-fns';
+import { createIsolatedUserData, removeUserData, userDataArg } from './helpers/userDataDir';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,11 +10,18 @@ const __dirname = path.dirname(__filename);
 test.describe('Week Display Customization', () => {
     let electronApp: ElectronApplication;
     let window: Page;
+    // This spec is isolatable because it mocks `auth:check` itself and reloads
+    // afterwards, so it never needs the developer's Google credentials. Without
+    // isolation its `localStorage.clear()` below wipes the real Mission Control
+    // store, and its settings saves rewrite the real weekStartDay — which is
+    // what several other specs assert dates against.
+    let userDataDir: string;
 
     test.beforeEach(async () => {
         // Launch Electron app
+        userDataDir = createIsolatedUserData();
         electronApp = await electron.launch({
-            args: [path.join(__dirname, '../dist-electron/main.js')],
+            args: [path.join(__dirname, '../dist-electron/main.js'), userDataArg(userDataDir)],
             timeout: 60000,
             env: {
                 ...process.env,
@@ -97,6 +105,7 @@ test.describe('Week Display Customization', () => {
         if (electronApp) {
             await electronApp.close();
         }
+        if (userDataDir) removeUserData(userDataDir);
     });
 
     const openSettings = async () => {
