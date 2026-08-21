@@ -321,7 +321,7 @@ Seven rungs, three question shapes. `generateReadingQuestion(level, rng, opts)` 
 | **L2** | picture → word | 🐕 | 4 short words, **distinct initials** | Reverse mapping: recall the spelling, don't just recognise it. |
 | **L3** | picture → word | 🐕 | 4 **minimal pairs** (dog / dot / dig / dug) | Full decoding — one grapheme apart, no shortcut exists. |
 | **L4** | missing letter | `_og` + 🐕 | 4 consonants | Onset/coda phonics on CVC words. |
-| **L5** | missing letter | `d_g` + 🐕 | 5 vowels | Medial vowel — the hardest slot for early readers. |
+| **L5** | missing letter | `d_g` + 🐕 | 4 choices, drawn from the 5 vowels | Medial vowel — the hardest slot for early readers. |
 | **L6** | either recognition mode | long word or its picture | 5–6 letter words, near-miss distractors | Applies everything to longer words. |
 
 Content lives in `games/quiz/reading/`: `wordBank.ts` (74 curated `{word, emoji}` pairs +
