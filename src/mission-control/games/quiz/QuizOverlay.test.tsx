@@ -48,7 +48,11 @@ function submit() {
     fireEvent.click(screen.getByRole('button', { name: '✓' }));
 }
 
-describe('QuizOverlay — numeric (numpad) behavior guards', () => {
+// Every test here drives framer-motion through fake timers, which is slow:
+// individual cases take 0.5-2s in isolation and blow the 5s default when the
+// full suite runs in parallel on a loaded machine. The timeout is a file-level
+// property of the setup, not a property of any one case, so it lives here.
+describe('QuizOverlay — numeric (numpad) behavior guards', { timeout: 20000 }, () => {
     beforeEach(() => {
         vi.useFakeTimers();
     });
@@ -67,9 +71,7 @@ describe('QuizOverlay — numeric (numpad) behavior guards', () => {
         expect(screen.getByText('1/3')).toBeDefined();
     });
 
-    // Generous timeout: framer-motion + fake timers make this slow under
-    // full-suite load (it runs in ~1.5s in isolation).
-    it('keeps the SAME question after a wrong answer (no regeneration)', { timeout: 15000 }, () => {
+    it('keeps the SAME question after a wrong answer (no regeneration)', () => {
         const { counting } = renderOverlay();
         const callsAfterMount = counting.callCount();
 
@@ -174,7 +176,7 @@ function renderChoiceOverlay(overrides: Partial<React.ComponentProps<typeof Quiz
     return { ...utils, onCorrect, onAnswered, generatedCount: () => generated, props };
 }
 
-describe('QuizOverlay — choice (reading) behavior', () => {
+describe('QuizOverlay — choice (reading) behavior', { timeout: 20000 }, () => {
     beforeEach(() => {
         vi.useFakeTimers();
     });

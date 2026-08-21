@@ -261,10 +261,11 @@ The game system is split into two independent modules under `src/mission-control
 
 #### Quiz Module (`games/quiz/`)
 
-- **Extensible design:** `QuizGenerator` function type + `QuizQuestion` interface.
-- **Current generators:** `generateAdditionQuestion(maxSum = 20)` — addition problems for young kids.
-- **Future expansion:** multiplication, subtraction, reading comprehension, verbal challenges. Each new type adds a generator function implementing `QuizGenerator`.
-- **UI:** `QuizOverlay.tsx` — kid-friendly numpad with digit buttons, progress dots, animated feedback (shake on wrong, checkmark on correct). Also supports keyboard input (0-9, Backspace, Enter).
+- **Extensible design:** `QuizQuestion` is a discriminated union on `kind` (`'numeric' | 'choice'`); each question type adds a generator, not a flag.
+- **Maths generators:** `generateAdditionQuestion(maxSum = 20)` and friends, via `generateMathQuestion` — all take an injectable `rng`.
+- **Reading generators:** `generateReadingQuestion(level, rng)` — see [Section J](#j-reading-practice--the-adaptive-quiz-engine). Which of the two a game gets is decided by the adaptive engine, not by the game.
+- **Future expansion:** multiplication, subtraction, verbal challenges, writing/spelling.
+- **UI:** `QuizOverlay.tsx` is the shared shell; it swaps the answer surface on `question.kind` — `NumericPanel.tsx` (numpad, keys 0-9/Backspace/Enter) or `ChoicePanel.tsx` (2×2 grid, keys 1-4). Progress dots and animated feedback (shake on wrong, checkmark on correct) are common to both.
 
 #### Snake Module (`games/snake/`)
 
@@ -293,8 +294,141 @@ The game system is split into two independent modules under `src/mission-control
 - 🔇 **Background music** — fun music while game is active (TODO: requires audio asset pipeline).
 - 🎨 **Sprite-based graphics** — replace canvas primitives with sprite images for richer visuals.
 - 📱 **On-screen controls** — touch/click-based directional buttons for tablet use.
-- 🧩 **More quiz types** — multiplication, subtraction, reading, configurable by age/topic in settings.
-- 🎮 **More games** — additional game types beyond Snake, all using the shared quiz module.
+- 🧩 **More quiz types** — multiplication and subtraction (reading ✅ shipped, see Section J); configurable by age/topic in settings.
+- 🎮 **More games** — Space Rescue (`blocks`) and Fruit Merge (`fruits`) have shipped alongside Snake, all using the shared quiz module. More still welcome.
+
+---
+
+## J. Reading Practice & the Adaptive Quiz Engine
+
+**Status:** ✅ Implemented & Working (2026-08-20)
+
+### Overview
+
+The quiz module is no longer maths-only. Every quiz surface in every game now serves a **mix of maths and reading** questions, chosen by an adaptive engine that tracks an **invisible** reading level per child. The kid never sees a level, a score or a percentage — the level exists solely so the app can pick the questions that are worth asking. The parent sees all of it, behind a hold-gesture, in a Learning tab.
+
+Reading questions are **multiple choice (4 options)** and share the paid-session economics of the existing quizzes: no new coin cost, no new reward, no new surface for the kid to discover.
+
+### The Reading Ladder (L0 → L6)
+
+Seven rungs, three question shapes. `generateReadingQuestion(level, rng, opts)` in
+`games/quiz/reading/readingQuestions.ts` **is** the table — the switch there is the spec.
+
+| Level | Shape | Prompt | Choices | What it actually trains |
+|---|---|---|---|---|
+| **L0** | word → picture | the word `dog` | 4 emoji, **all different initials** (dog / cat / fish / sun) | Confidence. Solvable by recognising the first letter alone — deliberately so. |
+| **L1** | word → picture | the word `dog` | 4 emoji, **all the same initial** (dog / dino / dad / duck) | Forces reading past letter 1. |
+| **L2** | picture → word | 🐕 | 4 short words, **distinct initials** | Reverse mapping: recall the spelling, don't just recognise it. |
+| **L3** | picture → word | 🐕 | 4 **minimal pairs** (dog / dot / dig / dug) | Full decoding — one grapheme apart, no shortcut exists. |
+| **L4** | missing letter | `_og` + 🐕 | 4 consonants | Onset/coda phonics on CVC words. |
+| **L5** | missing letter | `d_g` + 🐕 | 5 vowels | Medial vowel — the hardest slot for early readers. |
+| **L6** | either recognition mode | long word or its picture | 5–6 letter words, near-miss distractors | Applies everything to longer words. |
+
+Content lives in `games/quiz/reading/`: `wordBank.ts` (74 curated `{word, emoji}` pairs +
+`CONFUSABLE_EMOJI_GROUPS`) and `minimalPairs.ts` (`MINIMAL_PAIRS`, `LONG_WORD_DISTRACTORS`).
+
+**Two content traps the generators actively avoid:**
+
+- **Emoji ambiguity.** 🐕 and 🐩 are the same picture to a 5-year-old. `CONFUSABLE_EMOJI_GROUPS` + `pickNonConfusable()` guarantee no two choices in one question can be confused.
+- **Two right answers.** In picture→word, a distractor whose *own* picture could be the prompt (`ship` under a ⛵) is a correct answer marked wrong. Distractor selection filters those out.
+
+### First-Attempt Contract
+
+Per the original brief: **only a first-attempt correct answer counts.** A miss is recorded as wrong
+*and then the kid is allowed to keep hunting until they find the right one* — the question resolves
+as `'found'` (soft success: no confetti, no penalty, no dead end), and the next question comes from
+the same level. Wrong choices grey out and stay dead; the panel visibly freezes for the feedback
+dwell so a mis-tap can't burn the retry.
+
+**Mercy rule:** after `MERCY_MISS_THRESHOLD = 2` misses in a session, the engine backs off — a
+struggling kid gets easier questions rather than a wall.
+
+**Retrieval practice:** a missed word is re-queued and re-served `REQUEUE_AFTER_QUESTIONS = 3`
+questions later, at the same level, via `forceWordId`. Spaced retrieval, not immediate repetition.
+
+### Sampling (`quizEngine.ts`)
+
+Pure functions, injectable `rng`, no store access:
+
+- **Level mix — 20 / 60 / 20.** `sampleReadingLevel(current, stage, rng)`: 20% at `current − 1`
+  (fluency + easy wins), 60% **at level**, 20% stretch to `+1` — or `+2` once the *game* stage is
+  deep enough (`DEEP_STRETCH_STAGE = 2`), mirroring how maths difficulty already ramps with game
+  progress. Shares collapse correctly at the floor (L0: no down) and cap (L6: no stretch).
+- **Reading ⇄ maths mix — 40–60%.** `computeReadingShare()` starts at 50% and leans toward whichever
+  subject is *weaker* by recent accuracy, clamped to `[READING_SHARE_MIN 0.40, READING_SHARE_MAX 0.60]`.
+  The clamp is the point: neither subject can ever be squeezed out, however lopsided the child is.
+  Weighting needs `MIN_ATTEMPTS_FOR_WEIGHTING = 5` attempts and looks back
+  `WEIGHTING_LOOKBACK_DAYS = 14` days; below that it stays at the 50/50 base.
+
+`useQuizEngine.ts` is the only store-facing piece. It is created **once** in `MCLayout` and injected
+into games as a prop, so game modules stay store-free (the existing `onClose(score)` contract).
+Session state and difficulty both reset in `beginSession`, so a level from one game can never leak
+into the next.
+
+### Level Movement (`store/skillProgress.ts`)
+
+`applyQuizAnswer(progress, record, localDate)` is a pure function. `RECORD_QUIZ_ANSWER` is the
+**only** writer of `skillProgress`.
+
+- **Sliding window** of the last `WINDOW_SIZE = 20` at-level attempts.
+- **Promote** at `PROMOTE_MIN_ATTEMPTS = 15`+ attempts with ≥ `PROMOTE_ACCURACY = 0.85` first-try accuracy.
+- **Demote** below `DEMOTE_ACCURACY = 0.40` — quietly, and never below L0.
+- **Fast-track:** `FAST_TRACK_STREAK = 5` in a row at L0–L2 (`FAST_TRACK_MAX_LEVEL`) promotes
+  immediately, so a child who already reads isn't held for 15 questions on the confidence rungs.
+- **The window always resets when the rule fires** — including at the floor and the cap, where the
+  level can't actually move. Without that reset, a kid parked at L0 with a failing window would
+  re-satisfy the rule on *every* subsequent answer and flood the log.
+
+**Off-level attempts are counted separately** (`offAttempts` / `offFirstTry`). Stretch questions are
+*supposed* to be missed; folding them into the headline accuracy would make deliberate challenge
+look like a reading crisis to the parent.
+
+Storage is bounded by design — `DAY_BUCKET_CAP = 60` days, `LEVEL_HISTORY_CAP = 50` level changes,
+`MISSED_WORDS_CAP = 50` words — because this slice shares one `localStorage` blob with everything else.
+
+### Invisible-Level Contract
+
+Enforced structurally by `__tests__/skill-progress-boundaries.test.ts`:
+
+- No level, score, streak or percentage renders on any kid-facing surface.
+- The activity-log entry for a level change is deliberately neutral — **"Practice adjusted"**, 📖,
+  `source: 'auto'` — because the log is reachable by the kid. It records *that* practice changed,
+  not that they were promoted or demoted.
+- `RECORD_QUIZ_ANSWER` is excluded from `createLogEntry` (`UNLOGGED_ACTIONS`), before the speculative
+  reducer run — every answered question would otherwise be a log line and a full extra reduce.
+- `skillProgress` **never rides the remote-sync broadcast**. A child's learning record is not phone
+  data, and per-answer broadcasts would be a real network cost.
+- `reading/` is private to `games/quiz/`; everything else reaches it through `quizEngine.ts` /
+  `useQuizEngine`. The `skills/` domain sits *outside* `games/` so the store never imports upward.
+
+### Parent View — Learning Progress
+
+`components/progress/LearningProgressPanel.tsx` + `ProgressCharts.tsx`, reached via
+**⚙️ → 📈 Learning with a 600 ms hold** (a plain tap is a no-op — the same hidden-gesture convention
+as every other admin control here, see Design Principles). Charts are hand-rolled SVG; `recharts`
+is in `package.json` but imported nowhere, and pulling it in for six small charts wasn't worth the
+bundle. `SERIES_COLORS` is the single palette source and is CVD-validated.
+
+Derivations are pure selectors in `skills/progressSelectors.ts`:
+
+- **Momentum** — cumulative net (first-try correct − missed) over time, stock-chart style. This is
+  the "how long, and what triggered the level-up" view: the run-up is visible, and level-change
+  markers sit on the same axis.
+- **Level log** — every change with `fromLevel → toLevel`, date, and the window that caused it, so a
+  **demotion renders as honestly as a promotion**.
+- **Weekly accuracy**, **daily volume**, **per-game totals**, **hardest words**.
+- **Needs work** — weakest skills, gated at `NEEDS_WORK_MIN_ATTEMPTS = 10` so three unlucky answers
+  don't get labelled a weakness.
+
+Empty state (`"No practice yet"`) is a first-class case — a fresh profile is the normal state, not an error.
+
+### Backlog
+
+- ✍️ **Writing / spelling modes** — trace or type the word (explicitly deferred at design time).
+- 🇫🇷 **French word bank** — the generators are language-agnostic; only `wordBank.ts` and
+  `minimalPairs.ts` are English-specific.
+- 🔊 **Audio** — dropped by decision, not oversight: phoneme audio was judged overkill for the
+  current stage. Revisit only if the child stalls on L4/L5.
 
 ---
 
