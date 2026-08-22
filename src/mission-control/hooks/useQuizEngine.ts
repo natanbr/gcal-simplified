@@ -64,8 +64,32 @@ export function useQuizEngine(): QuizEngineApi {
     const difficultyRef = useRef({ mathLevel: 0, stage: 0 });
     const sessionRef = useRef<EngineSession>(freshSession());
 
+    /**
+     * The **pending** question: the one most recently served that has received
+     * zero `onAnswered` calls. A question is parked here the moment it is served
+     * and leaves only when it is answered — so if the quiz closes first (the ✕ on
+     * the opt-in quizzes, or quitting the game), it is still sitting here, and
+     * the next quiz to open on ANY surface is served it before anything new is
+     * sampled. Cancelling is therefore not a reroll.
+     *
+     * Three deliberate properties:
+     * - **Exempt from `beginSession`.** It is not part of `EngineSession`, so the
+     *   session reset does not clear it. It has to survive: the blocks rescue
+     *   quiz remounts between the cancel and the reopen and opening another game
+     *   calls `beginSession`, so a slot that cleared there would leave the reroll
+     *   loophole exactly as wide as it was. Cross-game carry is the point — a
+     *   dodge must not be laundered by switching games.
+     * - **A first-tap miss is not pending.** `onAnswered` already fired, so the
+     *   miss is recorded and the re-queue (`REQUEUE_AFTER_QUESTIONS`) owns that
+     *   word. Nothing is handled twice.
+     * - **In-memory only.** Engine session state; never persisted, never in
+     *   `mc-state-v5`, never near `skillProgress`.
+     */
+    const pendingRef = useRef<QuizQuestion | null>(null);
+
     const beginSession = useCallback((gameId: GameId) => {
         gameIdRef.current = gameId;
+        // NOTE: pendingRef is deliberately NOT reset here — see its declaration.
         sessionRef.current = freshSession();
         // Difficulty must not leak between games: snake at minute 6 sets
         // level 3, and a blocks session opened next would otherwise serve
@@ -83,11 +107,26 @@ export function useQuizEngine(): QuizEngineApi {
         const progress = progressRef.current;
         const { mathLevel, stage } = difficultyRef.current;
 
+        // The pending question wins before ANY sampling: back out of a hard
+        // question and you get that exact question back, at its own level, past
+        // the mercy rule and past the difficulty reset. Returning here — above
+        // the countdown tick — is load-bearing twice over: the question already
+        // ticked the re-queue when it was first served, so re-serving must not
+        // burn a second tick, and that is also what makes a duplicated
+        // generator() call (React StrictMode's dev double-invoke) harmless.
+        const pending = pendingRef.current;
+        if (pending) {
+            if (pending.kind === 'choice') session.lastWordId = pending.wordId;
+            return pending;
+        }
+
         for (const entry of session.requeue) entry.countdown -= 1;
 
         const mercy = session.mercyMisses >= MERCY_MISS_THRESHOLD;
         if (mercy || rng() >= currentReadingShare(progress)) {
-            return generateMathQuestion(mathLevel, rng);
+            const math = generateMathQuestion(mathLevel, rng);
+            pendingRef.current = math;
+            return math;
         }
 
         const due = session.requeue.find(entry => entry.countdown <= 0);
@@ -102,11 +141,15 @@ export function useQuizEngine(): QuizEngineApi {
             });
         }
         session.lastWordId = question.wordId;
+        pendingRef.current = question;
         return question;
     }, []);
 
     const onAnswered = useCallback((question: QuizQuestion, firstTry: boolean) => {
         const session = sessionRef.current;
+        // Any answer settles the pending slot — including a wrong first tap,
+        // which the re-queue takes over from here.
+        pendingRef.current = null;
         if (question.kind === 'choice') {
             if (firstTry) {
                 session.mercyMisses = 0;
@@ -139,6 +182,8 @@ export function useQuizEngine(): QuizEngineApi {
 
     const notifyQuizClosed = useCallback(() => {
         // The mercy rule is scoped to one quiz: a fresh quiz starts clean.
+        // pendingRef is untouched on purpose: an unanswered question at close
+        // time IS the pending question, and clearing it here would be the reroll.
         sessionRef.current.mercyMisses = 0;
     }, []);
 

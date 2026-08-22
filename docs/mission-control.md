@@ -346,6 +346,17 @@ struggling kid gets easier questions rather than a wall.
 **Retrieval practice:** a missed word is re-queued and re-served `REQUEUE_AFTER_QUESTIONS = 3`
 questions later, at the same level, via `forceWordId`. Spaced retrieval, not immediate repetition.
 
+**Cancelling is not a reroll.** The two opt-in quizzes (blocks unlock, fruits delete) show a ✕, so a
+kid who saw a hard question could close it and reopen for a freshly sampled easy one — nothing
+recorded it and the engine never learned the question was dodged. A question served with **zero**
+`onAnswered` calls when its quiz closes is now held in memory by `useQuizEngine` as the *pending*
+question, and the next quiz to open — any surface, any game — is served that exact question, at its
+own level, before anything is sampled; any answer clears the slot, and a wrong first tap is
+therefore not pending (the miss is already recorded and the re-queue owns that word). The slot is a
+deliberate exemption from `beginSession`'s reset: without it, cancel-then-reopen or simply switching
+games would clear it and the dodge would still work. In-memory session state only — nothing about it
+reaches `mc-state-v5` or `skillProgress`.
+
 ### Sampling (`quizEngine.ts`)
 
 Pure functions, injectable `rng`, no store access:
@@ -363,7 +374,7 @@ Pure functions, injectable `rng`, no store access:
 `useQuizEngine.ts` is the only store-facing piece. It is created **once** in `MCLayout` and injected
 into games as a prop, so game modules stay store-free (the existing `onClose(score)` contract).
 Session state and difficulty both reset in `beginSession`, so a level from one game can never leak
-into the next.
+into the next — the pending question is the one documented exception (see First-Attempt Contract).
 
 ### Level Movement (`store/skillProgress.ts`)
 

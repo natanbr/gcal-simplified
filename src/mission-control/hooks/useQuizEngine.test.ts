@@ -1,6 +1,12 @@
 // ============================================================
 // useQuizEngine — session behavior: stable generator identity,
-// recording payloads, the mercy rule, and the miss re-queue.
+// recording payloads, the mercy rule, the miss re-queue, and the
+// pending (served-but-unanswered) anti-reroll slot.
+//
+// Convention: generator() re-serves an unanswered question by
+// design, so a test that wants a FRESH draw must answer the
+// previous one first — exactly as QuizOverlay does, which only
+// regenerates after an answer.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -81,7 +87,9 @@ describe('useQuizEngine', () => {
         result.current.onAnswered(choiceQuestion('cat'), false);
 
         for (let i = 0; i < 6; i++) {
-            expect(result.current.generator().kind).toBe('numeric');
+            const question = result.current.generator();
+            expect(question.kind).toBe('numeric');
+            result.current.onAnswered(question, true); // clears the pending slot
         }
 
         // The mercy scope ends with the quiz.
@@ -99,7 +107,9 @@ describe('useQuizEngine', () => {
         result.current.notifyQuizClosed(); // keep mercy out of this test's way
 
         const first = result.current.generator() as ChoiceQuizQuestion;
+        result.current.onAnswered(first, true);
         const second = result.current.generator() as ChoiceQuizQuestion;
+        result.current.onAnswered(second, true);
         const third = result.current.generator() as ChoiceQuizQuestion;
 
         expect(first.wordId).not.toBe('dog');
@@ -110,12 +120,12 @@ describe('useQuizEngine', () => {
         // A second miss on the re-queued word does NOT re-queue it forever.
         result.current.onAnswered(third, false);
         result.current.notifyQuizClosed();
-        const after = [
-            result.current.generator() as ChoiceQuizQuestion,
-            result.current.generator() as ChoiceQuizQuestion,
-            result.current.generator() as ChoiceQuizQuestion,
-            result.current.generator() as ChoiceQuizQuestion,
-        ];
+        const after: ChoiceQuizQuestion[] = [];
+        for (let i = 0; i < 4; i++) {
+            const question = result.current.generator() as ChoiceQuizQuestion;
+            after.push(question);
+            result.current.onAnswered(question, true);
+        }
         expect(after.every(q => q.kind === 'choice')).toBe(true);
         expect(after.filter(q => q.wordId === 'dog')).toHaveLength(0);
     });
@@ -144,7 +154,9 @@ describe('useQuizEngine', () => {
         // (0.6): with the weighting wired, this roll serves READING. If the
         // arguments were swapped or the share hardcoded, it would serve math.
         vi.spyOn(Math, 'random').mockReturnValue(0.55);
-        expect(result.current.generator().kind).toBe('choice');
+        const weighted = result.current.generator();
+        expect(weighted.kind).toBe('choice');
+        result.current.onAnswered(weighted, true); // so the next draw is a fresh sample
 
         // Without evidence, the same roll falls on the math side of the base 0.5.
         vi.restoreAllMocks();
@@ -159,7 +171,9 @@ describe('useQuizEngine', () => {
         result.current.beginSession('snake');
         result.current.setDifficulty(3, 3);
         vi.spyOn(Math, 'random').mockReturnValue(0.99); // always math
-        expect(result.current.generator().level).toBe(3);
+        const hard = result.current.generator();
+        expect(hard.level).toBe(3);
+        result.current.onAnswered(hard, true); // answered, so nothing is carried
 
         // Closing snake and opening blocks must not inherit snake's level 3.
         result.current.beginSession('blocks');
@@ -177,5 +191,111 @@ describe('useQuizEngine', () => {
         const question = result.current.generator() as ChoiceQuizQuestion;
         expect(question.kind).toBe('choice');
         expect(question.wordId).not.toBe('dog'); // queue gone with the old session
+    });
+
+    // ---- Anti-reroll: the pending (served-but-unanswered) question ----
+
+    it('re-serves a question the kid backed out of, before sampling anything new', () => {
+        const { result } = renderHook(() => useQuizEngine());
+        result.current.beginSession('blocks');
+        const rng = vi.spyOn(Math, 'random');
+
+        rng.mockReturnValue(0.1); // reading side of the mix
+        const served = result.current.generator();
+        expect(served.kind).toBe('choice');
+
+        // The kid taps the ✕ without answering.
+        result.current.notifyQuizClosed();
+
+        // Sampling would now hand out a math question — the pending slot wins.
+        rng.mockReturnValue(0.99);
+        expect(result.current.generator()).toBe(served);
+    });
+
+    it('does not launder a dodged question by switching games', () => {
+        const { result } = renderHook(() => useQuizEngine());
+        result.current.beginSession('blocks');
+        const rng = vi.spyOn(Math, 'random');
+
+        rng.mockReturnValue(0.1);
+        const dodged = result.current.generator();
+        result.current.notifyQuizClosed();
+
+        // DELIBERATE, NOT A BUG: there is one engine instance for all games
+        // (created in MCLayout), so a question cancelled in blocks is served in
+        // fruits. Quitting the game must not be a cheaper reroll than the ✕.
+        // beginSession resets session state and difficulty — the pending slot is
+        // exempt on purpose; if it were cleared here the loophole would survive.
+        result.current.beginSession('fruits');
+
+        rng.mockReturnValue(0.99);
+        expect(result.current.generator()).toBe(dodged);
+    });
+
+    it('serves the carried question at its own level, past the difficulty reset', () => {
+        const { result } = renderHook(() => useQuizEngine());
+        result.current.beginSession('snake');
+        result.current.setDifficulty(3, 3);
+        vi.spyOn(Math, 'random').mockReturnValue(0.99); // always math
+
+        const served = result.current.generator();
+        expect(served.level).toBe(3);
+        result.current.notifyQuizClosed();
+
+        // beginSession drops difficulty to 0, but the pending slot holds the
+        // exact question — not a permission to re-sample it at an easier level.
+        result.current.beginSession('blocks');
+        const next = result.current.generator();
+        expect(next).toBe(served);
+        expect(next.level).toBe(3);
+    });
+
+    it('does not treat a first-tap miss as pending — the re-queue already owns it', () => {
+        const { result } = renderHook(() => useQuizEngine());
+        result.current.beginSession('fruits');
+        vi.spyOn(Math, 'random').mockReturnValue(0.1);
+
+        const served = result.current.generator() as ChoiceQuizQuestion;
+        result.current.onAnswered(served, false); // wrong first tap, then ✕
+        result.current.notifyQuizClosed();
+
+        const next = result.current.generator() as ChoiceQuizQuestion;
+        expect(next).not.toBe(served);
+        expect(next.wordId).not.toBe(served.wordId);
+    });
+
+    it('clears the pending slot on any answer', () => {
+        const { result } = renderHook(() => useQuizEngine());
+        result.current.beginSession('fruits');
+        vi.spyOn(Math, 'random').mockReturnValue(0.1);
+
+        const served = result.current.generator();
+        result.current.notifyQuizClosed();
+        result.current.onAnswered(choiceQuestion('zzz', 1), true);
+
+        expect(result.current.generator()).not.toBe(served);
+    });
+
+    it('re-serving is idempotent — it burns no re-queue countdown tick', () => {
+        const { result } = renderHook(() => useQuizEngine());
+        result.current.beginSession('snake');
+        vi.spyOn(Math, 'random').mockReturnValue(0.1); // always reading
+
+        result.current.onAnswered(choiceQuestion('dog', 1), false); // dog queued
+        result.current.notifyQuizClosed(); // keep mercy out of this test's way
+
+        const first = result.current.generator() as ChoiceQuizQuestion;
+        // A second generator() call with nothing answered — StrictMode's dev
+        // double-invoke, or a reopen — must hand back the same question and
+        // must NOT advance the countdown toward dog.
+        expect(result.current.generator()).toBe(first);
+        result.current.onAnswered(first, true);
+
+        const second = result.current.generator() as ChoiceQuizQuestion;
+        result.current.onAnswered(second, true);
+        const third = result.current.generator() as ChoiceQuizQuestion;
+
+        expect(second.wordId).not.toBe('dog');
+        expect(third.wordId).toBe('dog'); // still the 3rd distinct question
     });
 });
