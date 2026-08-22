@@ -172,8 +172,14 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         case 'ADJUST_BEHAVIOR_PROGRESS':
             return { id, timestamp: now, icon: '📈', message: `Mood gauge adjusted (${action.amount > 0 ? '+' : ''}${action.amount}) — ${action.reason}`, type: 'system', colorKey: 'system', ...snapshots };
         case 'END_GAME':
-            if (!state.snakeGameActive) return null;
-            return { id, timestamp: now, icon: '🏁', message: 'Game closed', type: 'reward', colorKey: 'system', ...snapshots };
+            // Deliberately unlogged. useQuickGameSession is the ONLY dispatcher
+            // of END_GAME (it is not in REMOTE_ALLOWED_ACTIONS either), and it
+            // hand-writes its own 🏁 entry carrying the score and duration —
+            // strictly more than this case could know. Deriving one here as well
+            // wrote two 🏁 lines per game and ate the 200-entry ring buffer
+            // twice as fast. START_GAME has no case here for the same reason;
+            // this makes the pair symmetric.
+            return null;
         case 'CLEAR_LOGS':
             // Deliberately unlogged here (the entry would be wiped by the very
             // action that created it). The durable disk trail records it instead.
