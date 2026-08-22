@@ -355,7 +355,11 @@ own level, before anything is sampled; any answer clears the slot, and a wrong f
 therefore not pending (the miss is already recorded and the re-queue owns that word). The slot is a
 deliberate exemption from `beginSession`'s reset: without it, cancel-then-reopen or simply switching
 games would clear it and the dodge would still work. In-memory session state only — nothing about it
-reaches `mc-state-v5` or `skillProgress`.
+reaches `mc-state-v5` or `skillProgress`. Its lifetime is therefore one Mission Control visit:
+`useQuizEngine` lives in `MCLayout`, which unmounts on the switch back to Calendar (`App.tsx`),
+so a Calendar round-trip — or the idle auto-return — drops the pending question. That is an
+acceptable boundary rather than a hole: re-entering a game costs another token, which is a
+steeper price than answering the question.
 
 ### Sampling (`quizEngine.ts`)
 
