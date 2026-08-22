@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { createLogEntry } from './activityLog';
 import { initialState } from './mcReducer';
 import type { MCState, MCAction, ActivityLogEntry } from '../types';
+import { productionSources, readSource, toRepoPath } from '../../__tests__/helpers/sourceFiles';
 
 const TIMESTAMP = '2026-08-19T12:00:00.000Z';
 
@@ -172,5 +173,34 @@ describe('activity log attribution', () => {
             expect(next.activityLogs[0].source).toBe('auto');
             expect(next.activityLogs[0].gameTokens).toBe(1);
         });
+    });
+});
+
+// ============================================================
+// One event, one entry.
+// ------------------------------------------------------------
+// useQuickGameSession dispatches END_GAME *and* hand-writes its own 🏁 entry
+// carrying the score and duration. createLogEntry used to derive a second
+// 🏁 'Game closed' line from the same action, so every game close wrote two
+// entries and burned the 200-entry ring buffer twice as fast. START_GAME never
+// had a case here, which is why only the close path doubled.
+// ============================================================
+describe('END_GAME is not double-logged', () => {
+    it('derives no entry — the dispatcher writes the richer one itself', () => {
+        const entry = createLogEntry(
+            { type: 'END_GAME', timestamp: TIMESTAMP },
+            { ...richState(), snakeGameActive: true }
+        );
+        expect(entry).toBeNull();
+    });
+
+    it('stays the only END_GAME dispatcher, so the hand-written entry cannot be bypassed', () => {
+        // Structural: if a second dispatch site appears, that caller gets NO log
+        // entry at all (this case returns null), which is a silent gap rather
+        // than a duplicate. Re-derive the decision if this ever fails.
+        const dispatchers = productionSources(['src'])
+            .filter(f => readSource(f).includes("dispatch({ type: 'END_GAME'"))
+            .map(toRepoPath);
+        expect(dispatchers).toEqual(['src/mission-control/hooks/useQuickGameSession.ts']);
     });
 });
