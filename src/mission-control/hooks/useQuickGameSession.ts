@@ -27,6 +27,9 @@ export function useQuickGameSession() {
                 message: 'Quick Game started',
                 type: 'reward',
                 colorKey: 'system',
+                // Hand-built entry: it skips `createLogEntry`, so it must set
+                // `source` itself. The child tapped a game on this machine.
+                source: 'local',
             },
         });
     }, [dispatch]);
@@ -51,6 +54,8 @@ export function useQuickGameSession() {
                 message: `Quick Game ended — Score: ${score}${durationLabel}`,
                 type: 'reward',
                 colorKey: 'system',
+                // Same as the start entry — hand-built, so `source` is manual.
+                source: 'local',
             },
         });
         gameStartRef.current = null;
