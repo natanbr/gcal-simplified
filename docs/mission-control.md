@@ -350,16 +350,32 @@ questions later, at the same level, via `forceWordId`. Spaced retrieval, not imm
 kid who saw a hard question could close it and reopen for a freshly sampled easy one — nothing
 recorded it and the engine never learned the question was dodged. A question served with **zero**
 `onAnswered` calls when its quiz closes is now held in memory by `useQuizEngine` as the *pending*
-question, and the next quiz to open — any surface, any game — is served that exact question, at its
-own level, before anything is sampled; any answer clears the slot, and a wrong first tap is
-therefore not pending (the miss is already recorded and the re-queue owns that word). The slot is a
-deliberate exemption from `beginSession`'s reset: without it, cancel-then-reopen or simply switching
-games would clear it and the dodge would still work. In-memory session state only — nothing about it
-reaches `mc-state-v5` or `skillProgress`. Its lifetime is therefore one Mission Control visit:
-`useQuizEngine` lives in `MCLayout`, which unmounts on the switch back to Calendar (`App.tsx`),
-so a Calendar round-trip — or the idle auto-return — drops the pending question. That is an
-acceptable boundary rather than a hole: re-entering a game costs another token, which is a
-steeper price than answering the question.
+question, and the next quiz on that surface is served that exact question before anything is
+sampled. Any answer clears the slot, so a wrong first tap is not pending — the miss is already
+recorded and the re-queue owns that word. `onAnswered` is a **required** prop for the same reason:
+a surface that omitted it would wedge the engine on one question for the rest of the visit.
+
+**The pin dies with the game session.** `beginSession` clears it, so it never crosses into another
+game. This is deliberate and was arrived at the hard way — the first implementation let it cross,
+which looked like a stronger anti-cheat and was actually a trap:
+
+- Each game has exactly one quiz surface, and **snake's revive quiz has no ✕** — numeric questions
+  there retry until solved. A hard question backed out of where quitting was free got collected
+  where there was no way out but forfeiting the session.
+- `onAnswered` stamps `gameId` from the *current* session while the carried question keeps its own
+  `level`, so a level-4 blocks question answered in snake recorded as **snake, level 4** in
+  `skillProgress` — corrupting the per-game breakdown the Learning tab exists to show.
+- It bought nothing. `beginSession` fires once per paid game session, so cancel-and-reopen *within*
+  a session never reaches it; session-scoping closes the real loophole just as well. Crossing games
+  costs a filled reward case, which is already a steeper price than answering the question.
+
+**An armed mercy state outranks the pin.** Backing out is the clearest "this is too hard" signal the
+app has; pinning the hard question past the safety net would build the wall mercy exists to remove.
+A pinned *numeric* question is still honoured under mercy — it is already what mercy would serve, and
+honouring it keeps a repeated `generator()` call idempotent.
+
+In-memory session state only — nothing about it reaches `mc-state-v5` or `skillProgress`, and it also
+dies when `MCLayout` unmounts on the switch back to Calendar.
 
 ### Sampling (`quizEngine.ts`)
 
@@ -420,9 +436,10 @@ Enforced structurally by `__tests__/skill-progress-boundaries.test.ts`:
 
 `components/progress/LearningProgressPanel.tsx` + `ProgressCharts.tsx`, reached via
 **⚙️ → 📈 Learning with a 600 ms hold** (a plain tap is a no-op — the same hidden-gesture convention
-as every other admin control here, see Design Principles). Charts are hand-rolled SVG; `recharts`
-is in `package.json` but imported nowhere, and pulling it in for six small charts wasn't worth the
-bundle. `SERIES_COLORS` is the single palette source and is CVD-validated.
+as every other admin control here, see Design Principles). Charts are hand-rolled SVG; `recharts` was
+dropped from `package.json` (2026-08-21) after sitting there imported nowhere — pulling a
+charting library in for six small charts was never worth the bundle. `SERIES_COLORS` is the single
+palette source and is CVD-validated.
 
 Derivations are pure selectors in `skills/progressSelectors.ts`:
 
