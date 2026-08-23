@@ -54,6 +54,11 @@ const FORBIDDEN_PREFIXES = [
     'src/hooks/',
     'src/utils/',
     'src/features/',
+    // Test helpers count. A repo-wide structural guard that needs
+    // helpers/sourceFiles belongs in src/__tests__/, not inside the module it
+    // watches — this prefix was missing when an attribution guard reached into
+    // it, which is how the module acquired its only parent-tree import.
+    'src/__tests__/',
 ];
 
 describe('Mission Control isolation contract', () => {

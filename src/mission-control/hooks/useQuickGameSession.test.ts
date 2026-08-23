@@ -64,8 +64,11 @@ describe('useQuickGameSession attribution', () => {
     });
 
     it('attributes an end entry even when the session was never opened', () => {
-        // Defensive: the overlay can call onClose without a recorded start
-        // (e.g. a remote START_GAME opened it). That entry needs a source too.
+        // Defensive only — no production caller reaches this today. The
+        // rationale it originally cited (a remote START_GAME opening the
+        // overlay) is impossible by design: START_GAME is deliberately absent
+        // from REMOTE_ALLOWED_ACTIONS because a remote-opened game with no
+        // overlay mounted would be unclosable. The entry still needs a source.
         const { result } = renderHook(() => useQuickGameSession());
 
         act(() => {

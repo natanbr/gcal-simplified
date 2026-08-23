@@ -130,6 +130,14 @@ const REGISTRY: Rule[] = [
         status: 'guarded',
         guard: 'src/mission-control/store/activityLog.attribution.test.ts',
         verifiedRedBy: 'remove `source` from deriveSnapshots',
+        defence: 'Covers only the entries createLogEntry DERIVES. An entry built by hand and dispatched straight as ADD_LOG never reaches it — which is exactly how the two useQuickGameSession entries shipped with source undefined (fixed 2026-08-21). That hook is the only hand-building site today and carries its own guard: src/mission-control/hooks/useQuickGameSession.test.ts asserts source === local on both entries. A new hand-built entry anywhere else needs its own test; nothing catches one structurally.',
+    },
+    {
+        rule: 'One game close, one 🏁 entry — END_GAME derives nothing because its dispatcher hand-writes the richer entry',
+        source: 'Corollary of CLAUDE.md → Conventions → Attribution (a parent cannot see who moved what if one event logs twice, or not at all). Stated in full at UNLOGGED_ACTIONS in src/mission-control/store/activityLog.ts',
+        status: 'guarded',
+        guard: 'src/mission-control/store/activityLog.attribution.test.ts',
+        verifiedRedBy: 'add a SECOND END_GAME dispatcher as a new file under src/mission-control/, written multi-line (the type sits on its own line) — the dispatcher list goes red naming both paths (proven 2026-08-21). Counterpart proof: a file whose only occurrence is inside a line comment stays GREEN. The previous literal-substring matcher failed both ways round — red on the comment, green on the real multi-line dispatch.',
     },
     {
         rule: 'REMOTE_ALLOWED_ACTIONS is an allowlist; remote buttons must be added to it',
