@@ -30,8 +30,13 @@ interface QuizOverlayProps {
     currentCorrect: number;
     generator: QuizGenerator;
     onCorrect: () => void;
-    /** Recording hook — fired once per question at the first-attempt moment. */
-    onAnswered?: (question: QuizQuestion, firstTry: boolean) => void;
+    /**
+     * Recording hook — fired once per question at the first-attempt moment.
+     * REQUIRED, not a nicety: it is the only thing that clears the engine's
+     * pending-question slot, so a surface that omitted it would wedge the
+     * engine on one question for the rest of the Mission Control visit.
+     */
+    onAnswered: (question: QuizQuestion, firstTry: boolean) => void;
     /** Renders a ✕ — only the opt-in quizzes (blocks unlock, fruits delete) pass this. */
     onCancel?: () => void;
     /** Fired when the overlay closes — lets the engine end its mercy scope. */
@@ -115,7 +120,7 @@ export function QuizOverlay({
         const correct = answer === question.answer;
         if (!answeredRef.current) {
             answeredRef.current = true;
-            onAnswered?.(question, correct);
+            onAnswered(question, correct);
         }
         setFeedback(correct ? 'correct' : 'wrong');
     }, [question, onAnswered]);
@@ -133,7 +138,7 @@ export function QuizOverlay({
         const firstAttempt = !answeredRef.current;
         if (firstAttempt) {
             answeredRef.current = true;
-            onAnswered?.(question, correct);
+            onAnswered(question, correct);
         }
 
         if (correct) {

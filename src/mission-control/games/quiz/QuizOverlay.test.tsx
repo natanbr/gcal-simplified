@@ -28,16 +28,21 @@ function makeCountingGenerator() {
 function renderOverlay(overrides: Partial<React.ComponentProps<typeof QuizOverlay>> = {}) {
     const counting = makeCountingGenerator();
     const onCorrect = vi.fn();
+    const onAnswered = vi.fn();
     const props: React.ComponentProps<typeof QuizOverlay> = {
         open: true,
         requiredCorrect: 3,
         currentCorrect: 0,
         generator: counting.generator,
         onCorrect,
+        // Required, not decoration: onAnswered is the only thing that clears
+        // the engine's pending-question slot. A surface that omits it wedges
+        // the engine on one question for the rest of the visit.
+        onAnswered,
         ...overrides,
     };
     const utils = render(<QuizOverlay {...props} />);
-    return { ...utils, counting, onCorrect, props };
+    return { ...utils, counting, onCorrect, onAnswered, props };
 }
 
 function tapDigit(digit: string) {

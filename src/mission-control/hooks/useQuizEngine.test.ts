@@ -212,27 +212,42 @@ describe('useQuizEngine', () => {
         expect(result.current.generator()).toBe(served);
     });
 
-    it('does not launder a dodged question by switching games', () => {
+    it('drops the pinned question when a new game session begins', () => {
         const { result } = renderHook(() => useQuizEngine());
         result.current.beginSession('blocks');
         const rng = vi.spyOn(Math, 'random');
 
         rng.mockReturnValue(0.1);
         const dodged = result.current.generator();
+        expect(dodged.kind).toBe('choice');
         result.current.notifyQuizClosed();
 
-        // DELIBERATE, NOT A BUG: there is one engine instance for all games
-        // (created in MCLayout), so a question cancelled in blocks is served in
-        // fruits. Quitting the game must not be a cheaper reroll than the ✕.
-        // beginSession resets session state and difficulty — the pending slot is
-        // exempt on purpose; if it were cleared here the loophole would survive.
+        // DELIBERATE: the pin is session-scoped, and because each game has
+        // exactly ONE quiz surface, session scope buys surface scope for free —
+        // a pinned question can only ever be re-served by the surface that
+        // created it. The anti-reroll property is untouched: beginSession is not
+        // the reroll boundary. It fires once per GAME session (MissionControl's
+        // effect keys on activeGameType), so cancel-and-reopen *within* one game
+        // never reaches it.
+        //
+        // Cross-game carry was tried in 708a68c and rejected. Backing out is
+        // free by design on the two opt-in surfaces (blocks unlock, fruits
+        // delete — both show a ✕). Snake's revive quiz has no ✕ and numeric
+        // questions retry until solved, so a hard question pinned where quitting
+        // was free got collected where the only exits are answering it or
+        // forfeiting the run. The entry condition was not cheating; it was "a
+        // 5-year-old closed a game with a quiz on screen". And it bought almost
+        // nothing: quitting to reroll already costs a re-entry, i.e. a filled
+        // reward case — a far steeper price than answering the question.
         result.current.beginSession('fruits');
 
         rng.mockReturnValue(0.99);
-        expect(result.current.generator()).toBe(dodged);
+        const fresh = result.current.generator();
+        expect(fresh).not.toBe(dodged);
+        expect(fresh.kind).toBe('numeric'); // freshly sampled, not the carried pin
     });
 
-    it('serves the carried question at its own level, past the difficulty reset', () => {
+    it('serves the pinned question at its own level, past a difficulty change', () => {
         const { result } = renderHook(() => useQuizEngine());
         result.current.beginSession('snake');
         result.current.setDifficulty(3, 3);
@@ -242,9 +257,11 @@ describe('useQuizEngine', () => {
         expect(served.level).toBe(3);
         result.current.notifyQuizClosed();
 
-        // beginSession drops difficulty to 0, but the pending slot holds the
-        // exact question — not a permission to re-sample it at an easier level.
-        result.current.beginSession('blocks');
+        // Games drive setDifficulty from an effect as their level ramps, so the
+        // difficulty moves between two quizzes of the SAME session. The pin
+        // holds that exact question — it is not a licence to re-sample the slot
+        // at whatever level is current now.
+        result.current.setDifficulty(0, 0);
         const next = result.current.generator();
         expect(next).toBe(served);
         expect(next.level).toBe(3);
@@ -297,5 +314,34 @@ describe('useQuizEngine', () => {
 
         expect(second.wordId).not.toBe('dog');
         expect(third.wordId).toBe('dog'); // still the 3rd distinct question
+    });
+
+    it('lets an armed mercy state outrank the pin', () => {
+        const { result } = renderHook(() => useQuizEngine());
+        result.current.beginSession('blocks');
+
+        // Two first-attempt reading misses arm the mercy rule.
+        result.current.onAnswered(choiceQuestion('dog'), false);
+        result.current.onAnswered(choiceQuestion('cat'), false);
+
+        vi.spyOn(Math, 'random').mockReturnValue(0.1); // reading side of the mix
+        const served = result.current.generator();
+        expect(served.kind).toBe('numeric'); // mercy wins the mix
+
+        // The pin can never route a question around the safety net. Today the
+        // harmful state — a READING pin held while mercy is armed — is not
+        // constructible: onAnswered is the only writer of mercyMisses and it
+        // clears the pin first, so by the time mercy arms, the pin is empty and
+        // the next question is the mercy question itself. The generator still
+        // checks mercy before honouring a reading pin, so the invariant does not
+        // depend on that coincidence holding forever.
+        //
+        // What IS reachable is this: mercy armed, math pinned. A second
+        // generator() call with nothing answered — StrictMode's dev
+        // double-invoke, or the blocks quiz being closed by UNMOUNT (which never
+        // fires onClosed, so the mercy scope survives) and reopened — must hand
+        // back the same object. That is what fails if mercy is made to outrank
+        // the pin by simply moving the pending check below it.
+        expect(result.current.generator()).toBe(served);
     });
 });

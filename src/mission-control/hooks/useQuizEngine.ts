@@ -68,17 +68,26 @@ export function useQuizEngine(): QuizEngineApi {
      * The **pending** question: the one most recently served that has received
      * zero `onAnswered` calls. A question is parked here the moment it is served
      * and leaves only when it is answered — so if the quiz closes first (the ✕ on
-     * the opt-in quizzes, or quitting the game), it is still sitting here, and
-     * the next quiz to open on ANY surface is served it before anything new is
-     * sampled. Cancelling is therefore not a reroll.
+     * the opt-in quizzes), it is still sitting here and the next quiz to open is
+     * served it before anything new is sampled. Cancelling is not a reroll.
      *
-     * Three deliberate properties:
-     * - **Exempt from `beginSession`.** It is not part of `EngineSession`, so the
-     *   session reset does not clear it. It has to survive: the blocks rescue
-     *   quiz remounts between the cancel and the reopen and opening another game
-     *   calls `beginSession`, so a slot that cleared there would leave the reroll
-     *   loophole exactly as wide as it was. Cross-game carry is the point — a
-     *   dodge must not be laundered by switching games.
+     * Four deliberate properties:
+     * - **Cleared by `beginSession`, i.e. scoped to one game session.** That is
+     *   the whole anti-reroll boundary, because `beginSession` fires once per
+     *   GAME session (`MissionControl`'s effect keys on `activeGameType`) — a
+     *   cancel-and-reopen *within* one game never reaches it, which is the
+     *   loophole this slot exists to close. And since each game has exactly ONE
+     *   quiz surface, session scope buys surface scope for free: a pinned
+     *   question can only ever be re-served by the surface that pinned it.
+     * - **No cross-game carry.** Tried in 708a68c, reverted. Backing out is free
+     *   by design on the two opt-in surfaces (blocks unlock, fruits delete);
+     *   snake's revive quiz has no ✕ and numeric questions retry until solved.
+     *   Carrying across games therefore collected a question the child could
+     *   walk away from onto a surface where the only exits are answering it or
+     *   forfeiting the run — and the entry condition was not cheating, it was "a
+     *   5-year-old quit a game with a quiz on screen". It also bought almost
+     *   nothing: re-entering a game already costs a filled reward case, a far
+     *   steeper price than answering the question.
      * - **A first-tap miss is not pending.** `onAnswered` already fired, so the
      *   miss is recorded and the re-queue (`REQUEUE_AFTER_QUESTIONS`) owns that
      *   word. Nothing is handled twice.
@@ -89,7 +98,8 @@ export function useQuizEngine(): QuizEngineApi {
 
     const beginSession = useCallback((gameId: GameId) => {
         gameIdRef.current = gameId;
-        // NOTE: pendingRef is deliberately NOT reset here — see its declaration.
+        // A new game session drops the pin with the rest of the session state.
+        pendingRef.current = null;
         sessionRef.current = freshSession();
         // Difficulty must not leak between games: snake at minute 6 sets
         // level 3, and a blocks session opened next would otherwise serve
@@ -109,20 +119,29 @@ export function useQuizEngine(): QuizEngineApi {
 
         // The pending question wins before ANY sampling: back out of a hard
         // question and you get that exact question back, at its own level, past
-        // the mercy rule and past the difficulty reset. Returning here — above
-        // the countdown tick — is load-bearing twice over: the question already
-        // ticked the re-queue when it was first served, so re-serving must not
-        // burn a second tick, and that is also what makes a duplicated
-        // generator() call (React StrictMode's dev double-invoke) harmless.
+        // a mid-session difficulty change. Returning here — above the countdown
+        // tick — is load-bearing twice over: the question already ticked the
+        // re-queue when it was first served, so re-serving must not burn a
+        // second tick, and that is also what makes a duplicated generator() call
+        // (React StrictMode's dev double-invoke) harmless.
+        //
+        // Mercy is the one thing that outranks the pin. A reading pin is dropped
+        // while mercy is armed, so a question the child backed out of can never
+        // route around the safety net; a MATH pin is still honoured, because it
+        // is already what mercy would serve and honouring it is what keeps a
+        // repeat generator() call idempotent under mercy. (Today the dropped
+        // case is unreachable — `onAnswered` is the only writer of `mercyMisses`
+        // and it clears the pin first — so this ordering is defensive, not a
+        // live path. Do not "simplify" it into an unconditional early return.)
+        const mercy = session.mercyMisses >= MERCY_MISS_THRESHOLD;
         const pending = pendingRef.current;
-        if (pending) {
+        if (pending && (!mercy || pending.kind === 'numeric')) {
             if (pending.kind === 'choice') session.lastWordId = pending.wordId;
             return pending;
         }
 
         for (const entry of session.requeue) entry.countdown -= 1;
 
-        const mercy = session.mercyMisses >= MERCY_MISS_THRESHOLD;
         if (mercy || rng() >= currentReadingShare(progress)) {
             const math = generateMathQuestion(mathLevel, rng);
             pendingRef.current = math;
