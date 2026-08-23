@@ -751,3 +751,70 @@ a question no longer triggers a Supabase broadcast; `skillProgress` never rides 
 (1033 → 828 lines); `MissionControl` shed the quick-game session hook and `RemoteIndicator`
 (338 → under the limit); `QuizOverlay` split into per-kind panels and traded its raw hex for
 `--mc-quiz-*` tokens (its style-ratchet entry is deleted, not raised).
+
+### 2026-08-21 Log Fidelity, the Quiz-Cancel Loophole, and a Lighter Rescue Overlay
+
+**What shipped**: follow-ups to the reading-practice change above. No new feature here — every item
+is something that entry got wrong, left unsaid, or shipped with a hole in it.
+
+**Activity log — attribution**
+- The 🕹️ "Quick Game started" and 🏁 "Quick Game ended" entries are built by hand in
+  `useQuickGameSession` and dispatched straight as `ADD_LOG`, bypassing `createLogEntry`'s
+  derivation — so both shipped with `source` undefined, against CLAUDE.md's attribution rule. Both
+  are now `'local'`: the child tapped a game on this machine, and the remote path never routes
+  through this hook. The guard asserts the exact value rather than presence, because a
+  plausible-but-wrong `'system'` would pass a truthiness check while lying to the parent.
+
+**Activity log — one event, one entry**
+- Every quick game wrote TWO 🏁 lines: the hand-built one carrying the score and duration, plus a
+  derived "Game closed" line from the same `END_GAME` action. The 200-entry ring buffer filled at
+  twice the rate, halving how far back a parent can actually see. `END_GAME` now derives nothing and
+  joins `START_GAME`, `ADD_LOG` and `RECORD_QUIZ_ANSWER` in `UNLOGGED_ACTIONS` — short-circuited
+  *before* the speculative reducer run rather than falling through the switch after paying for it.
+- **Accepted loss, recorded so nobody re-engineers it**: the derived entry spread the balance
+  snapshot (`totalTokens` / `bankTokens` / `gameTokens`), which renders as chips in the log and is
+  mirrored into the append-only NDJSON trail. Game-close lines no longer carry those chips. That is
+  the right trade: no tokens move at `END_GAME`, `START_GAME` never had snapshots either, and the
+  next balance-changing entry restates all three.
+
+**Cancelling a quiz is not a reroll**
+- The ✕ added to the opt-in quizzes (blocks unlock, fruits delete) in the 2026-08-20 entry left a
+  hole: backing out of a question left no trace, so reopening sampled a fresh one. Tap ✕ until the
+  question is easy and the adaptive engine never learns the hard one was dodged — the exact
+  first-attempt contract the reading feature rests on.
+- The engine now parks every question it serves in a pending slot and clears it on any answer. A
+  question that received zero answers when its quiz closed is still parked, and the next quiz to
+  open **on the same surface, within the same game session** is served that exact question — same
+  wording, same difficulty level — before anything new is sampled. Parking on serve rather than on
+  close is deliberate: the blocks rescue layer is conditionally mounted and never emits a close
+  signal at all, and parking also covers quitting a game mid-quiz, which no close-signal design
+  would catch.
+- The slot is scoped to one game session: a parked question does **not** follow the child into a
+  different game. Dodging that way means exiting the game and paying another token to re-enter,
+  which costs more than answering the question.
+
+**Rescue quiz backdrop (perf)**
+- `RescueQuizLayer` painted its own dim + 8px `backdrop-filter` and then mounted `QuizOverlay`,
+  which paints its own dim + 4px blur over the *same* rectangle — two dims compositing to ~0.97
+  alpha and two blur passes for one visible result, on a project with a hard idle-CPU budget. The
+  wrapper is now a pure positioning shell; `zIndex: 1000` stays, since it layers the quiz above the
+  shapes tray and the dev HUD. Snake and fruit-merge already mounted `QuizOverlay` bare — blocks
+  was the outlier.
+
+**Dependencies**
+- `recharts` dropped from `package.json`. It predated the Learning Progress panel and was imported
+  nowhere — those charts are hand-rolled SVG. It was worse than dead weight: the premium-ui skill
+  cited it as the project's charting library, so the next person adding a chart would have reached
+  for a dependency nobody had ever wired up. Six small charts never justified the bundle; the docs
+  now say so in the past tense.
+
+**Guards**
+- The structural test pinning `useQuickGameSession` as the only `END_GAME` dispatcher matched a
+  literal string. Proven bypassable both ways: a mere *comment* containing that string turned it
+  red, and a real dispatch written multi-line — the formatting its own sibling `ADD_LOG` call
+  already uses — left it green. It now strips comments before matching and tolerates whitespace,
+  with both forms re-proven. An outcome test was added alongside it, running the real `useMCDispatch`
+  interceptor over the real reducer and asserting exactly one 🏁 entry lands per close.
+- The rule registry now records what the attribution guard structurally *cannot* see — entries
+  built by hand and dispatched as `ADD_LOG` never reach `createLogEntry` — and names the per-site
+  test that covers the one such site.
