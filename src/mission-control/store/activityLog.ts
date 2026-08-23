@@ -29,12 +29,44 @@ function deriveSnapshots(state: MCState, action: MCAction) {
 /**
  * Action types that never produce an interceptor log entry. Listed HERE,
  * before any work happens, because `deriveSnapshots` below runs the full
- * reducer speculatively — for a per-answer action like RECORD_QUIZ_ANSWER
- * that would mean every quiz tap pays the reducer twice. (Its level-change
- * log is written inside the reducer itself, mood-grant style.)
+ * reducer speculatively: reaching `default: return null` from the switch costs
+ * a whole reduce — including the 200-entry `activityLogs.slice(0, 200)`
+ * allocation — to produce nothing at all.
+ *
+ * - `RECORD_QUIZ_ANSWER` — a per-answer action, so every quiz tap would pay
+ *   the reducer twice. (Its level-change log is written inside the reducer
+ *   itself, mood-grant style.)
+ *
+ * - `START_GAME` / `END_GAME` — `useQuickGameSession` is the only dispatcher
+ *   of either (neither is in `REMOTE_ALLOWED_ACTIONS`) and it hand-writes its
+ *   own 🕹️ / 🏁 entries carrying the score and duration, which is strictly
+ *   more than a derived entry could know. Deriving one here as well wrote two
+ *   🏁 lines per close and ate the 200-entry ring buffer twice as fast.
+ *
+ *   ACCEPTED CONSEQUENCE — chosen, not overlooked, so do not re-engineer it:
+ *   the removed `END_GAME` case spread `...snapshots`, so game-close entries
+ *   used to carry `totalTokens` / `bankTokens` / `gameTokens`. Those render as
+ *   chips in `components/activity-log/LogItemRow.tsx` and are mirrored into
+ *   the append-only NDJSON trail by `store/useAuditTrail.ts`; the hand-built
+ *   entry carries none, so game-close lines lost their balance chips. That is
+ *   fine: no tokens move at `END_GAME`, `START_GAME` never had snapshots
+ *   either, and the next balance-changing entry restates all three.
+ *
+ * - `ADD_LOG` — the two hand-built entries in `useQuickGameSession` are
+ *   dispatched through the `useMCDispatch` interceptor, so they arrive here
+ *   and would each pay a full reduce just to fall through to `default`.
+ *   Short-circuiting them is safe because the interceptor's OWN `ADD_LOG`
+ *   (step 3 in `useMCStore.tsx`) is issued on the raw React dispatch and never
+ *   re-enters this function.
+ *
+ * `CLEAR_LOGS` deliberately stays in the switch below — its `null` is a
+ * semantic decision, not a cost one, and the comment there explains it.
  */
 const UNLOGGED_ACTIONS = new Set<MCAction['type']>([
     'RECORD_QUIZ_ANSWER',
+    'START_GAME',
+    'END_GAME',
+    'ADD_LOG',
 ]);
 
 export function createLogEntry(action: MCAction, state: MCState): ActivityLogEntry | null {
@@ -171,15 +203,6 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         }
         case 'ADJUST_BEHAVIOR_PROGRESS':
             return { id, timestamp: now, icon: '📈', message: `Mood gauge adjusted (${action.amount > 0 ? '+' : ''}${action.amount}) — ${action.reason}`, type: 'system', colorKey: 'system', ...snapshots };
-        case 'END_GAME':
-            // Deliberately unlogged. useQuickGameSession is the ONLY dispatcher
-            // of END_GAME (it is not in REMOTE_ALLOWED_ACTIONS either), and it
-            // hand-writes its own 🏁 entry carrying the score and duration —
-            // strictly more than this case could know. Deriving one here as well
-            // wrote two 🏁 lines per game and ate the 200-entry ring buffer
-            // twice as fast. START_GAME has no case here for the same reason;
-            // this makes the pair symmetric.
-            return null;
         case 'CLEAR_LOGS':
             // Deliberately unlogged here (the entry would be wiped by the very
             // action that created it). The durable disk trail records it instead.

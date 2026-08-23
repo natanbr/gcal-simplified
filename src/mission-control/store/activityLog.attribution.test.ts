@@ -10,10 +10,12 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
+import React from 'react';
+import { renderHook, act } from '@testing-library/react';
 import { createLogEntry } from './activityLog';
-import { initialState } from './mcReducer';
+import { initialState, mcReducer } from './mcReducer';
+import { MCContext, useMCDispatch } from './useMCStore';
 import type { MCState, MCAction, ActivityLogEntry } from '../types';
-import { productionSources, readSource, toRepoPath } from '../../__tests__/helpers/sourceFiles';
 
 const TIMESTAMP = '2026-08-19T12:00:00.000Z';
 
@@ -184,7 +186,14 @@ describe('activity log attribution', () => {
 // 🏁 'Game closed' line from the same action, so every game close wrote two
 // entries and burned the 200-entry ring buffer twice as fast. START_GAME never
 // had a case here, which is why only the close path doubled.
+//
+// The failure mode has since inverted: END_GAME is now in UNLOGGED_ACTIONS, so
+// a SECOND dispatcher would get no entry at all — a silent gap rather than a
+// visible duplicate. That is what the structural test below watches for.
 // ============================================================
+
+
+
 describe('END_GAME is not double-logged', () => {
     it('derives no entry — the dispatcher writes the richer one itself', () => {
         const entry = createLogEntry(
@@ -194,13 +203,40 @@ describe('END_GAME is not double-logged', () => {
         expect(entry).toBeNull();
     });
 
-    it('stays the only END_GAME dispatcher, so the hand-written entry cannot be bypassed', () => {
-        // Structural: if a second dispatch site appears, that caller gets NO log
-        // entry at all (this case returns null), which is a silent gap rather
-        // than a duplicate. Re-derive the decision if this ever fails.
-        const dispatchers = productionSources(['src'])
-            .filter(f => readSource(f).includes("dispatch({ type: 'END_GAME'"))
-            .map(toRepoPath);
-        expect(dispatchers).toEqual(['src/mission-control/hooks/useQuickGameSession.ts']);
+    it('lands exactly one entry when the real interceptor + reducer process a close', () => {
+        // Outcome, not structure: the real useMCDispatch interceptor over the
+        // real reducer. END_GAME must derive nothing AND the hand-built ADD_LOG
+        // that follows must not derive a second entry of its own.
+        let latest: MCState = richState();
+
+        const Wrapper = ({ children }: { children: React.ReactNode }) => {
+            const [state, dispatch] = React.useReducer(mcReducer, richState());
+            latest = state;
+            return React.createElement(MCContext.Provider, { value: { state, dispatch } }, children);
+        };
+
+        const { result } = renderHook(() => useMCDispatch(), { wrapper: Wrapper });
+
+        act(() => {
+            result.current({ type: 'END_GAME' });
+        });
+        act(() => {
+            result.current({
+                type: 'ADD_LOG',
+                log: {
+                    id: 'game-end-test',
+                    timestamp: TIMESTAMP,
+                    icon: '🏁',
+                    message: 'Quick Game ended — Score: 42 (30s)',
+                    type: 'reward',
+                    colorKey: 'system',
+                    source: 'local',
+                },
+            });
+        });
+
+        const finishes = latest.activityLogs.filter(l => l.icon === '🏁');
+        expect(finishes, 'one game close must produce exactly one 🏁 entry').toHaveLength(1);
+        expect(finishes[0].message).toContain('Score: 42');
     });
 });
