@@ -7,8 +7,23 @@
 /* ---- Google Fonts ---- */
 /* Fonts are managed via <link> tags in index.html to appease Electron's strict Content Security Policy */
 
-/* ---- Color Tokens (Baby Pastel Palette) ---- */
-.mc-root {
+/* ---- Color Tokens (Baby Pastel Palette) ----
+   `.mc-tokens` is the token scope for Mission Control surfaces that App.tsx
+   mounts OUTSIDE `.mc-root` — position:fixed overlays that must sit on top of
+   either view, and therefore render as siblings of <MissionControl>. Without a
+   scope the --mc-* references in those components are invalid at
+   computed-value time, and an inherited property like `color` silently falls
+   back to the calendar body's colour, which is near-white in dark mode.
+
+   It declares custom properties and NOTHING else — no font, no layout, no
+   descendant rules — so it can be dropped onto any element without dragging
+   `.mc-root`'s full-viewport reset along with it.
+
+   MissionOverlay predates this class and injects the same three text tokens as
+   inline styles; both mechanisms work, and consolidating it here is follow-up
+   work, not a behaviour change. */
+.mc-root,
+.mc-tokens {
   /* Backgrounds */
   --mc-bg: #f0f4ff;
   --mc-surface: #ffffff;

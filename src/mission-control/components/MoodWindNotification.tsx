@@ -39,6 +39,15 @@ export function MoodWindNotification() {
         <AnimatePresence>
             {visible && (
                 <motion.div
+                    data-testid="mc-mood-wind-toast"
+                    // App.tsx mounts this toast as a SIBLING of <MissionControl>,
+                    // so it never has `.mc-root` as an ancestor on either view and
+                    // the --mc-* properties below have no scope to resolve in.
+                    // `mc-tokens` (styles/mc.css) is that scope: custom properties
+                    // only, so none of `.mc-root`'s viewport-sized reset comes with
+                    // it. Without it the text inherits the calendar body colour —
+                    // near-white in dark mode, on a near-white card.
+                    className="mc-tokens"
                     initial={{ opacity: 0, y: -100, x: '-50%' }}
                     animate={{ opacity: 1, y: 40, x: '-50%' }}
                     exit={{ opacity: 0, y: -20 }}
@@ -61,7 +70,11 @@ export function MoodWindNotification() {
                 >
                     <div style={{ fontSize: 32 }}>{mood.emoji}</div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--mc-text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                        {/* --mc-text-muted, not --mc-text-dim: dim is ~2:1 on this
+                            near-white card and reads as a smudge. Matches the
+                            eyebrow label in MissionOverlay, which is the same
+                            10px-ish uppercase treatment on the same light surface. */}
+                        <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--mc-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                             Mood Update
                         </div>
                         <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--mc-text)', lineHeight: 1.1 }}>
