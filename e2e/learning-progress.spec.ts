@@ -2,9 +2,14 @@
  * Mission Control — Learning Progress E2E
  *
  * Smoke-tests the parent-facing Learning tab in the settings overlay:
- * open ⚙️ → 📈 Learning → the panel renders (its empty state on a fresh
- * profile, or the charts header on a played one — the suite runs against
- * the developer's real userData, so both are legitimate).
+ * open ⚙️ → 📈 Learning → the panel renders its empty state.
+ *
+ * The profile is a throwaway one (see helpers/userDataDir.ts), so "no practice
+ * yet" is the only correct answer. This spec used to accept EITHER the empty
+ * state or the charts header, because it ran against the developer's real
+ * userData and could not know which it would get — an assertion that passes
+ * whichever of two opposite things happens is barely an assertion. Isolation
+ * is what makes it precise.
  *
  * In-game reading questions are DELIBERATELY not E2E-tested: reaching a
  * quiz requires spending a real game token, playing until a death/opt-in
@@ -13,33 +18,13 @@
  * and useQuizEngine unit suites instead.
  */
 
-import { test, expect, _electron as electron } from '@playwright/test';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
+import { ELECTRON_MAIN, expect, mcTest as test } from './helpers/mcApp';
 
 test.describe('Mission Control — Learning Progress tab', () => {
     test.skip(!existsSync(ELECTRON_MAIN), 'Electron build not present');
 
-    test('settings → Learning shows the progress panel', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        const base = page.url().split('?')[0];
-        await page.goto(`${base}?mc=1`);
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
+    test('settings → Learning shows the progress panel', async ({ mcPage: page }) => {
         await page.locator('[data-testid="mc-settings-btn"]').click();
         await expect(page.locator('[data-testid="mc-settings-panel"]')).toBeVisible();
 
@@ -47,11 +32,7 @@ test.describe('Mission Control — Learning Progress tab', () => {
         // it; `delay` keeps the button pressed long enough to fire the hold.
         await page.getByRole('button', { name: '📈 Learning' }).click({ delay: 900 });
 
-        // Fresh profile → empty state; played profile → the panel header.
-        const emptyState = page.getByText('No practice yet');
-        const header = page.getByText('📈 Learning Progress');
-        await expect(emptyState.or(header).first()).toBeVisible();
-
-        await app.close();
+        // Fresh profile — nothing has been practised, so this is deterministic.
+        await expect(page.getByText('No practice yet')).toBeVisible();
     });
 });
