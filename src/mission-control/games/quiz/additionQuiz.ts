@@ -22,6 +22,13 @@ export const MIN_ADDEND = 2;
 export const MIN_MINUEND = 10;
 /** …and "−1" is as trivial as "+1", so the subtrahend has its own floor. */
 export const MIN_SUBTRAHEND = 2;
+/**
+ * Floor on the DIFFERENCE, not just the operands. MIN_MINUEND stops `3 - 1`,
+ * but `12 - 11 = 1` clears every operand floor and is still just counting back
+ * one. That is the same triviality MIN_SUM exists to remove on the addition
+ * side, so it needs its own floor.
+ */
+export const MIN_DIFFERENCE = 3;
 /** Multiplication factors start at the first non-identity one. */
 export const MIN_MULT_FACTOR = 2;
 /** Kid-friendly cap: multiplication never exceeds MAX_MULT_FACTOR × MAX_MULT_FACTOR. */
@@ -106,8 +113,16 @@ export function generateAdditionQuestion(maxSum: number = DEFAULT_MAX_SUM, rng: 
 }
 
 export function generateSubtractionQuestion(maxVal: number = DEFAULT_MAX_MINUEND, rng: Rng = Math.random): NumericQuestionCore {
-    const a = randInt(rng, MIN_MINUEND, Math.max(maxVal, MIN_MINUEND));
-    const b = randInt(rng, MIN_SUBTRAHEND, a - 1);
+    const maxMinuend = Math.max(maxVal, MIN_MINUEND);
+    // Composition sampling again: draw the DIFFERENCE first so it has a real
+    // floor and a flat spread, then a subtrahend that keeps the minuend inside
+    // [MIN_MINUEND, maxMinuend]. Drawing the minuend first (as this did) leaves
+    // the difference to fall out of whatever range is left, which is exactly how
+    // `12 - 11` survived every operand floor.
+    const diff = randInt(rng, MIN_DIFFERENCE, Math.max(MIN_DIFFERENCE, maxMinuend - MIN_SUBTRAHEND));
+    const loSub = Math.max(MIN_SUBTRAHEND, MIN_MINUEND - diff);
+    const b = randInt(rng, loSub, Math.max(loSub, maxMinuend - diff));
+    const a = b + diff;
 
     return {
         text: `${a} - ${b} = ?`,

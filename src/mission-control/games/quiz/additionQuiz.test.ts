@@ -93,6 +93,24 @@ describe('the trivial-question floor', () => {
         expect(offenders.slice(0, 5)).toEqual([]);
     });
 
+    it('never leaves a difference below 3 — no more "12 - 11"', () => {
+        // The operand floors do not imply this one: 12 - 11 clears MIN_MINUEND
+        // and MIN_SUBTRAHEND and is still counting back one. Caught in the dev
+        // Quiz Lab histogram, which showed 10% of level-0 answers at 4 or below
+        // while every addition sum was correctly >= MIN_SUM.
+        // Literal 3, not MIN_DIFFERENCE: tuning the floor down should go red.
+        const rng = lcg(1234);
+        const offenders: string[] = [];
+        for (let level = 0; level <= MAX_MATH_LEVEL; level++) {
+            for (let i = 0; i < SAMPLES; i++) {
+                const q = generateMathQuestion(level, rng);
+                const m = q.text.match(SUB);
+                if (m && q.answer < 3) offenders.push(`L${level}: ${q.text} (${q.answer})`);
+            }
+        }
+        expect(offenders.slice(0, 5)).toEqual([]);
+    });
+
     it('never subtracts 1', () => {
         const rng = lcg(99);
         const offenders: string[] = [];
