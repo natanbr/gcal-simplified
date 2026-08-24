@@ -5,10 +5,10 @@
  * as well as the privilege suspend / reinstate flow.
  * Launches the Electron app in ?mc=1 mode and injects localStorage state.
  *
- * State handling: `mcTest` snapshots and restores the real `mc-state-v5` blob
- * around each test. Two of these tests suspend a privilege for a full day
- * through the real UI — without the restore the Knife would still be suspended
- * in the parent's app tomorrow.
+ * State handling: `mcTest` gives each test a throwaway userData directory. Two
+ * of these tests suspend a privilege for a full day through the real UI —
+ * against the real profile the Knife would still be suspended in the parent's
+ * app tomorrow.
  */
 
 import type { Page } from '@playwright/test';

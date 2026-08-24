@@ -5,11 +5,11 @@
  * Launches the Electron app, navigates to ?mc=1, then injects localStorage
  * state to trigger mission overlays without waiting for real clock windows.
  *
- * State handling: `mcTest` snapshots the real `mc-state-v5` blob before each
- * test and restores it afterwards. These specs inject an ACTIVE mission with a
- * 60-minute duration into the developer's own userData directory — without the
- * restore the resulting overlay covers the UI for every later spec and for the
- * next hour of real app usage.
+ * State handling: `mcTest` gives each test a throwaway userData directory, so
+ * the ACTIVE mission these specs inject is never written to the developer's own
+ * profile. Before that, the injected mission — 60 minutes long — kept the
+ * overlay over the UI for every later spec and for the next hour of real use.
+ * Each test starts from `initialState`; seed what you need and reload.
  */
 
 import type { Page } from '@playwright/test';

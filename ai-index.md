@@ -38,7 +38,8 @@ A strictly isolated application module.
   mapping function (`snakeQuizLevel`, `altitudeLevel`, `deleteTierLevel`).
 
 ### `electron/` (Main Process — flat, no subdirectories)
-* `main.ts`: single-instance lock, window creation, CSP, IPC registration, resume broadcast.
+* `main.ts`: bootstrap — window creation, CSP, IPC registration, resume broadcast.
+* `single-instance.ts`: the single-instance lock and the `second-instance` handler. Load-bearing; see CLAUDE.md.
 * `preload.ts`: the two channel whitelists. A non-whitelisted channel throws.
 * `auth.ts` / `api.ts`: Google OAuth2 + Calendar/Tasks.
 * `remote-bridge.ts`: Supabase Realtime pairing and action relay.

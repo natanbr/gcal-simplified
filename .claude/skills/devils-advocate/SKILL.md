@@ -173,5 +173,5 @@ Use this to sanity-check that the lenses covered the ground. It reflects how *th
 - [ ] `npm run test:unit`, `npm run lint`, `npm run tsc` all clean
 
 **Docs & commit**
-- [ ] `docs/requirements.md` updated if shipped behaviour changed (append to the *last* of its three duplicated copies)
+- [ ] `docs/requirements.md` updated if shipped behaviour changed (append a dated entry to the end of the changelog)
 - [ ] Conventional commit message that explains *why*

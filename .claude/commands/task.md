@@ -53,6 +53,6 @@ All four gates in the Definition of Done must pass. If something fails, fix it �
 
 ## 5. Close the loop
 
-Update `docs/requirements.md` to reflect the shipped behaviour (append to the **last** of its three duplicated copies — see `CLAUDE.md`). Then report: what changed, which files, what the tests prove, and anything you deliberately left out of scope.
+Update `docs/requirements.md` to reflect the shipped behaviour (one document, one `# ` heading — append a dated entry to the end of the changelog). Then report: what changed, which files, what the tests prove, and anything you deliberately left out of scope.
 
 Consider `/devils-advocate` before committing if the change touches `electron/`, the always-mounted tree, or more than a couple of files.

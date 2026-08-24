@@ -61,4 +61,4 @@ Then look at the running app: `preview_start`, navigate to the feature, resize t
 - What the plan review caught, and what the code review caught
 - The architectural approach and why it beat the alternatives
 - Test coverage added
-- `docs/requirements.md` updated (append to the **last** duplicated copy)
+- `docs/requirements.md` updated (append a dated entry to the end of the changelog)

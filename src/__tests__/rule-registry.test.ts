@@ -102,20 +102,12 @@ const REGISTRY: Rule[] = [
         defence: 'Enforced by Electron/the OS, not by a code path a unit test can call. Presence is checked structurally in electron/preload_contract.test.ts; real behaviour is proven by launching the built app twice: node scripts/verify-single-instance.mjs',
     },
     {
-        rule: 'mcReducer.ts and behaviorEngine.ts are pure — no side effects, no wall-clock reads',
+        rule: 'mcReducer.ts is a pure reducer — no side effects, no wall-clock reads',
         source: 'CLAUDE.md → Conventions',
         status: 'guarded',
         guard: 'src/mission-control/store/mcReducer.purity.test.ts',
         verifiedRedBy: 'mutate state.bankCount in place inside any case; or read new Date() directly instead of actionInstant(action) — the determinism test goes red',
-        defence: 'behaviorEngine.ts is covered transitively: every reducer call runs applyBehaviorSync, so the purity suite exercises both.',
-    },
-    {
-        rule: 'mcReducer.ts stays the front door — the store split is a refactor, not an API change',
-        source: 'CLAUDE.md → Mission Control → Store layout',
-        status: 'guarded',
-        guard: 'tsconfig.json',
-        verifiedRedBy: 'drop one name from the re-export block in mcReducer.ts — npm run tsc fails at every import site that used it',
-        defence: 'Type-checked rather than asserted: ~20 modules import from ./mcReducer, so a removed re-export cannot compile. A bespoke test would only restate what tsc already proves.',
+        defence: 'behaviorSync.ts is covered transitively: every reducer call runs applyBehaviorSync, so the purity suite exercises both.',
     },
 
     // ── Token economy / attribution ──────────────────────────────────────────
@@ -201,8 +193,8 @@ const REGISTRY: Rule[] = [
         source: 'CLAUDE.md → Testing → userData isolation',
         status: 'guarded',
         guard: 'src/__tests__/e2e-state-isolation.test.ts',
-        verifiedRedBy: 'drop --user-data-dir from launchMC; move removeUserData out of the fixture teardown; import `test` from @playwright/test in an MC spec; strip the restoreConfig call from settings-power',
-        defence: 'Eliminated for the 5 specs that can isolate (verified: 24 tests, zero writes to the real profile). Contained by snapshot/restore for the 8 calendar specs that still need real Google credentials — mocking auth:check as week-display-customization does is what would finish the job.',
+        verifiedRedBy: 'add an un-isolated electron.launch — as a new top-level spec, in a subdirectory, default-importing `test`, alongside the fixture, or with userDataArg computed but never passed; also by restoring config before closing the app. All seven verified red.',
+        defence: 'Enforced per LAUNCH, not per spec subject: every electron.launch must carry the throwaway-profile switch, or its spec must be named in NEEDS_REAL_PROFILE (8 left, may only shrink). The behavioural half is e2e/global-profile-leak-check.ts, which fails the run if a profile is left on disk — source text cannot prove cleanup ran.',
     },
 
     // ── Manual ───────────────────────────────────────────────────────────────

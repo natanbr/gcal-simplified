@@ -267,8 +267,10 @@ starting at wrong times, a phantom "remote game" prompt, and the calendar needin
 every few days — plus the requested slowdown of game-token generation.
 
 **Single instance enforcement (root cause of several symptoms at once)**
-- `electron/main.ts` now calls `app.requestSingleInstanceLock()` before anything else. A second
+- `electron/main.ts` now claims the single-instance lock before anything else. A second
   launch quits immediately and focuses the running window via the `second-instance` handler.
+  (Both details changed later — see 2026-08-24 below: the lock moved to
+  `electron/single-instance.ts`, and focus is no longer taken for E2E launches.)
 - Two instances shared one userData directory, therefore one `localStorage` blob (`mc-state-v5`)
   and one Supabase remote-control room. Both wrote the entire state on a 500ms debounce, so the
   loser's snapshot silently overwrote the winner's. This is what made token counts flip back and
@@ -483,3 +485,37 @@ is something that entry got wrong, left unsaid, or shipped with a hole in it.
 - `altitudeLevel` also gave `ALTITUDE_LEVELS` its first consumer. The 50/120/180 thresholds had
   been declared twice — once as that constant, once as a live if-chain in `useBlocksGame.ts` — and
   only the if-chain was doing anything.
+
+### 2026-08-24 E2E userData isolation, and a suite that stops writing to real state
+
+**The problem.** Every Electron instance Playwright launched used the developer's real userData
+directory — the Mission Control store (`mc-state-v5`), `config.json` (theme, `weekStartDay`, and the
+Supabase remote-control pairing keys), the Google tokens, and the audit trail. A test run therefore
+left `activeMission` running for an hour, suspended a privilege for a day, rewrote `morningStartsAt`,
+minted tokens into the real bank, flipped the theme, called `localStorage.clear()`, and — because the
+pairing keys live in that config — joined the household's real remote-control room and broadcast test
+state to the phone. It also explains the suite's apparent non-determinism: `weekStartDay` decides the
+dates several calendar specs assert against, so the previous run decided whether they passed.
+
+**Isolation.** Electron honours Chromium's `--user-data-dir`, so this needed no production change:
+each launch gets a throwaway profile (`e2e/helpers/userDataDir.ts`) and `remote-bridge` generates its
+own pairing keys, putting the instance in a room of its own. Mission Control specs can isolate because
+`?mc=1` routes outside the calendar's auth gate, so they never needed Google credentials. Six specs
+are isolated; eight still need a signed-in account and are named in `NEEDS_REAL_PROFILE`.
+
+**Shipped behaviour changes.**
+- The single-instance lock moved from `electron/main.ts` to `electron/single-instance.ts` and now
+  carries a `headless` flag. Refusing to boot a second instance is unchanged and unconditional;
+  surfacing the running window is not — an E2E launch no longer steals focus, because Playwright
+  starts the app once per test and each one used to restore, show and focus the developer's window.
+  A launch with no payload still surfaces the window.
+- The Playwright HTML report no longer opens a browser on failure (`open: 'never'`); read it with
+  `npx playwright show-report`.
+
+**Guards.** `src/__tests__/e2e-state-isolation.test.ts` checks every `electron.launch` rather than
+guessing which specs touch Mission Control state — the earlier keyword version missed that
+`MCStoreProvider` is mounted on both views, so calendar specs write MC state without entering it.
+`e2e/global-profile-leak-check.ts` fails the run if a throwaway profile is left on disk, because
+source text cannot prove cleanup ran. `src/__tests__/docs-integrity.test.ts` keeps this document a
+single copy after it was found triplicated with all three copies drifted apart. `e2e/` is now
+type-checked, which it never was.
