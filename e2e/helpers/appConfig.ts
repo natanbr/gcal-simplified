@@ -30,9 +30,6 @@ import { join } from 'node:path';
 /** Raw file contents. `null` means config.json did not exist. */
 export type ConfigSnapshot = { file: string; contents: string | null };
 
-/** The renderer's save round-trip has to land before the file is put back. */
-const SAVE_SETTLE_MS = 400;
-
 async function configPath(app: ElectronApplication): Promise<string> {
     const userData = await app.evaluate(({ app: electronApp }) => electronApp.getPath('userData'));
     return join(userData, 'config.json');
@@ -47,13 +44,39 @@ export async function snapshotConfig(app: ElectronApplication): Promise<ConfigSn
  * Put the file back exactly as it was. As with the MC blob, absence is a state:
  * a missing config.json means "defaults", and writing "null" over it would not
  * be the same thing.
+ *
+ * Takes no `ElectronApplication` on purpose. It used to, purely for symmetry
+ * with `snapshotConfig` — it never read the handle, the path travels inside the
+ * snapshot — and that dead parameter is what made callers restore while the app
+ * was still running, racing electron-store (which rewrites the whole file from
+ * its in-memory copy on any `set`). CLOSE THE APP FIRST, then call this: after
+ * the process is gone nothing can write, and no settle-sleep is needed.
+ *
+ * Never throws. A teardown that throws skips whatever came after it, and in
+ * this suite that means an un-closed Electron keeping the single-instance lock
+ * on the real profile — which makes every later spec time out at
+ * `firstWindow()`. One failed restore must not cascade into a red suite.
  */
-export async function restoreConfig(app: ElectronApplication, snapshot: ConfigSnapshot): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, SAVE_SETTLE_MS));
+export function restoreConfig(snapshot: ConfigSnapshot | undefined): void {
+    // `undefined` when the matching snapshotConfig failed in beforeEach. That
+    // is a real path: app.evaluate rejects if the app is already quitting (for
+    // instance because the developer has the real app open and it lost the
+    // single-instance lock).
+    if (!snapshot) {
+        console.warn('[e2e] no config snapshot to restore — snapshotConfig did not complete');
+        return;
+    }
+
     const { file, contents } = snapshot;
-    if (contents === null) {
-        if (existsSync(file)) rmSync(file);
-    } else {
-        writeFileSync(file, contents, 'utf-8');
+    try {
+        if (contents === null) {
+            // `force` covers the TOCTOU gap between the old existsSync and the
+            // delete; the retries cover Windows still holding the file open.
+            rmSync(file, { force: true, maxRetries: 5, retryDelay: 200 });
+        } else {
+            writeFileSync(file, contents, 'utf-8');
+        }
+    } catch (err) {
+        console.warn(`[e2e] could not restore ${file}:`, err);
     }
 }

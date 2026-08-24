@@ -20,7 +20,14 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "electron"],
+  // `e2e` is included deliberately. It used to be checked by nothing at all —
+  // not this config, not tsconfig.test.json, not vitest (which excludes e2e/**),
+  // and not Playwright, which transpiles with esbuild and never type-checks. So
+  // the four Definition-of-Done gates in CLAUDE.md all passed over it. That is
+  // how `restoreConfig(app, snapshot)` kept an unused parameter and how
+  // `patchMCCollection` compared a numeric id against a string. Both are the
+  // kind of thing `noUnusedParameters` and a union check catch for free.
+  "include": ["src", "electron", "e2e"],
   "exclude": [
     "src/**/__tests__/*",
     "src/**/*.test.tsx",

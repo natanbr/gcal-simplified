@@ -4,20 +4,19 @@
  * Smoke-tests the GlobalBank admin popup:
  * open the popup, add/remove coins, and close.
  *
- * State handling: `mcTest` snapshots and restores the real `mc-state-v5` blob
- * around each test. The "+1" test mints a real token into the real bank — the
- * kind of unexplained balance change that is very hard to account for later.
+ * State handling: `mcTest` gives each test a throwaway userData directory. The
+ * "+1" test mints a token; against the real profile that was an unexplained
+ * balance change nobody could account for later. It now mints into a profile
+ * that is deleted when the test ends.
  */
 
 import { existsSync } from 'node:fs';
-import { ELECTRON_MAIN, expect, isLoginScreen, mcTest as test } from './helpers/mcApp';
+import { ELECTRON_MAIN, expect, mcTest as test } from './helpers/mcApp';
 
 test.describe('Mission Control — Bank Management', () => {
     test.skip(!existsSync(ELECTRON_MAIN), 'Electron build not present');
 
     test('bank popup can be opened by clicking The Bank header', async ({ mcPage: page }) => {
-        test.skip(await isLoginScreen(page), 'Login required');
-
         // The bank header button
         const bankHeader = page.getByRole('button', { name: /Bank admin/i });
         await expect(bankHeader).toBeVisible({ timeout: 5000 });
@@ -31,8 +30,6 @@ test.describe('Mission Control — Bank Management', () => {
     });
 
     test('bank popup shows +1, +2, −1 coin control buttons', async ({ mcPage: page }) => {
-        test.skip(await isLoginScreen(page), 'Login required');
-
         await page.getByRole('button', { name: /Bank admin/i }).click();
         const popup = page.locator('[data-testid="mc-bank-admin-popup"]');
         await expect(popup.getByRole('button', { name: '+1' })).toBeVisible({ timeout: 2000 });
@@ -41,8 +38,6 @@ test.describe('Mission Control — Bank Management', () => {
     });
 
     test('clicking +1 increments the bank count display', async ({ mcPage: page }) => {
-        test.skip(await isLoginScreen(page), 'Login required');
-
         // Get initial count (the badge inside the header)
         const bankHeader = page.getByRole('button', { name: /Bank admin/i });
 
@@ -66,8 +61,6 @@ test.describe('Mission Control — Bank Management', () => {
     });
 
     test('bank popup can be closed with the close button', async ({ mcPage: page }) => {
-        test.skip(await isLoginScreen(page), 'Login required');
-
         await page.getByRole('button', { name: /Bank admin/i }).click();
         await expect(page.getByText(/Bank Admin/i)).toBeVisible({ timeout: 2000 });
 
