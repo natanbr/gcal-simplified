@@ -164,12 +164,12 @@ const REGISTRY: Rule[] = [
         defence: '12 files were already over the limit when the guard was written. Frozen at current size; may shrink, never grow. mcReducer.ts (1019) is the top split candidate.',
     },
     {
-        rule: 'No raw hex values in components — use the owning design system\'s token',
+        rule: 'No raw hex in DOM-styled surfaces — use the owning design system\'s token. Canvas draw palettes are exempt.',
         source: 'CLAUDE.md → Conventions → Styling',
         status: 'ratcheted',
         guard: 'src/__tests__/style-token-ratchet.test.ts',
-        verifiedRedBy: 'add a #rrggbb literal to a file with no baseline entry',
-        defence: 'Violated in 34 files when the guard was written — the codebase does not actually follow this rule. NEEDS A HUMAN DECISION: change the rule, or schedule the cleanup. Frozen meanwhile.',
+        verifiedRedBy: 'delete the Token.tsx row from RAW_HEX_BASELINE — the file reappears as un-baselined and "introduces no raw hex in a file that had none" goes red naming it (proven 2026-08-22). Counterpart proof for the exemption: add BlocksCanvas.tsx to CANVAS_PALETTE_EXEMPT — THREE tests go red (proven 2026-08-22, both with drawnBy explicitly itself and with it left implicit), led by "only exempts files that a real canvas renderer paints with" reporting no getContext and no fillStyle in the named renderer, plus "never lets a file be both exempt and baselined" and "tightens the baseline whenever a file improves". Neither recipe edits a component, so the ratchet can be proven honest without touching the code it measures.',
+        defence: 'The human decision this entry used to be waiting on was made 2026-08-22 and the rule NARROWED. Canvas half: ctx.fillStyle cannot consume var(--mc-*), so a per-game palette constant is the token source for that surface — 5 files / 54 values moved from "violation" to an explicit exemption list, each one verified to be painted by a real 2D context rather than taken on trust (BlocksCanvas.tsx was wrongly exempted on the first pass purely because of its name). DOM half: still ratcheted, 312 values across 27 files, frozen — may improve, never regress, and a new violation in a non-exempt file fails outright. The cleanup is real work that is still outstanding, not a resolved question.',
     },
     {
         rule: 'The two design systems are disjoint — no cross-contamination of tokens',

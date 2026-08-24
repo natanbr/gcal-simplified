@@ -113,7 +113,8 @@ field-by-field in the main process; never spread an untrusted object into it.
 - **Styling — two disjoint systems, do not mix them**:
   - Calendar app → **Tailwind** (`darkMode: 'class'`; custom tokens `family.*`, `dark.*`, `text-giant/mega/big` in `tailwind.config.js`). Font: Inter.
   - Mission Control → **`src/mission-control/styles/mc.css`**, a kid-friendly pastel token set of `--mc-*` CSS custom properties scoped to `.mc-root`, plus `mc-*` component classes. Font: Nunito. Imported only by `MissionControl.tsx`.
-  - No raw hex values in components. Use the token from whichever system owns the surface.
+  - No raw hex values in **DOM-styled** surfaces (JSX `style`, class names, CSS). Use the token from whichever system owns the surface.
+  - **Canvas draw palettes are exempt**: `ctx.fillStyle` cannot resolve `var(--mc-*)` — Canvas 2D takes a colour string and has no element to resolve a custom property against — so a per-game palette constant *is* the token source for that surface. The exemption is an explicit, verified list in `src/__tests__/style-token-ratchet.test.ts`; a listed file whose named renderer does not actually paint to a 2D context fails the guard. DOM surfaces are still on a ratcheted backlog (312 values in 27 files).
 - **Animation**: Framer Motion for UI transitions; Canvas API for game rendering
 - **Reducer purity**: `mcReducer.ts` is a pure reducer — no side effects
 - **CSP**: Production build injects strict Content-Security-Policy via Vite HTML transform
