@@ -46,6 +46,19 @@ export const ALTITUDE_LEVELS = {
     3: { label: 'Space Storm', threshold: 180 }, // triggers complex shapes + electricity
 };
 
+/**
+ * Altitude → board level, the single source of the thresholds above. The quiz
+ * engine is driven straight off `gameState.level`, so this doubles as blocks'
+ * quiz-difficulty mapping — which is why the dev Quiz Lab reads it from here.
+ */
+export function altitudeLevel(altitude: number): number {
+    let level = 0;
+    for (const [key, { threshold }] of Object.entries(ALTITUDE_LEVELS)) {
+        if (altitude >= threshold) level = Math.max(level, Number(key));
+    }
+    return level;
+}
+
 // ── Shape Templates ──────────────────────────────────────────
 export const SHAPE_POOL: GameShape[] = [
     { id: '1x3-h', name: 'Tromino H', cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }], color: '#22c55e' }, // green

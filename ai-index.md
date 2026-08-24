@@ -31,6 +31,11 @@ A strictly isolated application module.
   (the five-second glance), `LogItemRow.tsx`, `renderHighlightedMessage.tsx`.
 * **`hooks/`**: `useMissionScheduler.ts` (exact-time triggers, late-fire guard, resume re-arm),
   `useRemoteControl.ts` (remote action allowlist), `useMCAutoReturn.ts`.
+* **`components/quiz-lab/`**: the **dev-only** Quiz Lab at `?lab=1` — plays any question at any
+  family/level through the real `QuizOverlay` and shows the distribution of 200 draws. Gated on
+  `import.meta.env.DEV` in `src/App.tsx` (see `src/appRoutes.ts`), store-free, mounted outside
+  `MCStoreProvider`. Its level table is computed by `games/quizLevelMap.ts` from each game's own
+  mapping function (`snakeQuizLevel`, `altitudeLevel`, `deleteTierLevel`).
 
 ### `electron/` (Main Process — flat, no subdirectories)
 * `main.ts`: single-instance lock, window creation, CSP, IPC registration, resume broadcast.

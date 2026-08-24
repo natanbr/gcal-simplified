@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { 
     GameShape, BlocksGameState, 
     GRID_SIZE, SHAPE_POOL, HELP_SHAPES, LEVEL_COMPLEX_SHAPES, INITIAL_LAYOUTS,
-    transformShape, applyClearEffects, spawnObstacles
+    transformShape, applyClearEffects, spawnObstacles, altitudeLevel
 } from './types';
 
 export function useBlocksGame() {
@@ -248,11 +248,9 @@ export function useBlocksGame() {
             const nextScore = prev.score + pointsGained;
             const nextAltitude = prev.altitude + linesCleared * 10;
             
-            // Level / threshold events
-            let nextLevel = prev.level;
-            if (nextAltitude >= 180) nextLevel = 3;
-            else if (nextAltitude >= 120) nextLevel = 2;
-            else if (nextAltitude >= 50) nextLevel = 1;
+            // Level / threshold events. max() pins the rule that a level, once
+            // reached, is never taken back.
+            const nextLevel = Math.max(prev.level, altitudeLevel(nextAltitude));
 
             // If victory reached
             const phase = nextAltitude >= 200 ? ('victory' as const) : prev.phase;

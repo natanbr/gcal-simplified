@@ -10,20 +10,12 @@ import { FruitMergeCanvas } from './FruitMergeCanvas';
 import { useFruitMergeGame } from './useFruitMergeGame';
 import { QuizOverlay } from '../quiz/QuizOverlay';
 import type { QuizEngineApi } from '../quiz/types';
-import { FRUIT_TYPES, GAME_TIME_MS } from './types';
+import { FRUIT_TYPES, GAME_TIME_MS, deleteTierLevel } from './types';
 
 interface FruitMergeGameOverlayProps {
     open: boolean;
     onClose: (score: number) => void;
     engine: QuizEngineApi;
-}
-
-/** Quiz difficulty based on the fruit tier being deleted (was the local
- *  add/sub/mult roll — the engine's level mix reproduces it). */
-function deleteTierLevel(tier: number): number {
-    if (tier <= 1) return 0;
-    if (tier <= 3) return 1;
-    return 2;
 }
 
 export function FruitMergeGameOverlay({ open, onClose, engine }: FruitMergeGameOverlayProps) {

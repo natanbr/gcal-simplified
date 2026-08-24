@@ -10,6 +10,8 @@ import { useMCAutoReturn } from './mission-control/hooks/useMCAutoReturn';
 import { useRemoteControl } from './mission-control/hooks/useRemoteControl';
 import { MoodWindNotification } from './mission-control/components/MoodWindNotification';
 import { PerformanceHud } from './components/PerformanceHud';
+import { QuizLab } from './mission-control/components/quiz-lab/QuizLab';
+import { resolveInitialView, type View } from './appRoutes';
 
 // ── Scheduler hook — runs at App level so it works on both views ──────────────
 function MissionSchedulerBridge() {
@@ -87,14 +89,20 @@ function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
 // MCStoreProvider + DragLayer live HERE so the MC store and scheduler
 // keep running regardless of which view is active, and so MissionOverlay
 // can overlay the calendar view when a mission fires.
-type View = 'calendar' | 'mission-control';
-
 function App() {
-  const params = new URLSearchParams(window.location.search);
-  const initialView: View = params.get('mc') === '1' ? 'mission-control' : 'calendar';
-  const [view, setView] = useState<View>(initialView);
+  const [view, setView] = useState<View>(
+    () => resolveInitialView(window.location.search, import.meta.env.DEV)
+  );
 
   const handleReturnToCalendar = useCallback(() => setView('calendar'), []);
+
+  // Dev-only Quiz Lab (?lab=1). The literal `import.meta.env.DEV` is what makes
+  // this safe: Vite folds it to `false` in a production build, the branch is
+  // dropped, and QuizLab tree-shakes out of the bundle entirely. It returns
+  // BEFORE MCStoreProvider, so the lab runs with no store, scheduler or bridges.
+  if (import.meta.env.DEV && view === 'quiz-lab') {
+    return <QuizLab />;
+  }
 
   return (
     <MCStoreProvider>

@@ -11,7 +11,7 @@ import { SnakeCanvas } from './SnakeCanvas';
 import { useSnakeGame } from './useSnakeGame';
 import { QuizOverlay } from '../quiz/QuizOverlay';
 import type { QuizEngineApi } from '../quiz/types';
-import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE, QUIZ_QUESTIONS_TO_EXTEND, GameLevel, LEVEL_LABELS, INITIAL_TIME_MS } from './types';
+import { INITIAL_LIVES, QUIZ_QUESTIONS_TO_REVIVE, QUIZ_QUESTIONS_TO_EXTEND, GameLevel, LEVEL_LABELS, INITIAL_TIME_MS, snakeQuizLevel } from './types';
 
 interface SnakeGameOverlayProps {
     open: boolean;
@@ -50,7 +50,7 @@ export function SnakeGameOverlay({ open, onClose, engine }: SnakeGameOverlayProp
     }, [open, gameState.phase, handleClose]);
 
     const elapsedMs = INITIAL_TIME_MS - gameState.timeRemainingMs + gameState.extensionsUsed * 60000;
-    const quizDifficultyLevel = Math.min(3, Math.floor(elapsedMs / 120000)) as GameLevel;
+    const quizDifficultyLevel = snakeQuizLevel(elapsedMs);
 
     // Math difficulty and stretch stage both scale with elapsed play time.
     useEffect(() => {
