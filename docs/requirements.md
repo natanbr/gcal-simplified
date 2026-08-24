@@ -818,3 +818,35 @@ is something that entry got wrong, left unsaid, or shipped with a hole in it.
 - The rule registry now records what the attribution guard structurally *cannot* see — entries
   built by hand and dispatched as `ADD_LOG` never reach `createLogEntry` — and names the per-site
   test that covers the one such site.
+
+### 2026-08-24 — Quiz Lab (dev-only) + game level mappings extracted
+
+**Quiz Lab — `?lab=1`, dev builds only**
+- A developer/PO surface for tuning question difficulty by eye. Until now the only way to see a
+  level-3 math question was to survive several minutes of snake, so difficulty was tuned blind.
+- Two panels, because there are two different questions. **Live sample** plays a real question at
+  any family/level through the actual `QuizOverlay` (honest tap targets, wrong-tap freeze, feedback
+  dwell) with a Reroll and the metadata the kid never sees — `kind`, `skill`, `level`, `wordId`.
+  **Distribution** draws 200 questions at that setting and shows what actually comes out: the
+  add/sub/mul split (or the three reading shapes), and an answer histogram (or per-word counts).
+  A single sample cannot answer "am I getting enough hard questions?" — 200 can.
+- Store-free by construction: it calls the generators directly rather than `useQuizEngine`, and
+  returns from `App.tsx` **before** `MCStoreProvider`. No scheduler, no bridges, nothing added to
+  the always-mounted tree, and no path by which a lab answer could reach the child's real
+  `skillProgress`.
+- **The dev gate is the load-bearing part** — a debug surface that shows answers has no business on
+  a child's device. Gated twice on the literal `import.meta.env.DEV`: once in `resolveInitialView`
+  (`src/appRoutes.ts`), once at the render site, so Vite folds the branch to `false` in a
+  production build and the lab tree-shakes out of the bundle entirely. Both gates are pinned by
+  `src/appRoutes.test.ts`, which also asserts the mount sits above `<MCStoreProvider>`.
+
+**Each game's quiz-level mapping is now a function, not an inline expression**
+- `snakeQuizLevel(elapsedMs)` (`games/snake/types.ts`), `deleteTierLevel(tier)`
+  (`games/fruits/types.ts`) and `altitudeLevel(altitude)` (`games/blocks/types.ts`) replace
+  expressions that lived inside the overlays. `games/quizLevelMap.ts` walks each domain and emits a
+  row wherever the level changes, so the lab's "what does level 2 actually mean" table is
+  **computed** from the games rather than restated — it cannot drift. This paid for itself
+  immediately: snake's step was retuned from 120s to 45s the same day and the table followed.
+- `altitudeLevel` also gave `ALTITUDE_LEVELS` its first consumer. The 50/120/180 thresholds had
+  been declared twice — once as that constant, once as a live if-chain in `useBlocksGame.ts` — and
+  only the if-chain was doing anything.

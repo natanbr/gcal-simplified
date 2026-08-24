@@ -89,7 +89,7 @@ export const LEVEL_LABELS: Record<GameLevel, string> = {
  * the child only ever saw the bottom rung. At 45s a base game spends about a
  * quarter of its time on each of levels 0/1/2 and finishes on level 3.
  */
-export const QUIZ_LEVEL_STEP_MS = 120 * 1000;
+export const QUIZ_LEVEL_STEP_MS = 45 * 1000;
 export const MAX_QUIZ_LEVEL: GameLevel = 3;
 
 export function snakeQuizLevel(elapsedMs: number): GameLevel {
