@@ -49,8 +49,11 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     'src/mission-control/games/blocks/BlocksCanvas.tsx': 362,
     'src/mission-control/games/fruits/useFruitMergeGame.ts': 361,
     'src/mission-control/games/fruits/FruitMergeCanvas.tsx': 360,
-    // Tightened 329 → 324 on 2026-08-20 (quiz question no longer stored in game state).
-    'src/mission-control/games/blocks/useBlocksGame.ts': 324,
+    // Tightened 329 → 324 on 2026-08-20 (quiz question no longer stored in game
+    // state), then 324 → 322 on 2026-08-24: the inline altitude→level if-chain
+    // became altitudeLevel() in types.ts, which also gave ALTITUDE_LEVELS its
+    // first consumer — the thresholds had been declared twice.
+    'src/mission-control/games/blocks/useBlocksGame.ts': 322,
     'src/mission-control/components/ResponsibilityPanel.tsx': 311,
 };
 
