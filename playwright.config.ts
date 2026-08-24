@@ -12,6 +12,10 @@ if (!process.env.E2E_HEADED) {
 
 export default defineConfig({
     testDir: './e2e',
+    // Fails the run if an isolated launch left its throwaway profile behind.
+    // The source-text guard in src/__tests__/e2e-state-isolation.test.ts cannot
+    // see that — it only proves the cleanup is *written*, not that it ran.
+    globalSetup: './e2e/global-profile-leak-check.ts',
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
