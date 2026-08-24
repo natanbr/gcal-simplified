@@ -97,32 +97,36 @@ export async function patchMCState(page: Page, patch: Record<string, unknown>): 
 export async function patchMCCollection(
     page: Page,
     field: 'responsibilities' | 'privileges' | 'cases',
-    id: string,
+    id: string | number,
     patch: Record<string, unknown>,
 ): Promise<void> {
-    await page.evaluate(
-        ({ key, name, rowId, value }: { key: string; name: string; rowId: string; value: Record<string, unknown> }) => {
+    const matched = await page.evaluate(
+        ({ key, name, rowId, value }: { key: string; name: string; rowId: string | number; value: Record<string, unknown> }) => {
             const raw = localStorage.getItem(key);
             const state = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
             const rows = (state[name] ?? []) as Array<Record<string, unknown>>;
-            state[name] = rows.map(r => (r['id'] === rowId ? { ...r, ...value } : r));
+            // Compared as strings on purpose: responsibility and privilege ids
+            // are strings, but DisplayCase.id is a NUMBER, so a strict `===`
+            // against a string parameter silently matched nothing and the seed
+            // was dropped without a word — the test then asserted against
+            // unseeded default state.
+            let hits = 0;
+            state[name] = rows.map(r => {
+                if (String(r['id']) !== String(rowId)) return r;
+                hits++;
+                return { ...r, ...value };
+            });
             localStorage.setItem(key, JSON.stringify(state));
+            return hits;
         },
         { key: STORAGE_KEY, name: field, rowId: id, value: patch },
     );
-}
 
-/**
- * True when the app is sitting on the Google login screen. Mission Control does
- * not require auth, so under an isolated profile this should never be true in
- * `?mc=1` — the checks remain as a guard against a spec landing on the calendar
- * route by accident.
- */
-export async function isLoginScreen(page: Page): Promise<boolean> {
-    return page
-        .locator('[data-testid="login-screen"]')
-        .isVisible()
-        .catch(() => false);
+    // Seeding nothing is never what the caller meant, and silence here is how a
+    // mis-typed id turns into a confusing assertion failure three lines later.
+    if (matched === 0) {
+        throw new Error(`patchMCCollection: no row with id "${id}" in "${field}" — nothing was seeded`);
+    }
 }
 
 /**
@@ -136,14 +140,26 @@ export const mcTest = base.extend<{ mcApp: ElectronApplication; mcPage: Page }>(
     // eslint-disable-next-line no-empty-pattern
     mcApp: async ({}, use) => {
         const userDataDir = createIsolatedUserData();
-        const { app } = await launchMC(userDataDir);
 
+        // Everything after the directory exists goes inside the try, INCLUDING
+        // the launch. `launchMC` can fail three ways — electron.launch timing
+        // out, a stale dist-electron build, gotoMC's navigation timing out —
+        // and each of those happens after the profile is on disk. Creating it
+        // outside the try leaked a full Chromium profile, and a live Electron
+        // process, on every failed launch.
+        let app: ElectronApplication | undefined;
         try {
+            ({ app } = await launchMC(userDataDir));
             await use(app);
         } finally {
-            // Runs on failure too — that is the point.
-            await app.close();
-            removeUserData(userDataDir);
+            // Nested, so a rejecting close() cannot skip the removal. close()
+            // rejects when the app already died or hangs — exactly the runs
+            // that leaked before.
+            try {
+                await app?.close();
+            } finally {
+                removeUserData(userDataDir);
+            }
         }
     },
 

@@ -4,10 +4,10 @@
  * Smoke-tests the MCSettingsOverlay:
  * open via the ⚙️ button, change a time, save, and verify persistence.
  *
- * State handling: `mcTest` snapshots and restores the real `mc-state-v5` blob
- * around each test. The save test genuinely rewrites `morningStartsAt` to 07:15
- * — without the restore, running the suite silently moves the parent's real
- * morning mission time.
+ * State handling: `mcTest` gives each test a throwaway userData directory. The
+ * save test genuinely rewrites `morningStartsAt` to 07:15 — against the real
+ * profile that silently moved the parent's morning mission time, which is why
+ * these specs no longer see it.
  */
 
 import { existsSync } from 'node:fs';
@@ -15,7 +15,6 @@ import type { Page } from '@playwright/test';
 import {
     ELECTRON_MAIN,
     expect,
-    isLoginScreen,
     mcTest as test,
     readMCField,
 } from './helpers/mcApp';
@@ -30,8 +29,6 @@ test.describe('Mission Control — Settings Overlay', () => {
     test.skip(!existsSync(ELECTRON_MAIN), 'Electron build not present');
 
     test('settings panel opens via the ⚙️ button', async ({ mcPage: page }) => {
-        test.skip(await isLoginScreen(page), 'Login required');
-
         // Gear button in the MC top bar
         const settingsBtn = page.locator('[data-testid="mc-settings-btn"]');
         await expect(settingsBtn).toBeVisible({ timeout: 5000 });
@@ -42,8 +39,6 @@ test.describe('Mission Control — Settings Overlay', () => {
     });
 
     test('settings panel shows Morning and Evening Mission sections', async ({ mcPage: page }) => {
-        test.skip(await isLoginScreen(page), 'Login required');
-
         await page.locator('[data-testid="mc-settings-btn"]').click();
 
         await expect(page.getByText('Morning Mission')).toBeVisible({ timeout: 2000 });
@@ -51,8 +46,6 @@ test.describe('Mission Control — Settings Overlay', () => {
     });
 
     test('settings panel can be cancelled — store unchanged', async ({ mcPage: page }) => {
-        test.skip(await isLoginScreen(page), 'Login required');
-
         // Read the initial stored settings
         const before = await readSetting(page, 'morningStartsAt');
 
@@ -72,8 +65,6 @@ test.describe('Mission Control — Settings Overlay', () => {
     });
 
     test('Save Settings button persists changes to localStorage', async ({ mcPage: page }) => {
-        test.skip(await isLoginScreen(page), 'Login required');
-
         // Open settings
         await page.locator('[data-testid="mc-settings-btn"]').click();
         await page.waitForTimeout(200);

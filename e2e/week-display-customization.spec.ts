@@ -102,10 +102,14 @@ test.describe('Week Display Customization', () => {
     });
 
     test.afterEach(async () => {
-        if (electronApp) {
-            await electronApp.close();
+        // Nested finally: a close() that rejects (hung renderer, app already
+        // gone) must not skip the profile removal, or a full Chromium profile
+        // is stranded in %TEMP% on exactly the runs that failed.
+        try {
+            await electronApp?.close();
+        } finally {
+            if (userDataDir) removeUserData(userDataDir);
         }
-        if (userDataDir) removeUserData(userDataDir);
     });
 
     const openSettings = async () => {
