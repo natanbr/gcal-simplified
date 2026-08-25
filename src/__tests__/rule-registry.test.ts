@@ -7,8 +7,10 @@
 // places the first time a guard was pointed at it. Prose does not enforce
 // anything, and "we all know the rule" is not a mechanism.
 //
-// This registry does not try to parse CLAUDE.md — curated data beats a fragile
-// prose diff. What it does is make the *enforcement status* of every rule
+// This registry does not try to parse CLAUDE.md's prose — curated data beats a
+// fragile prose diff. The one exception is `## ` section headings, which the
+// suite reads to keep every `source` anchor pointing at a section that still
+// exists. What the registry does is make the *enforcement status* of every rule
 // explicit, so "nothing is watching this one" is visible rather than assumed.
 //
 // Four honest states:
@@ -22,7 +24,7 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repoRoot } from './helpers/sourceFiles';
 
@@ -83,21 +85,21 @@ const REGISTRY: Rule[] = [
     },
     {
         rule: 'Every ipcMain.handle channel is whitelisted in preload, and vice versa',
-        source: 'CLAUDE.md → Process Model',
+        source: 'CLAUDE.md → Architecture → Preload bridge',
         status: 'guarded',
         guard: 'electron/preload_contract.test.ts',
         verifiedRedBy: "remove 'audit:append' from ALLOWED_INVOKE_CHANNELS",
     },
     {
         rule: 'A non-whitelisted IPC channel throws — it does not silently no-op',
-        source: 'CLAUDE.md → Process Model',
+        source: 'CLAUDE.md → Architecture → Preload bridge',
         status: 'guarded',
         guard: 'electron/preload.test.ts',
         verifiedRedBy: 'replace the throw with a return in preload.ts',
     },
     {
         rule: 'Only one instance of the app may run',
-        source: 'CLAUDE.md → Single Instance',
+        source: 'CLAUDE.md → Architecture → Single instance',
         status: 'unguardable',
         defence: 'Enforced by Electron/the OS, not by a code path a unit test can call. Presence is checked structurally in electron/preload_contract.test.ts; real behaviour is proven by launching the built app twice: node scripts/verify-single-instance.mjs',
     },
@@ -273,6 +275,31 @@ describe('rule registry', () => {
             unverified,
             `Guarded rule(s) with no recorded way to make the guard go red.\n` +
             `Break the rule locally, watch the test fail, then record the recipe here:\n  ${unverified.join('\n  ')}`
+        ).toEqual([]);
+    });
+
+    it('anchors every CLAUDE.md source to a section that still exists', () => {
+        // `source` is prose, and a section renamed or moved in CLAUDE.md used to
+        // leave its anchors dangling with nothing noticing. Only the `## `
+        // section segment is validated — deeper segments name bold labels or
+        // checklist numbers, and matching those is exactly the fragile prose
+        // diff this registry avoids.
+        const sections = new Set(
+            readFileSync(join(repoRoot, 'CLAUDE.md'), 'utf8')
+                .split('\n')
+                .filter(line => line.startsWith('## '))
+                .map(line => line.slice(3).trim())
+        );
+
+        const dangling = REGISTRY
+            .filter(r => r.source.startsWith('CLAUDE.md → '))
+            .map(r => ({ rule: r.rule, section: r.source.split(' → ')[1] }))
+            .filter(({ section }) => !sections.has(section))
+            .map(({ rule, section }) => `  ${rule}\n    → no "## ${section}" in CLAUDE.md`);
+
+        expect(
+            dangling,
+            `source anchor(s) point at CLAUDE.md sections that do not exist:\n${dangling.join('\n')}`
         ).toEqual([]);
     });
 
