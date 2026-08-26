@@ -203,4 +203,60 @@ describe('mission scheduler — sleep/resume resilience', () => {
         expect(log?.[0].log.source).toBe('scheduler');
         unmount();
     });
+
+    it('starts the mission when a late fire still lands inside the mission window', () => {
+        stubIpcRenderer();
+        const dispatch = vi.fn();
+        vi.setSystemTime(todayAt(5, 59));
+
+        const { unmount } = renderScheduler(buildState(), dispatch);
+
+        // Sleep over 06:00; the lid opens at 06:10 — past the 5-minute
+        // tolerance but inside the 06:00–06:30 window. Skipping here lost the
+        // whole day's mission.
+        vi.setSystemTime(todayAt(6, 10));
+        vi.advanceTimersByTime(60_000);
+
+        expect(missionStarts(dispatch)).toBe(true);
+        unmount();
+    });
+
+    it('re-arms to TODAY when a resume lands inside a still-open mission window', () => {
+        const { listeners } = stubIpcRenderer();
+        const dispatch = vi.fn();
+
+        // Arm at 05:00; the machine sleeps over 06:00 and wakes at 06:10.
+        vi.setSystemTime(todayAt(5, 0));
+        const { unmount } = renderScheduler(buildState(), dispatch);
+
+        vi.setSystemTime(todayAt(6, 10));
+        act(() => {
+            listeners['system:resume']();
+        });
+
+        // The re-arm must aim at today's still-open window, not tomorrow.
+        vi.advanceTimersByTime(1_000);
+
+        expect(missionStarts(dispatch)).toBe(true);
+        unmount();
+    });
+
+    it('logs a skipped mission so the day is never silently lost', () => {
+        stubIpcRenderer();
+        const dispatch = vi.fn();
+        vi.setSystemTime(todayAt(5, 59));
+
+        const { unmount } = renderScheduler(buildState(), dispatch);
+
+        vi.setSystemTime(todayAt(11, 30)); // window long closed
+        vi.advanceTimersByTime(60_000);
+
+        expect(missionStarts(dispatch)).toBe(false);
+        const skip = dispatch.mock.calls.find(
+            ([a]) => a?.type === 'ADD_LOG' && String(a?.log?.message).includes('skipped')
+        );
+        expect(skip, 'a skipped mission must be visible in the activity log').toBeDefined();
+        expect(skip?.[0].log.source).toBe('scheduler');
+        unmount();
+    });
 });

@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMCStore, useMCDispatch } from '../store/useMCStore.tsx';
+import { getLocalDateString } from '../store/behaviorSync';
 import type { MissionPhase, MCState } from '../types';
 
 /**
@@ -20,27 +21,21 @@ import type { MissionPhase, MCState } from '../types';
  */
 const LATE_FIRE_TOLERANCE_MS = 5 * 60 * 1000;
 
-/** The next wall-clock Date matching HH:MM — today if still ahead, else tomorrow. */
-function nextOccurrence(hhmm: string): Date {
+/** Today's wall-clock Date matching HH:MM (regardless of whether it passed). */
+function occurrenceToday(hhmm: string): Date {
     const [h, m] = hhmm.split(':').map(Number);
-    const now = new Date();
     const target = new Date();
     target.setHours(h, m, 0, 0);
-
-    if (target.getTime() <= now.getTime()) {
-        target.setDate(target.getDate() + 1);
-    }
-
     return target;
 }
 
-/** Calculate ms from now until the target HH:MM time. */
-function getMsUntilNextTime(hhmm: string): number {
-    return nextOccurrence(hhmm).getTime() - Date.now();
-}
-
-function localDateString(d: Date = new Date()): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** The next wall-clock Date matching HH:MM — today if still ahead, else tomorrow. */
+function nextOccurrence(hhmm: string): Date {
+    const target = occurrenceToday(hhmm);
+    if (target.getTime() <= Date.now()) {
+        target.setDate(target.getDate() + 1);
+    }
+    return target;
 }
 
 export function useMissionScheduler(): void {
@@ -70,10 +65,19 @@ export function useMissionScheduler(): void {
         // Use a Set so recursive schedules can add/remove themselves correctly
         const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
-        /** True when the timer fired so far past its target that it must be ignored. */
-        function firedTooLate(target: Date, label: string): boolean {
+        /** True when the timer fired so far past its target that it must be ignored.
+         *  A fire while the mission's own window (startsAt → endsAt) is still open
+         *  counts as ON TIME: waking the machine at 06:10 must start the
+         *  06:00–06:30 mission, not silently lose the day. */
+        function firedTooLate(target: Date, label: string, windowEndHhmm?: string): boolean {
             const driftMs = Date.now() - target.getTime();
             if (driftMs <= LATE_FIRE_TOLERANCE_MS) return false;
+            if (windowEndHhmm) {
+                const windowEnd = new Date(target);
+                const [h, m] = windowEndHhmm.split(':').map(Number);
+                windowEnd.setHours(h, m, 0, 0);
+                if (Date.now() < windowEnd.getTime()) return false;
+            }
             console.warn(
                 `[MissionScheduler] Skipping ${label}: timer fired ${Math.round(driftMs / 60000)} min late ` +
                 `(target ${target.toLocaleTimeString()}). The machine was most likely asleep.`
@@ -81,31 +85,52 @@ export function useMissionScheduler(): void {
             return true;
         }
 
-        function schedulePhase(phase: MissionPhase, hhmm: string) {
+        function schedulePhase(phase: MissionPhase, hhmm: string, endsAt?: string) {
             if (phase === 'none') return;
-            const target = nextOccurrence(hhmm);
+            let target = nextOccurrence(hhmm);
+            // A re-arm (mount or system:resume) while today's window is still
+            // open must aim at today's occurrence — nextOccurrence alone rolls
+            // to tomorrow the second the start time has passed, which is how a
+            // sleep spanning 06:00 used to lose the whole day's mission.
+            if (endsAt) {
+                const todayStart = occurrenceToday(hhmm);
+                if (todayStart.getTime() <= Date.now() && Date.now() < occurrenceToday(endsAt).getTime()) {
+                    target = todayStart;
+                }
+            }
             const id = setTimeout(() => {
                 timeouts.delete(id); // Clean up self first
 
-                if (!firedTooLate(target, `${phase} mission`)) {
-                    const s = stateRef.current;
-                    const todayStr = localDateString();
+                const s = stateRef.current;
+                const todayStr = getLocalDateString();
+                const alreadyRun =
+                    phase === 'morning'
+                        ? s.lastCompletedOrFailedMorningDate === todayStr
+                        : phase === 'evening'
+                        ? s.lastCompletedOrFailedEveningDate === todayStr
+                        : false;
 
-                    const alreadyRun =
-                        phase === 'morning'
-                            ? s.lastCompletedOrFailedMorningDate === todayStr
-                            : phase === 'evening'
-                            ? s.lastCompletedOrFailedEveningDate === todayStr
-                            : false;
-
+                if (!firedTooLate(target, `${phase} mission`, endsAt)) {
                     // Only trigger if no mission is currently running AND it hasn't run today yet
                     if (s.activeMission === 'none' && !alreadyRun) {
                         dispatch({ type: 'SET_ACTIVE_MISSION', phase, origin: 'scheduler' });
                     }
+                } else if (!alreadyRun) {
+                    // A skipped mission must be visible to a parent, not only in
+                    // the dev console — scheduler actions are never silent.
+                    dispatch({ type: 'ADD_LOG', log: {
+                        id: self.crypto.randomUUID(),
+                        timestamp: new Date().toISOString(),
+                        icon: '⏭️',
+                        message: `${phase === 'morning' ? 'Morning' : 'Evening'} mission skipped — the ${hhmm} window was missed (machine asleep)`,
+                        type: 'mission',
+                        colorKey: phase === 'none' ? undefined : phase,
+                        source: 'scheduler',
+                    } });
                 }
 
                 // Schedule the next day's occurrence — tracked so cleanup catches it
-                const nextId = setTimeout(() => schedulePhase(phase, hhmm), 1000);
+                const nextId = setTimeout(() => schedulePhase(phase, hhmm, endsAt), 1000);
                 timeouts.add(nextId);
             }, Math.max(0, target.getTime() - Date.now()));
             timeouts.add(id);
@@ -136,7 +161,7 @@ export function useMissionScheduler(): void {
 
         // Schedule all configured missions
         for (const m of state.missions) {
-            schedulePhase(m.phase as Exclude<MissionPhase, 'none'>, m.startsAt);
+            schedulePhase(m.phase as Exclude<MissionPhase, 'none'>, m.startsAt, m.endsAt);
             for (const t of m.tasks) {
                 if (t.locksAt) {
                     scheduleTaskLock(m.phase, t.id, t.locksAt);
@@ -181,5 +206,3 @@ export function useMissionScheduler(): void {
         return () => clearInterval(id);
     }, [state.activeMission, dispatch]);
 }
-
-export { getMsUntilNextTime, LATE_FIRE_TOLERANCE_MS };
