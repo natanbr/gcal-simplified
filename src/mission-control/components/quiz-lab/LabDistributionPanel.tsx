@@ -7,7 +7,7 @@
 
 import { useMemo } from 'react';
 import { LabBarList } from './LabBarList';
-import { DEFAULT_SAMPLE_SIZE, sampleDistribution, type LabFamily } from './labSampling';
+import { sampleDistribution, type LabFamily } from './labSampling';
 import { actionButton, codeText, mutedNote, panel, panelTitle, SERIES } from './labStyles';
 
 interface LabDistributionPanelProps {
@@ -16,17 +16,16 @@ interface LabDistributionPanelProps {
     /** Bumped by the caller to force a fresh draw of the same setting. */
     resampleSeq: number;
     onResample: () => void;
-    sampleSize?: number;
 }
 
 export function LabDistributionPanel({
-    family, level, resampleSeq, onResample, sampleSize = DEFAULT_SAMPLE_SIZE,
+    family, level, resampleSeq, onResample,
 }: LabDistributionPanelProps) {
     const distribution = useMemo(
-        () => sampleDistribution(family, level, sampleSize),
+        () => sampleDistribution(family, level),
         // resampleSeq is a deliberate cache-buster: same setting, new draw.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [family, level, sampleSize, resampleSeq],
+        [family, level, resampleSeq],
     );
 
     return (

@@ -6,7 +6,7 @@
 // ============================================================
 
 import type { ChoiceQuizQuestion, QuizChoice } from '../types';
-import type { ReadingSkillId } from '../../../skills/types';
+import { MAX_READING_LEVEL, type ReadingSkillId } from '../../../skills/types';
 import { WORDS, CONFUSABLE_EMOJI_GROUPS, type WordEntry } from './wordBank';
 import { MINIMAL_PAIRS, LONG_WORD_DISTRACTORS } from './minimalPairs';
 
@@ -129,13 +129,13 @@ function emojiChoices(target: WordEntry, candidates: WordEntry[], rng: Rng): Qui
 
 function wordToPicture(level: number, rng: Rng, opts: GenerateOptions): ChoiceQuizQuestion {
     const sameInitial = level >= 1;
-    const pool = level >= 6 ? LONG : (sameInitial ? L1_TARGETS : SHORT);
+    const pool = level >= MAX_READING_LEVEL ? LONG : (sameInitial ? L1_TARGETS : SHORT);
     const target = pickTarget(pool, rng, opts);
 
     let candidates: WordEntry[];
     if (sameInitial && level < 6) {
         candidates = WORDS.filter(w => w.word[0] === target.word[0]);
-    } else if (level >= 6) {
+    } else if (level >= MAX_READING_LEVEL) {
         candidates = LONG;
     } else {
         candidates = WORDS.filter(w => w.word[0] !== target.word[0]);
@@ -154,11 +154,11 @@ function wordToPicture(level: number, rng: Rng, opts: GenerateOptions): ChoiceQu
 
 function pictureToWord(level: number, rng: Rng, opts: GenerateOptions): ChoiceQuizQuestion {
     const minimal = level === 3;
-    const pool = level >= 6 ? LONG.filter(w => LONG_WORD_DISTRACTORS[w.word]) : (minimal ? L3_TARGETS : SHORT);
+    const pool = level >= MAX_READING_LEVEL ? LONG.filter(w => LONG_WORD_DISTRACTORS[w.word]) : (minimal ? L3_TARGETS : SHORT);
     const target = pickTarget(pool, rng, opts);
 
     let words: string[];
-    if (level >= 6 && LONG_WORD_DISTRACTORS[target.word]) {
+    if (level >= MAX_READING_LEVEL && LONG_WORD_DISTRACTORS[target.word]) {
         words = shuffle(LONG_WORD_DISTRACTORS[target.word], rng).slice(0, 3);
     } else if (minimal && MINIMAL_PAIRS[target.word]) {
         words = shuffle(MINIMAL_PAIRS[target.word], rng).slice(0, 3);
@@ -232,7 +232,7 @@ export function generateReadingQuestion(
     rng: Rng,
     opts: GenerateOptions = {},
 ): ChoiceQuizQuestion {
-    const clamped = Math.max(0, Math.min(6, Math.round(level)));
+    const clamped = Math.max(0, Math.min(MAX_READING_LEVEL, Math.round(level)));
     switch (clamped) {
         case 0:
         case 1:
@@ -245,7 +245,7 @@ export function generateReadingQuestion(
             return missingLetter(clamped, rng, opts);
         default:
             return rng() < 0.5
-                ? wordToPicture(6, rng, opts)
-                : pictureToWord(6, rng, opts);
+                ? wordToPicture(MAX_READING_LEVEL, rng, opts)
+                : pictureToWord(MAX_READING_LEVEL, rng, opts);
     }
 }

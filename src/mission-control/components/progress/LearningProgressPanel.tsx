@@ -8,7 +8,7 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useMCState } from '../../store/useMCStore';
 import { getLocalDateString } from '../../store/behaviorSync';
 import {
@@ -21,7 +21,7 @@ import {
     shiftDate,
     weeklyAccuracy,
 } from '../../skills/progressSelectors';
-import { READING_SKILL_IDS, type ReadingSkillId } from '../../skills/types';
+import { GAME_IDS, READING_SKILL_IDS, type ReadingSkillId } from '../../skills/types';
 import { AccuracyChart, MomentumChart, SERIES_COLORS, VolumeChart } from './ProgressCharts';
 
 const SKILL_LABELS: Record<ReadingSkillId, string> = {
@@ -51,23 +51,32 @@ function SparseNote({ children }: { children: ReactNode }) {
 export function LearningProgressPanel() {
     const { skillProgress } = useMCState();
     const today = getLocalDateString();
-    const since60 = shiftDate(today, -59);
 
-    const momentum = momentumSeries(skillProgress, since60);
-    const levelUps = levelUpRows(skillProgress.levelHistory);
-    // Markers outside the 60-day window would pin to the first visible point
-    // and draw on the wrong day — filter them out.
-    const momentumMarkers = levelUps
-        .filter(row => row.date >= since60)
-        .map(row => ({ date: row.date, level: row.level, up: row.level > row.fromLevel }));
-    const accuracy = READING_SKILL_IDS.map(skill =>
-        weeklyAccuracy(skillProgress.days[skill] ?? [], today));
-    const anyAccuracy = accuracy.some(series => series.some(p => p.accuracy !== null));
-    const volume = dailyVolume(skillProgress, today);
+    // The panel subscribes to the whole MC store, so without the memo every
+    // dispatch — including each 60s heartbeat write — re-ran the full
+    // 60-day/8-week derivation chain to produce identical output.
+    const derived = useMemo(() => {
+        const since60 = shiftDate(today, -59);
+        const momentum = momentumSeries(skillProgress, since60);
+        const levelUps = levelUpRows(skillProgress.levelHistory);
+        // Markers outside the 60-day window would pin to the first visible point
+        // and draw on the wrong day — filter them out.
+        const momentumMarkers = levelUps
+            .filter(row => row.date >= since60)
+            .map(row => ({ date: row.date, level: row.level, up: row.level > row.fromLevel }));
+        const accuracy = READING_SKILL_IDS.map(skill =>
+            weeklyAccuracy(skillProgress.days[skill] ?? [], today));
+        return {
+            momentum, levelUps, momentumMarkers, accuracy,
+            anyAccuracy: accuracy.some(series => series.some(p => p.accuracy !== null)),
+            volume: dailyVolume(skillProgress, today),
+            games: perGameTotals(skillProgress),
+            words: hardestWords(skillProgress.missedWords),
+            callout: needsWork(skillProgress, shiftDate(today, -6)),
+        };
+    }, [skillProgress, today]);
+    const { momentum, levelUps, momentumMarkers, accuracy, anyAccuracy, volume, games, words, callout } = derived;
     const recentVolume = volume.some(d => d.reading + d.math > 0);
-    const games = perGameTotals(skillProgress);
-    const words = hardestWords(skillProgress.missedWords);
-    const callout = needsWork(skillProgress, shiftDate(today, -6));
     const hasAnyPractice = Object.values(skillProgress.days).some(buckets => buckets.length > 0);
 
     if (!hasAnyPractice) {
@@ -195,7 +204,7 @@ export function LearningProgressPanel() {
 
                 <Panel title="Where practice happens" sub="questions per game, all time">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {(['snake', 'blocks', 'fruits'] as const).map(game => {
+                        {GAME_IDS.map(game => {
                             const max = Math.max(1, ...Object.values(games));
                             const labels = { snake: '🐍 snake', blocks: '🧱 blocks', fruits: '🍉 fruits' };
                             return (

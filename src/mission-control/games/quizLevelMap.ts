@@ -115,8 +115,3 @@ export const GAME_LEVEL_MAPS: readonly GameLevelMap[] = [
         ),
     },
 ];
-
-/** The highest level any game will ever ask the math generator for. */
-export const MAX_GAME_QUIZ_LEVEL = Math.max(
-    ...GAME_LEVEL_MAPS.flatMap(map => map.rows.map(row => row.level)),
-);

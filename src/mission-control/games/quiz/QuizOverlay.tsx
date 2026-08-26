@@ -91,6 +91,12 @@ export function QuizOverlay({
         if (wasOpen.current && !open) onClosed?.();
         wasOpen.current = open;
     }, [open, onClosed]);
+    // Unmounting while open must end the scope too: blocks unmounts its
+    // RescueQuizLayer wholesale with open hardcoded true, so without this the
+    // mercy counter leaks across quizzes for the rest of the session.
+    const onClosedRef = useRef(onClosed);
+    onClosedRef.current = onClosed;
+    useEffect(() => () => { if (wasOpen.current) onClosedRef.current?.(); }, []);
 
     // Success dwell: let the flash land, then report up / move on. Effect-
     // scoped so closing mid-dwell cancels instead of firing into an unmounted

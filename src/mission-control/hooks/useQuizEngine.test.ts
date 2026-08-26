@@ -52,13 +52,14 @@ describe('useQuizEngine', () => {
 
     it('keeps the generator referentially stable across store updates', () => {
         const { result, rerender } = renderHook(() => useQuizEngine());
-        const first = result.current.generator;
+        const firstApi = result.current;
+        const first = firstApi.generator;
 
         mockState = { skillProgress: { ...createDefaultSkillProgress(), readingLevel: 3 } };
         rerender();
 
         expect(result.current.generator).toBe(first);
-        expect(result.current).toBe(result.current); // api object memoized
+        expect(result.current).toBe(firstApi); // api object memoized
     });
 
     it('records a fully attributed answer for the active game', () => {

@@ -6,7 +6,12 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-export type GameId = 'snake' | 'blocks' | 'fruits';
+// Value-level registry, same pattern as ALL_SKILL_IDS below: consumers that
+// enumerate games (persistence sanitizer, progress panel, selector) iterate
+// THIS, so adding a game here reaches all of them — a bare type union let the
+// sanitizer silently strip an unlisted game's persisted counters on every load.
+export const GAME_IDS = ['snake', 'blocks', 'fruits'] as const;
+export type GameId = typeof GAME_IDS[number];
 
 export type ReadingSkillId = 'read-word-pic' | 'read-pic-word' | 'read-missing-letter';
 export type MathSkillId = 'math-add' | 'math-sub' | 'math-mul';

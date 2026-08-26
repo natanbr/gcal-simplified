@@ -9,6 +9,7 @@
 import type { ActivityLogEntry } from '../types';
 import {
     ALL_SKILL_IDS,
+    GAME_IDS,
     createDefaultSkillProgress,
     DAY_BUCKET_CAP,
     DEMOTE_ACCURACY,
@@ -190,8 +191,6 @@ const LOCAL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 function isLocalDate(v: unknown): v is string {
     return typeof v === 'string' && LOCAL_DATE_PATTERN.test(v);
 }
-
-const GAME_IDS = ['snake', 'blocks', 'fruits'] as const;
 
 /** Rebuilt over the known GameId union with clamped counters — a bare cast
  *  here once let `byGame: { quiz: "x" }` NaN-poison the per-game chart. */

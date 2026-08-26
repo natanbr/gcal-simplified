@@ -10,7 +10,8 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { generateMathQuestion } from '../../games/quiz/additionQuiz';
+import { generateMathQuestion, MAX_MATH_LEVEL } from '../../games/quiz/additionQuiz';
+import { MAX_READING_LEVEL } from '../../skills/types';
 // The sanctioned door: reading content is private to games/quiz/reading/.
 import { generateReadingQuestion } from '../../games/quiz/quizEngine';
 import type { QuizQuestion } from '../../games/quiz/types';
@@ -18,8 +19,8 @@ import type { QuizQuestion } from '../../games/quiz/types';
 export type LabFamily = 'reading' | 'math';
 
 export const LAB_FAMILIES: readonly { id: LabFamily; label: string; maxLevel: number }[] = [
-    { id: 'reading', label: '📖 Reading', maxLevel: 6 },
-    { id: 'math', label: '➕ Math', maxLevel: 3 },
+    { id: 'reading', label: '📖 Reading', maxLevel: MAX_READING_LEVEL },
+    { id: 'math', label: '➕ Math', maxLevel: MAX_MATH_LEVEL },
 ];
 
 export const DEFAULT_SAMPLE_SIZE = 200;
