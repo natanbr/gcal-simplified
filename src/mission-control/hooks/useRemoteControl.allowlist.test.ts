@@ -88,6 +88,20 @@ describe('remote action allowlist', () => {
             }).not.toThrow();
             expect(mockDispatch).not.toHaveBeenCalled();
         });
+
+        it('rejects allowlisted actions whose numeric payload is missing or NaN', () => {
+            // {type:'ADD_TOKENS'} with no amount reduces to bankCount +
+            // undefined = NaN, which persists (as null) and zeroes the bank on
+            // reload — the allowlist alone does not stop a tampered payload.
+            const listener = mountAndGetListener();
+            listener({ type: 'ADD_TOKENS' });
+            listener({ type: 'ADD_TOKENS', amount: 'seven' });
+            listener({ type: 'ADD_TOKENS', amount: NaN });
+            listener({ type: 'ADJUST_BEHAVIOR_PROGRESS' });
+            listener({ type: 'ADJUST_MISSION_END', missionPhase: 'morning' });
+            listener({ type: 'SET_MOOD_WIND' });
+            expect(mockDispatch).not.toHaveBeenCalled();
+        });
     });
 
     describe('still accepts the legitimate remote surface', () => {
@@ -102,9 +116,17 @@ describe('remote action allowlist', () => {
 
         it('accepts every type on the allowlist', () => {
             const listener = mountAndGetListener();
+            // Minimal valid payloads for the types whose numeric fields are
+            // validated (PAYLOAD_VALIDATORS in the hook).
+            const payloads: Record<string, Record<string, unknown>> = {
+                ADD_TOKENS: { amount: 1 },
+                ADJUST_BEHAVIOR_PROGRESS: { amount: 1, reason: 'test' },
+                ADJUST_MISSION_END: { missionPhase: 'morning', deltaMinutes: 5 },
+                SET_MOOD_WIND: { level: 1 },
+            };
             for (const type of REMOTE_ALLOWED_ACTIONS) {
                 mockDispatch.mockClear();
-                listener({ type });
+                listener({ type, ...(payloads[type] ?? {}) });
                 expect(mockDispatch, `allowlisted ${type} was rejected`).toHaveBeenCalled();
             }
         });

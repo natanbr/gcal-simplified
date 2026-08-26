@@ -35,6 +35,19 @@ const REMOTE_ALLOWED_ACTIONS: ReadonlySet<MCAction['type']> = new Set<MCAction['
     'TRIGGER_ANIMATION',
 ]);
 
+/**
+ * Payload validation for allowlisted actions that reach arithmetic or clamps.
+ * The same threat model as the allowlist: a stale or tampered remote build.
+ * `{type:'ADD_TOKENS'}` with no amount reduces to `bankCount + undefined =
+ * NaN`, which persists (as null) and silently zeroes the bank on reload.
+ */
+const PAYLOAD_VALIDATORS: Partial<Record<MCAction['type'], (a: MCAction) => boolean>> = {
+    ADD_TOKENS: a => a.type === 'ADD_TOKENS' && Number.isFinite(a.amount),
+    ADJUST_BEHAVIOR_PROGRESS: a => a.type === 'ADJUST_BEHAVIOR_PROGRESS' && Number.isFinite(a.amount),
+    ADJUST_MISSION_END: a => a.type === 'ADJUST_MISSION_END' && Number.isFinite(a.deltaMinutes),
+    SET_MOOD_WIND: a => a.type === 'SET_MOOD_WIND' && Number.isFinite(a.level),
+};
+
 const SNAKE_KEY_MAP: Record<string, string> = {
     up: 'ArrowUp',
     down: 'ArrowDown',
@@ -71,6 +84,12 @@ export function useRemoteControl() {
 
             if (!REMOTE_ALLOWED_ACTIONS.has(action.type)) {
                 console.warn(`[Remote] Rejected disallowed action type: ${action.type}`);
+                return;
+            }
+
+            const validate = PAYLOAD_VALIDATORS[action.type];
+            if (validate && !validate(action)) {
+                console.warn(`[Remote] Rejected ${action.type}: malformed payload`);
                 return;
             }
 
