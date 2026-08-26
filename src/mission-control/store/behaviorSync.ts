@@ -216,10 +216,6 @@ export function applyBehaviorSync(state: MCState, nowIso: string): MCState {
         nextProgress = nextProgress % PROGRESS_PER_TOKEN;
         nextGameTokens = Math.min(MAX_GAME_TOKENS, nextGameTokens + tokensToGrant);
 
-        // Earning a token spends the good mood that earned it: the child starts
-        // the next token from Neutral and has to earn their way back up.
-        nextMoodWind = 0;
-
         // The grant is written here, inside the reducer, rather than by the
         // dispatch interceptor — this is the one token movement no user action
         // triggers, so it is exactly the one that must never go unlogged.
@@ -227,6 +223,11 @@ export function applyBehaviorSync(state: MCState, nowIso: string): MCState {
         // reducer pure and replayable.
         const granted = nextGameTokens - state.gameTokens;
         if (granted > 0) {
+            // Earning a token spends the good mood that earned it: the child
+            // starts the next token from Neutral and earns their way back up.
+            // Gated on an actual grant — at the token cap nothing is earned,
+            // and a parent-set mood must not vanish with no log entry.
+            nextMoodWind = 0;
             grantLog = {
                 id: `auto-mood-token-${nextLastUpdated}`,
                 timestamp: nextLastUpdated,

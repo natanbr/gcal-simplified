@@ -92,6 +92,10 @@ export function loadPersistedState(): MCState {
             // Clamp to the cap; never top tokens back up on restart (that would
             // let a restart refund spent game tokens).
             gameTokens: Math.min(MAX_GAME_TOKENS, Math.max(0, parsed.gameTokens ?? initialState.gameTokens)),
+            // A corrupt write (NaN serializes to null) must not propagate.
+            bankCount: typeof parsed.bankCount === 'number' && Number.isFinite(parsed.bankCount)
+                ? Math.max(0, parsed.bankCount)
+                : initialState.bankCount,
             gameTokensLastGrantedDate: parsed.gameTokensLastGrantedDate ?? null,
             // A game only runs while its overlay is mounted, so an "active" game
             // can never survive a restart. Restoring it stranded the flag at true

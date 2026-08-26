@@ -169,6 +169,41 @@ describe('earning a game token resets mood to normal', () => {
         expect(next.activityLogs[0].message).toMatch(/mood/i);
         expect(next.activityLogs[0].source).toBe('auto');
     });
+
+    it('leaves a parent-set mood alone when the gauge fills at the token cap', () => {
+        const state: MCState = {
+            ...initialState,
+            moodWind: 2,
+            behaviorProgress: 99.9,
+            gameTokens: MAX_GAME_TOKENS,
+            activityLogs: [],
+            moodLastResetDate: localDateString(),
+            behaviorLastUpdated: todayAtLocal(12, 0),
+        };
+
+        const next = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAtLocal(12, 1) });
+
+        // Nothing was earned, so nothing may reset the mood: the reset is tied
+        // to a grant, and an unlogged mood movement is unattributable.
+        expect(next.gameTokens).toBe(MAX_GAME_TOKENS);
+        expect(next.moodWind).toBe(2);
+        expect(next.activityLogs).toHaveLength(0);
+    });
+
+    it('applies the same reset when a mission bonus crosses the gauge', () => {
+        const state: MCState = {
+            ...initialState,
+            moodWind: 2,
+            behaviorProgress: 80,
+            gameTokens: 0,
+            missions: initialState.missions.map(m => m.phase === 'morning' ? { ...m, active: true } : m),
+        };
+
+        const next = mcReducer(state, { type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'morning', bonusTokens: 2 });
+
+        expect(next.gameTokens).toBe(1);
+        expect(next.moodWind).toBe(0);
+    });
 });
 
 // ── No free tokens on restart ────────────────────────────────────────────────

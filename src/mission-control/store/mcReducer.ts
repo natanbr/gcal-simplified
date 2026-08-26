@@ -444,15 +444,14 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             // first completion may grant tokens/behavior bonus.
             if (!mission || !mission.active) return state;
             const whining = mission.whiningDetected ?? false;
-            
             // "without wining will add points. with wining will result in no change"
             const behaviorBonus = whining ? 0 : 25;
             let nextProgress = state.behaviorProgress + behaviorBonus;
             let nextGameTokens = state.gameTokens;
-            
-            if (nextProgress >= 100) {
-                nextProgress -= 100;
-                nextGameTokens = Math.min(5, nextGameTokens + 1);
+            const crossed = nextProgress >= PROGRESS_PER_TOKEN;
+            if (crossed) {
+                nextProgress -= PROGRESS_PER_TOKEN;
+                nextGameTokens = Math.min(MAX_GAME_TOKENS, nextGameTokens + 1);
             }
 
             return {
@@ -461,8 +460,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 bankCount: state.bankCount + action.bonusTokens,
                 behaviorProgress: nextProgress,
                 gameTokens: nextGameTokens,
-                ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString() } : {}),
-                ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString() } : {}),
+                ...(crossed ? { moodWind: 0 } : {}), // earning a token resets mood — same rule as the heartbeat grant
+                ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString(new Date(actionInstant(action))) } : {}),
+                ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString(new Date(actionInstant(action))) } : {}),
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
                         ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
@@ -475,8 +475,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             return {
                 ...state,
                 behaviorProgress: Math.max(0, state.behaviorProgress - 20), // "not completing missions will reduce"
-                ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString() } : {}),
-                ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString() } : {}),
+                ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString(new Date(actionInstant(action))) } : {}),
+                ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString(new Date(actionInstant(action))) } : {}),
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
                         ? { ...m, loggedTimeoutAt: actionInstant(action) }
