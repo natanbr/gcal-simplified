@@ -59,7 +59,11 @@ export function useRemoteSync(state: MCState) {
                 delta: log.delta,
                 type: log.type,
                 colorKey: log.colorKey,
-                isRemote: log.isRemote
+                isRemote: log.isRemote,
+                // Attribution travels to the phone too, so the remote log reads
+                // the same as the one on the machine.
+                source: log.source,
+                gameTokens: log.gameTokens
             })),
             responsibilities: stateRef.current.responsibilities.map(r => ({
                 id: r.id,
@@ -88,7 +92,13 @@ export function useRemoteSync(state: MCState) {
     }, [
         state.bankCount,
         state.gameTokens,
-        state.behaviorProgress,
+        // behaviorProgress is deliberately NOT a dependency (docs/performance.md
+        // backlog item, done 2026-08-20): every timestamped dispatch during
+        // active hours nudges it, so keying the broadcast on it meant one
+        // Supabase message per action — including one per answered quiz
+        // question. It still rides every broadcast's payload; the phone just
+        // sees it at the next real change. skillProgress must stay out of BOTH
+        // the payload and this list (~68KB per answer at its caps if added).
         state.moodWind,
         state.activeMission,
         state.missions,

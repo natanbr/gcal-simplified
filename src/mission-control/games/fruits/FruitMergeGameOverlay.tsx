@@ -9,29 +9,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FruitMergeCanvas } from './FruitMergeCanvas';
 import { useFruitMergeGame } from './useFruitMergeGame';
 import { QuizOverlay } from '../quiz/QuizOverlay';
-import {
-    generateAdditionQuestion, generateSubtractionQuestion,
-    generateMultiplicationQuestion,
-} from '../quiz/additionQuiz';
-import { FRUIT_TYPES, GAME_TIME_MS } from './types';
+import type { QuizEngineApi } from '../quiz/types';
+import { FRUIT_TYPES, GAME_TIME_MS, deleteTierLevel } from './types';
 
 interface FruitMergeGameOverlayProps {
     open: boolean;
     onClose: (score: number) => void;
+    engine: QuizEngineApi;
 }
 
-/** Quiz difficulty based on fruit tier being deleted. */
-function generateDeleteQuestion(tier: number) {
-    if (tier <= 1) return generateAdditionQuestion(10);
-    if (tier <= 3) {
-        return Math.random() < 0.5
-            ? generateAdditionQuestion(20)
-            : generateSubtractionQuestion(15);
-    }
-    return generateMultiplicationQuestion(4);
-}
-
-export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayProps) {
+export function FruitMergeGameOverlay({ open, onClose, engine }: FruitMergeGameOverlayProps) {
     const {
         gameState, engineRef, fruitMapRef, mergeEffectsRef,
         startGame, resetGame, dropFruit, setDropX,
@@ -58,7 +45,10 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
         if (!open) return;
         const handler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                if (gameState.phase === 'selecting-delete') {
+                // ESC peels one layer, same as the visible ✕ — from the delete
+                // QUIZ it must back out of the delete, never forfeit the paid
+                // game session.
+                if (gameState.phase === 'selecting-delete' || gameState.phase === 'quiz-delete') {
                     cancelDeleteMode();
                 } else {
                     handleClose();
@@ -80,6 +70,16 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
     const isEnded = gameState.phase === 'game-over' || gameState.phase === 'time-up';
     const elapsedMs = GAME_TIME_MS - gameState.timeRemainingMs;
     const deleteTier = getDeleteTier();
+
+    // Difficulty must be applied at generation time: the child QuizOverlay
+    // generates its question before this component's effects run, so a
+    // post-commit setDifficulty effect always served one selection behind
+    // (level 0 on the first delete).
+    const deleteQuizGenerator = useCallback(() => {
+        const level = deleteTierLevel(getDeleteTier());
+        engine.setDifficulty(level, level);
+        return engine.generator();
+    }, [engine, getDeleteTier]);
 
     return (
         <AnimatePresence>
@@ -176,12 +176,15 @@ export function FruitMergeGameOverlay({ open, onClose }: FruitMergeGameOverlayPr
                                 </div>
                             )}
 
-                            {/* Delete quiz overlay */}
+                            {/* Delete quiz overlay — opt-in, so it can be cancelled */}
                             <QuizOverlay
                                 open={gameState.phase === 'quiz-delete'}
                                 requiredCorrect={1}
                                 currentCorrect={0}
-                                generator={() => generateDeleteQuestion(deleteTier)}
+                                generator={deleteQuizGenerator}
+                                onAnswered={engine.onAnswered}
+                                onClosed={engine.notifyQuizClosed}
+                                onCancel={cancelDeleteMode}
                                 onCorrect={onDeleteQuizCorrect}
                                 title={`🧠 Delete ${FRUIT_TYPES[deleteTier].emoji} ${FRUIT_TYPES[deleteTier].name}?`}
                             />

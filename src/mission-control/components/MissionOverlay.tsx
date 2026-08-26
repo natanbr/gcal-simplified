@@ -99,8 +99,8 @@ export function MissionOverlay() {
     const allDone      = totalCount > 0 && doneCount === totalCount;
     const effectiveBonus = whiningDetected ? Math.max(0, BONUS_BASE - 1) : BONUS_BASE;
 
-    const handleBonusCoin = useCallback(() => {
-        dispatch({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase as Exclude<MissionPhase, 'none'>, bonusTokens: effectiveBonus });
+    const collectBonus = useCallback((origin?: 'auto') => {
+        dispatch({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase as Exclude<MissionPhase, 'none'>, bonusTokens: effectiveBonus, origin });
     }, [dispatch, effectiveBonus, phase]);
 
     // Auto-collect when timer expires with all tasks done
@@ -112,13 +112,13 @@ export function MissionOverlay() {
         const nowMs = Date.now();
 
         if (nowMs >= endMs) {
-            handleBonusCoin();
+            collectBonus('auto');
             return;
         }
 
-        const timer = setTimeout(handleBonusCoin, endMs - nowMs);
+        const timer = setTimeout(() => collectBonus('auto'), endMs - nowMs);
         return () => clearTimeout(timer);
-    }, [allDone, mission, handleBonusCoin]);
+    }, [allDone, mission, collectBonus]);
 
     return (
         <>
@@ -234,7 +234,7 @@ export function MissionOverlay() {
                             <MissionTimerDisplay
                                 mission={mission}
                                 allDone={allDone}
-                                onTimerExpiredWithAllDone={handleBonusCoin}
+                                onTimerExpiredWithAllDone={() => collectBonus('auto')}
                                 onTimerExpiredInfo={handleTimerExpiredInfo}
                             />
 
@@ -456,7 +456,7 @@ export function MissionOverlay() {
                                         data-testid="mc-bonus-coin-btn"
                                         whileTap={{ scale: 0.9, y: 2 }}
                                         whileHover={{ scale: 1.05, y: -2 }}
-                                        onClick={handleBonusCoin}
+                                        onClick={() => collectBonus()}
                                         style={{
                                             background: effectiveBonus > 0
                                                 ? 'linear-gradient(180deg, #f7c948 0%, #f0b820 100%)'

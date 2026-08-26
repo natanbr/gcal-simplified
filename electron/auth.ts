@@ -35,9 +35,33 @@ export class AuthService {
         if (tokens) {
             this.oauth2Client.setCredentials(tokens);
         }
+
+        // google-auth-library refreshes the access token in memory and never
+        // tells the store about it. Without this listener the persisted blob
+        // slowly goes stale, and a rotated refresh_token is lost on the next
+        // restart — which shows up as "I have to sign in again every few days".
+        this.oauth2Client.on('tokens', (refreshed) => {
+            this.saveTokens(refreshed);
+        });
     }
 
+    /**
+     * Persists credentials, preserving the refresh_token when the incoming set
+     * does not carry one.
+     *
+     * Google issues a refresh_token only on the FIRST consent. Every later grant
+     * and every refresh response omits it, so writing the response verbatim
+     * destroys the only long-lived credential we have — and the next start finds
+     * an access token that is already expired with nothing to renew it from.
+     */
     private saveTokens(tokens: Credentials) {
+        if (!tokens.refresh_token) {
+            const existing = this.loadTokens();
+            if (existing?.refresh_token) {
+                tokens = { ...existing, ...tokens, refresh_token: existing.refresh_token };
+            }
+        }
+
         if (safeStorage.isEncryptionAvailable()) {
             try {
                 const json = JSON.stringify(tokens);
@@ -182,6 +206,11 @@ export class AuthService {
                     // Generate Auth URL
                     const authUrl = this.oauth2Client.generateAuthUrl({
                         access_type: 'offline', // Crucial for refresh token
+                        // Force the consent screen. Without it a re-auth of an
+                        // already-authorised account returns NO refresh_token,
+                        // so the session dies again as soon as the access token
+                        // expires — the "signed in, then signed out again" loop.
+                        prompt: 'consent',
                         scope: SCOPES,
                         redirect_uri: redirectUri,
                         state: state // Include state parameter

@@ -3,44 +3,32 @@
  *
  * Smoke-tests the MCSettingsOverlay:
  * open via the ⚙️ button, change a time, save, and verify persistence.
+ *
+ * State handling: `mcTest` gives each test a throwaway userData directory. The
+ * save test genuinely rewrites `morningStartsAt` to 07:15 — against the real
+ * profile that silently moved the parent's morning mission time, which is why
+ * these specs no longer see it.
  */
 
-import { test, expect, _electron as electron } from '@playwright/test';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import type { Page } from '@playwright/test';
+import {
+    ELECTRON_MAIN,
+    expect,
+    mcTest as test,
+    readMCField,
+} from './helpers/mcApp';
 
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
-const STORAGE_KEY = 'mc-state-v5';
-
-async function gotoMC(page: Page): Promise<void> {
-    const currentUrl = page.url();
-    const base = currentUrl.split('?')[0];
-    await page.goto(`${base}?mc=1`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
+/** Read one field out of the persisted `settings` object. */
+async function readSetting(page: Page, name: string): Promise<unknown> {
+    const settings = await readMCField<Record<string, unknown>>(page, 'settings');
+    return settings?.[name] ?? null;
 }
 
 test.describe('Mission Control — Settings Overlay', () => {
     test.skip(!existsSync(ELECTRON_MAIN), 'Electron build not present');
 
-
-    test('settings panel opens via the ⚙️ button', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        await gotoMC(page);
-
+    test('settings panel opens via the ⚙️ button', async ({ mcPage: page }) => {
         // Gear button in the MC top bar
         const settingsBtn = page.locator('[data-testid="mc-settings-btn"]');
         await expect(settingsBtn).toBeVisible({ timeout: 5000 });
@@ -48,49 +36,18 @@ test.describe('Mission Control — Settings Overlay', () => {
         // Open
         await settingsBtn.click();
         await expect(page.locator('[data-testid="mc-settings-save"]')).toBeVisible({ timeout: 2000 });
-
-        await app.close();
     });
 
-    test('settings panel shows Morning and Evening Mission sections', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        await gotoMC(page);
-
+    test('settings panel shows Morning and Evening Mission sections', async ({ mcPage: page }) => {
         await page.locator('[data-testid="mc-settings-btn"]').click();
 
         await expect(page.getByText('Morning Mission')).toBeVisible({ timeout: 2000 });
         await expect(page.getByText('Evening Mission')).toBeVisible();
-
-        await app.close();
     });
 
-    test('settings panel can be cancelled — store unchanged', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        await gotoMC(page);
-
+    test('settings panel can be cancelled — store unchanged', async ({ mcPage: page }) => {
         // Read the initial stored settings
-        const before = await page.evaluate((key: string) => {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const state = JSON.parse(raw) as Record<string, unknown>;
-            return (state.settings as Record<string, unknown>)?.morningStartsAt ?? null;
-        }, STORAGE_KEY);
+        const before = await readSetting(page, 'morningStartsAt');
 
         // Open settings
         await page.locator('[data-testid="mc-settings-btn"]').click();
@@ -104,30 +61,10 @@ test.describe('Mission Control — Settings Overlay', () => {
         await expect(page.getByText('Morning Mission')).not.toBeVisible();
 
         // Store should be unchanged
-        const after = await page.evaluate((key: string) => {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const state = JSON.parse(raw) as Record<string, unknown>;
-            return (state.settings as Record<string, unknown>)?.morningStartsAt ?? null;
-        }, STORAGE_KEY);
-
-        expect(after).toBe(before);
-
-        await app.close();
+        expect(await readSetting(page, 'morningStartsAt')).toBe(before);
     });
 
-    test('Save Settings button persists changes to localStorage', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
-        const page = await app.firstWindow();
-
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
-
-        const loginVisible = await page.locator('[data-testid="login-screen"]').isVisible().catch(() => false);
-        test.skip(loginVisible as boolean, 'Login required');
-
-        await gotoMC(page);
-
+    test('Save Settings button persists changes to localStorage', async ({ mcPage: page }) => {
         // Open settings
         await page.locator('[data-testid="mc-settings-btn"]').click();
         await page.waitForTimeout(200);
@@ -145,15 +82,6 @@ test.describe('Mission Control — Settings Overlay', () => {
         await expect(page.getByText('Morning Mission')).not.toBeVisible();
 
         // localStorage must reflect the new value
-        const saved = await page.evaluate((key: string) => {
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const state = JSON.parse(raw) as Record<string, unknown>;
-            return (state.settings as Record<string, unknown>)?.morningStartsAt ?? null;
-        }, STORAGE_KEY);
-
-        expect(saved).toBe('07:15');
-
-        await app.close();
+        expect(await readSetting(page, 'morningStartsAt')).toBe('07:15');
     });
 });

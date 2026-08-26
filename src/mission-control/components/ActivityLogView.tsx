@@ -1,22 +1,53 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useMCState, useMCDispatch } from '../store/useMCStore';
-import { Activity, X } from 'lucide-react';
+import { useMCState, useMCDispatch, selectTotalWealth } from '../store/useMCStore';
+import { Activity, X, HardDriveDownload } from 'lucide-react';
 import { ActivityLogEntry } from '../types';
+import { LogItemRow } from './activity-log/LogItemRow';
+import { LogSummaryStrip } from './activity-log/LogSummaryStrip';
+import { sourceOf } from './activity-log/logSources';
+
+type FilterMode = 'tokens' | 'missions' | 'unattended' | 'remote' | 'all';
 
 const TOKEN_TYPES = new Set<ActivityLogEntry['type']>(['manual', 'reward', 'responsibility']);
 
+const FILTERS: Array<{ id: FilterMode; label: string; title: string }> = [
+    { id: 'tokens', label: '💰 Tokens', title: 'Only entries that moved tokens' },
+    { id: 'missions', label: '🎯 Missions', title: 'Mission starts, completions and expiries' },
+    { id: 'unattended', label: '⚙️ Automatic', title: 'Things the clock or the app did on its own — nobody pressed anything' },
+    { id: 'remote', label: '📱 Phone', title: 'Everything sent from the phone remote' },
+    { id: 'all', label: '📋 All', title: 'Everything' },
+];
+
+function matchesFilter(log: ActivityLogEntry, mode: FilterMode): boolean {
+    switch (mode) {
+        case 'tokens': return TOKEN_TYPES.has(log.type);
+        case 'missions': return log.type === 'mission';
+        case 'unattended': {
+            const source = sourceOf(log);
+            return source === 'scheduler' || source === 'auto' || source === 'system';
+        }
+        case 'remote': return sourceOf(log) === 'remote';
+        case 'all': return true;
+    }
+}
+
 export function ActivityLogView(): React.JSX.Element {
-    const { activityLogs, hasUnreviewedCheatAttempt } = useMCState();
+    const state = useMCState();
+    const { activityLogs, hasUnreviewedCheatAttempt, bankCount, gameTokens } = state;
     const dispatch = useMCDispatch();
     const [isOpen, setIsOpen] = useState(false);
-    const [filterMode, setFilterMode] = useState<'tokens' | 'all'>('tokens');
+    const [filterMode, setFilterMode] = useState<FilterMode>('tokens');
     const [visibleCount, setVisibleCount] = useState(30);
+    const [confirmClear, setConfirmClear] = useState(false);
+    const [exportNote, setExportNote] = useState('');
     const sentinelRef = useRef<HTMLDivElement>(null);
 
     const handleOpen = () => {
         setIsOpen(true);
         setVisibleCount(30);
+        setConfirmClear(false);
+        setExportNote('');
         if (hasUnreviewedCheatAttempt) {
             dispatch({ type: 'CLEAR_CHEAT_FLAG' });
         }
@@ -27,39 +58,66 @@ export function ActivityLogView(): React.JSX.Element {
         setVisibleCount(30);
     }, [filterMode]);
 
-    // Compute the filtered logs list lazily
-    const visibleLogs = useMemo(() => {
-        if (!isOpen) return []; // guard: skip when closed
-        const base = filterMode === 'tokens'
-            ? activityLogs.filter(log => TOKEN_TYPES.has(log.type))
-            : activityLogs;
-        return base.slice(0, visibleCount);
-    }, [isOpen, activityLogs, filterMode, visibleCount]);
+    const filteredLogs = useMemo(
+        () => (isOpen ? activityLogs.filter(log => matchesFilter(log, filterMode)) : []),
+        [isOpen, activityLogs, filterMode]
+    );
+
+    const visibleLogs = useMemo(
+        () => filteredLogs.slice(0, visibleCount),
+        [filteredLogs, visibleCount]
+    );
 
     // Infinite scrolling / Lazy loading
     useEffect(() => {
         if (!isOpen || !sentinelRef.current) return;
-        const totalFiltered = filterMode === 'tokens'
-            ? activityLogs.filter(log => TOKEN_TYPES.has(log.type)).length
-            : activityLogs.length;
-
-        if (visibleCount >= totalFiltered) return;
+        if (visibleCount >= filteredLogs.length) return;
 
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting) {
-                    setVisibleCount(prev => Math.min(prev + 30, totalFiltered));
+                    setVisibleCount(prev => Math.min(prev + 30, filteredLogs.length));
                 }
             },
             { rootMargin: '0px 0px 200px 0px', threshold: 0.1 }
         );
         observer.observe(sentinelRef.current);
         return () => observer.disconnect();
-    }, [isOpen, visibleCount, activityLogs, filterMode]);
+    }, [isOpen, visibleCount, filteredLogs.length]);
+
+    /** Pulls the durable on-disk trail — the record CLEAR cannot touch. */
+    const handleExport = useCallback(async () => {
+        if (!window.ipcRenderer) {
+            setExportNote('Only available in the desktop app');
+            return;
+        }
+        try {
+            const entries = await window.ipcRenderer.invoke('audit:read', 2000) as unknown[];
+            const blob = new Blob([entries.map(e => JSON.stringify(e)).join('\n')], { type: 'application/x-ndjson' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mission-control-audit-${new Date().toISOString().slice(0, 10)}.ndjson`;
+            a.click();
+            URL.revokeObjectURL(url);
+            setExportNote(`${entries.length} events exported`);
+        } catch {
+            setExportNote('Export failed');
+        }
+    }, []);
+
+    const handleClear = useCallback(() => {
+        if (!confirmClear) {
+            setConfirmClear(true);
+            return;
+        }
+        dispatch({ type: 'CLEAR_LOGS' });
+        setConfirmClear(false);
+    }, [confirmClear, dispatch]);
 
     return (
         <div style={{ position: 'relative' }}>
-            <button 
+            <button
                 onClick={handleOpen}
                 className="flex items-center gap-2 px-3 py-2 bg-white/80 hover:bg-slate-50 text-slate-700 rounded-lg transition border border-slate-200 backdrop-blur-sm shadow-sm"
                 title="Activity Log"
@@ -70,15 +128,14 @@ export function ActivityLogView(): React.JSX.Element {
             {hasUnreviewedCheatAttempt && <div className="mc-notification-dot" />}
 
             {isOpen && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
                     onClick={() => setIsOpen(false)}
                 >
-                    <div 
-                        className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                    <div
+                        className="bg-white w-full max-w-4xl rounded-2xl shadow-xl border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
                         onClick={e => e.stopPropagation()}
                     >
-                        
                         {/* Header */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                             <div className="flex items-center gap-3">
@@ -86,40 +143,28 @@ export function ActivityLogView(): React.JSX.Element {
                                     <Activity size={20} />
                                 </div>
                                 <h2 className="text-lg font-bold text-slate-800 tracking-wide">Activity History</h2>
-                                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 uppercase tracking-widest">
-                                    7 Days
-                                </span>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-1.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                                    <button 
-                                        onClick={() => setFilterMode('tokens')} 
-                                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
-                                            filterMode === 'tokens' 
-                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50' 
-                                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/40'
-                                        }`}
-                                    >
-                                        💰 Tokens
-                                    </button>
-                                    <button 
-                                        onClick={() => setFilterMode('all')} 
-                                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
-                                            filterMode === 'all' 
-                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50' 
-                                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/40'
-                                        }`}
-                                    >
-                                        📋 All
-                                    </button>
-                                </div>
+                            <div className="flex items-center gap-3">
                                 <button
-                                    onClick={() => dispatch({ type: 'CLEAR_LOGS' })}
-                                    className="px-3 py-1 text-xs font-bold text-red-500 hover:bg-red-50 hover:text-red-600 rounded-md transition"
+                                    onClick={handleExport}
+                                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-slate-500 hover:bg-slate-200/50 hover:text-slate-700 rounded-md transition"
+                                    title="Download the full on-disk trail. This record is append-only — CLEAR does not touch it."
                                 >
-                                    CLEAR
+                                    <HardDriveDownload size={14} />
+                                    EXPORT
                                 </button>
-                                <button 
+                                <button
+                                    onClick={handleClear}
+                                    className={`px-3 py-1 text-xs font-bold rounded-md transition ${
+                                        confirmClear
+                                            ? 'bg-red-500 text-white hover:bg-red-600'
+                                            : 'text-red-500 hover:bg-red-50 hover:text-red-600'
+                                    }`}
+                                    title="Clears only this on-screen list. The on-disk trail is kept."
+                                >
+                                    {confirmClear ? 'CONFIRM CLEAR' : 'CLEAR'}
+                                </button>
+                                <button
                                     onClick={() => setIsOpen(false)}
                                     className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition"
                                     title="Close"
@@ -129,21 +174,53 @@ export function ActivityLogView(): React.JSX.Element {
                             </div>
                         </div>
 
+                        {/* Five-second summary */}
+                        <LogSummaryStrip
+                            logs={activityLogs}
+                            bankCount={bankCount}
+                            gameTokens={gameTokens}
+                            totalTokens={selectTotalWealth(state)}
+                        />
+
+                        {/* Filters */}
+                        <div className="flex items-center gap-1.5 px-6 py-2 border-b border-slate-100 bg-slate-50/30 flex-wrap">
+                            {FILTERS.map(f => (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setFilterMode(f.id)}
+                                    title={f.title}
+                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all border ${
+                                        filterMode === f.id
+                                            ? 'bg-white text-indigo-600 shadow-sm border-slate-200'
+                                            : 'text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-200/40'
+                                    }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                            {exportNote && (
+                                <span className="ml-auto text-[11px] font-bold text-slate-400">{exportNote}</span>
+                            )}
+                        </div>
+
                         {/* Log List */}
                         <div className="flex-1 overflow-y-auto w-full">
-                            {(!activityLogs || activityLogs.length === 0) ? (
+                            {filteredLogs.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-3">
                                     <Activity size={32} className="opacity-50" />
-                                    <p className="text-sm font-medium">No activity recorded yet</p>
+                                    <p className="text-sm font-medium">
+                                        {activityLogs.length === 0 ? 'No activity recorded yet' : 'Nothing matches this filter'}
+                                    </p>
                                 </div>
                             ) : (
                                 <>
                                     <table className="w-full text-left text-sm text-slate-600">
                                         <thead className="text-xs text-slate-400 uppercase bg-slate-50/50 sticky top-0 border-b border-slate-100">
                                             <tr>
-                                                <th className="px-6 py-3 font-bold tracking-wider rounded-tl-lg w-32">Time</th>
-                                                <th className="px-6 py-3 font-bold tracking-wider">Event</th>
-                                                <th className="px-6 py-3 font-bold tracking-wider rounded-tr-lg text-right w-24">Tokens</th>
+                                                <th className="px-6 py-3 font-bold tracking-wider w-32">Time</th>
+                                                <th className="px-2 py-3 font-bold tracking-wider w-24">Who</th>
+                                                <th className="px-4 py-3 font-bold tracking-wider">Event</th>
+                                                <th className="px-6 py-3 font-bold tracking-wider text-right w-32">Tokens</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -164,108 +241,3 @@ export function ActivityLogView(): React.JSX.Element {
         </div>
     );
 }
-
-/** Parses **text** markers in log messages and renders them as highlighted pills */
-function renderHighlightedMessage(message: string) {
-    const parts = message.split(/\*\*(.+?)\*\*/g);
-    if (parts.length === 1) return message; // no markers
-    return parts.map((part, i) =>
-        i % 2 === 1 ? (
-            <span
-                key={i}
-                style={{
-                    background: 'rgba(99,102,241,0.10)',
-                    color: '#4338ca',
-                    padding: '1px 6px',
-                    borderRadius: 6,
-                    fontWeight: 900,
-                    letterSpacing: '0.01em',
-                }}
-            >
-                {part}
-            </span>
-        ) : (
-            <span key={i}>{part}</span>
-        )
-    );
-}
-
-const LogItemRow = React.memo(function LogItemRow({ log }: { log: ActivityLogEntry }) {
-    // Determine colors based on type
-    let titleColor = "text-slate-700";
-    let bgClass = "hover:bg-slate-50/80 transition-colors";
-    
-    // Explicit color key overrides from user request
-    if (log.colorKey === 'cheat') {
-        titleColor = "text-red-700";
-        bgClass = "bg-red-50 hover:bg-red-100 transition-colors";
-    }
-    else if (log.colorKey === 'morning') titleColor = "text-amber-500"; // Orange
-    else if (log.colorKey === 'evening') titleColor = "text-purple-500";
-    else if (log.colorKey === 'recycling') titleColor = "text-emerald-500"; // Green
-    else if (log.colorKey === 'activity') titleColor = "text-blue-500";
-    else if (log.colorKey === 'bank') titleColor = "text-slate-900"; // Black
-    else if (log.colorKey === 'system') titleColor = "text-slate-500"; // neutral
-    else {
-        // Fallbacks based on original categorization
-        if (log.type === 'manual') titleColor = "text-slate-900";
-        else if (log.type === 'mission') titleColor = "text-emerald-700";
-        else if (log.type === 'reward' || log.type === 'responsibility') titleColor = "text-purple-700";
-        else if (log.type === 'system') titleColor = "text-blue-700";
-    }
-
-    const timeString = new Date(log.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const dateString = new Date(log.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
-
-    return (
-        <tr className={bgClass}>
-            <td className="px-6 py-3 whitespace-nowrap">
-                <div className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold text-slate-500">{dateString}</span>
-                    <span className="text-slate-400 font-medium">{timeString}</span>
-                    {log.isRemote && (
-                        <span title="Triggered from Remote" className="opacity-70" style={{ fontSize: '11px' }}>📱</span>
-                    )}
-                </div>
-            </td>
-            <td className="px-6 py-3">
-                <div className={`flex items-center gap-3 font-bold ${titleColor}`}>
-                    <span className="text-base leading-none">{log.icon}</span>
-                    <span className="tracking-wide">{renderHighlightedMessage(log.message)}</span>
-                </div>
-            </td>
-            <td className="px-6 py-3 text-right">
-                <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-2">
-                        {/* Action: Added/Removed from game */}
-                        {log.delta !== undefined && log.delta !== 0 && (
-                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider border ${
-                                log.delta > 0 
-                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
-                                : 'bg-rose-50 text-rose-600 border-rose-200'
-                            }`}>
-                                {log.delta > 0 ? '+' : ''}{log.delta}
-                            </span>
-                        )}
-                        
-                        {/* Total Tokens (Wealth) */}
-                        {log.totalTokens !== undefined && (
-                            <div className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="Total Tokens (Bank + Goals)">
-                               <span className="text-[10px] opacity-60">Σ</span>
-                                <span className="text-[10px] font-black text-slate-700">{log.totalTokens}</span>
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Bank Tokens */}
-                    {log.bankTokens !== undefined && (
-                        <div className="flex items-center gap-1 px-1.5 py-0.5" title="Bank Tokens">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Bank:</span>
-                            <span className="text-[10px] font-black text-slate-600">{log.bankTokens}</span>
-                        </div>
-                    )}
-                </div>
-            </td>
-        </tr>
-    );
-});

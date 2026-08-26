@@ -49,6 +49,7 @@ vi.mock('googleapis', () => {
           generateAuthUrl = vi.fn().mockReturnValue('http://auth-url');
           getToken = vi.fn().mockResolvedValue({ tokens: {} });
           setCredentials = vi.fn();
+          on = vi.fn();
         }
       }
     }

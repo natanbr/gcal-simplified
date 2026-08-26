@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect, memo, useMemo } from 'react';
 import { GameShape, BlocksGameState, GRID_SIZE, CELL_DISPLAY_SIZE } from './types';
-import { QuizOverlay } from '../quiz/QuizOverlay';
+import { RescueQuizLayer } from './RescueQuizLayer';
+import type { QuizEngineApi } from '../quiz/types';
 import { Altimeter } from './Altimeter';
 import { StandardShapesTray } from './StandardShapesTray';
 import { RescueSlot } from './RescueSlot';
@@ -13,7 +14,9 @@ interface BlocksCanvasProps {
     gameState: BlocksGameState;
     placeShape: (shape: GameShape, gridX: number, gridY: number, slotType: 'standard' | 'rescue', slotIndex: number) => boolean;
     triggerRescueQuiz: () => void;
-    submitQuizAnswer: (answer: number) => void;
+    resolveRescueQuiz: () => void;
+    cancelRescueQuiz: () => void;
+    engine: QuizEngineApi;
     refreshRescueShape: () => void;
 }
 
@@ -59,7 +62,7 @@ const ProjectionOverlay = memo(function ProjectionOverlay({ hoverCells, hoverVal
 });
 
 export function BlocksCanvas({
-    gameState, placeShape, triggerRescueQuiz, submitQuizAnswer, refreshRescueShape
+    gameState, placeShape, triggerRescueQuiz, resolveRescueQuiz, cancelRescueQuiz, engine, refreshRescueShape
 }: BlocksCanvasProps) {
     const boardRef = useRef<HTMLDivElement>(null);
     const boardRectRef = useRef<DOMRect | null>(null);
@@ -347,29 +350,12 @@ export function BlocksCanvas({
                 </div>
             )}
 
-            {gameState.quizQuestion && (
-                <div style={{ 
-                    position: 'absolute', 
-                    inset: -12, 
-                    zIndex: 1000, 
-                    background: 'rgba(15, 23, 42, 0.75)', 
-                    backdropFilter: 'blur(8px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 28
-                }}>
-                    <div style={{ width: 420 }}>
-                        <QuizOverlay
-                            open={true}
-                            requiredCorrect={1}
-                            currentCorrect={0}
-                            generator={() => ({ text: gameState.quizQuestion!.text, answer: gameState.quizQuestion!.answer })}
-                            onCorrect={() => submitQuizAnswer(gameState.quizQuestion!.answer)}
-                            title="Solve Math to Unlock Golden Shape!"
-                        />
-                    </div>
-                </div>
+            {gameState.rescueQuizActive && (
+                <RescueQuizLayer
+                    engine={engine}
+                    onSolved={resolveRescueQuiz}
+                    onCancel={cancelRescueQuiz}
+                />
             )}
         </div>
     );

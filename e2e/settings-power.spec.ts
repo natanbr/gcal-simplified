@@ -1,18 +1,56 @@
+/**
+ * Settings — Display & Power E2E Test
+ *
+ * State handling: this spec genuinely saves settings — it switches the theme to
+ * Manual and clicks Save, which writes the real `config.json` in the shared
+ * userData directory. `themeMode: "manual"` sat in the developer's config for
+ * months because of it. The snapshot/restore below puts the file back, pass or
+ * fail. See e2e/helpers/appConfig.ts.
+ */
+
 import { test, expect, _electron as electron } from '@playwright/test';
+import type { ElectronApplication } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { restoreConfig, snapshotConfig, type ConfigSnapshot } from './helpers/appConfig';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 test.describe('Settings - Display & Power', () => {
-    test('should allow configuring display and power settings', async () => {
-        const electronApp = await electron.launch({
+    let electronApp: ElectronApplication;
+    let config: ConfigSnapshot | undefined;
+
+    test.beforeEach(async () => {
+        config = undefined;
+        electronApp = await electron.launch({
             args: [path.join(__dirname, '../dist-electron/main.js')],
             timeout: 60000,
             env: { ...process.env, NODE_ENV: 'development' }
         });
+        config = await snapshotConfig(electronApp);
+    });
 
+    test.afterEach(async () => {
+        // Runs on failure too — a test that dies after Save is exactly the one
+        // that would otherwise leave the theme flipped.
+        //
+        // Order matters: CLOSE FIRST, then restore. This spec is one of the few
+        // still running against the real userData directory, so its Electron
+        // holds the real profile's single-instance lock. Restoring first meant
+        // any throw from the restore skipped close(), the lock stayed held, and
+        // every later calendar spec then quit at startup and hung to its 60s
+        // timeout — one teardown error turning into a red suite. Closing first
+        // also removes the race with electron-store, which rewrites the whole
+        // file from memory on any `set`.
+        try {
+            await electronApp?.close();
+        } finally {
+            restoreConfig(config);
+        }
+    });
+
+    test('should allow configuring display and power settings', async () => {
         const window = await electronApp.firstWindow();
         await window.waitForLoadState('domcontentloaded');
 
@@ -21,9 +59,7 @@ test.describe('Settings - Display & Power', () => {
 
         // Check for Login Screen - skip if present
         if (await window.locator('[data-testid="login-button"]').isVisible()) {
-            console.log('Skipping Settings test - Login required');
-            await electronApp.close();
-            return;
+            test.skip(true, 'Login required');
         }
 
         // Open Settings
@@ -59,12 +95,10 @@ test.describe('Settings - Display & Power', () => {
         await expect(window.locator('[data-testid="manual-day-start-input"]')).toBeVisible();
         await expect(window.locator('[data-testid="manual-day-end-input"]')).toBeVisible();
 
-        // Save
+        // Save — this writes the real config.json; afterEach puts it back.
         await window.locator('[data-testid="save-settings-button"]').click();
 
         // Modal should close
         await expect(window.locator('[data-testid="settings-modal-title"]')).not.toBeVisible();
-
-        await electronApp.close();
     });
 });

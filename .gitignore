@@ -36,3 +36,14 @@ test_output.json
 lint_output.txt
 test-output.log
 *_out.txt
+jest.log
+
+# Claude Code — share the config, never the machine-local bits.
+# worktrees/ holds full working copies of the repo; settings.local.json is
+# per-user permission state. Everything else under .claude/ is team config
+# and SHOULD be committed.
+.claude/worktrees/
+.claude/settings.local.json
+
+# Coverage output from `npx vitest run --coverage`
+coverage/

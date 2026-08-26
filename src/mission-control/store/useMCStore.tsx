@@ -11,8 +11,9 @@ import type {
     MissionPhase,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
-import { initialState, selectTotalWealth } from './mcReducer';
+import { initialState, selectTotalWealth, MAX_GAME_TOKENS } from './mcReducer';
 import { createLogEntry } from './activityLog';
+import { sanitizeSkillProgress } from './skillProgress';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export { selectTotalWealth };
@@ -20,8 +21,6 @@ export { selectTotalWealth };
 // ---- Persistence ----
 
 export const STORAGE_KEY = 'mc-state-v5'; // bumped: added gameTokens fields
-
-const MAX_GAME_TOKENS = 5;
 
 const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 
@@ -93,7 +92,20 @@ export function loadPersistedState(): MCState {
             // Clamp to the cap; never top tokens back up on restart (that would
             // let a restart refund spent game tokens).
             gameTokens: Math.min(MAX_GAME_TOKENS, Math.max(0, parsed.gameTokens ?? initialState.gameTokens)),
+            // A corrupt write (NaN serializes to null) must not propagate.
+            bankCount: typeof parsed.bankCount === 'number' && Number.isFinite(parsed.bankCount)
+                ? Math.max(0, parsed.bankCount)
+                : initialState.bankCount,
             gameTokensLastGrantedDate: parsed.gameTokensLastGrantedDate ?? null,
+            // A game only runs while its overlay is mounted, so an "active" game
+            // can never survive a restart. Restoring it stranded the flag at true
+            // forever (crash/quit mid-game, or a remote START_GAME while the
+            // Calendar view was showing and no overlay existed to close it) —
+            // which is what made the phone remote keep offering a ghost game.
+            snakeGameActive: false,
+            // Rebuilt field-by-field like settings/cases/missions above — the
+            // bare spread would restore a partial or corrupt slice wholesale.
+            skillProgress: sanitizeSkillProgress(parsed.skillProgress),
             _migrationVersion: MIGRATION_VERSION,
         };
     } catch {

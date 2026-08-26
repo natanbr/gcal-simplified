@@ -13,6 +13,8 @@ import { REWARDS } from '../rewardCatalogue';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useRemoteStatus } from '../contexts/RemoteStatusContext';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
+import { LearningProgressPanel } from './progress/LearningProgressPanel';
+import { useLongPress } from '../hooks/useLongPress';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -207,6 +209,35 @@ function AutoReturnStepper({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
+type SettingsTabId = 'time' | 'tasks' | 'rewards' | 'remote' | 'privileges' | 'learning';
+
+const noop = () => {};
+
+function SettingsTab({ id, label, activeTab, onSelect, holdMs }: {
+    id: SettingsTabId;
+    label: string;
+    activeTab: SettingsTabId;
+    onSelect: (id: SettingsTabId) => void;
+    /** Hold-to-open: a short tap does nothing — the deliberate house pattern
+     *  for affordances hidden from the child (see the GlobalBank admin hold). */
+    holdMs?: number;
+}) {
+    const active = activeTab === id;
+    const hold = useLongPress(noop, () => onSelect(id), holdMs ?? 0);
+    return (
+        <button
+            {...(holdMs ? hold : { onClick: () => onSelect(id) })}
+            style={{
+                textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
+                background: active ? 'rgba(165,125,255,0.15)' : 'transparent',
+                color: active ? '#8050e0' : 'var(--mc-text-muted)',
+            }}
+        >
+            {label}
+        </button>
+    );
+}
+
 interface MCSettingsOverlayProps {
     open: boolean;
     onClose: () => void;
@@ -219,7 +250,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
 
     // Local draft — only committed on "Save"
     const [draft, setDraft] = useState<MCSettings>(() => state.settings);
-    const [activeTab, setActiveTab] = useState<'time' | 'tasks' | 'rewards' | 'remote' | 'privileges'>('time');
+    const [activeTab, setActiveTab] = useState<SettingsTabId>('time');
 
     // Reset draft whenever the panel opens
     const handleOpen = () => setDraft(state.settings);
@@ -302,60 +333,17 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
                             {/* Sidebar */}
                             <div style={{ width: 180, borderRight: '1px solid rgba(160,150,230,0.2)', display: 'flex', flexDirection: 'column', padding: 12, gap: 4, background: 'rgba(255,255,255,0.2)' }}>
-                                <button
-                                    onClick={() => setActiveTab('time')}
-                                    style={{
-                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
-                                        background: activeTab === 'time' ? 'rgba(165,125,255,0.15)' : 'transparent',
-                                        color: activeTab === 'time' ? '#8050e0' : 'var(--mc-text-muted)',
-                                    }}
-                                >
-                                    🕒 Missions Time
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('tasks')}
-                                    style={{
-                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
-                                        background: activeTab === 'tasks' ? 'rgba(165,125,255,0.15)' : 'transparent',
-                                        color: activeTab === 'tasks' ? '#8050e0' : 'var(--mc-text-muted)',
-                                    }}
-                                >
-                                    🧴 Missions Tasks
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('rewards')}
-                                    style={{
-                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
-                                        background: activeTab === 'rewards' ? 'rgba(165,125,255,0.15)' : 'transparent',
-                                        color: activeTab === 'rewards' ? '#8050e0' : 'var(--mc-text-muted)',
-                                    }}
-                                >
-                                    🎁 Rewards
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('remote')}
-                                    style={{
-                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
-                                        background: activeTab === 'remote' ? 'rgba(165,125,255,0.15)' : 'transparent',
-                                        color: activeTab === 'remote' ? '#8050e0' : 'var(--mc-text-muted)',
-                                    }}
-                                >
-                                    📱 Remote
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('privileges')}
-                                    style={{
-                                        textAlign: 'left', padding: '10px 14px', borderRadius: 12, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
-                                        background: activeTab === 'privileges' ? 'rgba(165,125,255,0.15)' : 'transparent',
-                                        color: activeTab === 'privileges' ? '#8050e0' : 'var(--mc-text-muted)',
-                                    }}
-                                >
-                                    🛡️ Privileges
-                                </button>
+                                <SettingsTab id="time" label="🕒 Missions Time" activeTab={activeTab} onSelect={setActiveTab} />
+                                <SettingsTab id="tasks" label="🧴 Missions Tasks" activeTab={activeTab} onSelect={setActiveTab} />
+                                <SettingsTab id="rewards" label="🎁 Rewards" activeTab={activeTab} onSelect={setActiveTab} />
+                                <SettingsTab id="remote" label="📱 Remote" activeTab={activeTab} onSelect={setActiveTab} />
+                                <SettingsTab id="privileges" label="🛡️ Privileges" activeTab={activeTab} onSelect={setActiveTab} />
+                                <SettingsTab id="learning" label="📈 Learning" activeTab={activeTab} onSelect={setActiveTab} holdMs={600} />
                             </div>
 
                             {/* Content Area */}
                             <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+                                {activeTab === 'learning' && <LearningProgressPanel />}
                                 {activeTab === 'time' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                                         {/* Morning Mission */}

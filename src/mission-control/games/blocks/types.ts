@@ -27,7 +27,10 @@ export interface BlocksGameState {
     score: number;
     phase: GamePhase;
     level: number;
-    quizQuestion: { text: string; answer: number } | null;
+    /** The unlock quiz is showing. Questions come from the injected engine —
+     *  storing one here would re-serve it after a miss with the answer already
+     *  revealed by elimination. */
+    rescueQuizActive: boolean;
     clearedFeedback: { text: string; stars: number; id: string } | null;
 }
 
@@ -42,6 +45,19 @@ export const ALTITUDE_LEVELS = {
     2: { label: 'Satellite Orbit', threshold: 120 }, // triggers satellite repair
     3: { label: 'Space Storm', threshold: 180 }, // triggers complex shapes + electricity
 };
+
+/**
+ * Altitude → board level, the single source of the thresholds above. The quiz
+ * engine is driven straight off `gameState.level`, so this doubles as blocks'
+ * quiz-difficulty mapping — which is why the dev Quiz Lab reads it from here.
+ */
+export function altitudeLevel(altitude: number): number {
+    let level = 0;
+    for (const [key, { threshold }] of Object.entries(ALTITUDE_LEVELS)) {
+        if (altitude >= threshold) level = Math.max(level, Number(key));
+    }
+    return level;
+}
 
 // ── Shape Templates ──────────────────────────────────────────
 export const SHAPE_POOL: GameShape[] = [

@@ -77,6 +77,26 @@ export const LEVEL_LABELS: Record<GameLevel, string> = {
     3: 'Expert',
 };
 
+/**
+ * Quiz difficulty ramp: one rung per QUIZ_LEVEL_STEP_MS of elapsed play, capped
+ * at MAX_QUIZ_LEVEL. Exported (rather than inlined in SnakeGameOverlay) so the
+ * dev Quiz Lab can render the real mapping instead of restating it.
+ *
+ * The step was 2 minutes, which made the top of the ladder practically
+ * unreachable: a base game is INITIAL_TIME_MS = 3 minutes, so it stopped at
+ * level 1, and level 3 needed three separate +1-minute extensions. Most deaths —
+ * and therefore most revive quizzes — happen in the first minute, so in practice
+ * the child only ever saw the bottom rung. At 45s a base game spends about a
+ * quarter of its time on each of levels 0/1/2 and finishes on level 3.
+ */
+export const QUIZ_LEVEL_STEP_MS = 45 * 1000;
+export const MAX_QUIZ_LEVEL: GameLevel = 3;
+
+export function snakeQuizLevel(elapsedMs: number): GameLevel {
+    const step = Math.floor(Math.max(0, elapsedMs) / QUIZ_LEVEL_STEP_MS);
+    return Math.min(MAX_QUIZ_LEVEL, step) as GameLevel;
+}
+
 export const LEVEL_GRID_SIZES: Record<GameLevel, { cols: number; rows: number }> = {
     0: { cols: 20, rows: 15 },
     1: { cols: 20, rows: 15 },

@@ -7,8 +7,23 @@
 /* ---- Google Fonts ---- */
 /* Fonts are managed via <link> tags in index.html to appease Electron's strict Content Security Policy */
 
-/* ---- Color Tokens (Baby Pastel Palette) ---- */
-.mc-root {
+/* ---- Color Tokens (Baby Pastel Palette) ----
+   `.mc-tokens` is the token scope for Mission Control surfaces that App.tsx
+   mounts OUTSIDE `.mc-root` — position:fixed overlays that must sit on top of
+   either view, and therefore render as siblings of <MissionControl>. Without a
+   scope the --mc-* references in those components are invalid at
+   computed-value time, and an inherited property like `color` silently falls
+   back to the calendar body's colour, which is near-white in dark mode.
+
+   It declares custom properties and NOTHING else — no font, no layout, no
+   descendant rules — so it can be dropped onto any element without dragging
+   `.mc-root`'s full-viewport reset along with it.
+
+   MissionOverlay predates this class and injects the same three text tokens as
+   inline styles; both mechanisms work, and consolidating it here is follow-up
+   work, not a behaviour change. */
+.mc-root,
+.mc-tokens {
   /* Backgrounds */
   --mc-bg: #f0f4ff;
   --mc-surface: #ffffff;
@@ -57,6 +72,24 @@
   --mc-coin-shadow:
     0 2px 0 var(--mc-coin-gold-dark) inset, 0 -1px 0 rgba(0, 0, 0, 0.08) inset,
     0 3px 8px rgba(200, 155, 16, 0.35);
+
+  /* Quiz surface — the games' dark-slate card (QuizOverlay + its panels).
+     A deliberate second world inside Mission Control: the games are dark. */
+  --mc-quiz-surface-hi: #1e293b;
+  --mc-quiz-surface-lo: #0f172a;
+  --mc-quiz-text: #f8fafc;
+  --mc-quiz-text-soft: #e2e8f0;
+  --mc-quiz-text-muted: #94a3b8;
+  --mc-quiz-text-dim: #475569;
+  --mc-quiz-correct: #4ade80;
+  --mc-quiz-wrong: #ef4444;
+
+  /* Chart series — parent Learning Progress view. Deliberately darker than
+     the pastel accents: a 2px polyline in --mc-purple is ~2:1 against white
+     and unreadable as data. CVD-validated triple (deutan ΔE ≥ 10). */
+  --mc-chart-violet: #6d54c8;
+  --mc-chart-teal: #0a9d83;
+  --mc-chart-rust: #c25a35;
 }
 
 /* ---- Reset for MC root ---- */

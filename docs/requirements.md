@@ -131,378 +131,6 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
         - *Level 3: Space Storm*: Increases shape sizes (e.g. 3x3 blocks, crosses `+`).
         - **High-Performance Drag-and-Drop Overlay**: Dragging is executed via native HTML5 pointer capture and direct, uncontrolled DOM style updates (`transform: translate3d`). This completely bypasses React virtual DOM diffing during pointermove, maintaining 1:1 hardware responsiveness with 0ms scripting lag. A `<ProjectionOverlay>` isolates grid projections, and a development-only Performance HUD tracks frame rates and scripting times in real time.
         - **Unique Shape Instances & Jump-Back Prevention**: All generated shape instances are assigned unique IDs upon selection in `useBlocksGame.ts`, avoiding React key collisions. The slots in the tray are rendered transparent during dragging and unmounted upon successful placement, resolving the used shape "jump-back" visual glitch and ensuring proper state resets.
-- **Status Text**: Display small text indicating the current loading status (e.g., "Fetching Schedule...", "Updating Weather...") next to or under the date range title in the header.
-- **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched.
-
-## Technical Context
-
-- **Frameworks**: Electron, React, Vite (Module Federation/HMR supported).
-- **Styling**: Tailwind CSS, Framer Motion for animations.
-- **State Management**: React `useState` / `useEffect` with IPC calls for data fetching.
-- **Testing**: Playwright for E2E tests, Vitest (implied) for unit tests.
-
-## Bug Fixes
-
-- **Monday Highlighting**: Fixed issue where Monday was incorrectly highlighted in future weeks. Highlighting is now strictly reserved for the actual "Today".
-
-## Changelog
-
-### 2026-02-18 Settings Modal Redesign
-
-- **New Layout**: Replaced long scroll list with a sidebar navigation layout.
-- **Categorization**: Settings are now grouped into:
-  - **Google Account**: Account connection status and actions.
-  - **General**: Calendar View, Active Hours, Display & Power, About.
-  - **Calendars**: Toggle visibility of specific Google Calendars.
-  - **Tasks**: Toggle visibility of specific Task Lists.
-- **UI/UX**: Improved navigation and accessibility with clear category icons and structured content.
-
-### 2026-05-13 Mission Control & Remote Hardening
-
-- **UI Unification**: Standardized Responsibility panel layout with action buttons on the right side.
-- **Activity Consolidation**: Merged multiple sport buttons into a single 4-icon grid button for cleaner mobile/desktop UX.
-- **Remote Stability**: Resolved all build-time TypeScript errors, implemented strict IPC message validation, and optimized Supabase Realtime synchronization logic. Added VITE_SUPABASE keys to Electron main process Vite define block to fix production connectivity.
-- **Logging**: Added remote-action identification (📱) to the MC Activity Log.
-
-### 2026-05-14 Remote Control Stability Fixes
-
-- **Auto-Reconnect**: Hardened the `RemoteBridge` to automatically attempt reconnection when the Supabase channel is closed or experiences errors (e.g. rate limits or network drops).
-- **IPC Permissions**: Whitelisted the `remote:request-sync` channel in the preload script to allow the remote web app to successfully request state syncs from the desktop upon connection.
-- **Error Visibility**: Dispatched connection loss and reconnection events as visible logs in the Mission Control Activity Log, allowing users to see when the remote connection drops.
-
-### 2026-05-14 Mission Control UI Cleanup
-
-- **Subtitles**: Moved card subtitles (Responsibility & Game Tokens) to hoverable `?` help buttons next to titles to reduce visual clutter.
-- **Counters**: Removed redundant `x / y completed` counters from Responsibility cards, relying purely on visual token progress.
-- **Buttons**: Adjusted action buttons to feature a top-right `+1` indicator. Increased emoji icon sizes for the consolidated Activity button.
-- **Bug Fixes**: Fixed an infinite reconnection loop in `RemoteBridge` caused by clearing the Supabase channel. Fixed a bug in `useLongPress` where hovering and leaving the minimize button would accidentally trigger a short-press to minimize the mission overlay.
-
-### 2026-06-12 Remote Control Mission State Reflection
-
-- **Detailed Mission State**: Updated the remote control and host application state synchronization to broadcast and reflect the status of both Morning and Evening missions simultaneously.
-- **Pulsing Whining Status**: Reflected the exact whining detection status on individual mission cards, highlighting the button in pulsing red when whining is active.
-- **Interactive Checklists**: Rendered expandable task checklists with completion progress bars on both Morning and Evening remote mission cards, allowing parents/children to see what is done/not done and toggle tasks in real-time.
-
-### 2026-05-22 Log Bounding & Remote Status Isolation
-
-- **Connection Status Indicator**: Replaced chatty, high-frequency connection state log entries in the Activity Log with a dedicated visual live status indicator next to the Logs button (pulsing green for Online, red for Offline).
-- **Log Bounding & Cap**: Enforced a hard limit of 200 entries for the `activityLogs` list inside the state reducer to prevent performance degradation over time.
-- **Lazy Loading**: Replaced the full rendering of the Activity Log list with an IntersectionObserver-driven paginated list that lazy-loads logs in increments of 30 as the user scrolls.
-- **Speculative Reducer Optimization**: Refactored `createLogEntry` to use a lightweight O(1) state snapshot helper instead of redundantly running the full `mcReducer` state updates, reducing reducer calls on log creations by 3x.
-- **Reducer Guard Hardening**: Restricted the execution of the `syncCreamTask` invariant synchronization logic inside `mcReducer` to only run on relevant state dispatches, preventing reference checks and task sync recalculations on unrelated events.
-# Project Requirements: Google Calendar Simplified
-
-## Overview
-
-A simplified desktop calendar application inspired by Google Calendar, built with Electron, React, TypeScript, and Tailwind CSS. The application provides a focused, single-screen view of the scheduling week with integrated weather and outdoor activity information.
-
-## Core Features
-
-### Calendar View
-
-- **7-Day View**: The calendar displays 7 days in a week view.
-  - **Data Fetching and Caching**: Events are always fetched and loaded a full month at a time and cached locally. Navigating between weeks within a cached month is instantaneous, while a background process verifies the data is up-to-date.
-  - **Default View**: Shows the current week (7 days starting from today).
-  - **Week Navigation**:
-    - **Next Week Button**: Navigates forward to the next week, always starting from Monday.
-    - **Previous Week Button**: Navigates backward to the previous week, always starting from Monday.
-    - **Navigation Limit**: Cannot navigate to weeks before the current week (today).
-    - **"Today" Button**: Quick navigation to return to the current week view.
-  - **Week Start**: When navigating, weeks always start from Monday regardless of the current day.
-    - Example: If today is Wednesday and user clicks "Next Week", the view shows Monday-Sunday of the following week.
-- **Monthly View**: The calendar also supports a full month view.
-  - **Grid Layout**: Displays a standard 6-week grid, typically 42 days, starting from the week that contains the 1st of the month.
-  - **View Toggle**: Users can switch between "Weekly" and "Monthly" views using a toggle in the header.
-  - **Month Navigation**:
-    - **Next Month**: Navigates forward to the next month.
-    - **Previous Month**: Navigates backward to the previous month.
-    - **Navigation Limit**: Cannot navigate to months before the current month.
-  - **Event Display**: Events in the monthly view are displayed as compact pill-shaped items spanning their respective days.
-- **Forecast Limitation**: Weather forecast data is only available and displayed for the current week (next 7 days from today). Future weeks beyond the current week will not show forecast data.
-- **Hourly Grid**: The layout is divided into vertical hour slots.
-- **Active Hours**:
-  - The grid displays only "active hours" (customizable, default typically 7 AM - 9 PM) to reduce clutter and avoid scrolling.
-  - Events outside these hours are grouped into "Pre" (Before) and "Post" (After) scrollable buckets.
-- **Event Cards**:
-  - Time slots/Event cards visually span the actual duration of the event on the grid (`top` % and `height` % calculated based on duration).
-  - Cards support overlap handling (side-by-side positioning for conflicting times).
-- **Special Event Styling**:
-  - **Color Coding Priority**:
-    1. **Google Calendar Colors** (Primary): Events display colors assigned in Google Calendar via `colorId` (1-11), mapped to closest Tailwind color
-    2. **Name-based Colors** (Fallback): If no `colorId`, events containing specific names are color-coded:
-       - Natan: Blue
-       - Alon: Green
-       - Uval: Purple
-       - Marta: Pink
-    3. **Default**: Zinc/Gray
-  - **Color Mapping**: Google Calendar colors (colorId 1-11) are mapped to Tailwind colors:
-    - Lavender/Blueberry (1, 9) → Blue
-    - Sage/Basil (2, 10) → Green
-    - Grape (3) → Purple
-    - Flamingo (4) → Pink
-    - Banana (5) → Yellow
-    - Tangerine (6) → Orange
-    - Peacock (7) → Cyan
-    - Graphite (8) → Gray
-    - Tomato (11) → Red
-  - **Text Contrast**: All event text colors ensure WCAG AA compliance (≥4.5:1 contrast ratio)
-  - **Icons by Keyword**: Events containing specific keywords display icons:
-    - Garbage/Trash: Trash Can
-    - Recycle: Recycle Icon
-    - Pool/Swim: Waves
-    - Scout: Users/Group
-    - Karate/Martial: Swords
-
-## Weather & Marine Integration
-
-### Daily Weather
-
-### Enhanced Day Header Cells
-
-- **Structure**: The day header of each day in the calendar grid is enhanced for better information density.
-- **Layout**:
-  - The weather icon is moved to the right of the day name and date.
-  - The temperature range (high-low) for the day is displayed underneath the weather icon.
-- **Typography**:
-  - Day font size (e.g., Sunday, Monday) is slightly increased for better legibility.
-  - **Full Day Names**: Use full day names (e.g., "Sunday" instead of "Sun") to take advantage of available horizontal space.
-- **Behavior**: The behavior of full-day events (holidays) remains unchanged, appearing below the date and weather information.
-
-### Side Drawers (Slide-over Panels)
-
-- **Weather Panel**:
-  - **Hourly Forecast Table**: Dense table showing Time, Conditions (Icon), Temperature, Rain %, and Wind.
-  - **Design**: Minimal spacing to maximize data on one screen.
-
-
-- **Weather Panel**:
-  - **Hourly Forecast Table**: Dense table showing Time, Conditions (Icon), Temperature, Rain %, and Wind.
-  - **Design**: Minimal spacing to maximize data on one screen.
-
-## Authentication & Systems
-
-
-- **Google Login**:
-  - Custom Login Screen with "Sign in with Google" button.
-  - Uses Electron IPC (`auth:login`) to handle OAuth flow.
-- **Settings**:
-  - **Active Hours**: Configurable Start and End times (0-23h).
-  - **Calendars**: Toggle visibility of specific Google Calendars.
-  - **Task Lists**: Toggle visibility of specific Task Lists.
-  - **Auto-Refresh**: Data refreshes every 5 minutes.
-- **Remote Control (Mission Control)**:
-  - **Secure Bridge**: Established via Supabase Realtime (Broadcast) and Electron IPC.
-  - **Main Process Isolation**: All Supabase connections and key validations are restricted to the Main process.
-  - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing.
-  - **QR Code Pairing**: Displayed in Settings for easy mobile connection.
-  - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
-  - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
-- **Mission Control Responsibilities & Privileges**:
-  - **Responsibility Progress**: Point-based tracking using visual point dots (no text counters). Shows Done status and a "Claim" button once the target point goal is met.
-  - **Privilege Suspension System**:
-    - Privileges can be suspended for a duration (1 Day, 3 Days, 1 Week, or 2 Weeks).
-    - Shows remaining time with a countdown badge on the button and in an active suspensions summary below the buttons.
-    - Located inside a dedicated card (`PrivilegesPanel`) in Column 3, underneath the Snake Game/Game Token panel.
-    - Synchronized with the mobile remote web application (`mc-remote`) in real-time.
-  - **Phone Games Privilege**:
-    - Adding a new privilege for "Phone Games" (`phone-games` ID, `Smartphone` / `📱` icon).
-    - When suspended, it blocks the selection of the "Game" reward (cost 6 tokens) from the Goal Pedestals list of choices, and disables/locks the "Use!" button on any active completed "Game" goals.
-    - The "Quick Game" (Snake, cost 1 token) goal remains active and unaffected.
-
-## UX / UI Enhancements
-
-### Enhanced Loading Indicator
-
-- **Visibility**: When navigating between weeks or refreshing data, a more prominent loading indicator should be visible.
-- **Progress Bar**: Implement a Framer Motion-based progress bar (skeleton or linear loader).
-- **Status Text**: Display small text indicating the current loading status (e.g., "Fetching Schedule...", "Updating Weather...") next to or under the date range title in the header.
-- **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched.
-
-## Technical Context
-
-- **Frameworks**: Electron, React, Vite (Module Federation/HMR supported).
-- **Styling**: Tailwind CSS, Framer Motion for animations.
-- **State Management**: React `useState` / `useEffect` with IPC calls for data fetching.
-- **Testing**: Playwright for E2E tests, Vitest (implied) for unit tests.
-
-## Bug Fixes
-
-- **Monday Highlighting**: Fixed issue where Monday was incorrectly highlighted in future weeks. Highlighting is now strictly reserved for the actual "Today".
-
-## Changelog
-
-### 2026-02-18 Settings Modal Redesign
-
-- **New Layout**: Replaced long scroll list with a sidebar navigation layout.
-- **Categorization**: Settings are now grouped into:
-  - **Google Account**: Account connection status and actions.
-  - **General**: Calendar View, Active Hours, Display & Power, About.
-  - **Calendars**: Toggle visibility of specific Google Calendars.
-  - **Tasks**: Toggle visibility of specific Task Lists.
-- **UI/UX**: Improved navigation and accessibility with clear category icons and structured content.
-
-### 2026-05-13 Mission Control & Remote Hardening
-
-- **UI Unification**: Standardized Responsibility panel layout with action buttons on the right side.
-- **Activity Consolidation**: Merged multiple sport buttons into a single 4-icon grid button for cleaner mobile/desktop UX.
-- **Remote Stability**: Resolved all build-time TypeScript errors, implemented strict IPC message validation, and optimized Supabase Realtime synchronization logic. Added VITE_SUPABASE keys to Electron main process Vite define block to fix production connectivity.
-- **Logging**: Added remote-action identification (📱) to the MC Activity Log.
-
-### 2026-05-14 Remote Control Stability Fixes
-
-- **Auto-Reconnect**: Hardened the `RemoteBridge` to automatically attempt reconnection when the Supabase channel is closed or experiences errors (e.g. rate limits or network drops).
-- **IPC Permissions**: Whitelisted the `remote:request-sync` channel in the preload script to allow the remote web app to successfully request state syncs from the desktop upon connection.
-- **Error Visibility**: Dispatched connection loss and reconnection events as visible logs in the Mission Control Activity Log, allowing users to see when the remote connection drops.
-
-### 2026-05-14 Mission Control UI Cleanup
-
-- **Subtitles**: Moved card subtitles (Responsibility & Game Tokens) to hoverable `?` help buttons next to titles to reduce visual clutter.
-- **Counters**: Removed redundant `x / y completed` counters from Responsibility cards, relying purely on visual token progress.
-- **Buttons**: Adjusted action buttons to feature a top-right `+1` indicator. Increased emoji icon sizes for the consolidated Activity button.
-- **Bug Fixes**: Fixed an infinite reconnection loop in `RemoteBridge` caused by clearing the Supabase channel. Fixed a bug in `useLongPress` where hovering and leaving the minimize button would accidentally trigger a short-press to minimize the mission overlay.
-
-### 2026-05-22 Log Bounding & Remote Status Isolation
-
-- **Connection Status Indicator**: Replaced chatty, high-frequency connection state log entries in the Activity Log with a dedicated visual live status indicator next to the Logs button (pulsing green for Online, red for Offline).
-- **Log Bounding & Cap**: Enforced a hard limit of 200 entries for the `activityLogs` list inside the state reducer to prevent performance degradation over time.
-- **Lazy Loading**: Replaced the full rendering of the Activity Log list with an IntersectionObserver-driven paginated list that lazy-loads logs in increments of 30 as the user scrolls.
-- **Speculative Reducer Optimization**: Refactored `createLogEntry` to use a lightweight O(1) state snapshot helper instead of redundantly running the full `mcReducer` state updates, reducing reducer calls on log creations by 3x.
-- **Reducer Guard Hardening**: Restricted the execution of the `syncCreamTask` invariant synchronization logic inside `mcReducer` to only run on relevant state dispatches, preventing reference checks and task sync recalculations on unrelated events.
-
-### 2026-05-26 Phone Games Privilege & Panel Layout Refactor
-
-- **Phone Games Privilege**: Added `phone-games` privilege (`Smartphone` / `📱` icon) that can be suspended for 1 Day, 3 Days, 1 Week, or 2 Weeks.
-- **Goal Pedestal Blocking**: Suspending `phone-games` prevents selecting the "Game" goal in Goal Pedestals and disables/locks the "Use!" button on completed "Game" goals, leaving "Quick Game" (Snake) available.
-- **Privilege Panel Relocation**: Moved privilege buttons out of the top header bar and placed them in a new dedicated dashboard card (`PrivilegesPanel`) in Column 3 (below Snake Game/Game Tokens).
-- **Mobile Sync**: Fully synchronized the new privilege, duration settings, and suspension state countdowns with the mobile app (`mc-remote`).
-- **Parent-Only Settings Refactor**: Made the dashboard privileges card read-only (child-facing), hiding status pills and active suspensions lists, and relocated interactive suspension/reinstatement controls to a new dedicated Privileges tab in the parent-only Settings overlay.
-- **Mobile Remote Layout Optimization**: Restored the two-column responsive grid layout on the mobile remote app for larger (`md:`) screen sizes, adding a centered maximum screen width (`max-w-5xl mx-auto`) and restricting column cards from stretching excessively. Pushed updates to trigger a live Vercel deploy.
-
-### 2026-05-29 Noto Emoji Animated Reactions
-
-- **Animated Reactions Overlay**: Added 10 new animated emoji reactions (Clap, Thumbs-up, Slightly-happy, Triumph, Scrunched, Shaking-face, Hear-no-evil, Hourglass, Check-mark, Cross-mark) using center-screen bounce-in Framer Motion overlays. Uses official Google Fonts CDN WebP images with GIF fallback.
-- **Remote App Reaction Grid**: Implemented a responsive 5-column grid section under "Reactions" inside the mobile remote controller app. Buttons display animated emojis from the CDN for rich interactive visual feedback.
-- **Lazy Loading**: Replaced the full rendering of the Activity Log list with an IntersectionObserver-driven paginated list that lazy-loads logs in increments of 30 as the user scrolls.
-- **Speculative Reducer Optimization**: Refactored `createLogEntry` to use a lightweight O(1) state snapshot helper instead of redundantly running the full `mcReducer` state updates, reducing reducer calls on log creations by 3x.
-- **Reducer Guard Hardening**: Restricted the execution of the `syncCreamTask` invariant synchronization logic inside `mcReducer` to only run on relevant state dispatches, preventing reference checks and task sync recalculations on unrelated events.
-# Project Requirements: Google Calendar Simplified
-
-## Overview
-
-A simplified desktop calendar application inspired by Google Calendar, built with Electron, React, TypeScript, and Tailwind CSS. The application provides a focused, single-screen view of the scheduling week with integrated weather and outdoor activity information.
-
-## Core Features
-
-### Calendar View
-
-- **7-Day View**: The calendar displays 7 days in a week view.
-  - **Data Fetching and Caching**: Events are always fetched and loaded a full month at a time and cached locally. Navigating between weeks within a cached month is instantaneous, while a background process verifies the data is up-to-date.
-  - **Default View**: Shows the current week (7 days starting from today).
-  - **Week Navigation**:
-    - **Next Week Button**: Navigates forward to the next week, always starting from Monday.
-    - **Previous Week Button**: Navigates backward to the previous week, always starting from Monday.
-    - **Navigation Limit**: Cannot navigate to weeks before the current week (today).
-    - **"Today" Button**: Quick navigation to return to the current week view.
-  - **Week Start**: When navigating, weeks always start from Monday regardless of the current day.
-    - Example: If today is Wednesday and user clicks "Next Week", the view shows Monday-Sunday of the following week.
-- **Monthly View**: The calendar also supports a full month view.
-  - **Grid Layout**: Displays a standard 6-week grid, typically 42 days, starting from the week that contains the 1st of the month.
-  - **View Toggle**: Users can switch between "Weekly" and "Monthly" views using a toggle in the header.
-  - **Month Navigation**:
-    - **Next Month**: Navigates forward to the next month.
-    - **Previous Month**: Navigates backward to the previous month.
-    - **Navigation Limit**: Cannot navigate to months before the current month.
-  - **Event Display**: Events in the monthly view are displayed as compact pill-shaped items spanning their respective days.
-- **Forecast Limitation**: Weather forecast data is only available and displayed for the current week (next 7 days from today). Future weeks beyond the current week will not show forecast data.
-- **Hourly Grid**: The layout is divided into vertical hour slots.
-- **Active Hours**:
-  - The grid displays only "active hours" (customizable, default typically 7 AM - 9 PM) to reduce clutter and avoid scrolling.
-  - Events outside these hours are grouped into "Pre" (Before) and "Post" (After) scrollable buckets.
-- **Event Cards**:
-  - Time slots/Event cards visually span the actual duration of the event on the grid (`top` % and `height` % calculated based on duration).
-  - Cards support overlap handling (side-by-side positioning for conflicting times).
-- **Special Event Styling**:
-  - **Color Coding Priority**:
-    1. **Google Calendar Colors** (Primary): Events display colors assigned in Google Calendar via `colorId` (1-11), mapped to closest Tailwind color
-    2. **Name-based Colors** (Fallback): If no `colorId`, events containing specific names are color-coded:
-       - Natan: Blue
-       - Alon: Green
-       - Uval: Purple
-       - Marta: Pink
-    3. **Default**: Zinc/Gray
-  - **Color Mapping**: Google Calendar colors (colorId 1-11) are mapped to Tailwind colors:
-    - Lavender/Blueberry (1, 9) → Blue
-    - Sage/Basil (2, 10) → Green
-    - Grape (3) → Purple
-    - Flamingo (4) → Pink
-    - Banana (5) → Yellow
-    - Tangerine (6) → Orange
-    - Peacock (7) → Cyan
-    - Graphite (8) → Gray
-    - Tomato (11) → Red
-  - **Text Contrast**: All event text colors ensure WCAG AA compliance (≥4.5:1 contrast ratio)
-  - **Icons by Keyword**: Events containing specific keywords display icons:
-    - Garbage/Trash: Trash Can
-    - Recycle: Recycle Icon
-    - Pool/Swim: Waves
-    - Scout: Users/Group
-    - Karate/Martial: Swords
-
-## Weather & Marine Integration
-
-### Daily Weather
-
-### Enhanced Day Header Cells
-
-- **Structure**: The day header of each day in the calendar grid is enhanced for better information density.
-- **Layout**:
-  - The weather icon is moved to the right of the day name and date.
-  - The temperature range (high-low) for the day is displayed underneath the weather icon.
-- **Typography**:
-  - Day font size (e.g., Sunday, Monday) is slightly increased for better legibility.
-  - **Full Day Names**: Use full day names (e.g., "Sunday" instead of "Sun") to take advantage of available horizontal space.
-- **Behavior**: The behavior of full-day events (holidays) remains unchanged, appearing below the date and weather information.
-
-### Side Drawers (Slide-over Panels)
-
-- **Weather Panel**:
-  - **Hourly Forecast Table**: Dense table showing Time, Conditions (Icon), Temperature, Rain %, and Wind.
-  - **Design**: Minimal spacing to maximize data on one screen.
-
-
-- **Weather Panel**:
-  - **Hourly Forecast Table**: Dense table showing Time, Conditions (Icon), Temperature, Rain %, and Wind.
-  - **Design**: Minimal spacing to maximize data on one screen.
-
-## Authentication & Systems
-
-
-- **Google Login**:
-  - Custom Login Screen with "Sign in with Google" button.
-  - Uses Electron IPC (`auth:login`) to handle OAuth flow.
-- **Settings**:
-  - **Active Hours**: Configurable Start and End times (0-23h).
-  - **Calendars**: Toggle visibility of specific Google Calendars.
-  - **Task Lists**: Toggle visibility of specific Task Lists.
-  - **Auto-Refresh**: Data refreshes every 5 minutes.
-- **Remote Control (Mission Control)**:
-  - **Secure Bridge**: Established via Supabase Realtime (Broadcast) and Electron IPC.
-  - **Main Process Isolation**: All Supabase connections and key validations are restricted to the Main process.
-  - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing.
-  - **QR Code Pairing**: Displayed in Settings for easy mobile connection.
-  - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
-  - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
-- **Mission Control Responsibilities & Privileges**:
-  - **Responsibility Progress**: Point-based tracking using visual point dots (no text counters). Shows Done status and a "Claim" button once the target point goal is met.
-  - **Privilege Suspension System**:
-    - Privileges can be suspended for a duration (1 Day, 3 Days, 1 Week, or 2 Weeks).
-    - Shows remaining time with a countdown badge on the button and in an active suspensions summary below the buttons.
-    - Located inside a dedicated card (`PrivilegesPanel`) in Column 3, underneath the Snake Game/Game Token panel.
-    - Synchronized with the mobile remote web application (`mc-remote`) in real-time.
-  - **Phone Games Privilege**:
-    - Adding a new privilege for "Phone Games" (`phone-games` ID, `Smartphone` / `📱` icon).
-    - When suspended, it blocks the selection of the "Game" reward (cost 6 tokens) from the Goal Pedestals list of choices, and disables/locks the "Use!" button on any active completed "Game" goals.
-    - The "Quick Game" (Snake, cost 1 token) goal remains active and unaffected.
 
 ## UX / UI Enhancements
 
@@ -596,6 +224,11 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **CSP Google Fonts Whitelisting**: Added `https://fonts.gstatic.com` to the `img-src` Content Security Policy directive in both development and production, allowing the desktop app to successfully download and render animated WebP/GIF emojis. Added regression security unit tests to verify the whitelisting.
 - **Remote Reactions Layout**: Replaced layout classes on the `<picture>` wrapper with direct sizing (`w-10 h-10` / 40px) on the underlying `<img>` tag in the mobile remote, resolving browser fallback rendering issues and improving visibility.
 
+### 2026-06-12 Remote Control Mission State Reflection
+
+- **Detailed Mission State**: Updated the remote control and host application state synchronization to broadcast and reflect the status of both Morning and Evening missions simultaneously.
+- **Pulsing Whining Status**: Reflected the exact whining detection status on individual mission cards, highlighting the button in pulsing red when whining is active.
+- **Interactive Checklists**: Rendered expandable task checklists with completion progress bars on both Morning and Evening remote mission cards, allowing parents/children to see what is done/not done and toggle tasks in real-time.
 ### 2026-06-29 Space Rescue Blocks Game
 
 - **Quick Game Selector**: Added selection overlay allowing children to choose between Snake 🐍 and Space Rescue 🚀.
@@ -626,3 +259,294 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 
 
+
+### 2026-08-19 Data Integrity, Attribution & Token Economy Rebalance
+
+Investigation into four reported symptoms — bank tokens vanishing and reappearing, missions
+starting at wrong times, a phantom "remote game" prompt, and the calendar needing re-sign-in
+every few days — plus the requested slowdown of game-token generation.
+
+**Single instance enforcement (root cause of several symptoms at once)**
+- `electron/main.ts` now claims the single-instance lock before anything else. A second
+  launch quits immediately and focuses the running window via the `second-instance` handler.
+  (Both details changed later — see 2026-08-24 below: the lock moved to
+  `electron/single-instance.ts`, and focus is no longer taken for E2E launches.)
+- Two instances shared one userData directory, therefore one `localStorage` blob (`mc-state-v5`)
+  and one Supabase remote-control room. Both wrote the entire state on a 500ms debounce, so the
+  loser's snapshot silently overwrote the winner's. This is what made token counts flip back and
+  forth, ate activity-log history (the log lives inside that same blob), let both schedulers fire
+  the same mission, and showed the phone two conflicting states.
+- Bootstrap logic was restructured into `bootstrap()` / `registerIpcHandlers()` /
+  `registerAutoUpdater()`, and the night-time screen-blanking policy moved to
+  `electron/power-policy.ts`, keeping `main.ts` inside the 300-line limit.
+
+**Token economy — generation slowed and re-expressed in tokens/day**
+- `MOOD_HOURLY_RATE` (magic per-hour numbers) replaced by `MOOD_TOKENS_PER_DAY`:
+  Excellent 1.5/day, Good 1/day, Neutral 1/3 day (one token every three days), Bad −0.4/day,
+  Horrible −1.0/day. `moodHourlyRate(mood, settings)` derives the per-hour rate from the
+  *configured* active window, so changing the morning/evening times cannot silently change the
+  economy.
+- Earning a token now resets `moodWind` to 0 (Normal). The next token has to be earned back up
+  from Neutral.
+- **Removed `useGameTokenScheduler` entirely.** It granted a token on every mount *and* at every
+  midnight, and never wrote `gameTokensLastGrantedDate` — so every app launch minted a free token.
+  This, not the mood rates, was the source of the token surplus. Manual `GRANT_GAME_TOKEN` is
+  retained (the phone remote has a button for it) and is now logged.
+
+**Visibility and attribution**
+- `ActivityLogEntry` gained `source` (`local | remote | scheduler | auto | system`) and
+  `gameTokens`. `MCAction` gained an `origin` field carrying the same information.
+- The mission scheduler now dispatches through the logging interceptor, so scheduler-driven
+  mission starts, task locks and expiries appear in the log instead of happening silently.
+- Automatic mood-token grants write their own log entry from inside the reducer, with a
+  deterministic id — the one token movement no user action triggers is now the one that can
+  never go unlogged.
+- New log coverage: `LOCK_TASK`, `GRANT_GAME_TOKEN`, `CONSUME_GAME_TOKEN`, `RESET_GAME_TOKENS`,
+  `SET_MOOD_WIND`, `ADJUST_BEHAVIOR_PROGRESS`, `END_GAME`.
+- **Durable audit trail**: `electron/audit-log.ts` appends sanitised NDJSON to
+  `<userData>/audit-log.ndjson` (4 MB, one rotation). Append-only by design — there is no
+  `audit:clear` channel, so the in-app CLEAR button cannot erase it. `useAuditTrail` mirrors every
+  log entry plus a `SESSION_START` marker; it adds no timer.
+- **Activity log redesign**: a "today at a glance" summary strip (balances, earned/spent, event
+  counts per source, and a warning row for token movements nobody triggered), a *Who* column with
+  attribution badges, filters (Tokens / Missions / Automatic / Phone / All), an EXPORT button that
+  downloads the on-disk trail, and a two-step confirm on CLEAR.
+
+**Mission timing**
+- `setTimeout` does not survive a machine suspend: a timer armed for 06:00 fires late — or
+  instantly — on resume, which is what started missions at visibly wrong times. The scheduler now
+  records each timer's intended wall-clock target and skips (with a console warning) any firing
+  more than `LATE_FIRE_TOLERANCE_MS` (5 min) late.
+- `powerMonitor.on('resume')` in the main process sends `system:resume`; the scheduler tears down
+  and re-arms its whole schedule against the real clock.
+
+**Remote control hardening**
+- `useRemoteControl` now enforces `REMOTE_ALLOWED_ACTIONS`. The channel previously forwarded any
+  action type straight into the reducer; `CLEAR_LOGS`, `RESET_GAME_TOKENS`, `ADD_LOG`,
+  `SET_SETTINGS` and `START_GAME` are now rejected.
+
+**Ghost game fix**
+- `loadPersistedState` forces `snakeGameActive: false`. The flag was restored verbatim from
+  localStorage, so a crash or quit mid-game — or a remote `START_GAME` arriving while the Calendar
+  view was showing, where no overlay exists to close it — stranded it at `true` forever, which is
+  what made the phone keep offering a game that was not running.
+
+**Google auth session loss**
+- `saveTokens` now preserves an existing `refresh_token` when the incoming credential set omits
+  one (Google issues it only on first consent; every refresh response omits it, and writing the
+  response verbatim destroyed it).
+- Added an `oauth2Client.on('tokens')` listener so refreshed credentials are actually persisted.
+- `generateAuthUrl` now passes `prompt: 'consent'` so a re-auth reliably returns a refresh token.
+- NOTE: if the Google Cloud OAuth consent screen is still in **Testing** publishing status, refresh
+  tokens expire after 7 days regardless of these fixes. That is a console setting, not code.
+
+**IPC surface**: `ALLOWED_INVOKE_CHANNELS` 17 → 19 (`audit:append`, `audit:read`);
+`ALLOWED_ON_CHANNELS` 10 → 11 (`system:resume`).
+
+### 2026-08-20 Reading Practice in the Game Quizzes
+
+**What shipped**: the revive/unlock quizzes inside snake, blocks and fruit-merge now mix reading
+questions with math, driven by an invisible adaptive engine, with a parent-only progress view.
+
+**Reading modes** (tap-to-answer, 4 choices, lowercase decodable words with one canonical emoji each):
+- L0–L1 word → picture (distractors share the first letter from L1 — full decoding required)
+- L2–L3 picture → word (minimal-pair distractors at L3: dog / dig / dot / dug)
+- L4–L5 missing letter (first/last, then the middle vowel — the picture disambiguates c＿t)
+- L6 five-to-six-letter words, both directions
+
+**Rules**:
+- First-attempt scoring: the revive dot fills only on a clean first tap. A wrong tap greys the
+  choice, freezes the grid for 1.5 s (tap-spam is slower than reading), and the eventual find
+  celebrates softly, counts nothing, and a fresh question follows. Math keeps its numpad and its
+  retry-until-solved dot behavior; its first submit is recorded silently for stats.
+- Adaptive level: sliding 20-answer window of at-level first attempts; ≥85% over 15+ promotes,
+  <40% demotes, a perfect first 5 fast-tracks through L0–L2. Level changes write ONE neutral
+  activity-log entry ("Practice adjusted" — the log is kid-reachable; exact levels are parent-only).
+- Sampling: 20% one level down / 60% current / 20% stretch (+2 once the game stage allows);
+  reading/math mix leans toward the weaker family within a 40–60% band — math is the always-
+  solvable escape valve and never drops below 40%. After two consecutive reading misses the rest
+  of that quiz is math (invisible mercy, reset per quiz). A missed word re-serves after exactly
+  3 questions, once per game session. Opt-in quizzes (blocks unlock, fruits delete) gained a ✕.
+
+**Parent view**: Settings → 📈 Learning tab. Reading-momentum "stock" chart with ▲ level-up markers
+and a level-up log ("→ L3 · date · 9 days at L2 · 18/20 first-try"), weekly at-level accuracy per
+skill, daily practice volume, per-game split, hardest-words top-5, and a NEEDS-WORK callout gated
+on ≥10 recent at-level answers. Charts and callouts count at-level questions only, so stretch
+questions doing their job never read as a reading crisis. Empty and sparse states are designed.
+
+**Storage & perf**: everything lives in a bounded `skillProgress` slice (60-day per-skill day
+buckets with at-level/off-level pairs and per-game splits, capped level history with the window
+evidence that triggered each change, capped missed-word counts). No new timers; recording is
+tap-driven; `createLogEntry` now short-circuits unlogged action types before its speculative
+reducer run; `behaviorProgress` left the remote-sync dependency list (backlog item), so answering
+a question no longer triggers a Supabase broadcast; `skillProgress` never rides the broadcast
+(guarded). `RECORD_QUIZ_ANSWER` is pinned out of the remote allowlist.
+
+**Refactors in the same change**: `mcReducer` shed its behavior-sync block to `behaviorSync.ts`
+(1033 → 828 lines); `MissionControl` shed the quick-game session hook and `RemoteIndicator`
+(338 → under the limit); `QuizOverlay` split into per-kind panels and traded its raw hex for
+`--mc-quiz-*` tokens (its style-ratchet entry is deleted, not raised).
+
+### 2026-08-21 Log Fidelity, the Quiz-Cancel Loophole, and a Lighter Rescue Overlay
+
+**What shipped**: follow-ups to the reading-practice change above. No new feature here — every item
+is something that entry got wrong, left unsaid, or shipped with a hole in it.
+
+**Activity log — attribution**
+- The 🕹️ "Quick Game started" and 🏁 "Quick Game ended" entries are built by hand in
+  `useQuickGameSession` and dispatched straight as `ADD_LOG`, bypassing `createLogEntry`'s
+  derivation — so both shipped with `source` undefined, against CLAUDE.md's attribution rule. Both
+  are now `'local'`: the child tapped a game on this machine, and the remote path never routes
+  through this hook. The guard asserts the exact value rather than presence, because a
+  plausible-but-wrong `'system'` would pass a truthiness check while lying to the parent.
+
+**Activity log — one event, one entry**
+- Every quick game wrote TWO 🏁 lines: the hand-built one carrying the score and duration, plus a
+  derived "Game closed" line from the same `END_GAME` action. The 200-entry ring buffer filled at
+  twice the rate, halving how far back a parent can actually see. `END_GAME` now derives nothing and
+  joins `START_GAME`, `ADD_LOG` and `RECORD_QUIZ_ANSWER` in `UNLOGGED_ACTIONS` — short-circuited
+  *before* the speculative reducer run rather than falling through the switch after paying for it.
+- **Accepted loss, recorded so nobody re-engineers it**: the derived entry spread the balance
+  snapshot (`totalTokens` / `bankTokens` / `gameTokens`), which renders as chips in the log and is
+  mirrored into the append-only NDJSON trail. Game-close lines no longer carry those chips. That is
+  the right trade: no tokens move at `END_GAME`, `START_GAME` never had snapshots either, and the
+  next balance-changing entry restates all three.
+
+**Cancelling a quiz is not a reroll**
+- The ✕ added to the opt-in quizzes (blocks unlock, fruits delete) in the 2026-08-20 entry left a
+  hole: backing out of a question left no trace, so reopening sampled a fresh one. Tap ✕ until the
+  question is easy and the adaptive engine never learns the hard one was dodged — the exact
+  first-attempt contract the reading feature rests on.
+- The engine now parks every question it serves in a pending slot and clears it on any answer. A
+  question that received zero answers when its quiz closed is still parked, and the next quiz to
+  open **on the same surface, within the same game session** is served that exact question — same
+  wording, same difficulty level — before anything new is sampled. Parking on serve rather than on
+  close is deliberate: the blocks rescue layer is conditionally mounted and never emits a close
+  signal at all, and parking also covers quitting a game mid-quiz, which no close-signal design
+  would catch.
+- The slot is scoped to one game session: a parked question does **not** follow the child into a
+  different game. Dodging that way means exiting the game and paying another token to re-enter,
+  which costs more than answering the question.
+
+**Rescue quiz backdrop (perf)**
+- `RescueQuizLayer` painted its own dim + 8px `backdrop-filter` and then mounted `QuizOverlay`,
+  which paints its own dim + 4px blur over the *same* rectangle — two dims compositing to ~0.97
+  alpha and two blur passes for one visible result, on a project with a hard idle-CPU budget. The
+  wrapper is now a pure positioning shell; `zIndex: 1000` stays, since it layers the quiz above the
+  shapes tray and the dev HUD. Snake and fruit-merge already mounted `QuizOverlay` bare — blocks
+  was the outlier.
+
+**Dependencies**
+- `recharts` dropped from `package.json`. It predated the Learning Progress panel and was imported
+  nowhere — those charts are hand-rolled SVG. It was worse than dead weight: the premium-ui skill
+  cited it as the project's charting library, so the next person adding a chart would have reached
+  for a dependency nobody had ever wired up. Six small charts never justified the bundle; the docs
+  now say so in the past tense.
+
+**Guards**
+- The structural test pinning `useQuickGameSession` as the only `END_GAME` dispatcher matched a
+  literal string. Proven bypassable both ways: a mere *comment* containing that string turned it
+  red, and a real dispatch written multi-line — the formatting its own sibling `ADD_LOG` call
+  already uses — left it green. It now strips comments before matching and tolerates whitespace,
+  with both forms re-proven. An outcome test was added alongside it, running the real `useMCDispatch`
+  interceptor over the real reducer and asserting exactly one 🏁 entry lands per close.
+- The rule registry now records what the attribution guard structurally *cannot* see — entries
+  built by hand and dispatched as `ADD_LOG` never reach `createLogEntry` — and names the per-site
+  test that covers the one such site.
+
+### 2026-08-24 — Quiz Lab (dev-only) + game level mappings extracted
+
+**Quiz Lab — `?lab=1`, dev builds only**
+- A developer/PO surface for tuning question difficulty by eye. Until now the only way to see a
+  level-3 math question was to survive several minutes of snake, so difficulty was tuned blind.
+- Two panels, because there are two different questions. **Live sample** plays a real question at
+  any family/level through the actual `QuizOverlay` (honest tap targets, wrong-tap freeze, feedback
+  dwell) with a Reroll and the metadata the kid never sees — `kind`, `skill`, `level`, `wordId`.
+  **Distribution** draws 200 questions at that setting and shows what actually comes out: the
+  add/sub/mul split (or the three reading shapes), and an answer histogram (or per-word counts).
+  A single sample cannot answer "am I getting enough hard questions?" — 200 can.
+- Store-free by construction: it calls the generators directly rather than `useQuizEngine`, and
+  returns from `App.tsx` **before** `MCStoreProvider`. No scheduler, no bridges, nothing added to
+  the always-mounted tree, and no path by which a lab answer could reach the child's real
+  `skillProgress`.
+- **The dev gate is the load-bearing part** — a debug surface that shows answers has no business on
+  a child's device. Gated twice on the literal `import.meta.env.DEV`: once in `resolveInitialView`
+  (`src/appRoutes.ts`), once at the render site, so Vite folds the branch to `false` in a
+  production build and the lab tree-shakes out of the bundle entirely. Both gates are pinned by
+  `src/appRoutes.test.ts`, which also asserts the mount sits above `<MCStoreProvider>`.
+
+**Each game's quiz-level mapping is now a function, not an inline expression**
+- `snakeQuizLevel(elapsedMs)` (`games/snake/types.ts`), `deleteTierLevel(tier)`
+  (`games/fruits/types.ts`) and `altitudeLevel(altitude)` (`games/blocks/types.ts`) replace
+  expressions that lived inside the overlays. `games/quizLevelMap.ts` walks each domain and emits a
+  row wherever the level changes, so the lab's "what does level 2 actually mean" table is
+  **computed** from the games rather than restated — it cannot drift. This paid for itself
+  immediately: snake's step was retuned from 120s to 45s the same day and the table followed.
+- `altitudeLevel` also gave `ALTITUDE_LEVELS` its first consumer. The 50/120/180 thresholds had
+  been declared twice — once as that constant, once as a live if-chain in `useBlocksGame.ts` — and
+  only the if-chain was doing anything.
+
+### 2026-08-24 E2E userData isolation, and a suite that stops writing to real state
+
+**The problem.** Every Electron instance Playwright launched used the developer's real userData
+directory — the Mission Control store (`mc-state-v5`), `config.json` (theme, `weekStartDay`, and the
+Supabase remote-control pairing keys), the Google tokens, and the audit trail. A test run therefore
+left `activeMission` running for an hour, suspended a privilege for a day, rewrote `morningStartsAt`,
+minted tokens into the real bank, flipped the theme, called `localStorage.clear()`, and — because the
+pairing keys live in that config — joined the household's real remote-control room and broadcast test
+state to the phone. It also explains the suite's apparent non-determinism: `weekStartDay` decides the
+dates several calendar specs assert against, so the previous run decided whether they passed.
+
+**Isolation.** Electron honours Chromium's `--user-data-dir`, so this needed no production change:
+each launch gets a throwaway profile (`e2e/helpers/userDataDir.ts`) and `remote-bridge` generates its
+own pairing keys, putting the instance in a room of its own. Mission Control specs can isolate because
+`?mc=1` routes outside the calendar's auth gate, so they never needed Google credentials. Six specs
+are isolated; eight still need a signed-in account and are named in `NEEDS_REAL_PROFILE`.
+
+**Shipped behaviour changes.**
+- The single-instance lock moved from `electron/main.ts` to `electron/single-instance.ts` and now
+  carries a `headless` flag. Refusing to boot a second instance is unchanged and unconditional;
+  surfacing the running window is not — an E2E launch no longer steals focus, because Playwright
+  starts the app once per test and each one used to restore, show and focus the developer's window.
+  A launch with no payload still surfaces the window.
+- The Playwright HTML report no longer opens a browser on failure (`open: 'never'`); read it with
+  `npx playwright show-report`.
+
+**Guards.** `src/__tests__/e2e-state-isolation.test.ts` checks every `electron.launch` rather than
+guessing which specs touch Mission Control state — the earlier keyword version missed that
+`MCStoreProvider` is mounted on both views, so calendar specs write MC state without entering it.
+`e2e/global-profile-leak-check.ts` fails the run if a throwaway profile is left on disk, because
+source text cannot prove cleanup ran. `src/__tests__/docs-integrity.test.ts` keeps this document a
+single copy after it was found triplicated with all three copies drifted apart. `e2e/` is now
+type-checked, which it never was.
+
+### 2026-08-25 Release-review fixes (PR #152 max-effort review)
+
+Behavior changes shipped by the review's fix pass:
+
+- **Audit trail integrity.** The durable NDJSON trail no longer re-appends the restored activity-log
+  ring on every launch (entries present at mount are treated as already mirrored); oversized flushes
+  are chunked to the main process's 100-entry append cap instead of silently losing their newest
+  entries; and pressing CLEAR now writes a `🧹 Activity log cleared (N entries)` record that survives
+  the wipe and reaches the trail.
+- **Attribution.** The auto-collected mission bonus (timer expiry with all tasks done) dispatches
+  with `origin: 'auto'`, so the Who column, the summary strip's "unattended token changes" counter,
+  and the disk trail attribute it to the app rather than to a person. The unattended counter is
+  live for the first time as a result.
+- **Token economy.** The "earning a token resets mood to 0" rule now also applies to the mission
+  no-whining bonus crossing the gauge; conversely, when the gauge fills while game tokens are at
+  cap, nothing is earned and the parent-set mood is left alone (previously it was silently zeroed
+  with no log entry).
+- **Mission scheduler.** A late timer fire or a resume that lands inside the mission's own
+  startsAt–endsAt window now starts the mission (waking at 06:10 runs the 06:00–06:30 morning
+  mission); an app started inside an open window behaves the same. A genuinely missed window writes
+  a `⏭️ mission skipped` log entry instead of only a console warning.
+- **Remote hardening.** Allowlisted remote actions now validate their numeric payload fields
+  (`amount`, `deltaMinutes`, `level`) before dispatch, and `bankCount` is sanitized at load — a
+  malformed phone payload can no longer NaN-poison the persisted bank balance.
+- **Quiz engine.** The fruits delete-quiz difficulty is applied at question-generation time, so the
+  question always matches the selected fruit's tier (it previously always served level 0); closing a
+  quiz by unmount (blocks) now ends the engine's mercy scope like closing by flag does.
+- **E2E/dev tooling.** `test:headed`/`test:debug`/`test:ui` show the app window again; the shared MC
+  fixture waits for real readiness signals (`.mc-root` + the persisted blob) instead of fixed
+  sleeps, and closes the Electron process if a launch fails halfway.

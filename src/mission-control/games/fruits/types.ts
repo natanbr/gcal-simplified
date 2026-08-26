@@ -121,6 +121,19 @@ export interface MergeEffect {
     tier: number;
 }
 
+/**
+ * Quiz difficulty for the delete prompt, based on the fruit tier being removed
+ * (was the local add/sub/mult roll — the engine's level mix reproduces it).
+ * Lives here rather than in the overlay so the dev Quiz Lab reads the real
+ * mapping instead of restating it (and so eslint's react-refresh rule stays
+ * happy about a non-component export in a .tsx file).
+ */
+export function deleteTierLevel(tier: number): number {
+    if (tier <= 1) return 0;
+    if (tier <= 3) return 1;
+    return 2;
+}
+
 export const COLORS = {
     bg: '#0f172a',
     containerWall: '#334155',

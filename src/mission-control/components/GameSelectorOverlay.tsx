@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
+import type { GameId } from '../skills/types';
 
 interface GameSelectorOverlayProps {
-    onSelect: (game: 'snake' | 'blocks' | 'fruits') => void;
+    onSelect: (game: GameId) => void;
     onClose: () => void;
 }
 

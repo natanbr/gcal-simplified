@@ -1,14 +1,28 @@
 // ============================================================
 // Quiz Module — Quiz Overlay Component
-// Reusable in-game quiz UI with a kid-friendly numpad.
+// The shared revive-quiz shell: dark card, title, progress dots,
+// fireworks, and the correctness/feedback state machine. Answer
+// UI lives in per-kind panels (NumericPanel / ChoicePanel).
+//
+// Scoring contract: `onAnswered` fires at the FIRST-attempt
+// moment (first tap / first submit) so a miss is recorded even
+// if the game is closed right after. The revive dot (`onCorrect`)
+// fills only on a clean first-attempt success for choice
+// questions; math keeps its retry-until-solved dot behavior.
 // ⚠️  Internal to src/mission-control/games/quiz/ only.
 // ============================================================
 
-import { useState, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { QuizQuestion, QuizGenerator } from './types';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import type { QuizQuestion, QuizGenerator, QuizFeedback } from './types';
 import { Fireworks } from './Fireworks';
-import { NumpadButton } from './NumpadButton';
+import { NumericPanel } from './NumericPanel';
+import { ChoicePanel } from './ChoicePanel';
+
+/** Wrong-tap freeze on choice questions — tap-spam must be slower than reading. */
+const WRONG_TAP_LOCK_MS = 1500;
+/** Success flash dwell before the next step (matches the numpad's feel). */
+const SUCCESS_DWELL_MS = 600;
 
 interface QuizOverlayProps {
     open: boolean;
@@ -16,6 +30,17 @@ interface QuizOverlayProps {
     currentCorrect: number;
     generator: QuizGenerator;
     onCorrect: () => void;
+    /**
+     * Recording hook — fired once per question at the first-attempt moment.
+     * REQUIRED, not a nicety: it is the only thing that clears the engine's
+     * pending-question slot, so a surface that omitted it would wedge the
+     * engine on one question for the rest of the Mission Control visit.
+     */
+    onAnswered: (question: QuizQuestion, firstTry: boolean) => void;
+    /** Renders a ✕ — only the opt-in quizzes (blocks unlock, fruits delete) pass this. */
+    onCancel?: () => void;
+    /** Fired when the overlay closes — lets the engine end its mercy scope. */
+    onClosed?: () => void;
     title?: string;
 }
 
@@ -25,79 +50,114 @@ export function QuizOverlay({
     currentCorrect,
     generator,
     onCorrect,
+    onAnswered,
+    onCancel,
+    onClosed,
     title = 'Answer to Revive!',
 }: QuizOverlayProps) {
-    const [question, setQuestion] = useState<QuizQuestion>(() => generator());
-    const [input, setInput] = useState('');
-    const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+    const [question, setQuestion] = useState<QuizQuestion | null>(null);
+    const [feedback, setFeedback] = useState<QuizFeedback>(null);
+    const [deadChoices, setDeadChoices] = useState<number[]>([]);
+    const [inputLocked, setInputLocked] = useState(false);
+    /** Bumped to force a fresh question when the dot did NOT fill (a 'found'). */
+    const [questionSeq, setQuestionSeq] = useState(0);
+    /** First attempt consumed for the current question (recording moment). */
+    const answeredRef = useRef(false);
 
-    // Generate new question when overlay opens or after a correct answer
+    // A new question whenever the overlay opens, a dot fills, or a 'found'
+    // resolves. Generation happens here (never in render) because the engine's
+    // generator advances session state per call — and the key-guard makes the
+    // effect idempotent, so StrictMode's dev double-invocation can't burn a
+    // re-queue countdown into a discarded question.
+    const generatedForRef = useRef<string | null>(null);
     useEffect(() => {
-        if (open) {
-            setQuestion(generator());
-            setInput('');
-            setFeedback(null);
+        if (!open) {
+            generatedForRef.current = null;
+            return;
         }
-    }, [open, currentCorrect, generator]);
-
-    const handleDigit = useCallback((digit: string) => {
-        if (feedback === 'correct') return; // Don't allow input during success flash
-        setInput(prev => {
-            if (prev.length >= 3) return prev; // Max 3 digits
-            return prev + digit;
-        });
+        const key = `${currentCorrect}:${questionSeq}`;
+        if (generatedForRef.current === key) return;
+        generatedForRef.current = key;
+        setQuestion(generator());
         setFeedback(null);
-    }, [feedback]);
+        setDeadChoices([]);
+        setInputLocked(false);
+        answeredRef.current = false;
+    }, [open, currentCorrect, generator, questionSeq]);
 
-    const handleBackspace = useCallback(() => {
-        setInput(prev => prev.slice(0, -1));
-        setFeedback(null);
+    // Closing ends the engine's mercy scope for this quiz.
+    const wasOpen = useRef(open);
+    useEffect(() => {
+        if (wasOpen.current && !open) onClosed?.();
+        wasOpen.current = open;
+    }, [open, onClosed]);
+    // Unmounting while open must end the scope too: blocks unmounts its
+    // RescueQuizLayer wholesale with open hardcoded true, so without this the
+    // mercy counter leaks across quizzes for the rest of the session.
+    const onClosedRef = useRef(onClosed);
+    onClosedRef.current = onClosed;
+    useEffect(() => () => { if (wasOpen.current) onClosedRef.current?.(); }, []);
+
+    // Success dwell: let the flash land, then report up / move on. Effect-
+    // scoped so closing mid-dwell cancels instead of firing into an unmounted
+    // game.
+    useEffect(() => {
+        if (feedback !== 'correct' && feedback !== 'found') return;
+        const timer = setTimeout(() => {
+            if (feedback === 'correct') {
+                onCorrect();
+                setFeedback(null);
+            } else {
+                setQuestionSeq(seq => seq + 1);
+            }
+        }, SUCCESS_DWELL_MS);
+        return () => clearTimeout(timer);
+    }, [feedback, onCorrect]);
+
+    // Wrong-tap freeze (choice questions only).
+    useEffect(() => {
+        if (!inputLocked) return;
+        const timer = setTimeout(() => setInputLocked(false), WRONG_TAP_LOCK_MS);
+        return () => clearTimeout(timer);
+    }, [inputLocked]);
+
+    const handleNumericSubmit = useCallback((answer: number) => {
+        if (!question || question.kind !== 'numeric') return;
+        const correct = answer === question.answer;
+        if (!answeredRef.current) {
+            answeredRef.current = true;
+            onAnswered(question, correct);
+        }
+        setFeedback(correct ? 'correct' : 'wrong');
+    }, [question, onAnswered]);
+
+    const handleDirty = useCallback(() => {
+        setFeedback(prev => (prev === 'wrong' ? null : prev));
     }, []);
 
-    const handleSubmit = useCallback(() => {
-        if (!input) return;
-        const answer = parseInt(input, 10);
-        if (answer === question.answer) {
-            setFeedback('correct');
-            setTimeout(() => {
-                onCorrect();
-                setInput('');
-                setFeedback(null);
-            }, 600);
-        } else {
-            setFeedback('wrong');
-            setInput('');
+    const handlePick = useCallback((index: number) => {
+        if (!question || question.kind !== 'choice') return;
+        if (inputLocked || feedback === 'correct' || feedback === 'found') return;
+        if (deadChoices.includes(index)) return;
+
+        const correct = index === question.correctIndex;
+        const firstAttempt = !answeredRef.current;
+        if (firstAttempt) {
+            answeredRef.current = true;
+            onAnswered(question, correct);
         }
-    }, [input, question, onCorrect]);
 
-    // Keyboard support for numpad
-    useEffect(() => {
-        if (!open) return;
-        const handler = (e: KeyboardEvent) => {
-            if (e.key >= '0' && e.key <= '9') {
-                handleDigit(e.key);
-            } else if (e.key === 'Backspace') {
-                handleBackspace();
-            } else if (e.key === 'Enter') {
-                handleSubmit();
-            }
-        };
-        window.addEventListener('keydown', handler);
-        return () => window.removeEventListener('keydown', handler);
-    }, [open, handleDigit, handleBackspace, handleSubmit]);
+        if (correct) {
+            // A clean first tap fills the dot; a later find celebrates softly
+            // and a fresh question follows — it never counts.
+            setFeedback(firstAttempt ? 'correct' : 'found');
+        } else {
+            setDeadChoices(prev => [...prev, index]);
+            setInputLocked(true);
+        }
+    }, [question, inputLocked, feedback, deadChoices, onAnswered]);
 
-    if (!open) return null;
-
-    // Split question text: "14 + 2 = ?" → questionPart = "14 + 2", answer replaces "?"
-    const questionPart = question.text.replace(/\s*=\s*\?$/, '');
-
-    // Answer box border/bg based on feedback
-    const answerBorder = feedback === 'correct' ? '#4ade80'
-        : feedback === 'wrong' ? '#ef4444'
-            : 'rgba(255,255,255,0.25)';
-    const answerBg = feedback === 'correct' ? 'rgba(74,222,128,0.25)'
-        : feedback === 'wrong' ? 'rgba(239,68,68,0.25)'
-            : 'rgba(255,255,255,0.08)';
+    if (!open || !question) return null;
 
     return (
         <motion.div
@@ -120,7 +180,7 @@ export function QuizOverlay({
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 22 }}
                 style={{
-                    background: 'linear-gradient(145deg, #1e293b, #0f172a)',
+                    background: 'linear-gradient(145deg, var(--mc-quiz-surface-hi), var(--mc-quiz-surface-lo))',
                     borderRadius: 28,
                     border: '2px solid rgba(148,163,184,0.2)',
                     padding: '32px 36px 36px',
@@ -135,14 +195,39 @@ export function QuizOverlay({
                     overflow: 'hidden',
                 }}
             >
-                {/* Fireworks on correct answer */}
+                {/* Fireworks only on a counted (first-attempt) success */}
                 <Fireworks trigger={feedback === 'correct'} />
+
+                {/* Cancel — opt-in quizzes only; backing out costs nothing */}
+                {onCancel && (
+                    <motion.button
+                        aria-label="Cancel"
+                        whileTap={{ scale: 0.9 }}
+                        onClick={onCancel}
+                        style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            background: 'rgba(255,255,255,0.08)',
+                            border: '1.5px solid rgba(148,163,184,0.3)',
+                            borderRadius: 12,
+                            width: 44,
+                            height: 44,
+                            fontSize: 18,
+                            fontWeight: 800,
+                            color: 'var(--mc-quiz-text-muted)',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        ✕
+                    </motion.button>
+                )}
 
                 {/* Title */}
                 <div style={{
                     fontSize: 18,
                     fontWeight: 900,
-                    color: '#f8fafc',
+                    color: 'var(--mc-quiz-text)',
                     fontFamily: "'Nunito', sans-serif",
                     textAlign: 'center',
                 }}>
@@ -159,7 +244,7 @@ export function QuizOverlay({
                                 height: 14,
                                 borderRadius: '50%',
                                 background: i < currentCorrect
-                                    ? '#4ade80'
+                                    ? 'var(--mc-quiz-correct)'
                                     : 'rgba(255,255,255,0.15)',
                                 border: '2px solid rgba(255,255,255,0.2)',
                                 transition: 'background 0.3s',
@@ -168,7 +253,7 @@ export function QuizOverlay({
                     ))}
                     <span style={{
                         fontSize: 12,
-                        color: '#94a3b8',
+                        color: 'var(--mc-quiz-text-muted)',
                         fontWeight: 700,
                         marginLeft: 4,
                         fontFamily: "'Nunito', sans-serif",
@@ -177,88 +262,22 @@ export function QuizOverlay({
                     </span>
                 </div>
 
-                {/* Question + inline answer */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 14,
-                    padding: '24px 0',
-                    flexWrap: 'nowrap',
-                }}>
-                    {/* Question text e.g. "14 + 2 =" */}
-                    <span style={{
-                        fontSize: 52,
-                        fontWeight: 900,
-                        color: '#e2e8f0',
-                        fontFamily: "'Nunito', sans-serif",
-                        letterSpacing: '0.03em',
-                        whiteSpace: 'nowrap',
-                    }}>
-                        {questionPart} =
-                    </span>
-
-                    {/* Inline answer box */}
-                    <div style={{
-                        minWidth: 88,
-                        height: 68,
-                        borderRadius: 16,
-                        background: answerBg,
-                        border: `2px solid ${answerBorder}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 44,
-                        fontWeight: 900,
-                        color: '#f8fafc',
-                        fontFamily: "'Nunito', sans-serif",
-                        transition: 'all 0.2s',
-                        padding: '0 12px',
-                    }}>
-                        <AnimatePresence mode="popLayout">
-                            {feedback === 'correct' && (
-                                <motion.span
-                                    key="check"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    style={{ fontSize: 32 }}
-                                >
-                                    ✅
-                                </motion.span>
-                            )}
-                            {feedback === 'wrong' && (
-                                <motion.span
-                                    key="wrong"
-                                    initial={{ x: -10 }}
-                                    animate={{ x: [0, -6, 6, -4, 4, 0] }}
-                                    transition={{ duration: 0.4 }}
-                                    style={{ color: '#ef4444', fontSize: 22 }}
-                                >
-                                    ✗
-                                </motion.span>
-                            )}
-                            {feedback === null && (
-                                <span>{input || <span style={{ color: '#475569' }}>?</span>}</span>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                </div>
-
-                {/* Numpad — large touch-friendly buttons */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: 10,
-                    width: '100%',
-                    maxWidth: 300,
-                }}>
-                    {['1','2','3','4','5','6','7','8','9'].map(d => (
-                        <NumpadButton key={d} label={d} onClick={() => handleDigit(d)} />
-                    ))}
-                    <NumpadButton label="⌫" onClick={handleBackspace} variant="action" />
-                    <NumpadButton label="0" onClick={() => handleDigit('0')} />
-                    <NumpadButton label="✓" onClick={handleSubmit} variant="submit" />
-                </div>
+                {question.kind === 'numeric' ? (
+                    <NumericPanel
+                        question={question}
+                        feedback={feedback}
+                        onDirty={handleDirty}
+                        onSubmit={handleNumericSubmit}
+                    />
+                ) : (
+                    <ChoicePanel
+                        question={question}
+                        feedback={feedback}
+                        deadChoices={deadChoices}
+                        locked={inputLocked}
+                        onPick={handlePick}
+                    />
+                )}
             </motion.div>
         </motion.div>
     );

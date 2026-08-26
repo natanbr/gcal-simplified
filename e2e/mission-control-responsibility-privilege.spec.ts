@@ -4,43 +4,24 @@
  * Tests the responsibility progress tracking, completion, and claim flow,
  * as well as the privilege suspend / reinstate flow.
  * Launches the Electron app in ?mc=1 mode and injects localStorage state.
+ *
+ * State handling: `mcTest` gives each test a throwaway userData directory. Two
+ * of these tests suspend a privilege for a full day through the real UI —
+ * against the real profile the Knife would still be suspended in the parent's
+ * app tomorrow.
  */
 
-import { test, expect, _electron as electron } from '@playwright/test';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ELECTRON_MAIN = path.join(__dirname, '../dist-electron/main.js');
-const STORAGE_KEY = 'mc-state-v5';
+import { existsSync } from 'node:fs';
+import {
+    ELECTRON_MAIN,
+    expect,
+    gotoMC,
+    mcTest as test,
+    patchMCCollection,
+} from './helpers/mcApp';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
-
-async function gotoMC(page: Page): Promise<void> {
-    const currentUrl = page.url();
-    const base = currentUrl.split('?')[0];
-    await page.goto(`${base}?mc=1`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
-}
-
-/**
- * Launch Electron, navigate to MC and return the page.
- * Caller is responsible for closing the app.
- */
-async function launchMC() {
-    const app = await electron.launch({
-        args: [ELECTRON_MAIN],
-        timeout: 60_000,
-        env: { ...process.env, NODE_ENV: 'development' },
-    });
-    const page = await app.firstWindow();
-    await page.waitForLoadState('domcontentloaded');
-    await gotoMC(page);
-    return { app, page };
-}
 
 async function openPrivilegesSettings(page: Page): Promise<void> {
     const settingsBtn = page.locator('[data-testid="mc-settings-btn"]');
@@ -54,25 +35,30 @@ async function openPrivilegesSettings(page: Page): Promise<void> {
     await page.waitForTimeout(400);
 }
 
+/** Seed the recycling responsibility at a known point count, then reload. */
+async function seedRecycling(page: Page, pointsEarned: number, completedAt: string | null = null): Promise<void> {
+    await patchMCCollection(page, 'responsibilities', 'recycling', { pointsEarned, completedAt });
+    await gotoMC(page);
+}
+
+/** Seed one privilege into a known status, then reload. */
+async function seedPrivilege(
+    page: Page,
+    id: string,
+    status: 'active' | 'suspended',
+    suspendedUntil: string | null = null,
+): Promise<void> {
+    await patchMCCollection(page, 'privileges', id, { status, suspendedUntil });
+    await gotoMC(page);
+}
+
 // ── Responsibility tests ──────────────────────────────────────────────────────
 
 test.describe('Mission Control — Responsibility panel', () => {
+    test.skip(!existsSync(ELECTRON_MAIN), 'Electron build not present');
 
-    test('Recycling task displays correct initial progress', async () => {
-        const { app, page } = await launchMC();
-
-        // Reset state to fresh (0 points) via localStorage, then reload
-        await page.evaluate(({ key }: { key: string }) => {
-            const raw = localStorage.getItem(key);
-            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-            const responsibilities = (state['responsibilities'] ?? []) as Array<Record<string, unknown>>;
-            state['responsibilities'] = responsibilities.map((r) =>
-                r['id'] === 'recycling' ? { ...r, pointsEarned: 0, completedAt: null } : r,
-            );
-            localStorage.setItem(key, JSON.stringify(state));
-        }, { key: STORAGE_KEY });
-
-        await gotoMC(page);
+    test('Recycling task displays correct initial progress', async ({ mcPage: page }) => {
+        await seedRecycling(page, 0);
 
         // Ensure recycling card is visible and shows its starting state
         const recyclingHeader = page.locator('text=Recycling');
@@ -80,25 +66,10 @@ test.describe('Mission Control — Responsibility panel', () => {
 
         // Initial progress: 2 ♻️ emojis should be visible (1 header icon + 1 button icon), no filled progress dots
         await expect(page.locator('text=♻️')).toHaveCount(2, { timeout: 5000 });
-
-        await app.close();
     });
 
-    test('+1 point button increments recycling progress', async () => {
-        const { app, page } = await launchMC();
-
-        // Reset state to fresh (0 points) via localStorage, then reload
-        await page.evaluate(({ key }: { key: string }) => {
-            const raw = localStorage.getItem(key);
-            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-            const responsibilities = (state['responsibilities'] ?? []) as Array<Record<string, unknown>>;
-            state['responsibilities'] = responsibilities.map((r) =>
-                r['id'] === 'recycling' ? { ...r, pointsEarned: 0, completedAt: null } : r,
-            );
-            localStorage.setItem(key, JSON.stringify(state));
-        }, { key: STORAGE_KEY });
-
-        await gotoMC(page);
+    test('+1 point button increments recycling progress', async ({ mcPage: page }) => {
+        await seedRecycling(page, 0);
 
         // Click the +1 button for recycling
         const addBtn = page.locator('[data-testid="mc-responsibility-add-recycling"]');
@@ -108,25 +79,11 @@ test.describe('Mission Control — Responsibility panel', () => {
 
         // Progress should now have 3 ♻️ emojis (1 header icon + 1 button icon + 1 filled progress dot)
         await expect(page.locator('text=♻️')).toHaveCount(3, { timeout: 5000 });
-
-        await app.close();
     });
 
-    test('Completing recycling (3 points) shows DONE badge and Claim button', async () => {
-        const { app, page } = await launchMC();
-
+    test('Completing recycling (3 points) shows DONE badge and Claim button', async ({ mcPage: page }) => {
         // Seed state: recycling at 2 points so one tap completes it
-        await page.evaluate(({ key }: { key: string }) => {
-            const raw = localStorage.getItem(key);
-            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-            const responsibilities = (state['responsibilities'] ?? []) as Array<Record<string, unknown>>;
-            state['responsibilities'] = responsibilities.map((r) =>
-                r['id'] === 'recycling' ? { ...r, pointsEarned: 2, completedAt: null } : r,
-            );
-            localStorage.setItem(key, JSON.stringify(state));
-        }, { key: STORAGE_KEY });
-
-        await gotoMC(page);
+        await seedRecycling(page, 2);
 
         // Tap the +1 button to push it to 3
         const addBtn = page.locator('[data-testid="mc-responsibility-add-recycling"]');
@@ -139,27 +96,11 @@ test.describe('Mission Control — Responsibility panel', () => {
 
         // Claim button should appear
         await expect(page.locator('[data-testid="mc-responsibility-claim-recycling"]')).toBeVisible({ timeout: 5000 });
-
-        await app.close();
     });
 
-    test('Claim & Start Over resets recycling to 0 points', async () => {
-        const { app, page } = await launchMC();
-
+    test('Claim & Start Over resets recycling to 0 points', async ({ mcPage: page }) => {
         // Seed state: recycling fully completed
-        await page.evaluate(({ key }: { key: string }) => {
-            const raw = localStorage.getItem(key);
-            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-            const responsibilities = (state['responsibilities'] ?? []) as Array<Record<string, unknown>>;
-            state['responsibilities'] = responsibilities.map((r) =>
-                r['id'] === 'recycling'
-                    ? { ...r, pointsEarned: 3, completedAt: new Date().toISOString() }
-                    : r,
-            );
-            localStorage.setItem(key, JSON.stringify(state));
-        }, { key: STORAGE_KEY });
-
-        await gotoMC(page);
+        await seedRecycling(page, 3, new Date().toISOString());
 
         // Claim button should be visible
         const claimBtn = page.locator('[data-testid="mc-responsibility-claim-recycling"]');
@@ -172,23 +113,17 @@ test.describe('Mission Control — Responsibility panel', () => {
 
         // Claim button is gone
         await expect(claimBtn).not.toBeVisible({ timeout: 5000 });
-
-        await app.close();
     });
 
-    test('Activity task has a consolidated button with all sport icons', async () => {
-        const { app, page } = await launchMC();
-
+    test('Activity task has a consolidated button with all sport icons', async ({ mcPage: page }) => {
         const activityBtn = page.locator('[data-testid="mc-responsibility-add-activity"]');
         await expect(activityBtn).toBeVisible({ timeout: 10_000 });
-        
+
         // Verify it contains the 4 icons (grid)
         await expect(activityBtn.locator('text=🛼')).toBeVisible();
         await expect(activityBtn.locator('text=⛸️')).toBeVisible();
         await expect(activityBtn.locator('text=🏊')).toBeVisible();
         await expect(activityBtn.locator('text=🥋')).toBeVisible();
-
-        await app.close();
     });
 
 });
@@ -196,20 +131,15 @@ test.describe('Mission Control — Responsibility panel', () => {
 // ── Privilege suspension tests ────────────────────────────────────────────────
 
 test.describe('Mission Control — Privilege suspension', () => {
+    test.skip(!existsSync(ELECTRON_MAIN), 'Electron build not present');
 
-    test('privilege cards are visible', async () => {
-        const { app, page } = await launchMC();
-
+    test('privilege cards are visible', async ({ mcPage: page }) => {
         // The knife card renders with the 🔪 emoji
         const knifeCard = page.locator('button[title="Knife"]');
         await expect(knifeCard).toBeVisible({ timeout: 10_000 });
-
-        await app.close();
     });
 
-    test('clicking a privilege card opens the suspend popup', async () => {
-        const { app, page } = await launchMC();
-
+    test('clicking a privilege card opens the suspend popup', async ({ mcPage: page }) => {
         // Open privileges tab in settings
         await openPrivilegesSettings(page);
 
@@ -222,25 +152,11 @@ test.describe('Mission Control — Privilege suspension', () => {
         // The popup header and suspend options should be visible
         await expect(page.locator('text=Suspend for:')).toBeVisible({ timeout: 5000 });
         await expect(page.locator('text=🚫 1 Day')).toBeVisible({ timeout: 5000 });
-
-        await app.close();
     });
 
-    test('suspending a privilege shows the countdown badge', async () => {
-        const { app, page } = await launchMC();
-
+    test('suspending a privilege shows the countdown badge', async ({ mcPage: page }) => {
         // First reinstate (ensure fresh active state)
-        await page.evaluate(({ key }: { key: string }) => {
-            const raw = localStorage.getItem(key);
-            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-            const privs = (state['privileges'] ?? []) as Array<Record<string, unknown>>;
-            state['privileges'] = privs.map((p) =>
-                p['id'] === 'knife' ? { ...p, status: 'active', suspendedUntil: null } : p,
-            );
-            localStorage.setItem(key, JSON.stringify(state));
-        }, { key: STORAGE_KEY });
-
-        await gotoMC(page);
+        await seedPrivilege(page, 'knife', 'active');
 
         // Open privileges tab in settings
         await openPrivilegesSettings(page);
@@ -260,27 +176,11 @@ test.describe('Mission Control — Privilege suspension', () => {
 
         // Countdown badge should appear on the dashboard card
         await expect(page.locator('text=/\\d+[hd] left/').first()).toBeVisible({ timeout: 5000 });
-
-        await app.close();
     });
 
-    test('reinstating a suspended privilege removes the countdown badge', async () => {
-        const { app, page } = await launchMC();
-
+    test('reinstating a suspended privilege removes the countdown badge', async ({ mcPage: page }) => {
         // Seed it as already suspended
-        await page.evaluate(({ key }: { key: string }) => {
-            const raw = localStorage.getItem(key);
-            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-            const privs = (state['privileges'] ?? []) as Array<Record<string, unknown>>;
-            state['privileges'] = privs.map((p) =>
-                p['id'] === 'knife'
-                    ? { ...p, status: 'suspended', suspendedUntil: new Date(Date.now() + 24 * 3600 * 1000).toISOString() }
-                    : p,
-            );
-            localStorage.setItem(key, JSON.stringify(state));
-        }, { key: STORAGE_KEY });
-
-        await gotoMC(page);
+        await seedPrivilege(page, 'knife', 'suspended', new Date(Date.now() + 24 * 3600 * 1000).toISOString());
 
         // Countdown badge visible on the dashboard card initially
         await expect(page.locator('text=/\\d+[hd] left/').first()).toBeVisible({ timeout: 10_000 });
@@ -301,25 +201,11 @@ test.describe('Mission Control — Privilege suspension', () => {
 
         // Countdown badge gone on the dashboard card
         await expect(page.locator('text=/\\d+[hd] left/').first()).not.toBeVisible({ timeout: 5000 });
-
-        await app.close();
     });
 
-    test('suspending Phone Games blocks selection of the Game goal', async () => {
-        const { app, page } = await launchMC();
-
+    test('suspending Phone Games blocks selection of the Game goal', async ({ mcPage: page }) => {
         // 1. Ensure phone-games is active initially
-        await page.evaluate(({ key }: { key: string }) => {
-            const raw = localStorage.getItem(key);
-            const state = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-            const privs = (state['privileges'] ?? []) as Array<Record<string, unknown>>;
-            state['privileges'] = privs.map((p) =>
-                p['id'] === 'phone-games' ? { ...p, status: 'active', suspendedUntil: null } : p,
-            );
-            localStorage.setItem(key, JSON.stringify(state));
-        }, { key: STORAGE_KEY });
-
-        await gotoMC(page);
+        await seedPrivilege(page, 'phone-games', 'active');
 
         // 2. Open settings and suspend Phone Games
         await openPrivilegesSettings(page);
@@ -345,13 +231,11 @@ test.describe('Mission Control — Privilege suspension', () => {
 
         // 6. Verify the "Game" option is NOT visible in the picker, but others are
         await expect(page.locator('text=Pick a Goal')).toBeVisible();
-        
+
         // Find buttons under the Picker to ensure we don't accidentally match another element
         const gameButton = page.locator('button', { hasText: /^Game$/ });
         await expect(gameButton).not.toBeVisible();
         await expect(page.locator('button', { hasText: 'Short Show' })).toBeVisible();
-
-        await app.close();
     });
 
 });

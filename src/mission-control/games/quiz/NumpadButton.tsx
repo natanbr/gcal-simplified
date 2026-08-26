@@ -24,7 +24,7 @@ export function NumpadButton({ label, onClick, variant = 'digit' }: NumpadButton
                 borderRadius: 16,
                 border: '2px solid rgba(255,255,255,0.15)',
                 background: BG_MAP[variant],
-                color: '#f8fafc',
+                color: 'var(--mc-quiz-text)',
                 fontSize: variant === 'submit' ? 28 : 26,
                 fontWeight: 800,
                 cursor: 'pointer',
