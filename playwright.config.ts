@@ -6,7 +6,16 @@ import { defineConfig } from '@playwright/test';
 // be truly headless on Windows, but an unshown window still loads, renders and
 // is fully drivable over CDP — while no longer stealing focus 44 times in a row.
 // Set E2E_HEADED=1 to watch the run instead.
-if (!process.env.E2E_HEADED) {
+//
+// --headed/--ui/--debug (and PWDEBUG) only affect Playwright's browser
+// fixtures, not manual `electron.launch` — without this check the pre-existing
+// `npm run test:headed` / `test:debug` / `test:ui` scripts silently ran with a
+// hidden app window, which reads as a hung suite.
+const wantsHeaded =
+    process.env.E2E_HEADED ||
+    process.env.PWDEBUG ||
+    ['--headed', '--ui', '--debug'].some(flag => process.argv.includes(flag));
+if (!wantsHeaded) {
     process.env.E2E_HEADLESS = '1';
 }
 

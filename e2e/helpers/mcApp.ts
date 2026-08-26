@@ -42,7 +42,19 @@ export async function gotoMC(page: Page): Promise<void> {
     const base = page.url().split('?')[0];
     await page.goto(`${base}?mc=1`);
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
+    // Deterministic readiness beats a fixed sleep: 2s per launch across a
+    // sequential suite was ~1min of dead time, and a hard sleep also hides
+    // slow-boot regressions instead of failing on them.
+    await page.locator('.mc-root').waitFor({ state: 'visible', timeout: 15_000 });
+    // Seeding helpers edit the persisted blob in place; on a fresh profile it
+    // only exists after the store's first debounced (500ms) persist. Seeding
+    // before that patched an EMPTY blob — missions: [] — and the test then
+    // asserted against half-default state. Wait for the real condition.
+    await page.waitForFunction(
+        (key: string) => localStorage.getItem(key) !== null,
+        STORAGE_KEY,
+        { timeout: 15_000 },
+    );
 }
 
 /**
@@ -56,10 +68,19 @@ export async function launchMC(userDataDir: string): Promise<{ app: ElectronAppl
         timeout: 60_000,
         env: { ...process.env, NODE_ENV: 'development' },
     });
-    const page = await app.firstWindow();
-    await page.waitForLoadState('domcontentloaded');
-    await gotoMC(page);
-    return { app, page };
+    try {
+        const page = await app.firstWindow();
+        await page.waitForLoadState('domcontentloaded');
+        await gotoMC(page);
+        return { app, page };
+    } catch (err) {
+        // A rejection after a successful launch must not orphan the live
+        // process: the caller never receives `app`, so its finally-block
+        // close() is a no-op and the throwaway profile stays locked (EBUSY)
+        // — the exact leak the fixture exists to prevent.
+        await app.close().catch(() => { /* already dead is fine */ });
+        throw err;
+    }
 }
 
 /**

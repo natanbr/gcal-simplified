@@ -33,7 +33,7 @@ function turnOffScreen(): void {
     }
 }
 
-export function checkPowerPolicy(): void {
+function checkPowerPolicy(): void {
     try {
         const config = apiService.getSettings();
         if (config.sleepEnabled === false) return; // Explicit false check, default true
