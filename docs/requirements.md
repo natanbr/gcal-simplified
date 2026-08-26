@@ -519,3 +519,34 @@ guessing which specs touch Mission Control state — the earlier keyword version
 source text cannot prove cleanup ran. `src/__tests__/docs-integrity.test.ts` keeps this document a
 single copy after it was found triplicated with all three copies drifted apart. `e2e/` is now
 type-checked, which it never was.
+
+### 2026-08-25 Release-review fixes (PR #152 max-effort review)
+
+Behavior changes shipped by the review's fix pass:
+
+- **Audit trail integrity.** The durable NDJSON trail no longer re-appends the restored activity-log
+  ring on every launch (entries present at mount are treated as already mirrored); oversized flushes
+  are chunked to the main process's 100-entry append cap instead of silently losing their newest
+  entries; and pressing CLEAR now writes a `🧹 Activity log cleared (N entries)` record that survives
+  the wipe and reaches the trail.
+- **Attribution.** The auto-collected mission bonus (timer expiry with all tasks done) dispatches
+  with `origin: 'auto'`, so the Who column, the summary strip's "unattended token changes" counter,
+  and the disk trail attribute it to the app rather than to a person. The unattended counter is
+  live for the first time as a result.
+- **Token economy.** The "earning a token resets mood to 0" rule now also applies to the mission
+  no-whining bonus crossing the gauge; conversely, when the gauge fills while game tokens are at
+  cap, nothing is earned and the parent-set mood is left alone (previously it was silently zeroed
+  with no log entry).
+- **Mission scheduler.** A late timer fire or a resume that lands inside the mission's own
+  startsAt–endsAt window now starts the mission (waking at 06:10 runs the 06:00–06:30 morning
+  mission); an app started inside an open window behaves the same. A genuinely missed window writes
+  a `⏭️ mission skipped` log entry instead of only a console warning.
+- **Remote hardening.** Allowlisted remote actions now validate their numeric payload fields
+  (`amount`, `deltaMinutes`, `level`) before dispatch, and `bankCount` is sanitized at load — a
+  malformed phone payload can no longer NaN-poison the persisted bank balance.
+- **Quiz engine.** The fruits delete-quiz difficulty is applied at question-generation time, so the
+  question always matches the selected fruit's tier (it previously always served level 0); closing a
+  quiz by unmount (blocks) now ends the engine's mercy scope like closing by flag does.
+- **E2E/dev tooling.** `test:headed`/`test:debug`/`test:ui` show the app window again; the shared MC
+  fixture waits for real readiness signals (`.mc-root` + the persisted blob) instead of fixed
+  sleeps, and closes the Electron process if a launch fails halfway.
