@@ -77,6 +77,13 @@ const REGISTRY: Rule[] = [
 
     // ── Architecture / boundaries ────────────────────────────────────────────
     {
+        rule: 'Audit trail is append-only (no clear/delete IPC channel); renderer payloads are rebuilt field-by-field in the main process, never spread',
+        source: 'CLAUDE.md → Architecture → Audit trail',
+        status: 'guarded',
+        guard: 'electron/audit-log.test.ts',
+        verifiedRedBy: 'sanitize() drops unknown fields and clamps types; preload_contract pins the channel list to audit:append/audit:read only',
+    },
+    {
         rule: 'Mission Control never imports from src/components, src/hooks, src/utils',
         source: 'CLAUDE.md → Conventions',
         status: 'guarded',

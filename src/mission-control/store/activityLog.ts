@@ -10,6 +10,15 @@ import type { MCState, MCAction, ActivityLogEntry } from '../types';
 import { mcReducer, selectTotalWealth } from './mcReducer';
 import { REWARD_MAP } from '../rewardCatalogue';
 
+export type LogSource = NonNullable<ActivityLogEntry['source']>;
+
+/** Falls back through the legacy `isRemote` flag for entries written before
+ *  attribution existed. Single definition — the durable audit trail and the
+ *  log view must never disagree about who caused an event. */
+export function sourceOf(log: Pick<ActivityLogEntry, 'source' | 'isRemote'>): LogSource {
+    return log.source ?? (log.isRemote ? 'remote' : 'local');
+}
+
 /**
  * Snapshot of the token economy *after* the action is applied, plus who caused
  * it. Attribution matters more than it looks: a token count that moves with no
@@ -27,11 +36,10 @@ function deriveSnapshots(state: MCState, action: MCAction) {
 }
 
 /**
- * Action types that never produce an interceptor log entry. Listed HERE,
- * before any work happens, because `deriveSnapshots` below runs the full
- * reducer speculatively: reaching `default: return null` from the switch costs
- * a whole reduce — including the 200-entry `activityLogs.slice(0, 200)`
- * allocation — to produce nothing at all.
+ * Action types that never produce an interceptor log entry. `deriveSnapshots`
+ * runs the full reducer speculatively, but lazily (see `snap` below), so a
+ * `null` path costs no reduce; this set stays as the semantic record of which
+ * dispatches are deliberately invisible to the interceptor.
  *
  * - `RECORD_QUIZ_ANSWER` — a per-answer action, so every quiz tap would pay
  *   the reducer twice. (Its level-change log is written inside the reducer
@@ -54,13 +62,9 @@ function deriveSnapshots(state: MCState, action: MCAction) {
  *
  * - `ADD_LOG` — the two hand-built entries in `useQuickGameSession` are
  *   dispatched through the `useMCDispatch` interceptor, so they arrive here
- *   and would each pay a full reduce just to fall through to `default`.
- *   Short-circuiting them is safe because the interceptor's OWN `ADD_LOG`
- *   (step 3 in `useMCStore.tsx`) is issued on the raw React dispatch and never
- *   re-enters this function.
- *
- * `CLEAR_LOGS` deliberately stays in the switch below — its `null` is a
- * semantic decision, not a cost one, and the comment there explains it.
+ *   and must not derive a second entry about themselves. The interceptor's
+ *   OWN `ADD_LOG` (step 3 in `useMCStore.tsx`) is issued on the raw React
+ *   dispatch and never re-enters this function.
  */
 const UNLOGGED_ACTIONS = new Set<MCAction['type']>([
     'RECORD_QUIZ_ANSWER',
@@ -90,55 +94,62 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         return bold ? `**${name}**` : name;
     };
 
-    const snapshots = deriveSnapshots(state, action);
+    // Lazy: the speculative reduce only runs for cases that actually spread
+    // snapshots — null paths (COMPLETE_TASK, settings toggles, future actions
+    // hitting `default`) must not pay a second full reducer pass per dispatch.
+    const snap = () => deriveSnapshots(state, action);
 
     switch (action.type) {
         case 'ADD_TOKEN':
-            return { id, timestamp: now, icon: '🪙', message: 'Manual token added', delta: +1, type: 'manual', colorKey: 'bank', ...snapshots };
+            return { id, timestamp: now, icon: '🪙', message: 'Manual token added', delta: +1, type: 'manual', colorKey: 'bank', ...snap() };
         case 'ADD_TOKENS':
-            if (action.source === 'mission') return { id, timestamp: now, icon: '🎉', message: `${action.label || 'Mission'} completed`, delta: +action.amount, type: 'mission', colorKey: action.label?.toLowerCase().includes('morning') ? 'morning' : 'evening', ...snapshots };
+            if (action.source === 'mission') return { id, timestamp: now, icon: '🎉', message: `${action.label || 'Mission'} completed`, delta: +action.amount, type: 'mission', colorKey: action.label?.toLowerCase().includes('morning') ? 'morning' : 'evening', ...snap() };
             if (action.source === 'responsibility') {
                 const colorKey = action.label?.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
-                return { id, timestamp: now, icon: '⭐', message: `${action.label || 'Activity'} completed`, delta: +action.amount, type: 'responsibility', colorKey, ...snapshots };
+                return { id, timestamp: now, icon: '⭐', message: `${action.label || 'Activity'} completed`, delta: +action.amount, type: 'responsibility', colorKey, ...snap() };
             }
-            return { id, timestamp: now, icon: '🪙', message: `Manual tokens added`, delta: +action.amount, type: 'manual', colorKey: 'bank', ...snapshots };
+            return { id, timestamp: now, icon: '🪙', message: `Manual tokens added`, delta: +action.amount, type: 'manual', colorKey: 'bank', ...snap() };
         case 'REMOVE_TOKEN':
-            return { id, timestamp: now, icon: '🪙', message: 'Manual token removed', delta: -1, type: 'manual', colorKey: 'bank', ...snapshots };
+            return { id, timestamp: now, icon: '🪙', message: 'Manual token removed', delta: -1, type: 'manual', colorKey: 'bank', ...snap() };
         case 'SELECT_CASE':
-            return { id, timestamp: now, icon: '🎯', message: `Goal selected: ${rewardLabel(action.reward)}`, type: 'system', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '🎯', message: `Goal selected: ${rewardLabel(action.reward)}`, type: 'system', colorKey: 'system', ...snap() };
         case 'DEPOSIT_TO_CASE': {
             const tkn = action.amount === 1 ? 'token' : 'tokens';
-            return { id, timestamp: now, icon: '🏦', message: `${action.amount} ${tkn} deposited to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '🏦', message: `${action.amount} ${tkn} deposited to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snap() };
         }
         case 'MOVE_TOKEN': {
             if (action.from === 'bank' && typeof action.to === 'number') {
-                return { id, timestamp: now, icon: '📤', message: `1 token added to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system', ...snapshots };
+                return { id, timestamp: now, icon: '📤', message: `1 token added to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system', ...snap() };
             }
             if (typeof action.from === 'number' && action.to === 'bank') {
-                return { id, timestamp: now, icon: '📥', message: `1 token removed from ${goalLabel(action.from)}`, type: 'system', colorKey: 'system', ...snapshots };
+                return { id, timestamp: now, icon: '📥', message: `1 token removed from ${goalLabel(action.from)}`, type: 'system', colorKey: 'system', ...snap() };
             }
             if (typeof action.from === 'number' && typeof action.to === 'number') {
-                return { id, timestamp: now, icon: '🔀', message: `1 token moved from ${goalLabel(action.from)} to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system', ...snapshots };
+                return { id, timestamp: now, icon: '🔀', message: `1 token moved from ${goalLabel(action.from)} to ${goalLabel(action.to)}`, type: 'system', colorKey: 'system', ...snap() };
             }
             return null;
         }
         case 'VACUUM_TO_CASE': {
             const target = state.cases.find(c => c.id === action.caseId);
             if (!target) return null;
+            // Mirror the reducer's guards — a rejected vacuum (quick-game case,
+            // full case, empty bank) must not produce a phantom entry.
+            if (target.reward === 'quick-game') return null;
             const amount = Math.min(state.bankCount, target.targetCount - target.tokenCount);
+            if (amount <= 0) return null;
             const tkn = amount === 1 ? 'token' : 'tokens';
-            return { id, timestamp: now, icon: '💨', message: `${amount} ${tkn} vacuumed to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '💨', message: `${amount} ${tkn} vacuumed to ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snap() };
         }
         case 'REFUND_CASE': {
             const target = state.cases.find(c => c.id === action.caseId);
             if (!target) return null;
             const tkn = target.tokenCount === 1 ? 'token' : 'tokens';
-            return { id, timestamp: now, icon: '↩️', message: `${target.tokenCount} ${tkn} refunded from ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '↩️', message: `${target.tokenCount} ${tkn} refunded from ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snap() };
         }
         case 'CONSUME_CASE': {
             const target = state.cases.find(c => c.id === action.caseId);
             if (!target || !target.reward) return null;
-            return { id, timestamp: now, icon: '🎁', message: `Used: ${rewardLabel(target.reward)}`, delta: -target.tokenCount, type: 'reward', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '🎁', message: `Used: ${rewardLabel(target.reward)}`, delta: -target.tokenCount, type: 'reward', colorKey: 'system', ...snap() };
         }
         case 'SET_ACTIVE_MISSION':
             if (action.phase === 'none') {
@@ -147,11 +158,11 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
                 const timedOutPhase = state.activeMission;
                 if (timedOutPhase === 'none') return null; // already inactive, nothing to log
                 const phaseLabel = timedOutPhase === 'morning' ? 'Morning' : 'Evening';
-                return { id, timestamp: now, icon: '🕐', message: `${phaseLabel} mission expired`, type: 'mission', colorKey: timedOutPhase, ...snapshots };
+                return { id, timestamp: now, icon: '🕐', message: `${phaseLabel} mission expired`, type: 'mission', colorKey: timedOutPhase, ...snap() };
             }
-            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started`, type: 'mission', colorKey: action.phase, ...snapshots };
+            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started`, type: 'mission', colorKey: action.phase, ...snap() };
         case 'CANCEL_MISSION':
-            return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
+            return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'MARK_MISSION_TIMEOUT':
             // Suppressed: SET_ACTIVE_MISSION phase:'none' now logs the expiry event with full
             // phase context. Logging here too would produce a duplicate entry.
@@ -161,52 +172,57 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             // dispatch is a no-op and must not produce a duplicate log entry.
             const mission = state.missions.find(m => m.phase === action.missionPhase);
             if (!mission || !mission.active) return null;
-            return { id, timestamp: now, icon: '🎉', message: `${action.missionPhase === 'morning' ? 'Morning' : 'Evening'} mission completed`, delta: +action.bonusTokens, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
+            return { id, timestamp: now, icon: '🎉', message: `${action.missionPhase === 'morning' ? 'Morning' : 'Evening'} mission completed`, delta: +action.bonusTokens, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         }
         case 'COMPLETE_TASK':
             return null; // The user requested to only log the main event, not subtasks.
         case 'RESET_MISSION_WITH_TIMER':
-            return { id, timestamp: now, icon: '🔄', message: `Mission fully reset (tasks + timer)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
+            return { id, timestamp: now, icon: '🔄', message: `Mission fully reset (tasks + timer)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'ADJUST_MISSION_END':
-            return { id, timestamp: now, icon: '⏱️', message: `Mission time adjusted (${action.deltaMinutes > 0 ? '+' : ''}${action.deltaMinutes}m)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
+            return { id, timestamp: now, icon: '⏱️', message: `Mission time adjusted (${action.deltaMinutes > 0 ? '+' : ''}${action.deltaMinutes}m)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'ADD_RESPONSIBILITY_POINT': {
             const resp = state.responsibilities.find(r => r.id === action.taskId);
             const colorKey = resp?.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
-            return { id, timestamp: now, icon: resp?.icon || '⭐', message: `Point earned for ${resp?.label || 'responsibility'}`, type: 'responsibility', colorKey, ...snapshots };
+            return { id, timestamp: now, icon: resp?.icon || '⭐', message: `Point earned for ${resp?.label || 'responsibility'}`, type: 'responsibility', colorKey, ...snap() };
         }
         case 'RESET_RESPONSIBILITY': {
             const resp = state.responsibilities.find(r => r.id === action.taskId);
             const colorKey = resp?.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
-            return resp ? { id, timestamp: now, icon: resp.icon, message: `${resp.label} completed`, delta: action.claimTokens ? +action.claimTokens : undefined, type: 'responsibility', colorKey, ...snapshots } : null;
+            return resp ? { id, timestamp: now, icon: resp.icon, message: `${resp.label} completed`, delta: action.claimTokens ? +action.claimTokens : undefined, type: 'responsibility', colorKey, ...snap() } : null;
         }
         case 'CHEAT_ATTEMPT':
-            return { id, timestamp: now, icon: '🚨', message: 'Unauthorized bank access attempt!', type: 'cheat-attempt', colorKey: 'cheat', ...snapshots };
+            return { id, timestamp: now, icon: '🚨', message: 'Unauthorized bank access attempt!', type: 'cheat-attempt', colorKey: 'cheat', ...snap() };
         case 'LOCK_TASK': {
             const m = state.missions.find(mm => mm.phase === action.missionPhase);
             const t = m?.tasks.find(tt => tt.id === action.taskId);
             if (!t || t.locked || t.completed) return null; // mirror the scheduler guard
-            return { id, timestamp: now, icon: '🔒', message: `Task locked: ${t.label}`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snapshots };
+            return { id, timestamp: now, icon: '🔒', message: `Task locked: ${t.label}`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         }
         case 'GRANT_GAME_TOKEN':
             if (state.gameTokens >= 5) return null; // capped — nothing happened
-            return { id, timestamp: now, icon: '🎁', message: 'Mood token granted manually', type: 'reward', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '🎁', message: 'Mood token granted manually', type: 'reward', colorKey: 'system', ...snap() };
         case 'CONSUME_GAME_TOKEN':
             if (state.gameTokens <= 0) return null;
-            return { id, timestamp: now, icon: '🎮', message: 'Mood token spent on a game', type: 'reward', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '🎮', message: 'Mood token spent on a game', type: 'reward', colorKey: 'system', ...snap() };
         case 'RESET_GAME_TOKENS':
-            return { id, timestamp: now, icon: '🧹', message: 'Mood tokens reset to zero', type: 'system', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '🧹', message: 'Mood tokens reset to zero', type: 'system', colorKey: 'system', ...snap() };
         case 'SET_MOOD_WIND': {
             const clamped = Math.max(-2, Math.min(2, action.level));
             if (clamped === state.moodWind) return null; // no-op, nothing happened
             const names: Record<number, string> = { 2: 'Excellent', 1: 'Good', 0: 'Normal', [-1]: 'Bad', [-2]: 'Horrible' };
-            return { id, timestamp: now, icon: '🌬️', message: `Mood set to ${names[clamped] ?? clamped}`, type: 'system', colorKey: 'system', ...snapshots };
+            return { id, timestamp: now, icon: '🌬️', message: `Mood set to ${names[clamped] ?? clamped}`, type: 'system', colorKey: 'system', ...snap() };
         }
         case 'ADJUST_BEHAVIOR_PROGRESS':
-            return { id, timestamp: now, icon: '📈', message: `Mood gauge adjusted (${action.amount > 0 ? '+' : ''}${action.amount}) — ${action.reason}`, type: 'system', colorKey: 'system', ...snapshots };
-        case 'CLEAR_LOGS':
-            // Deliberately unlogged here (the entry would be wiped by the very
-            // action that created it). The durable disk trail records it instead.
-            return null;
+            return { id, timestamp: now, icon: '📈', message: `Mood gauge adjusted (${action.amount > 0 ? '+' : ''}${action.amount}) — ${action.reason}`, type: 'system', colorKey: 'system', ...snap() };
+        case 'CLEAR_LOGS': {
+            // The interceptor dispatches ADD_LOG *after* the reducer wipes the
+            // ring, so this entry survives the clear it records — and from the
+            // ring it is mirrored into the durable trail, which must never lose
+            // the one event (a wipe) it exists to survive.
+            const wiped = state.activityLogs.length;
+            if (wiped === 0) return null; // nothing was cleared
+            return { id, timestamp: now, icon: '🧹', message: `Activity log cleared (${wiped} ${wiped === 1 ? 'entry' : 'entries'})`, type: 'system', colorKey: 'system', ...snap() };
+        }
         default:
             return null;
     }

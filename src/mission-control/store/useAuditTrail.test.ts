@@ -71,9 +71,10 @@ describe('useAuditTrail', () => {
     it('never writes the same entry twice across re-renders', async () => {
         const log = entry({ message: 'only once' });
         const { rerender } = renderHook(({ s }) => useAuditTrail(s), {
-            initialProps: { s: stateWith([log]) },
+            initialProps: { s: stateWith([]) },
         });
 
+        rerender({ s: stateWith([log]) });
         await vi.advanceTimersByTimeAsync(1100);
         // Same logs array contents, new object identity — a normal re-render.
         rerender({ s: stateWith([log]) });
@@ -81,6 +82,45 @@ describe('useAuditTrail', () => {
         await vi.advanceTimersByTimeAsync(1100);
 
         expect(appended().filter(e => e.msg === 'only once')).toHaveLength(1);
+    });
+
+    it('never re-mirrors entries restored from a previous session (restart)', async () => {
+        // A populated ring at MOUNT means localStorage restored it — the
+        // previous session already mirrored those entries. Re-appending them
+        // every launch duplicated the durable trail once per restart.
+        const restored = [entry({ message: 'yesterday b' }), entry({ message: 'yesterday a' })];
+        const { rerender } = renderHook(({ s }) => useAuditTrail(s), {
+            initialProps: { s: stateWith(restored) },
+        });
+        await vi.advanceTimersByTimeAsync(1100);
+
+        expect(appended().filter(e => e.ev !== 'SESSION_START')).toHaveLength(0);
+
+        // A genuinely new entry after mount is still mirrored — exactly once.
+        rerender({ s: stateWith([entry({ message: 'fresh today' }), ...restored]) });
+        await vi.advanceTimersByTimeAsync(1100);
+
+        const nonSession = appended().filter(e => e.ev !== 'SESSION_START');
+        expect(nonSession.map(e => e.msg)).toEqual(['fresh today']);
+    });
+
+    it('chunks an oversized flush to the main-side 100-entry append cap', async () => {
+        // electron/audit-log.ts truncates any batch past 100 entries; a single
+        // >100 flush silently lost its newest entries.
+        const many = Array.from({ length: 150 }, (_, i) => entry({ message: `burst ${i}` }));
+        const { rerender } = renderHook(({ s }) => useAuditTrail(s), {
+            initialProps: { s: stateWith([]) },
+        });
+
+        rerender({ s: stateWith(many) });
+        await vi.advanceTimersByTimeAsync(1100);
+
+        const batches = invoke.mock.calls
+            .filter(([channel, batch]) => channel === 'audit:append' &&
+                (batch as Array<{ ev: string }>).every(e => e.ev !== 'SESSION_START'))
+            .map(([, batch]) => batch as Array<{ msg: string }>);
+        expect(batches.every(b => b.length <= 100)).toBe(true);
+        expect(batches.flat()).toHaveLength(150);
     });
 
     it('writes oldest-first so the file reads chronologically', async () => {

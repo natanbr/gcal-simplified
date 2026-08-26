@@ -13,9 +13,15 @@
 
 import { useEffect, useRef } from 'react';
 import type { MCState, ActivityLogEntry } from '../types';
+import { sourceOf } from './activityLog';
 
 /** Coalesce bursts (an action plus its log entry) into one disk write. */
 const FLUSH_DEBOUNCE_MS = 1000;
+
+/** Mirror of MAX_ENTRIES_PER_APPEND in electron/audit-log.ts — the main
+ *  process truncates anything larger, so oversized flushes must be chunked
+ *  here or their newest entries are silently lost. */
+const MAX_BATCH = 100;
 
 /** One id per app run — makes a double-instance era obvious in the file. */
 const SESSION_ID = typeof self.crypto?.randomUUID === 'function'
@@ -39,7 +45,7 @@ function toPayload(log: ActivityLogEntry, appVersion: string): AuditPayload {
     return {
         t: log.timestamp,
         ev: log.type,
-        src: log.source ?? (log.isRemote ? 'remote' : 'local'),
+        src: sourceOf(log),
         // Strip the **bold** markers the in-app renderer uses.
         msg: log.message.replace(/\*\*/g, ''),
         ...(log.delta !== undefined ? { d: log.delta } : {}),
@@ -54,6 +60,12 @@ function toPayload(log: ActivityLogEntry, appVersion: string): AuditPayload {
 export function useAuditTrail(state: MCState): void {
     /** Ids already written to disk, so a re-render never duplicates a line. */
     const writtenIds = useRef<Set<string>>(new Set());
+    /** Entries restored from localStorage were mirrored by the session that
+     *  wrote them; re-appending them every launch would duplicate the trail.
+     *  Seeding once at mount trades the previous session's unflushed tail
+     *  (≤1s of entries, indistinguishable without persistent ids) for
+     *  never double-writing history. */
+    const seeded = useRef(false);
     const appVersion = useRef('');
     const pending = useRef<AuditPayload[]>([]);
     const flushTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -76,7 +88,7 @@ export function useAuditTrail(state: MCState): void {
                     msg: 'App started',
                     v: appVersion.current,
                     sid: SESSION_ID,
-                }]);
+                }]).catch(() => { /* best-effort */ });
             })
             .catch(() => { /* audit trail is best-effort; never break the app */ });
 
@@ -84,8 +96,13 @@ export function useAuditTrail(state: MCState): void {
     }, []);
 
     useEffect(() => {
-        if (!window.ipcRenderer) return;
         const logs = state.activityLogs;
+        if (!seeded.current) {
+            seeded.current = true;
+            if (logs) for (const log of logs) writtenIds.current.add(log.id);
+            return;
+        }
+        if (!window.ipcRenderer) return;
         if (!logs || logs.length === 0) return;
 
         // activityLogs is newest-first; walk it oldest-first so the file reads
@@ -105,9 +122,10 @@ export function useAuditTrail(state: MCState): void {
         flushTimer.current = setTimeout(() => {
             const batch = pending.current;
             pending.current = [];
-            if (batch.length === 0) return;
-            window.ipcRenderer?.invoke('audit:append', batch)
-                .catch(() => { /* best-effort */ });
+            for (let i = 0; i < batch.length; i += MAX_BATCH) {
+                window.ipcRenderer?.invoke('audit:append', batch.slice(i, i + MAX_BATCH))
+                    .catch(() => { /* best-effort */ });
+            }
         }, FLUSH_DEBOUNCE_MS);
     }, [state.activityLogs]);
 
@@ -123,12 +141,11 @@ export function useAuditTrail(state: MCState): void {
     useEffect(() => {
         return () => {
             clearTimeout(flushTimer.current);
-            if (pending.current.length > 0) {
-                window.ipcRenderer?.invoke('audit:append', pending.current).catch(() => {});
-                pending.current = [];
+            const batch = pending.current;
+            pending.current = [];
+            for (let i = 0; i < batch.length; i += MAX_BATCH) {
+                window.ipcRenderer?.invoke('audit:append', batch.slice(i, i + MAX_BATCH)).catch(() => {});
             }
         };
     }, []);
 }
-
-export { SESSION_ID };

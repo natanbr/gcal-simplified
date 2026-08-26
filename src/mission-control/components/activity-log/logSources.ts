@@ -5,9 +5,13 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import type { ActivityLogEntry } from '../../types';
+import { sourceOf, type LogSource } from '../../store/activityLog';
+import { getLocalDateString } from '../../store/behaviorSync';
 
-export type LogSource = NonNullable<ActivityLogEntry['source']>;
+// Single source of truth lives in store/activityLog.ts so the durable audit
+// trail and this view can never disagree; re-exported for existing consumers.
+export { sourceOf };
+export type { LogSource };
 
 export interface SourceMeta {
     icon: string;
@@ -56,10 +60,6 @@ export const SOURCE_META: Record<LogSource, SourceMeta> = {
     },
 };
 
-/** Falls back through the legacy `isRemote` flag for entries written before attribution existed. */
-export function sourceOf(log: ActivityLogEntry): LogSource {
-    return log.source ?? (log.isRemote ? 'remote' : 'local');
-}
 
 export interface DaySummary {
     /** Bank tokens gained today (sum of positive deltas). */
@@ -81,13 +81,10 @@ export interface DaySummary {
 const EMPTY_BY_SOURCE = (): Record<LogSource, number> =>
     ({ local: 0, remote: 0, scheduler: 0, auto: 0, system: 0 });
 
+/** Same canonical day boundary as the token economy (getLocalDateString) —
+ *  the summary strip must count the same "today" the grants do. */
 function isSameLocalDay(iso: string, reference: Date): boolean {
-    const d = new Date(iso);
-    return (
-        d.getFullYear() === reference.getFullYear() &&
-        d.getMonth() === reference.getMonth() &&
-        d.getDate() === reference.getDate()
-    );
+    return getLocalDateString(new Date(iso)) === getLocalDateString(reference);
 }
 
 /**

@@ -6,12 +6,15 @@
 // it reaches disk.
 // ============================================================
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-log-test-'));
+// The per-test hooks delete only the two ndjson files — without this, every
+// unit-test run leaked one empty audit-log-test-* directory in the OS temp dir.
+afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
 vi.mock('electron', () => ({
     app: { getPath: () => tmpDir },
