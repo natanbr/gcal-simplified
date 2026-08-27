@@ -7,6 +7,7 @@
 
 import { sourceOf, type LogSource } from '../../store/activityLog';
 import { getLocalDateString } from '../../store/behaviorSync';
+import type { ActivityLogEntry } from '../../types';
 
 // Single source of truth lives in store/activityLog.ts so the durable audit
 // trail and this view can never disagree; re-exported for existing consumers.

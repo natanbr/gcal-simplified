@@ -124,7 +124,7 @@ export function useMissionScheduler(): void {
                         icon: '⏭️',
                         message: `${phase === 'morning' ? 'Morning' : 'Evening'} mission skipped — the ${hhmm} window was missed (machine asleep)`,
                         type: 'mission',
-                        colorKey: phase === 'none' ? undefined : phase,
+                        colorKey: phase,
                         source: 'scheduler',
                     } });
                 }
