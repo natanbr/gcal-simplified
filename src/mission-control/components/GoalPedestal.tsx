@@ -7,7 +7,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch, useMCState } from '../store/useMCStore';
-import { isWakingHour } from '../store/mcReducer';
+import { isEconomyLocked } from '../store/missionStreak';
+import { isQuickGameWindowOpen } from '../store/gameWindow';
 import { Button3D } from './Button3D';
 import { MOOD_TOKEN } from '../moodTokenConfig';
 import { Token } from './Token';
@@ -144,7 +145,7 @@ interface GoalPedestalProps {
   innerRef?: (el: HTMLDivElement | null) => void;
   bankCount: number;
   layoutRects: { bank: DOMRect | null; cases: Record<number, DOMRect | null> };
-  onQuickGameOpen?: () => void;
+  onQuickGameOpen?: (at?: string) => void;
 }
 
 export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, onQuickGameOpen }: GoalPedestalProps) {
@@ -185,8 +186,13 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
   }, [case_.tokenCount, case_.id]);
 
+  // Read outside the callback: capturing `state` in the closure let the drop
+  // test a stale lock value.
+  const economyLocked = isEconomyLocked(state);
+
   const handleTokenDrop = useCallback((tokenId: string, x: number, y: number): boolean => {
     if (!layoutRects) return false;
+    if (economyLocked) return false; // refuse before animating, or the token vanishes
     
     // Check if dropped on Bank
     if (layoutRects.bank && x >= layoutRects.bank.left && x <= layoutRects.bank.right && y >= layoutRects.bank.top && y <= layoutRects.bank.bottom) {
@@ -237,7 +243,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
 
     return false;
-  }, [case_.id, cases, layoutRects, dispatch]);
+  }, [case_.id, cases, layoutRects, dispatch, economyLocked]);
 
   const reward = case_.reward ? REWARD_MAP[case_.reward] : null;
   const isComplete = case_.status === 'active' && case_.tokenCount >= case_.targetCount;
@@ -268,14 +274,25 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
 
   const handleUse = () => {
     const rewardId = case_.reward;
-    dispatch({ type: 'CONSUME_CASE', caseId: case_.id });
+    // ONE instant for the whole redemption — this guard, CONSUME_CASE's stamp,
+    // the hook's guard and START_GAME's. Separate clock reads let a tap at
+    // 18:59:59.999 spend the goal and be refused the game a millisecond later.
+    const at = new Date().toISOString();
+    if (rewardId === 'quick-game' && !isQuickGameWindowOpen(state, at)) return;
+    dispatch({ type: 'CONSUME_CASE', caseId: case_.id, timestamp: at });
     if (rewardId === 'quick-game' && onQuickGameOpen) {
-      onQuickGameOpen();
+      onQuickGameOpen(at);
     }
   };
 
-  const isWithinSessionHours = isWakingHour(new Date().toISOString(), state.settings);
-  const canUseQuickGame = state.moodWind >= 0 && isWithinSessionHours;
+  const isWithinSessionHours = isQuickGameWindowOpen(state, new Date().toISOString());
+  const shieldBroken = isEconomyLocked(state);
+  const canUseQuickGame = state.moodWind >= 0 && isWithinSessionHours && !shieldBroken;
+  // Three distinct reasons: one label for all of them told a child with
+  // perfect mood that their mood was too low, every evening.
+  const blockedLabel = shieldBroken ? '🔒 Bank locked'
+    : !isWithinSessionHours ? '⏰ Not right now'
+    : '😡 Mood too low';
 
   // Pastel accent per pedestal — only used when ACTIVE
   const pastelAccents = [
@@ -344,7 +361,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
           <motion.button
             whileHover={{ scale: 1.1, y: -2 }}
             whileTap={{ scale: 0.92 }}
-            onClick={() => setIsSelecting(true)}
+            onClick={economyLocked ? undefined : () => setIsSelecting(true)}
             aria-label="Add a new goal"
             style={{
               width: 54, height: 54, borderRadius: '50%',
@@ -525,7 +542,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                       cursor: canUseQuickGame ? 'pointer' : 'not-allowed',
                     }}
                   >
-                    {canUseQuickGame ? '🎁 Use!' : '😡 Mood too low'}
+                    {canUseQuickGame ? '🎁 Use!' : blockedLabel}
                   </Button3D>
                   <motion.div
                     animate={{ rotate: leverTilted ? 45 : 0 }}
@@ -547,7 +564,10 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                 (() => {
                   const phoneGamesPriv = state.privileges.find(p => p.id === 'phone-games');
                   const isPhoneGamesBlocked = phoneGamesPriv ? phoneGamesPriv.status === 'suspended' : false;
-                  const isUseBlocked = case_.reward === 'game' && isPhoneGamesBlocked;
+                  // Everything the shield freezes must LOOK frozen: a refused action
+                  // writes no log line, so a live-looking button that does nothing
+                  // leaves the child and the parent with no trace.
+                  const isUseBlocked = economyLocked || (case_.reward === 'game' && isPhoneGamesBlocked);
 
                   return (
                     <div style={{ display: 'flex', gap: 5, width: '100%' }}>
@@ -560,7 +580,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                           variant="primary"
                           onClick={isUseBlocked ? undefined : handleUse}
                           disabled={isUseBlocked}
-                          aria-label={isUseBlocked ? "Phone games are locked" : "Use this reward"}
+                          aria-label={economyLocked ? "Bank locked — finish your next mission" : isUseBlocked ? "Phone games are locked" : "Use this reward"}
                           style={{
                             flex: 1, width: '100%', justifyContent: 'center', display: 'flex',
                             alignItems: 'center', gap: 4, fontSize: 11,
@@ -598,8 +618,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                   <Button3D
                     variant="primary"
                     onClick={() => dispatch({ type: 'VACUUM_TO_CASE', caseId: case_.id })}
-                    aria-label="Move needed coins to this goal"
-                    disabled={bankCount === 0}
+                    aria-label={economyLocked ? "Bank locked — finish your next mission" : "Move needed coins to this goal"}
+                    disabled={bankCount === 0 || economyLocked}
                     style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
                   >
                     💨 All

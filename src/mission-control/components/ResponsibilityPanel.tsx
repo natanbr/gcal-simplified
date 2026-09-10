@@ -8,6 +8,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch } from '../store/useMCStore.tsx';
+import { isEconomyLocked } from '../store/missionStreak';
 import type { ResponsibilityTask } from '../types';
 
 // ── Single task card ──────────────────────────────────────────────────────────
@@ -54,6 +55,10 @@ interface TaskCardProps {
 function ResponsibilityCard({ task }: TaskCardProps) {
     const dispatch = useMCDispatch();
     const isComplete = task.completedAt !== null;
+    // The shield freezes the child's earning loop too, so the reducer refuses
+    // both of these. A refusal writes no log line, so a live-looking button
+    // would give a dead tap with no trace on either side.
+    const locked = isEconomyLocked(useMCState());
 
     return (
         <motion.div
@@ -189,22 +194,26 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                         >
                             <motion.button
                                 data-testid={`mc-responsibility-claim-${task.id}`}
-                                whileTap={{ scale: 0.93 }}
-                                whileHover={{ scale: 1.03 }}
-                                onClick={() => {
+                                whileTap={locked ? undefined : { scale: 0.93 }}
+                                whileHover={locked ? undefined : { scale: 1.03 }}
+                                onClick={locked ? undefined : () => {
                                     dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id, claimTokens: task.tokenReward });
                                 }}
+                                disabled={locked}
+                                aria-label={locked ? 'Bank locked — finish your next mission' : 'Claim this reward'}
                                 style={{
-                                    background: 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
+                                    background: locked
+                                        ? 'rgba(200,200,220,0.4)'
+                                        : 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)',
                                     border: '1.5px solid rgba(61,206,118,0.5)',
                                     borderRadius: 12,
                                     padding: '0 16px',
                                     fontSize: 13,
                                     fontWeight: 900,
-                                    color: '#0b4a20',
-                                    cursor: 'pointer',
+                                    color: locked ? 'var(--mc-text-dim)' : '#0b4a20',
+                                    cursor: locked ? 'not-allowed' : 'pointer',
                                     fontFamily: "'Nunito', sans-serif",
-                                    boxShadow: '0 3px 0 #2da85a',
+                                    boxShadow: locked ? 'none' : '0 3px 0 #2da85a',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
@@ -225,20 +234,24 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0 }}
-                            whileTap={{ scale: 0.93 }}
-                            whileHover={{ scale: 1.03 }}
-                            onClick={() => dispatch({ type: 'ADD_RESPONSIBILITY_POINT', taskId: task.id })}
+                            whileTap={locked ? undefined : { scale: 0.93 }}
+                            whileHover={locked ? undefined : { scale: 1.03 }}
+                            onClick={locked ? undefined : () => dispatch({ type: 'ADD_RESPONSIBILITY_POINT', taskId: task.id })}
+                            disabled={locked}
+                            aria-label={locked ? 'Bank locked — finish your next mission' : `Add a point to ${task.label}`}
                             style={{
-                                background: 'linear-gradient(180deg, #ffe880 0%, #f7c948 100%)',
+                                background: locked
+                                    ? 'rgba(200,200,220,0.4)'
+                                    : 'linear-gradient(180deg, #ffe880 0%, #f7c948 100%)',
                                 border: '1.5px solid rgba(247,201,72,0.6)',
                                 borderRadius: 12,
                                 padding: '8px 24px',
                                 fontSize: 13,
                                 fontWeight: 900,
-                                color: '#5a3e00',
-                                cursor: 'pointer',
+                                color: locked ? 'var(--mc-text-dim)' : '#5a3e00',
+                                cursor: locked ? 'not-allowed' : 'pointer',
                                 fontFamily: "'Nunito', sans-serif",
-                                boxShadow: '0 3px 0 #c99b10',
+                                boxShadow: locked ? 'none' : '0 3px 0 #c99b10',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 alignItems: 'center',

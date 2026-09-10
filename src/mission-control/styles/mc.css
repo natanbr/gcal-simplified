@@ -90,6 +90,13 @@
   --mc-chart-violet: #6d54c8;
   --mc-chart-teal: #0a9d83;
   --mc-chart-rust: #c25a35;
+
+  /* Mission Streak Shield — TEXT only. --mc-red is ~2.3:1 on this card's
+     near-white ground (#fcfdff): fine for an 18px segment block, unreadable as
+     11px type. Same hue, darkened until it clears 4.5:1 on both that ground
+     (5.34) and the lock row's soft red (#fcebed, 4.72). ONE token, not a
+     green/amber/red set: the tiers are carried by segment colour alone. */
+  --mc-shield-danger-text: #c62f38;
 }
 
 /* ---- Reset for MC root ---- */
