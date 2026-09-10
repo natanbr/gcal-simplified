@@ -68,15 +68,18 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
     // committing it optimistically made coins vanish from the pile).
     'src/mission-control/components/GlobalBank.tsx': 407,
-    // Tightened 376 → 362 on 2026-08-20 (RescueQuizLayer extracted).
-    'src/mission-control/games/blocks/BlocksCanvas.tsx': 362,
+    // 376 → 362 on 2026-08-20 (RescueQuizLayer extracted), then OFF the backlog
+    // on 2026-09-07: the drag gesture moved to useShapeDrag.ts and the file
+    // landed at 165. Re-adding it would need a fresh, deliberate entry.
     'src/mission-control/games/fruits/useFruitMergeGame.ts': 361,
     'src/mission-control/games/fruits/FruitMergeCanvas.tsx': 360,
     // Tightened 329 → 324 on 2026-08-20 (quiz question no longer stored in game
     // state), then 324 → 322 on 2026-08-24: the inline altitude→level if-chain
     // became altitudeLevel() in types.ts, which also gave ALTITUDE_LEVELS its
-    // first consumer — the thresholds had been declared twice.
-    'src/mission-control/games/blocks/useBlocksGame.ts': 322,
+    // first consumer — the thresholds had been declared twice. Then 322 → 312 on
+    // 2026-09-07: the local canPlaceShape was the drag ghost's isPlaceable
+    // written a second time, and moved to blocks/placement.ts as one rule.
+    'src/mission-control/games/blocks/useBlocksGame.ts': 312,
     // 311 → 324 on 2026-09-03 (the activity +1 and Claim buttons must LOOK
     // refused while the shield is broken — a refused action writes no log line,
     // so a live-looking button gives a dead tap with no trace on either side).

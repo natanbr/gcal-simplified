@@ -1,5 +1,5 @@
 import { memo, forwardRef } from 'react';
-import { GRID_SIZE, CELL_DISPLAY_SIZE } from './types';
+import { GRID_SIZE, CELL_DISPLAY_SIZE, BOARD_GAP, BOARD_PADDING, BOARD_BORDER } from './types';
 import { GridCell } from './GridCell';
 
 interface BlocksGridProps {
@@ -19,10 +19,10 @@ export const BlocksGrid = memo(forwardRef<HTMLDivElement, BlocksGridProps>(funct
                 display: 'grid',
                 gridTemplateColumns: `repeat(${GRID_SIZE}, ${CELL_DISPLAY_SIZE}px)`,
                 gridTemplateRows: `repeat(${GRID_SIZE}, ${CELL_DISPLAY_SIZE}px)`,
-                gap: 4,
-                padding: 8,
+                gap: BOARD_GAP,
+                padding: BOARD_PADDING,
                 background: '#020617',
-                border: '2.5px solid rgba(56, 189, 248, 0.5)',
+                border: `${BOARD_BORDER}px solid rgba(56, 189, 248, 0.5)`,
                 borderRadius: 18,
                 boxShadow: '0 0 20px rgba(56, 189, 248, 0.15), inset 0 4px 20px rgba(0,0,0,0.5)',
                 position: 'relative',

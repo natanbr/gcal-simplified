@@ -2,14 +2,19 @@ import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { GameShape } from './types';
 import { ShapeItem } from './ShapeItem';
+import type { DragSlot, StartDragHandler } from './useShapeDrag';
+
+/** Passed to ShapeItem *and* to onStartDrag: the grabbed cell is derived from
+ *  the size this slot really renders, which is smaller than the tray's. */
+const RESCUE_CELL_SIZE = 22;
 
 interface RescueSlotProps {
     rescueShape: GameShape | null;
     rescueShapeLocked: boolean;
     triggerRescueQuiz: () => void;
     refreshRescueShape: () => void;
-    activeDragSlot: { slotType: 'standard' | 'rescue'; slotIndex: number } | null;
-    onStartDrag: (event: React.PointerEvent<HTMLDivElement>, shape: GameShape, slotType: 'standard' | 'rescue', slotIndex: number) => void;
+    activeDragSlot: DragSlot | null;
+    onStartDrag: StartDragHandler;
 }
 
 export const RescueSlot = memo(function RescueSlot({
@@ -60,9 +65,9 @@ export const RescueSlot = memo(function RescueSlot({
 
                         <ShapeItem
                             shape={rescueShape}
-                            cellSize={22}
+                            cellSize={RESCUE_CELL_SIZE}
                             isTransparent={activeDragSlot?.slotType === 'rescue' && !rescueShapeLocked}
-                            onPointerDown={!rescueShapeLocked ? (e) => onStartDrag(e, rescueShape, 'rescue', 0) : undefined}
+                            onPointerDown={!rescueShapeLocked ? (e) => onStartDrag(e, rescueShape, 'rescue', 0, RESCUE_CELL_SIZE) : undefined}
                         />
                     </>
                 ) : null}

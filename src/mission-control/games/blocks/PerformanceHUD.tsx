@@ -1,10 +1,8 @@
 import { memo, useState, useEffect } from 'react';
+import type { DragPerf } from './dragPerf';
 
 interface PerformanceHUDProps {
-    perfRef: React.RefObject<{
-        fps: number;
-        avgScriptTime: number;
-    }>;
+    perfRef: React.RefObject<DragPerf>;
     canvasRenders: number;
     gridRenders: number;
     showProjection: boolean;
@@ -40,8 +38,11 @@ export const PerformanceHUD = memo(function PerformanceHUD({
             right: 0,
             display: 'flex',
             justifyContent: 'space-between',
+            // No backdrop-filter and no transition: this strip sits directly
+            // above the board and its numbers change every 200ms, so either one
+            // would put a permanently re-compositing layer into every
+            // performance trace taken to measure the thing below it.
             background: 'rgba(15, 23, 42, 0.7)',
-            backdropFilter: 'blur(8px)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: 14,
             padding: '6px 14px',
@@ -52,7 +53,6 @@ export const PerformanceHUD = memo(function PerformanceHUD({
             pointerEvents: 'none',
             zIndex: 100,
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            transition: 'all 0.3s'
         }}>
             <div style={{ display: 'flex', gap: 12 }}>
                 <span>FPS: <span style={{ color: metrics.fps >= 58 ? '#22c55e' : metrics.fps >= 45 ? '#f59e0b' : '#ef4444' }}>{metrics.fps}</span></span>

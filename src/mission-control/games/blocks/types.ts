@@ -38,6 +38,19 @@ export const GRID_SIZE = 8;
 export const CELL_DISPLAY_SIZE = 48; // pixels for render size
 export const ALTITUDE_TARGET = 200; // altitude in meters to win/rescue astronaut
 
+// --- Board geometry (single source for BlocksGrid, the projection overlay and
+// the drag maths). getBoundingClientRect() returns the BORDER box, so the first
+// cell starts BOARD_CONTENT_INSET — border *and* padding — inside it. Getting
+// this wrong draws the landing ghost off the real cells.
+export const BOARD_PADDING = 8;
+export const BOARD_GAP = 4;
+export const BOARD_BORDER = 2.5;
+export const BOARD_CONTENT_INSET = BOARD_BORDER + BOARD_PADDING;
+export const BOARD_CELL_PITCH = CELL_DISPLAY_SIZE + BOARD_GAP;
+/** Gap between cells of a bank/tray ShapeItem. Draggable items must render at
+ *  this gap — useShapeDrag derives the grabbed cell from it. */
+export const SHAPE_ITEM_GAP = 1.5;
+
 // Altitude events
 export const ALTITUDE_LEVELS = {
     0: { label: 'Earth Launch', threshold: 0 },
