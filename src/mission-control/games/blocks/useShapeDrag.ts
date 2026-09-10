@@ -201,8 +201,10 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
             const drag = ownedDrag(e);
             if (!drag) return;
 
-            // Metering is for the DEV-only HUD; Vite folds this to false in a
-            // production build, so the whole module tree-shakes out.
+            // Metering is for the DEV-only HUD. Vite folds the flag, so Rollup
+            // drops recordDragTick from a production build — verified in the
+            // bundle. `freshPerf()` below still runs, so dragPerf.ts itself
+            // ships; that is one object literal per grab, not per move.
             const start = import.meta.env.DEV ? performance.now() : 0;
             // One origin for both: the proxy and the ghost must never disagree
             // about where the shape is.

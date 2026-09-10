@@ -39,13 +39,16 @@ export const CELL_DISPLAY_SIZE = 48; // pixels for render size
 export const ALTITUDE_TARGET = 200; // altitude in meters to win/rescue astronaut
 
 // --- Board geometry (single source for BlocksGrid, the projection overlay and
-// the drag maths). getBoundingClientRect() returns the BORDER box, so the first
-// cell starts BOARD_CONTENT_INSET — border *and* padding — inside it. Getting
-// this wrong draws the landing ghost off the real cells.
+// the drag maths).
+// ⚠️ These are DECLARED values, not the ones the browser lays out. A fractional
+// border does not survive device-pixel snapping — 2.5px computes to 2px at DPR 1
+// and to something else again at the 125%/150% scaling common on Windows touch
+// devices. Never derive the board's screen origin by adding these to a rect;
+// boardOrigin.ts reads the used values from computed style for that reason.
+// They are correct for *writing* CSS, which is all they are for.
 export const BOARD_PADDING = 8;
 export const BOARD_GAP = 4;
 export const BOARD_BORDER = 2.5;
-export const BOARD_CONTENT_INSET = BOARD_BORDER + BOARD_PADDING;
 export const BOARD_CELL_PITCH = CELL_DISPLAY_SIZE + BOARD_GAP;
 /** Gap between cells of a bank/tray ShapeItem. Draggable items must render at
  *  this gap — useShapeDrag derives the grabbed cell from it. */

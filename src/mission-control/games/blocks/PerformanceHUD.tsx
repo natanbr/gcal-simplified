@@ -9,7 +9,13 @@ interface PerformanceHUDProps {
     onToggleProjection: () => void;
 }
 
-export const PerformanceHUD = memo(function PerformanceHUD({ 
+// /*#__PURE__*/ is load-bearing, not decoration. BlocksCanvas mounts this behind
+// `import.meta.env.DEV`, so Rollup drops the call site in a production build —
+// but it cannot prove `memo(...)` is side-effect-free, so without this annotation
+// it keeps the whole component, including the 200ms setInterval below, as dead
+// bytes in the shipped bundle. Verified by grepping dist/assets for this file's
+// strings: present before the annotation, absent after.
+export const PerformanceHUD = /*#__PURE__*/ memo(function PerformanceHUD({
     perfRef, 
     canvasRenders, 
     gridRenders,

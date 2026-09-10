@@ -136,6 +136,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
           - **The shape is lifted clear of the hand.** On touch input the proxy is offset above the fingertip so the shape and its projection are never hidden by the hand; mouse input keeps the shape under the cursor. The projection is derived from the lifted shape's own position on the board, not from where the fingertip is.
           - **Forgiveness snapping, never a surprise.** When the shape's rounded anchor is not placeable, the eight neighbouring anchors are tested and the nearest valid one within **less than one cell** is used. Snapping is computed continuously while the finger is down — and recomputed when the board itself changes under a still finger, so a line clear or a newly spawned meteor cannot leave a stale green ghost — and is always shown as the green projection *before* release, so a snap the child does not want can be corrected by moving; and the bounded radius means a shape can never travel to a distant free spot. When nothing valid is within the radius the projection shows red at the rounded position and the lift returns the shape to the bank.
           - **A refused drop is silent.** The tray slot is emptied only when placement actually succeeded; a rejected drop leaves the shape visible in the bank rather than blanking and restoring it.
+          - **The landing projection paints above the board.** The ghost overlay outranks the cells (`zIndex: 20` against a cell's 1, or 10 mid-explosion). Without it the cells win — a grid item takes a `z-index` without being positioned — and the red "you cannot put it here" warning is hidden behind the very block that makes the spot invalid, since a filled cell is opaque while an empty one is not.
+          - **Refresh is refused while the rescue shape is in flight.** Refreshing re-locks the slot, which would make the game refuse a drop the child had already been shown in green. The button is disabled for the duration of a rescue drag only; a standard-tray drag leaves it live.
         - **Unique Shape Instances & Jump-Back Prevention**: All generated shape instances are assigned unique IDs upon selection in `useBlocksGame.ts`, avoiding React key collisions. The slots in the tray are rendered transparent during dragging and unmounted upon successful placement, resolving the used shape "jump-back" visual glitch and ensuring proper state resets.
 
 - **Mission Streak Shield (missed-mission lockout)**:
@@ -634,9 +636,10 @@ were found and reproduced by tests before any change was made
 - The tray slot un-masks on release either way; a successful placement empties it in the
   same React commit, so a refused drop simply leaves the shape sitting in the bank.
 - The drag logic moved out of `BlocksCanvas.tsx` (362 → 165 lines, off the file-size debt list) into
-  four units: `useShapeDrag.ts` for the gesture, `dragGeometry.ts` for the pure pointer-to-cell and
+  five units: `useShapeDrag.ts` for the gesture, `dragGeometry.ts` for the pure pointer-to-cell and
   snapping maths, `placement.ts` for the single "may this shape sit here" rule the ghost and the game
-  now share, and `dragPerf.ts` for the dev HUD's metering.
+  now share, `boardOrigin.ts` for the one DOM measurement the drag depends on, and `dragPerf.ts`
+  for the dev HUD's metering.
 - The 250ms mask that hid a slot after a successful drop was removed. `useBlocksGame` deals three
   fresh shapes in the same React commit as the placement that emptied the last slot, so on every
   third placement the mask was hiding a shape that was genuinely there and could not be picked up.
