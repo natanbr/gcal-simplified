@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch } from '../store/useMCStore.tsx';
+import { isEconomyLocked } from '../store/missionStreak';
 import { Token } from './Token';
 import type { DisplayCase } from '../types';
 
@@ -86,8 +87,14 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
   // ------------------------------------------------------------------
   // Drop handler — called by Token via onDrop(id, x, y)
   // ------------------------------------------------------------------
+  // Refuse a locked drop BEFORE the exit animation: committing the optimistic
+  // update and letting the reducer refuse made the coin vanish from the pile
+  // while the counter kept the old total.
+  const economyLocked = isEconomyLocked(state);
+
   const handleTokenDrop = useCallback(
     (tokenId: string, x: number, y: number): boolean => {
+      if (economyLocked) return false; // springs back — the child sees it bounce
       // Find the first ACTIVE case whose rect contains the drop point
       const hit = Object.entries(layoutRects.cases).find(([id, rect]) => {
         if (!rect) return false;
@@ -125,7 +132,7 @@ export function GlobalBank({ cases, layoutRects, innerRef, onCheatDetected }: Gl
 
       return true; // consumed — Token will NOT spring back
     },
-    [cases, layoutRects, dispatch],
+    [cases, layoutRects, dispatch, economyLocked],
   );
 
 

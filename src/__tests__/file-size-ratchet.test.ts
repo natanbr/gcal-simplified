@@ -32,22 +32,42 @@ const LIMIT = 300;
  * quiet growth the ratchet exists to stop.
  */
 const OVERSIZED_BASELINE: Record<string, number> = {
+    // 836 → 830 on 2026-09-03 (the missionStreak/gameWindow re-export barrel
+    // deleted; every consumer now imports from the source module, which is what
+    // activityLog.ts already did. Net-negative for the round despite the
+    // additions below),
+    // 826 → 836 on 2026-09-03 (review round 2: the ADJUST_SHIELD log attribution
+    // needs the actor, and RESET_MISSION's comment records why it must NOT
+    // re-arm a miss it grants no time for),
+    // 809 → 826 on 2026-09-02 (review fixes: the ADJUST_SHIELD case for the
+    // parent-adjustable shields, the CONSUME_CASE window gate that stopped a
+    // goal being burned for a refused game, and the loggedTimeoutAt reset that
+    // made the streak counter actually count),
+    // 828 → 809 on 2026-09-02 (the two mission-outcome cases moved to
+    // missionStreak.ts, which is where the shield counter lives),
     // 1033 → 804 on 2026-08-20 (behavior-sync block moved to behaviorSync.ts),
     // then 804 → 828 the same day for the RECORD_QUIZ_ANSWER case (reading
     // practice). Net −205 vs. the pre-split file; the case itself delegates to
     // store/skillProgress.ts and is mostly the in-reducer level-change log.
-    // 828 → 827: the two mission-outcome cases moved to missionStreak.ts, and
-    // the re-export barrel was dropped in favour of importing from the source
-    // module (which is what activityLog.ts already did).
     'src/mission-control/store/mcReducer.ts': 827,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
     'src/mission-control/components/MCSettingsOverlay.tsx': 755,
-    'src/mission-control/components/GoalPedestal.tsx': 629,
+    // 648 → 649 on 2026-09-03 (+1: dropping the mcReducer barrel splits one
+    // import line into two, since the lock and the window now come from their
+    // own modules),
+    // 629 → 648 on 2026-09-03 (lock-aware Use! button + three honest blocked
+    // labels; hoisting the lock read out of the drop callback, which was closing
+    // over a stale state; and gating the OTHER three spend controls — the regular
+    // Use button, the vacuum, and the reward picker — which were dispatching
+    // actions the reducer silently refused while still looking enabled).
+    'src/mission-control/components/GoalPedestal.tsx': 649,
     'src/components/Dashboard.tsx': 504,
     'src/mission-control/components/MissionOverlay.tsx': 493,
-    'src/mission-control/components/GlobalBank.tsx': 400,
+    // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
+    // committing it optimistically made coins vanish from the pile).
+    'src/mission-control/components/GlobalBank.tsx': 407,
     // Tightened 376 → 362 on 2026-08-20 (RescueQuizLayer extracted).
     'src/mission-control/games/blocks/BlocksCanvas.tsx': 362,
     'src/mission-control/games/fruits/useFruitMergeGame.ts': 361,
@@ -57,7 +77,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // became altitudeLevel() in types.ts, which also gave ALTITUDE_LEVELS its
     // first consumer — the thresholds had been declared twice.
     'src/mission-control/games/blocks/useBlocksGame.ts': 322,
-    'src/mission-control/components/ResponsibilityPanel.tsx': 311,
+    // 311 → 324 on 2026-09-03 (the activity +1 and Claim buttons must LOOK
+    // refused while the shield is broken — a refused action writes no log line,
+    // so a live-looking button gives a dead tap with no trace on either side).
+    'src/mission-control/components/ResponsibilityPanel.tsx': 324,
 };
 
 interface Measured {

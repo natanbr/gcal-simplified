@@ -20,6 +20,7 @@ import { LiveClockDisplay } from './components/LiveClockDisplay';
 import { MCSettingsOverlay } from './components/MCSettingsOverlay';
 import { PrivilegesPanel } from './components/PrivilegesPanel';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
+import { ShieldPanel } from './components/ShieldPanel';
 import { SnakeGameOverlay } from './games/snake/SnakeGameOverlay';
 import { BlocksGameOverlay } from './games/blocks/BlocksGameOverlay';
 import { FruitMergeGameOverlay } from './games/fruits/FruitMergeGameOverlay';
@@ -224,9 +225,12 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
               ))}
             </div>
             {/* Column 3: Responsibilities */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+            {/* gap 6, not 8: Column 3 carries four cards and `.mc-root` is
+                overflow:hidden, so at 1366x768 the last card is simply gone. */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
               <ResponsibilityPanel />
               <GameTokenPanel />
+              <ShieldPanel />
               <PrivilegesPanel interactive={false} />
             </div>
           </div>
