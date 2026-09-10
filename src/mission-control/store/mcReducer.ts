@@ -25,6 +25,8 @@ import {
     PROGRESS_PER_TOKEN,
 } from './behaviorSync';
 import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
+import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
+import { isQuickGameWindowOpen } from './gameWindow';
 import { createDefaultSkillProgress } from '../skills/types';
 
 // The behavior/token-economy engine lives in behaviorSync.ts; re-export its
@@ -146,6 +148,7 @@ export const initialState: MCState = {
     gameTokens: 5,
     gameTokensLastGrantedDate: null,
     snakeGameActive: false,
+    missedMissionStreak: 0,
     lastCompletedOrFailedMorningDate: null,
     lastCompletedOrFailedEveningDate: null,
     behaviorProgress: 50, // Start in the middle (Yellow)
@@ -177,9 +180,19 @@ function computeMissionDurationMins(startsAt: string, endsAt: string): number {
 // ---- Reducer ----
 
 function _mcReducer(state: MCState, action: MCAction): MCState {
-    if (action.timestamp) {
+    // A broken shield freezes the mood gauge too. SKIPPING the sync rather than
+    // zeroing the delta leaves the anchor stale, which is the point: on unlock
+    // the first sync sees a gap larger than one heartbeat and re-anchors with NO
+    // back-fill, so locked days cannot dump accrued progress at once.
+    if (action.timestamp && !isEconomyLocked(state)) {
         state = applyBehaviorSync(state, action.timestamp);
     }
+    // The shield freezes the child's own economy: spending, plus the
+    // responsibility earning loop. Mission completion, parent grants and
+    // ADJUST_SHIELD stay open — they are the ways out, and locking them would
+    // make the lock inescapable. `activityLog.ts` calls the same predicate, so a
+    // refused action can never still log a movement that did not happen.
+    if (isRefusedByShieldLock(state, action)) return state;
     switch (action.type) {
         case 'ADD_TOKEN':
             return { ...state, bankCount: state.bankCount + 1 };
@@ -384,6 +397,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         active: true,
                         startedAt: now,
                         durationMins: computeMissionDurationMins(m.startsAt, m.endsAt), // no minimum — allows sub-minute test durations
+                        loggedTimeoutAt: undefined, // fresh occurrence — a stale stamp capped the streak at 2
                         whiningDetected: false,
                         whiningLocked: false,
                         tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
@@ -394,12 +408,17 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
 
         // Reset task progress only — mission stays active, timer keeps running.
         // Does NOT affect startedAt/durationMins/activeMission.
+        //
+        // Deliberately does NOT clear `loggedTimeoutAt`: this reset grants no
+        // extra time, so on an already-expired mission clearing it re-armed the
+        // timeout instantly and charged a second miss for a zero-second attempt.
+        // RESET_MISSION_WITH_TIMER restarts the clock, so that one re-arms.
         case 'RESET_MISSION':
             return {
                 ...state,
                 missions: state.missions.map(m =>
                     m.phase === action.missionPhase
-                        ? { ...m, active: true, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
+                        ? { ...m, active: true, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
                         : m
                 )
             };
@@ -437,52 +456,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 )
             };
 
-        case 'COMPLETE_MISSION_ROUTINE': {
-            const mission = state.missions.find(m => m.phase === action.missionPhase);
-            // Idempotency guard: the expiry timers in MissionOverlay and
-            // MissionTimerDisplay can both fire at the same moment — only the
-            // first completion may grant tokens/behavior bonus.
-            if (!mission || !mission.active) return state;
-            const whining = mission.whiningDetected ?? false;
-            // "without wining will add points. with wining will result in no change"
-            const behaviorBonus = whining ? 0 : 25;
-            let nextProgress = state.behaviorProgress + behaviorBonus;
-            let nextGameTokens = state.gameTokens;
-            const crossed = nextProgress >= PROGRESS_PER_TOKEN;
-            if (crossed) {
-                nextProgress -= PROGRESS_PER_TOKEN;
-                nextGameTokens = Math.min(MAX_GAME_TOKENS, nextGameTokens + 1);
-            }
-
-            return {
-                ...state,
-                activeMission: 'none',
-                bankCount: state.bankCount + action.bonusTokens,
-                behaviorProgress: nextProgress,
-                gameTokens: nextGameTokens,
-                ...(crossed ? { moodWind: 0 } : {}), // earning a token resets mood — same rule as the heartbeat grant
-                ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString(new Date(actionInstant(action))) } : {}),
-                ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString(new Date(actionInstant(action))) } : {}),
-                missions: state.missions.map(m =>
-                    m.phase === action.missionPhase
-                        ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
-                        : m
-                )
-            };
-        }
+        case 'COMPLETE_MISSION_ROUTINE':
+            return applyMissionRoutineComplete(state, action.missionPhase, action.bonusTokens, actionInstant(action));
 
         case 'MARK_MISSION_TIMEOUT':
-            return {
-                ...state,
-                behaviorProgress: Math.max(0, state.behaviorProgress - 20), // "not completing missions will reduce"
-                ...(action.missionPhase === 'morning' ? { lastCompletedOrFailedMorningDate: getLocalDateString(new Date(actionInstant(action))) } : {}),
-                ...(action.missionPhase === 'evening' ? { lastCompletedOrFailedEveningDate: getLocalDateString(new Date(actionInstant(action))) } : {}),
-                missions: state.missions.map(m =>
-                    m.phase === action.missionPhase
-                        ? { ...m, loggedTimeoutAt: actionInstant(action) }
-                        : m
-                )
-            };
+            return applyMissionTimeout(state, action.missionPhase, actionInstant(action));
 
         case 'ADJUST_MISSION_END': {
             return {
@@ -498,6 +476,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'CONSUME_CASE': {
+            // Must obey the SAME window as START_GAME. They once disagreed, so
+            // redeeming at the evening boundary destroyed the goal (no refund)
+            // and the game was then refused.
+            const consuming = state.cases.find(c => c.id === action.caseId);
+            if (consuming?.reward === 'quick-game' && !isQuickGameWindowOpen(state, actionInstant(action))) return state;
             // Permanently remove tokens from case (reward redeemed) — NO bank refund
             return {
                 ...state,
@@ -679,6 +662,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             };
 
         case 'START_GAME':
+            // Games live in the gap between the day's missions. Enforced here and
+            // not only at the pedestal: a UI-only gate is bypassable state.
+            if (!isQuickGameWindowOpen(state, actionInstant(action))) return state;
             return {
                 ...state,
                 snakeGameActive: true
@@ -739,6 +725,19 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 moodWind: Math.max(-2, Math.min(2, action.level))
             };
+
+        case 'ADJUST_SHIELD': {
+            // Segments, not misses: +1 gives a shield back, so the streak drops.
+            // Compare AFTER clamping, or "+1 at full" builds a new state object
+            // every press and defeats the store's bail-out.
+            const current = sanitizeMissedStreak(state.missedMissionStreak);
+            const next = sanitizeMissedStreak(current - action.delta);
+            if (next === current) return state;
+            // 'adjusted' keeps the log line from claiming missions were missed
+            // when the parent simply took a shield away.
+            const source = action.origin ?? (action.isRemote ? 'remote' : 'local');
+            return { ...state, ...applyStreakChange(state, next, actionInstant(action), 'adjusted', source) };
+        }
 
         case 'SYNC_BEHAVIOR':
             return state; // sync already happened via timestamp wrapper

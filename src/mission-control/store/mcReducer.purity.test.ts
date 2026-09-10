@@ -74,6 +74,7 @@ const SAMPLE_ACTIONS: MCAction[] = [
     { type: 'BEHAVIOR_TICK' },
     { type: 'SET_MOOD_WIND', level: 1 },
     { type: 'SYNC_BEHAVIOR' },
+    { type: 'ADJUST_SHIELD', delta: 1 },
 ];
 
 /** A populated state, so actions have something real to act on. */
@@ -85,6 +86,10 @@ function richState(): MCState {
         behaviorProgress: 55,
         moodWind: 1,
         activeMission: 'morning',
+        // One short of the lock so MARK_MISSION_TIMEOUT / COMPLETE_MISSION_ROUTINE
+        // actually cross the threshold and mint a shield log — the branch that
+        // shipped a randomUUID past this very guard because nothing reached it.
+        missedMissionStreak: 5,
         moodLastResetDate: '2026-08-19',
         behaviorLastUpdated: TIMESTAMP,
         cases: initialState.cases.map((c, i) =>

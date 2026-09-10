@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
+import { sanitizeMissedStreak } from './missionStreak';
 import type { MCState } from '../types';
 
 /**
@@ -48,6 +49,9 @@ export function useRemoteSync(state: MCState) {
                     locked: t.locked
                 }))
             })),
+            // The phone draws the same six-segment bar and offers +/- shield,
+            // so it needs the counter the lock is derived from.
+            missedMissionStreak: sanitizeMissedStreak(stateRef.current.missedMissionStreak),
             lastCompletedOrFailedMorningDate: stateRef.current.lastCompletedOrFailedMorningDate ?? null,
             lastCompletedOrFailedEveningDate: stateRef.current.lastCompletedOrFailedEveningDate ?? null,
             snakeGameActive: stateRef.current.snakeGameActive,
@@ -106,6 +110,7 @@ export function useRemoteSync(state: MCState) {
         state.privileges,
         state.snakeGameActive,
         state.activityLogs,
+        state.missedMissionStreak,
         state.lastCompletedOrFailedMorningDate,
         state.lastCompletedOrFailedEveningDate,
         broadcast

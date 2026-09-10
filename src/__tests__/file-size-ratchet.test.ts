@@ -36,7 +36,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // then 804 → 828 the same day for the RECORD_QUIZ_ANSWER case (reading
     // practice). Net −205 vs. the pre-split file; the case itself delegates to
     // store/skillProgress.ts and is mostly the in-reducer level-change log.
-    'src/mission-control/store/mcReducer.ts': 828,
+    // 828 → 827: the two mission-outcome cases moved to missionStreak.ts, and
+    // the re-export barrel was dropped in favour of importing from the source
+    // module (which is what activityLog.ts already did).
+    'src/mission-control/store/mcReducer.ts': 827,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.

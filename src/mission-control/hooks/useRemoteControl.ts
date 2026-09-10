@@ -18,6 +18,7 @@ const REMOTE_ALLOWED_ACTIONS: ReadonlySet<MCAction['type']> = new Set<MCAction['
     'ADD_TOKENS',
     'REMOVE_TOKEN',
     'ADD_RESPONSIBILITY_POINT',
+    'ADJUST_SHIELD',
     'ADJUST_BEHAVIOR_PROGRESS',
     'ADJUST_MISSION_END',
     'CANCEL_MISSION',
@@ -43,6 +44,20 @@ const REMOTE_ALLOWED_ACTIONS: ReadonlySet<MCAction['type']> = new Set<MCAction['
  */
 const PAYLOAD_VALIDATORS: Partial<Record<MCAction['type'], (a: MCAction) => boolean>> = {
     ADD_TOKENS: a => a.type === 'ADD_TOKENS' && Number.isFinite(a.amount),
+    ADJUST_SHIELD: a => a.type === 'ADJUST_SHIELD' && Number.isFinite(a.delta),
+    // An unvalidated phase wedges the app permanently: `activeMission: 'x'`
+    // persists, the one-mission-at-a-time guard then refuses every real trigger,
+    // the quick-game window stays shut, and the 15s expiry interval runs for
+    // good on an idle Calendar.
+    SET_ACTIVE_MISSION: a => a.type === 'SET_ACTIVE_MISSION'
+        && ['none', 'morning', 'evening'].includes(a.phase),
+    // `amount` is optional on this one (the reducer defaults it to 1), so the
+    // validator must accept `undefined` or the remote's own button breaks.
+    ADD_RESPONSIBILITY_POINT: a => a.type === 'ADD_RESPONSIBILITY_POINT'
+        && (a.amount === undefined || Number.isFinite(a.amount)),
+    // This action also resets the streak, so an unvalidated payload would
+    // unlock the bank as well as NaN-poison the balance.
+    COMPLETE_MISSION_ROUTINE: a => a.type === 'COMPLETE_MISSION_ROUTINE' && Number.isFinite(a.bonusTokens),
     ADJUST_BEHAVIOR_PROGRESS: a => a.type === 'ADJUST_BEHAVIOR_PROGRESS' && Number.isFinite(a.amount),
     ADJUST_MISSION_END: a => a.type === 'ADJUST_MISSION_END' && Number.isFinite(a.deltaMinutes),
     SET_MOOD_WIND: a => a.type === 'SET_MOOD_WIND' && Number.isFinite(a.level),
@@ -94,7 +109,15 @@ export function useRemoteControl() {
             }
 
             console.log('Remote action received:', action.type);
-            dispatch({ ...action, isRemote: true, origin: 'remote' });
+            // Scrub the ENVELOPE, not just the declared payload fields: every
+            // MCAction carries `timestamp`, so the validator table above
+            // structurally cannot see it. A junk timestamp reaches
+            // applyBehaviorSync, whose guards are all comparisons, and every
+            // comparison against NaN is false — behaviorProgress becomes NaN and
+            // mood-token generation stops for the rest of the session.
+            const { timestamp: _untrusted, ...scrubbed } = action;
+            void _untrusted;
+            dispatch({ ...scrubbed, isRemote: true, origin: 'remote' });
         });
 
         return () => {

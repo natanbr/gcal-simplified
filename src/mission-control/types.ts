@@ -217,6 +217,13 @@ export interface MCState {
     moodLastResetDate?: string;
     /** Per-skill practice history + the invisible adaptive reading level. */
     skillProgress: SkillProgress;
+    /**
+     * Consecutive mission occurrences that expired unfinished, shared by
+     * morning and evening. Reset to 0 by any completed routine. At
+     * MISSED_LOCK_THRESHOLD (6 ≈ three days) the bank and goal pedestals lock;
+     * that locked flag is derived from this number, never stored beside it.
+     */
+    missedMissionStreak: number;
 }
 
 export type MCAnimationType =
@@ -284,4 +291,8 @@ export type MCAction = (
     | { type: 'BEHAVIOR_TICK' }
     | { type: 'SET_MOOD_WIND'; level: number }
     | { type: 'SYNC_BEHAVIOR' }
+    /** Parent hands a shield back (positive delta) or takes one away (negative),
+     *  in SEGMENTS. Positive is always the kind direction, so the remote's
+     *  "+ shield" button is `delta: 1` and needs no sign gymnastics. */
+    | { type: 'ADJUST_SHIELD'; delta: number }
 ) & { isRemote?: boolean; timestamp?: string; origin?: ActionOrigin };

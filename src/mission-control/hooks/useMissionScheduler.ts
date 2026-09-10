@@ -194,6 +194,17 @@ export function useMissionScheduler(): void {
                 if (activeMission && activeMission.startedAt && activeMission.durationMins != null) {
                     const elapsedMins = (new Date().getTime() - new Date(activeMission.startedAt).getTime()) / 60000;
                     if (elapsedMins >= activeMission.durationMins) {
+                        // Record the miss BEFORE clearing the phase. MissionOverlay's
+                        // timer only exists while the overlay is on screen, so a
+                        // mission left minimized — or expiring on the Calendar view —
+                        // would end with no timeout marked and the shield would never
+                        // see it. The reducer's `loggedTimeoutAt` guard makes the
+                        // overlay also firing harmless.
+                        const allDone = activeMission.tasks.length > 0
+                            && activeMission.tasks.every(t => t.completed);
+                        if (!allDone && !activeMission.loggedTimeoutAt) {
+                            dispatch({ type: 'MARK_MISSION_TIMEOUT', missionPhase: s.activeMission, origin: 'scheduler' });
+                        }
                         dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler' });
                     }
                 }

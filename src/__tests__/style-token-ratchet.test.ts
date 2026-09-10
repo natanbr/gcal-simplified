@@ -32,7 +32,16 @@ const STYLED_ROOTS = [
     'src/mission-control/games',
 ];
 
-/** #rgb, #rrggbb, #rrggbbaa — anywhere in the source, including inside strings. */
+/** #rgb, #rrggbb, #rrggbbaa — anywhere in the source, including inside strings.
+ *
+ * KNOWN GAP, stated so nobody mistakes a 0 score for "no raw colours": this
+ * measures HEX only. `rgba()` / `hsl()` literals are invisible to it, so a file
+ * can add raw colours and still score 0 — which is how ShieldPanel.tsx first
+ * shipped two hand-mixed `rgba(255,123,123,…)` values past a green guard (they
+ * are now `color-mix(in srgb, var(--mc-red) …)`). Widening the pattern to
+ * `|rgba?\(|hsla?\(` is correct but re-baselines every file at once, so it
+ * belongs in its own change, not smuggled into a feature PR. Until then this
+ * guard's COVERAGE is narrower than its NAME. */
 const HEX_PATTERN = /#[0-9a-fA-F]{3,8}\b/g;
 
 /** Repo-relative path → source text, read once. */
