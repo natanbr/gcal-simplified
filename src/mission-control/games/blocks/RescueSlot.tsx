@@ -68,7 +68,7 @@ export const RescueSlot = memo(function RescueSlot({
                         <ShapeItem
                             shape={rescueShape}
                             cellSize={RESCUE_CELL_SIZE}
-                            isTransparent={activeDragSlot?.slotType === 'rescue' && !rescueShapeLocked}
+                            isTransparent={dragInFlight && !rescueShapeLocked}
                             onPointerDown={!rescueShapeLocked ? (e) => onStartDrag(e, rescueShape, 'rescue', 0, RESCUE_CELL_SIZE) : undefined}
                         />
                     </>

@@ -56,6 +56,15 @@ const ProjectionOverlay = memo(function ProjectionOverlay({ projection }: Projec
                 border: `${BOARD_BORDER}px solid transparent`,
                 padding: BOARD_PADDING,
                 pointerEvents: 'none',
+                // Above the cells (GridCell paints at 1, or 10 mid-explosion),
+                // below the feedback card (200) and the drag proxy (9999).
+                // Load-bearing: grid items take a z-index without being
+                // positioned, and neither the board nor its wrapper opens a
+                // stacking context, so the cells outrank an `auto` overlay and
+                // paint on top of it. Empty cells are 3.5% white so the ghost
+                // still showed through them — but a filled cell is opaque, which
+                // hid the RED warning behind exactly the block that caused it.
+                zIndex: 20,
                 display: 'grid',
                 gridTemplateColumns: `repeat(${GRID_SIZE}, ${CELL_DISPLAY_SIZE}px)`,
                 gridTemplateRows: `repeat(${GRID_SIZE}, ${CELL_DISPLAY_SIZE}px)`,

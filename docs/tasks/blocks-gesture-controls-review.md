@@ -115,7 +115,7 @@ and `npm run tsc` both exit clean. The spec is in `docs/requirements.md` under
 
 ## Structure
 The gesture left `BlocksCanvas.tsx`, which fell from 362 to 165 lines and is no longer on the
-file-size debt list. It now lives in three focused units:
+file-size debt list. It now lives in five focused units:
 - `useShapeDrag.ts` — the gesture: pointer ownership, lift, projection, drop, teardown.
 - `dragGeometry.ts` — pure maths, no DOM: pointer to shape position, rounding, snapping. This is the
   part that can put a block in the wrong place, so it is testable in isolation and has 22 tests.
@@ -131,7 +131,9 @@ which is enough to flip the rounding for a shape sitting exactly on a cell bound
 Two fixes, both "measure, do not assume":
 - `measureBoardOrigin` reads the board's own rect plus the inset its **computed style** reports,
   instead of trusting the declared constants. It falls back to the constants, each half
-  independently, when layout reports nothing — which is the jsdom path.
+  independently, when layout reports nothing at all. Note jsdom is NOT that path: it
+  reports the declared `2.5px`/`8px` back, so the test suite runs the *measured* branch and
+  merely coincides with the constant. Only a forced empty string reaches the fallback.
   (The first attempt measured the first cell's own rect. That is wrong and must not be restored:
   `getBoundingClientRect` includes CSS transforms, and cell (0,0) is the first to explode on a row-0
   clear, so it reports a box a third of a cell out for ~800ms after every clear. See the review
@@ -201,7 +203,8 @@ in Chromium but was not observed on that machine.
 
 ## Commit split
 
-Three topical commits, ordered so each one is a single idea:
+Four topical commits, ordered so each one is a single idea (the fourth carries the fixes
+from the review passes that followed):
 
 1. `perf: take the line-clear explosion off the main thread` — the CSS keyframe explosion with its
    stagger inside the reset window, and the two invisible `backdrop-filter` removals.
