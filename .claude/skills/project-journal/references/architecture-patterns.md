@@ -240,3 +240,38 @@ per-launch `userData` isolation.
 **Also worth knowing:** the E2E suite mutates the user's REAL Mission Control state — the same
 localStorage their child's app uses. A test run can leave a real mission running on the real app.
 Do not treat that state as disposable; surface it rather than silently resetting it.
+
+## 2026-09-07 — A window pointer listener with no `pointerId` filter belongs to every finger
+
+**Learning:** The blocks game's drag attached `pointermove`/`pointerup` to `window` and acted on
+whichever pointer fired. On the child's Windows touchscreen a second finger or a resting palm could
+therefore steer a shape in flight and drop it at *its own* coordinates — the "it landed somewhere I
+wasn't aiming" bug, which read as lag and was not. `pointercancel` was not handled at all, so a
+cancelled touch (Windows palm rejection fires these constantly) froze the proxy on screen with the
+tray slot still blanked. Neither is visible when testing with a mouse, which produces one pointer.
+**Action:** Any drag built on window-level pointer listeners must record the `pointerId` from the
+initiating `pointerdown` and ignore every event from another pointer, must handle `pointercancel` as
+a cancel, and must place on the state the *preview* last showed rather than recomputing from the
+lift coordinates (a finger rolls as it releases). If you refuse a second `pointerdown` while a drag
+is live, add a way out — window `blur`, `visibilitychange`, or a `pointerdown` reusing the same id —
+or a drag stranded by a release outside the window blocks every later grab until remount.
+
+## 2026-09-07 — Measure the browser's layout; do not sum the constants you declared
+
+**Learning:** The blocks board declares `border: 2.5px` and `padding: 8px`, so the drag maths used
+`BOARD_CONTENT_INSET = 10.5` against `getBoundingClientRect()`. Rendering the real board in Chromium
+showed the border laying out as **2px**: border widths are snapped to whole device pixels, and at the
+125%/150% display scaling common on Windows touch hardware it lands somewhere else again. Every
+projection was half a pixel out, which is enough to flip the rounding for a shape sitting exactly on
+a cell boundary. jsdom cannot see this — it returns whatever the test stubs, so a full green suite
+proved nothing about the geometry.
+**Action:** Derive layout geometry from the browser (`getComputedStyle` for used border/padding
+values), keeping the declared constants only as a fallback for environments that report no layout.
+Position a coordinate-critical overlay by reproducing the element's own box model — same border
+width, same padding — rather than insetting by their sum, so the browser applies identical snapping
+to both. **And prefer computed style to a child's `getBoundingClientRect`:** a rect includes CSS
+transforms, so measuring a cell that is mid-animation (the line-clear explosion scales and rotates
+cell 0,0 first) returns a box that is tens of pixels wrong, captured once and held for the whole
+drag. When a geometry constant matters, verify it against a real browser at least once; a temporary
+Vite harness that renders the component alone, with the app's real CSS, does it without touching app
+state.
