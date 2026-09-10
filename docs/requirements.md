@@ -631,7 +631,8 @@ were found and reproduced by tests before any change was made
   froze the proxy on screen with the tray slot still hidden.
 - The drop uses the last projected cells rather than the lift coordinates.
 - The grab cell is computed from the slot's rendered cell size instead of the 48px board constant.
-- The tray slot is blanked only when `placeShape` returned true.
+- The tray slot un-masks on release either way; a successful placement empties it in the
+  same React commit, so a refused drop simply leaves the shape sitting in the bank.
 - The drag logic moved out of `BlocksCanvas.tsx` (362 → 165 lines, off the file-size debt list) into
   four units: `useShapeDrag.ts` for the gesture, `dragGeometry.ts` for the pure pointer-to-cell and
   snapping maths, `placement.ts` for the single "may this shape sit here" rule the ghost and the game

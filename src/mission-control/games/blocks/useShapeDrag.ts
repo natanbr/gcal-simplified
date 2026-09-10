@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { GameShape, BOARD_CONTENT_INSET, SHAPE_ITEM_GAP } from './types';
+import { GameShape, SHAPE_ITEM_GAP } from './types';
+import { measureBoardOrigin } from './boardOrigin';
 import { DragPerf, freshPerf, recordDragTick } from './dragPerf';
 import {
     BoardOrigin,
     GrabPoint,
-    GridCoord,
     Projection,
     TOUCH_LIFT_PX,
     anchorPosition,
@@ -17,8 +17,6 @@ import {
 export type SlotType = 'standard' | 'rescue';
 
 export interface DragSlot { slotType: SlotType; slotIndex: number }
-
-export type { GridCoord };
 
 export type StartDragHandler = (
     event: ReactPointerEvent<HTMLDivElement>,
@@ -47,40 +45,9 @@ interface ActiveDrag {
     grab: GrabPoint;
 }
 
-interface UseShapeDragOptions { grid: number[][]; placeShape: PlaceShape; showProjection: boolean }
+interface UseShapeDragOptions { grid: number[][]; placeShape: PlaceShape }
 
 const NO_PROJECTION: Projection = { anchor: null, cells: [], valid: false };
-
-/**
- * Where the board's first cell actually is: the board's own rect plus the inset
- * its computed style reports.
- *
- * ⚠️ Do NOT measure the first cell's rect instead. getBoundingClientRect()
- * includes CSS transforms, and cell (0,0) carries a 0ms animationDelay, so it is
- * the first cell to explode on any row-0 or column-0 clear. Mid-keyframe it is
- * scale(1.2) rotate(45deg), whose axis-aligned box is ~81px for a 48px cell —
- * an origin ~17px (a third of a cell) out, captured once at grab and held for
- * the whole drag. The contaminated window is the ~800ms right after a clear,
- * which is exactly when a child grabs the next piece.
- *
- * Computed style keeps the device-pixel snapping that motivated measuring in the
- * first place and is transform-independent: Chromium reports the declared 2.5px
- * border as the snapped used value ("2px" at DPR 1, different again at the
- * 125%/150% scaling common on Windows touch devices), which is where the first
- * cell really starts.
- *
- * The constant is the fallback for environments that report no box model at all.
- */
-function measureBoardOrigin(board: HTMLDivElement): BoardOrigin {
-    const rect = board.getBoundingClientRect();
-    const style = getComputedStyle(board);
-    const insetLeft = Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.paddingLeft);
-    const insetTop = Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.paddingTop);
-    return {
-        left: rect.left + (Number.isFinite(insetLeft) ? insetLeft : BOARD_CONTENT_INSET),
-        top: rect.top + (Number.isFinite(insetTop) ? insetTop : BOARD_CONTENT_INSET),
-    };
-}
 
 /**
  * Owns the whole drag gesture. Three invariants the touchscreen depends on:
@@ -90,7 +57,7 @@ function measureBoardOrigin(board: HTMLDivElement): BoardOrigin {
  * shape stays aimable with the hand below the board; and the drop lands on the
  * anchor the projection last showed, never on the lift.
  */
-export function useShapeDrag({ grid, placeShape, showProjection }: UseShapeDragOptions) {
+export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
     const boardRef = useRef<HTMLDivElement>(null);
     /** Screen position of the board's first cell, measured at drag start. */
     const boardOriginRef = useRef<BoardOrigin | null>(null);
@@ -100,7 +67,9 @@ export function useShapeDrag({ grid, placeShape, showProjection }: UseShapeDragO
     const activeDragRef = useRef<ActiveDrag | null>(null);
     const grabPointRef = useRef({ x: 0, y: 0 });
     /** Where the shape was last drawn. Kept so the projection can be recomputed
-     *  when the BOARD moves under a still finger, not only when the finger does. */
+     *  when the board's CONTENTS change under a still finger, not only when the
+     *  finger moves. The board's screen position is measured once per grab —
+     *  nothing in this layout reflows it mid-drag. */
     const lastOriginRef = useRef<{ x: number; y: number } | null>(null);
     /** What the ghost is showing — the anchor a lift will place on. */
     const lastProjectionRef = useRef<Projection>(NO_PROJECTION);
@@ -122,17 +91,13 @@ export function useShapeDrag({ grid, placeShape, showProjection }: UseShapeDragO
         const next = projectShape(anchorPosition(origin, board), drag.shape, grid);
         if (sameProjection(lastProjectionRef.current, next)) return;
 
-        // Tracked even with the ghost switched off. Placing on an invisible
-        // projection is the unsafe failure and a return-to-bank the safe one, so
-        // the honest trade here is the other way round: this keeps the DEV-only
-        // toggle from silently changing where a drop lands, at the cost of a
-        // drop the child was shown nothing about. Unreachable in production —
-        // the toggle only exists behind import.meta.env.DEV.
+        // The ref is what a lift places on and the state is what the child sees;
+        // they are written together so the two can never disagree. Whether the
+        // ghost is *rendered* is the caller's business (BlocksCanvas gates it on
+        // the DEV toggle) — a debug switch must not reach into placement.
         lastProjectionRef.current = next;
-        if (!showProjection) return;
-
         setProjection(next);
-    }, [grid, showProjection]);
+    }, [grid]);
 
     const clearDrag = useCallback(() => {
         activeDragRef.current = null;
@@ -144,12 +109,21 @@ export function useShapeDrag({ grid, placeShape, showProjection }: UseShapeDragO
     }, []);
 
     const handleStartDrag = useCallback<StartDragHandler>((event, shape, slotType, slotIndex, cellSize) => {
+        // Unconditional: a refused pointer must still lose its browser default
+        // (long-press context menu, selection, synthesised mouse events), or a
+        // second finger landing mid-drag hands the OS a gesture of its own.
+        event.preventDefault();
+
         const live = activeDragRef.current;
         // A pointer cannot go down twice without going up, so the same id proves
-        // the previous gesture ended without telling us (mouse released outside
-        // the window). Reclaim it rather than dead-locking every future grab.
+        // the previous gesture ended without telling us. Reclaim it rather than
+        // dead-locking every future grab.
+        // ⚠️ Mouse-only in practice: Chromium keeps one id for the mouse but
+        // issues a fresh id per touch contact, so this never matches on the
+        // touchscreen. Touch relies on the blur/visibilitychange valves below —
+        // and, properly, on setPointerCapture, which this gesture does not yet
+        // use (see the journal entry on window-listener drags).
         if (live && live.pointerId !== event.pointerId) return;
-        event.preventDefault();
 
         if (boardRef.current) boardOriginRef.current = measureBoardOrigin(boardRef.current);
 
@@ -192,18 +166,22 @@ export function useShapeDrag({ grid, placeShape, showProjection }: UseShapeDragO
         moveProxy(proxyOrigin(grabPointRef.current.x, grabPointRef.current.y, drag.grab));
     }, [dragView, moveProxy]);
 
-    useEffect(() => {
-        if (!showProjection) setProjection(NO_PROJECTION);
-    }, [showProjection]);
-
     // The board can change under a still finger: the 1200ms line-clear timer in
     // useBlocksGame rewrites the grid, and applyClearEffects/spawnObstacles can
-    // drop a meteor into a cell a green ghost is already sitting on. Without
-    // this, a child who holds still through a clear and then lifts gets a silent
-    // return-to-bank after being shown green. `updateProjection` closes over
-    // `grid`, so its identity IS the grid change — one recompute per change,
-    // never one per frame.
-    useEffect(() => {
+    // drop a meteor into a cell a green ghost is already sitting on — or free
+    // the cleared cells a red ghost is sitting on. Without this, a child who
+    // holds still through a clear and then lifts gets a silent return-to-bank
+    // after being shown green, or a refusal on cells that are visibly empty.
+    // `updateProjection` closes over `grid`, so its identity IS the grid change
+    // — one recompute per change, never one per frame.
+    //
+    // ⚠️ Must stay a LAYOUT effect. The grid change arrives from a setTimeout,
+    // so React commits and paints it and then schedules the passive flush as a
+    // separate task. `pointerup` is a native window listener, which React has no
+    // opportunity to order against that flush — so with useEffect the lift can
+    // read a projection validated against the grid the child is no longer
+    // looking at. A layout effect runs inside the commit, before that paint.
+    useLayoutEffect(() => {
         const drag = activeDragRef.current;
         const origin = lastOriginRef.current;
         if (!drag || !origin) return;
@@ -223,13 +201,15 @@ export function useShapeDrag({ grid, placeShape, showProjection }: UseShapeDragO
             const drag = ownedDrag(e);
             if (!drag) return;
 
-            const start = performance.now();
+            // Metering is for the DEV-only HUD; Vite folds this to false in a
+            // production build, so the whole module tree-shakes out.
+            const start = import.meta.env.DEV ? performance.now() : 0;
             // One origin for both: the proxy and the ghost must never disagree
             // about where the shape is.
             const origin = proxyOrigin(e.clientX, e.clientY, drag.grab);
             moveProxy(origin);
             updateProjection(origin, drag);
-            recordDragTick(dragPerfRef.current, start, performance.now());
+            if (import.meta.env.DEV) recordDragTick(dragPerfRef.current, start, performance.now());
         };
 
         const handlePointerUp = (e: PointerEvent) => {

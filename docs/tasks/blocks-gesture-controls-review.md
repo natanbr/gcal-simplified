@@ -114,7 +114,7 @@ and `npm run tsc` both exit clean. The spec is in `docs/requirements.md` under
   **red where the shape actually is** and the lift returns the shape to the bank rather than guessing.
 
 ## Structure
-The gesture left `BlocksCanvas.tsx`, which fell from 362 to 151 lines and is no longer on the
+The gesture left `BlocksCanvas.tsx`, which fell from 362 to 165 lines and is no longer on the
 file-size debt list. It now lives in three focused units:
 - `useShapeDrag.ts` — the gesture: pointer ownership, lift, projection, drop, teardown.
 - `dragGeometry.ts` — pure maths, no DOM: pointer to shape position, rounding, snapping. This is the
@@ -129,9 +129,13 @@ Windows touch devices it lands somewhere else again. Every projection was theref
 which is enough to flip the rounding for a shape sitting exactly on a cell boundary.
 
 Two fixes, both "measure, do not assume":
-- `measureBoardOrigin` reads the first cell's own rect at drag start instead of adding border and
-  padding to the board rect. It falls back to the constants when layout reports nothing, which is the
-  jsdom path.
+- `measureBoardOrigin` reads the board's own rect plus the inset its **computed style** reports,
+  instead of trusting the declared constants. It falls back to the constants, each half
+  independently, when layout reports nothing — which is the jsdom path.
+  (The first attempt measured the first cell's own rect. That is wrong and must not be restored:
+  `getBoundingClientRect` includes CSS transforms, and cell (0,0) is the first to explode on a row-0
+  clear, so it reports a box a third of a cell out for ~800ms after every clear. See the review
+  round below. The measurement now lives in `boardOrigin.ts` with that warning attached.)
 - The projection overlay reproduces the board's box model (a transparent border of the same width
   plus the same padding) instead of insetting by their sum, so the browser applies identical rounding
   to both.

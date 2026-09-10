@@ -256,6 +256,19 @@ lift coordinates (a finger rolls as it releases). If you refuse a second `pointe
 is live, add a way out — window `blur`, `visibilitychange`, or a `pointerdown` reusing the same id —
 or a drag stranded by a release outside the window blocks every later grab until remount.
 
+**Amendment (same day, from the review of PR 155): `setPointerCapture` is the primitive, and blocks
+does not use it.** Capture gives by contract what the recovery trio above approximates: the element
+keeps the pointer until release, and `lostpointercapture` is a single canonical "this gesture is
+over" signal. Capture *retargets* rather than stopping propagation, so window listeners and the
+`pointerId` filter both keep working unchanged — the filter stays load-bearing either way, because a
+second finger still reaches `window`. Two facts that decide the trade: Chromium applies **implicit**
+capture for touch, so the child's device is already covered by the platform, and the same-id reclaim
+branch is therefore **mouse-only** — Chromium keeps one id for the mouse but issues a fresh id per
+touch contact, so that branch can never match on a touchscreen. The reason it was not adopted is
+cost, not merit: jsdom 28 implements no `setPointerCapture`, so it needs a stub, and this project
+documents `src/test/setup.ts` as having exactly one global mock by design. Treat the trio as a
+deliberate deferral, not as the pattern to copy into the next game.
+
 ## 2026-09-07 — Measure the browser's layout; do not sum the constants you declared
 
 **Learning:** The blocks board declares `border: 2.5px` and `padding: 8px`, so the drag maths used
