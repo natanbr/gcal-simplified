@@ -310,3 +310,25 @@ insetting by their sum.** Deliberate. A fractional border does not survive devic
 only an identical border gets snapped identically; insetting by the sum drew the ghost half a pixel
 out, which flips the rounding for a shape on a cell boundary. Do NOT "simplify" it to `inset:
 BOARD_CONTENT_INSET`.
+
+## 2026-09-10 — A shared test helper is a production file to the guards
+
+**Learning:** Consolidating the five blocks drag suites onto one
+`src/mission-control/games/blocks/dragTestKit.ts` hit two traps that neither the rule nor the
+filename suggests. First, `productionSources()` in `src/__tests__/helpers/sourceFiles.ts` excludes
+only `*.test.ts(x)` and `.d.ts` — so a *helper* under a styled root is scanned by
+`style-token-ratchet.test.ts` and `file-size-ratchet.test.ts` like any component. Copying the shape
+fixtures' `#f59e0b`/`#a78bfa`/`#38bdf8` into the kit would have failed the build as a **new** raw-hex
+violation, and a baseline entry for a file created that day would be exactly the lie the ratchet
+exists to prevent. Second, a `.tsx` that exports only functions and constants trips
+`react-refresh/only-export-components`, which the project lints at `--max-warnings 0` — and the rule
+is right, nothing in a test kit is a component.
+**Action:** Put shared test setup in a `.ts` file, using `createElement` for the one element it
+renders rather than reaching for `.tsx`. Derive fixtures from the production source (`SHAPE_POOL` /
+`HELP_SHAPES`) instead of retyping their literals — that satisfies the ratchets *and* removes the
+drift the kit exists to prevent. The drift is real and silent: `BlocksCanvas.gesture-defects.test.tsx`
+had been measuring the board's content box from the 8px padding alone, ignoring the 2.5px border,
+and sizing the board 428px instead of 433, for as long as it existed. Nothing failed, because 2.5px
+of a 52px pitch never crosses a rounding boundary — **a stale geometry constant does not break a
+test, it quietly re-points it at a board that does not exist.** After migrating a guard suite's
+setup, prove it still bites by mutating the source it guards, not by watching it stay green.
