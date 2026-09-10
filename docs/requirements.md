@@ -129,7 +129,13 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
         - *Level 1: Asteroid Impact*: Spawns unfillable locked "asteroid holes" on the grid.
         - *Level 2: Satellite Orbit*: Spawns a satellite block. Clearing the row/column containing it unlocks the 4th shape slot for free.
         - *Level 3: Space Storm*: Increases shape sizes (e.g. 3x3 blocks, crosses `+`).
-        - **High-Performance Drag-and-Drop Overlay**: Dragging is executed via native HTML5 pointer capture and direct, uncontrolled DOM style updates (`transform: translate3d`). This completely bypasses React virtual DOM diffing during pointermove, maintaining 1:1 hardware responsiveness with 0ms scripting lag. A `<ProjectionOverlay>` isolates grid projections, and a development-only Performance HUD tracks frame rates and scripting times in real time.
+        - **Drag-and-Drop (touchscreen-first)**: The dragged shape follows the finger through direct DOM `transform` writes on a `position: fixed` proxy, so pointer movement never goes through React rendering. A `<ProjectionOverlay>` draws the landing projection and a development-only Performance HUD tracks frame rate and handler script time.
+          - **One gesture owns the drag.** The drag records the `pointerId` that started it and ignores every `pointermove`, `pointerup` and `pointerdown` from any other pointer. On a touchscreen a second finger or a resting palm must not steer, drop, or hijack a shape in flight. `pointercancel` ends the drag as a return-to-bank.
+          - **What the child sees is what is placed.** The drop uses the cell coordinates the green projection last showed, never the coordinates of the lift. A finger that rolls on release, or a projection one frame behind the finger, must not change the outcome. A tap with no movement has no projection and is a return-to-bank, not a placement.
+          - **Grab point is honest.** The cell the child grabbed is derived from the cell size actually rendered in that slot (36px standard tray, 22px rescue slot), not from the 48px board cell, so the shape does not jump under the finger at pickup.
+          - **The shape is lifted clear of the hand.** On touch input the proxy is offset above the fingertip so the shape and its projection are never hidden by the hand; mouse input keeps the shape under the cursor. The projection is derived from the lifted shape's own position on the board, not from where the fingertip is.
+          - **Forgiveness snapping, never a surprise.** When the shape's rounded anchor is not placeable, the eight neighbouring anchors are tested and the nearest valid one within **less than one cell** is used. Snapping is computed continuously while the finger is down — and recomputed when the board itself changes under a still finger, so a line clear or a newly spawned meteor cannot leave a stale green ghost — and is always shown as the green projection *before* release, so a snap the child does not want can be corrected by moving; and the bounded radius means a shape can never travel to a distant free spot. When nothing valid is within the radius the projection shows red at the rounded position and the lift returns the shape to the bank.
+          - **A refused drop is silent.** The tray slot is emptied only when placement actually succeeded; a rejected drop leaves the shape visible in the bank rather than blanking and restoring it.
         - **Unique Shape Instances & Jump-Back Prevention**: All generated shape instances are assigned unique IDs upon selection in `useBlocksGame.ts`, avoiding React key collisions. The slots in the tray are rendered transparent during dragging and unmounted upon successful placement, resolving the used shape "jump-back" visual glitch and ensuring proper state resets.
 
 - **Mission Streak Shield (missed-mission lockout)**:
@@ -609,3 +615,63 @@ it is enforced in the reducer (`START_GAME`), not only in the pedestal UI.
   app closed until 07:00 — it deleted the rule it was meant to enforce. A morning that genuinely
   never ran therefore keeps games shut all day, and the parent recovers it by starting the mission
   by hand from Settings.
+### 2026-09-07 Space Rescue gesture controls (touchscreen)
+
+**Why**: watching the child play, a laggy-feeling drag made him miss the cell he was aiming for.
+Most misses returned the shape to the bank, some landed in the wrong place. Six concrete defects
+were found and reproduced by tests before any change was made
+(`BlocksCanvas.gesture-defects.test.tsx`); the full analysis is in
+[docs/tasks/blocks-gesture-controls-review.md](tasks/blocks-gesture-controls-review.md).
+
+**Group A — correctness of the gesture**
+- The window `pointermove`/`pointerup` listeners now filter on the `pointerId` that started the
+  drag, and a second `pointerdown` during a live drag is refused. A palm or second finger could
+  previously drop a shape at its own coordinates, which is the "landed in the wrong place" bug.
+- `pointercancel` is handled and ends the drag as a return-to-bank; previously a cancelled touch
+  froze the proxy on screen with the tray slot still hidden.
+- The drop uses the last projected cells rather than the lift coordinates.
+- The grab cell is computed from the slot's rendered cell size instead of the 48px board constant.
+- The tray slot is blanked only when `placeShape` returned true.
+- The drag logic moved out of `BlocksCanvas.tsx` (362 → 165 lines, off the file-size debt list) into
+  four units: `useShapeDrag.ts` for the gesture, `dragGeometry.ts` for the pure pointer-to-cell and
+  snapping maths, `placement.ts` for the single "may this shape sit here" rule the ghost and the game
+  now share, and `dragPerf.ts` for the dev HUD's metering.
+- The 250ms mask that hid a slot after a successful drop was removed. `useBlocksGame` deals three
+  fresh shapes in the same React commit as the placement that emptied the last slot, so on every
+  third placement the mask was hiding a shape that was genuinely there and could not be picked up.
+- A drag that ends without a `pointerup` or `pointercancel` — the pointer released outside the
+  window — no longer blocks every later grab: window `blur`, `visibilitychange`, and a `pointerdown`
+  reusing the same `pointerId` each reclaim it.
+
+**Group B — how it feels on a touchscreen**
+- The shape is lifted above the fingertip on touch input so the hand no longer covers the shape and
+  its landing projection; mouse input is unchanged.
+- The projection follows the lifted shape rather than the fingertip, and forgiveness snapping picks
+  the nearest valid anchor within less than one cell. The snap is always visible as the green
+  projection before release, so it cannot place a shape somewhere the child did not see first.
+- **Board geometry is measured, not assumed.** The board's content inset is read from its computed
+  style at drag start rather than computed as border + padding constants, and the projection overlay
+  reproduces the board's box model instead of insetting by their sum. A fractional CSS border does
+  not survive device-pixel snapping: the board's 2.5px border lays out as 2px at 100% scaling and
+  differently again at the 125%/150% common on Windows touch devices, which put every projection half
+  a pixel out and flipped the rounding for a shape sitting on a cell boundary. It is deliberately
+  *not* measured from the first cell's rect — that rect includes CSS transforms, and cell (0,0) is
+  the first to explode on a row-0 or column-0 clear, so for ~800ms after every clear it reports an
+  inflated box a third of a cell out. That is exactly the moment a child grabs the next piece.
+- **The projection is also recomputed when the board changes under a still finger.** The 1.2s
+  line-clear timer rewrites the grid and can drop a meteor into a cell a green ghost is already
+  sitting on; without a recompute, a child who holds still through a clear and then lifts got a
+  silent return-to-bank after being shown green.
+
+**Group C — paint cost around a line clear**
+- The invisible full-screen `backdrop-filter` behind the game overlay was removed. The 12px
+  `backdrop-filter` on the line-clear feedback card went with it: it sat directly over the exploding
+  cells for the full 1.2s and carried no visual weight over an 85%-opaque card with its own border
+  and shadow. A backdrop filter does not change opacity, so it was never contributing contrast.
+- The line-clear explosion moved from per-cell Framer Motion `boxShadow`/`backgroundColor`
+  animation to a compositor-friendly CSS keyframe on `transform`/`opacity`, with the stagger capped
+  so it finishes inside the 1.2s grid reset instead of being cut off at ~1.36s.
+
+**Spec drift corrected**: the previous entry claimed "native HTML5 pointer capture" and "0ms
+scripting lag". There was no `setPointerCapture` call in the game, and the absence of pointer
+ownership is precisely what let a second finger take over a drag.

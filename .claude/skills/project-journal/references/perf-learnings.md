@@ -105,3 +105,31 @@ broadcast's payload — the phone sees it at the next real change). When adding 
 action, check three fan-outs: the speculative reducer run in `createLogEntry` (UNLOGGED_ACTIONS),
 the remote-sync dependency list, and the persisted-blob size. `skill-progress-boundaries.test.ts`
 pins the second for `skillProgress`.
+
+## 2026-09-07 — An invisible `backdrop-filter` is visually free, not computationally free
+
+**Learning:** `BlocksGameOverlay` stacked `backdrop-filter: blur(4px)` underneath
+`rgba(0,0,0,0.88)`. The blur contributed nothing visible — a filter does not change opacity, and at
+88% black there is almost nothing left to smear — yet the browser still re-evaluated the full-screen
+backdrop whenever anything behind it painted. The same trap sat on the line-clear feedback card, a
+12px blur parked directly over 8–16 animating cells for 1.2s, which is precisely when a child grabs
+the next piece.
+**Action:** A `backdrop-filter` costs a backdrop re-evaluation on every frame that anything *behind*
+it changes. Before animating any surface, grep for a `backdrop-filter` above it, and delete the
+filter outright when the layer's own alpha already hides what it would blur. Note the dev-only
+`games/blocks/PerformanceHUD.tsx` still carries one: profile against a production build, or the HUD
+you are reading is inside your own trace.
+
+## 2026-09-07 — A ref caching a validated decision must be re-derived when its inputs change
+
+**Learning:** The blocks drag stores the projection the green ghost is showing in a ref, and the drop
+places on it — deliberately, so a finger rolling on release cannot move the outcome. But the ref was
+only recomputed inside `pointermove`. Hold the finger still while the 1200ms line-clear timer fires,
+and `applyClearEffects`/`spawnObstacles` can drop a meteor into a cell under a green ghost. The
+ghost keeps saying yes, `placeShape` re-validates against the new grid and says no, and the piece
+returns to the bank with no explanation — the same "I saw green and it went back" bug the rework
+existed to remove, re-entering through a different door.
+**Action:** When a ref caches a decision validated against some state, recompute it when that state
+changes, not only when the originating event fires — one recompute per data change, not per frame.
+More generally: any preview of a future write is a claim about data that something else may be
+mutating underneath it.
