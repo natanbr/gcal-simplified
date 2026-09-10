@@ -25,8 +25,10 @@ export const ClearedFeedbackOverlay = memo(function ClearedFeedbackOverlay({ fee
                         flexDirection: 'column',
                         alignItems: 'center',
                         gap: 8,
+                        // No backdrop-filter: this card sits over the board for the
+                        // whole 1.2s clear, so a blur here is re-evaluated against
+                        // every frame of the exploding cells underneath it.
                         background: 'rgba(15, 23, 42, 0.85)',
-                        backdropFilter: 'blur(12px)',
                         padding: '24px 48px',
                         borderRadius: 32,
                         border: '2px solid rgba(255, 255, 255, 0.2)',

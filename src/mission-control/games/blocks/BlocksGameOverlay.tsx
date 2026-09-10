@@ -55,7 +55,9 @@ export function BlocksGameOverlay({ open, onClose, engine }: BlocksGameOverlayPr
             transition={{ duration: 0.22 }}
             style={{
                 position: 'fixed', inset: 0, zIndex: 1000,
-                background: 'rgba(0, 0, 0, 0.88)', backdropFilter: 'blur(4px)',
+                // No backdrop-filter: at 88% black it was invisible, but the browser
+                // still re-blurred the full screen whenever anything under it moved.
+                background: 'rgba(0, 0, 0, 0.88)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
         >

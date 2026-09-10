@@ -1,5 +1,4 @@
 import { memo } from 'react';
-import { motion } from 'framer-motion';
 import { CELL_DISPLAY_SIZE } from './types';
 
 interface GridCellProps {
@@ -7,6 +6,18 @@ interface GridCellProps {
     c: number;
     val: number;
 }
+
+/**
+ * Stagger step for the line-clear explosion, in ms. `r + c` maxes at 14 on the
+ * 8x8 board, so the last cell starts at 280ms and the 0.8s keyframe ends at
+ * 1080ms — inside the 1200ms grid reset in useBlocksGame.ts. The margin is
+ * deliberately more than a rounding error: the CSS clock starts at the first
+ * paint after the commit while the reset timer starts at the state update, so
+ * on a slow tablet the real headroom is smaller than the arithmetic suggests.
+ * Raising either number without lowering the other cuts the animation off
+ * mid-flight.
+ */
+const EXPLODE_STAGGER_MS = 20;
 
 export const GridCell = memo(function GridCell({ r, c, val }: GridCellProps) {
     let bg = 'rgba(255, 255, 255, 0.035)';
@@ -33,52 +44,34 @@ export const GridCell = memo(function GridCell({ r, c, val }: GridCellProps) {
         border = '1.5px solid rgba(250, 204, 21, 0.7)';
         content = <span className="mc-anim-icon-pulse" style={{ fontSize: 16 }}>⚡</span>;
         shadow = '0 0 12px rgba(250, 204, 21, 0.4)';
-    } else if (val === 4) {
+    } else if (isExploding) {
+        // The flash is painted ONCE and then only transformed — see
+        // `.mc-anim-cell-explode` in styles/mc.css.
         bg = 'white';
+        border = 'none';
         shadow = '0 0 20px #fff, 0 0 40px #fbbf24';
     }
 
     return (
-        <motion.div
+        <div
             data-cell-index={`${r}-${c}`}
-            initial={false}
-            animate={isExploding ? {
-                scale: [1, 1.2, 0],
-                rotate: [0, 45, 90],
-                opacity: [1, 1, 0],
-                backgroundColor: ['#fff', '#fbbf24', '#f59e0b'],
-                boxShadow: [
-                    '0 0 10px #fff, 0 0 20px #fbbf24',
-                    '0 0 20px #fff, 0 0 40px #fbbf24',
-                    '0 0 0px transparent'
-                ]
-            } : {
-                scale: 1,
-                rotate: 0,
-                opacity: 1,
-                backgroundColor: 'transparent',
-                boxShadow: 'none'
-            }}
-            transition={isExploding ? {
-                duration: 0.8,
-                delay: (r + c) * 0.04,
-                ease: "easeInOut"
-            } : { duration: 0.2 }}
+            className={isExploding ? 'mc-anim-cell-explode' : undefined}
             style={{
                 width: CELL_DISPLAY_SIZE,
                 height: CELL_DISPLAY_SIZE,
-                background: isExploding ? 'white' : bg,
-                border: isExploding ? 'none' : border,
+                background: bg,
+                border,
                 borderRadius: 8,
-                boxShadow: isExploding ? undefined : shadow,
+                boxShadow: shadow,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 userSelect: 'none',
                 zIndex: isExploding ? 10 : 1,
+                animationDelay: isExploding ? `${(r + c) * EXPLODE_STAGGER_MS}ms` : undefined,
             }}
         >
             {content}
-        </motion.div>
+        </div>
     );
 });

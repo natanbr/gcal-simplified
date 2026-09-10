@@ -403,3 +403,20 @@
   animation: mc-bounce-emoji 2s ease-in-out 15;
   animation-fill-mode: forwards;
 }
+
+/* 12. Space Rescue line-clear explosion (GridCell)
+   Was a per-cell Framer Motion animation on backgroundColor + boxShadow — both
+   main-thread paint properties, on up to 16 cells at once, right when the child
+   grabs the next piece. transform/opacity only, so the compositor owns it.
+   The per-cell stagger is an inline animation-delay of (r + c) * 25ms; on the
+   8x8 board r + c maxes at 14, so the last cell finishes at 350 + 800 = 1150ms,
+   inside the 1200ms grid reset in useBlocksGame.ts. */
+@keyframes mc-cell-explode {
+  0% { transform: scale(1) rotate(0deg); opacity: 1; }
+  50% { transform: scale(1.2) rotate(45deg); opacity: 1; }
+  100% { transform: scale(0) rotate(90deg); opacity: 0; }
+}
+.mc-anim-cell-explode {
+  animation: mc-cell-explode 0.8s ease-in-out 1;
+  animation-fill-mode: forwards;
+}
