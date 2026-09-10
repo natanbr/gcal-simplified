@@ -133,3 +133,17 @@ existed to remove, re-entering through a different door.
 changes, not only when the originating event fires — one recompute per data change, not per frame.
 More generally: any preview of a future write is a claim about data that something else may be
 mutating underneath it.
+
+## 2026-09-10 — A DEV gate strips the mount, not the component
+
+**Learning:** `{import.meta.env.DEV && <PerformanceHUD/>}` looks like it keeps a dev-only component
+out of production. Vite folds the flag and Rollup drops the *call site*, but a component declared as
+`memo(...)` or `forwardRef(...)` survives anyway: Rollup cannot prove the wrapper call is
+side-effect-free, so it keeps it as a bare expression bound to nothing — dead bytes, including any
+`setInterval` in the body. Proof inside this repo: `QuizLab` (a plain function behind the identical
+gate in `App.tsx`) greps to zero hits in `dist/assets/*.js`, while `games/blocks/PerformanceHUD.tsx`
+shipped in full, 200ms poll and all.
+**Action:** annotate `/*#__PURE__*/ memo(...)`, or keep dev-only components as plain functions. Never
+assume the fold reached the definition — verify by grepping a distinctive string from the component
+in `dist/assets/*.js` after `npx vite build`. The same applies to any `React.memo`/`forwardRef`
+export you expect a bundler to remove.

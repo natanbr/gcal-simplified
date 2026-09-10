@@ -288,3 +288,25 @@ cell 0,0 first) returns a box that is tens of pixels wrong, captured once and he
 drag. When a geometry constant matters, verify it against a real browser at least once; a temporary
 Vite harness that renders the component alone, with the app's real CSS, does it without touching app
 state.
+
+## 2026-09-10 — A grid item outranks an `auto` overlay, so the warning hid behind the problem
+
+**Learning:** The blocks board's landing projection is an absolutely-positioned sibling of the grid
+with no `z-index`. Every `GridCell` carries `zIndex: 1`. Because **`z-index` applies to a grid or
+flex item without it being positioned**, and because neither the board nor its wrapper opens a
+stacking context (both are `position: relative; z-index: auto`), the cells painted *above* the
+overlay. This hid nothing in the common case — empty cells are `rgba(255,255,255,0.035)`, so the
+ghost showed straight through them and the green preview looked perfect — but a *filled* cell is
+opaque, so the red "you cannot place here" warning was invisible behind exactly the block that made
+the placement invalid. Ten independent code-review angles missed it because the code is correct; only
+the lens that asked "what does the child actually see" found it.
+**Action:** an overlay that must read on top of a grid needs an explicit `z-index` above the highest
+its items can take — and the guard should compare the two *rendered* values, not hardcode one side.
+More generally: when a review's lenses all check correctness, at least one must check perception. A
+warning that is computed correctly and never seen is not a warning.
+
+**False positive: `ProjectionOverlay` reproducing the board's border and padding rather than
+insetting by their sum.** Deliberate. A fractional border does not survive device-pixel snapping, and
+only an identical border gets snapped identically; insetting by the sum drew the ghost half a pixel
+out, which flips the rounding for a shape on a cell boundary. Do NOT "simplify" it to `inset:
+BOARD_CONTENT_INSET`.
