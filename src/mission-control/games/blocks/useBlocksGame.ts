@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { isPlaceable } from './placement';
 import { 
     GameShape, BlocksGameState, 
     GRID_SIZE, SHAPE_POOL, HELP_SHAPES, LEVEL_COMPLEX_SHAPES, INITIAL_LAYOUTS,
@@ -29,25 +30,14 @@ export function useBlocksGame() {
         setState(createInitialState());
     }, []);
 
-    // Look-ahead placement checker
-    const canPlaceShape = useCallback((grid: number[][], shape: GameShape, row: number, col: number): boolean => {
-        for (const cell of shape.cells) {
-            const r = row + cell.y;
-            const c = col + cell.x;
-            if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return false;
-            if (grid[r][c] !== 0 && grid[r][c] !== 3) return false; // 0=empty, 3=satellite (can override)
-        }
-        return true;
-    }, []);
-
     const hasAnyValidPlacement = useCallback((grid: number[][], shape: GameShape): boolean => {
         for (let r = 0; r < GRID_SIZE; r++) {
             for (let c = 0; c < GRID_SIZE; c++) {
-                if (canPlaceShape(grid, shape, r, c)) return true;
+                if (isPlaceable(grid, shape, { r, c })) return true;
             }
         }
         return false;
-    }, [canPlaceShape]);
+    }, []);
 
     // Intelligent proactive shape selector
     const selectProactiveShape = useCallback((grid: number[][], level: number): GameShape => {
@@ -66,7 +56,7 @@ export function useBlocksGame() {
             const clearing = fittingShapes.filter(s => {
                 for (let r = 0; r < GRID_SIZE; r++) {
                     for (let c = 0; c < GRID_SIZE; c++) {
-                        if (canPlaceShape(grid, s, r, c)) {
+                        if (isPlaceable(grid, s, { r, c })) {
                             return true; 
                         }
                     }
@@ -92,7 +82,7 @@ export function useBlocksGame() {
             id: `${selected.id}-${Math.random().toString(36).substring(2, 11)}`,
             cells: transformShape(selected.cells),
         };
-    }, [hasAnyValidPlacement, canPlaceShape]);
+    }, [hasAnyValidPlacement]);
 
     // Intelligent rescue shape selector (includes HELP_SHAPES for standard rescue utility)
     const selectRescueShape = useCallback((grid: number[][]): GameShape => {
@@ -157,12 +147,12 @@ export function useBlocksGame() {
     ): boolean => {
         if (state.phase !== 'playing') return false;
         if (slotType === 'rescue' && state.rescueShapeLocked) return false;
-        if (!canPlaceShape(state.grid, shape, gridY, gridX)) return false;
+        if (!isPlaceable(state.grid, shape, { r: gridY, c: gridX })) return false;
 
         setState(prev => {
             if (prev.phase !== 'playing') return prev;
             if (slotType === 'rescue' && prev.rescueShapeLocked) return prev;
-            if (!canPlaceShape(prev.grid, shape, gridY, gridX)) return prev;
+            if (!isPlaceable(prev.grid, shape, { r: gridY, c: gridX })) return prev;
 
             const gridCopy = prev.grid.map(row => [...row]);
             
@@ -286,7 +276,7 @@ export function useBlocksGame() {
             };
         });
         return true;
-    }, [state.phase, state.grid, state.rescueShapeLocked, canPlaceShape, selectProactiveShape, selectRescueShape]);
+    }, [state.phase, state.grid, state.rescueShapeLocked, selectProactiveShape, selectRescueShape]);
 
     // Check game over on grid change
     useEffect(() => {

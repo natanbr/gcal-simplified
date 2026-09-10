@@ -1,11 +1,16 @@
 import { memo } from 'react';
 import { GameShape } from './types';
 import { ShapeItem } from './ShapeItem';
+import type { DragSlot, StartDragHandler } from './useShapeDrag';
+
+/** Passed to ShapeItem *and* to onStartDrag: the grabbed cell is derived from
+ *  the size the slot really renders. */
+const TRAY_CELL_SIZE = 36;
 
 interface StandardShapesTrayProps {
     standardShapes: (GameShape | null)[];
-    activeDragSlot: { slotType: 'standard' | 'rescue'; slotIndex: number } | null;
-    onStartDrag: (event: React.PointerEvent<HTMLDivElement>, shape: GameShape, slotType: 'standard' | 'rescue', slotIndex: number) => void;
+    activeDragSlot: DragSlot | null;
+    onStartDrag: StartDragHandler;
 }
 
 export const StandardShapesTray = memo(function StandardShapesTray({
@@ -35,9 +40,9 @@ export const StandardShapesTray = memo(function StandardShapesTray({
                             {shape ? (
                                 <ShapeItem
                                     shape={shape}
-                                    cellSize={36}
+                                    cellSize={TRAY_CELL_SIZE}
                                     isTransparent={activeDragSlot?.slotType === 'standard' && activeDragSlot?.slotIndex === idx}
-                                    onPointerDown={(e) => onStartDrag(e, shape, 'standard', idx)}
+                                    onPointerDown={(e) => onStartDrag(e, shape, 'standard', idx, TRAY_CELL_SIZE)}
                                 />
                             ) : null}
                         </div>

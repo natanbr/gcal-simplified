@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { GameShape, CELL_DISPLAY_SIZE } from './types';
+import { GameShape, CELL_DISPLAY_SIZE, SHAPE_ITEM_GAP } from './types';
 
 interface ShapeItemProps {
     shape: GameShape;
@@ -7,6 +7,7 @@ interface ShapeItemProps {
     style?: React.CSSProperties;
     isTransparent?: boolean;
     cellSize?: number;
+    gap?: number;
 }
 
 export const ShapeItem = memo(function ShapeItem({
@@ -15,6 +16,7 @@ export const ShapeItem = memo(function ShapeItem({
     style,
     isTransparent = false,
     cellSize = CELL_DISPLAY_SIZE,
+    gap = SHAPE_ITEM_GAP,
 }: ShapeItemProps) {
     // Find shape bounding box for sizing
     const xs = shape.cells.map(c => c.x);
@@ -36,7 +38,7 @@ export const ShapeItem = memo(function ShapeItem({
                 display: 'grid',
                 gridTemplateColumns: `repeat(${widthCells}, ${cellSize}px)`,
                 gridTemplateRows: `repeat(${heightCells}, ${cellSize}px)`,
-                gap: 1.5,
+                gap,
                 zIndex: onPointerDown ? 100 : 1,
                 opacity: isTransparent ? 0.0 : 1.0,
                 pointerEvents: isTransparent ? 'none' : 'auto',
