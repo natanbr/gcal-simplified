@@ -16,9 +16,10 @@ import React from 'react';
 import { useMissionScheduler } from './useMissionScheduler';
 import { MCContext } from '../store/useMCStore';
 import { initialState } from '../store/mcReducer';
-import type { MCState, MCAction } from '../types';
+import type { MCState, MCAction, MissionTask } from '../types';
 
 const MORNING_AT = '06:00';
+const EVENING_AT = '19:00';
 
 function buildState(overrides: Partial<MCState> = {}): MCState {
     return {
@@ -238,6 +239,145 @@ describe('mission scheduler — sleep/resume resilience', () => {
         vi.advanceTimersByTime(1_000);
 
         expect(missionStarts(dispatch)).toBe(true);
+        unmount();
+    });
+
+    // ── The miss the shield used to never see ────────────────────────────────
+    // MARK_MISSION_TIMEOUT only ever fired from MissionTimerDisplay, which is
+    // only mounted while the overlay is on screen. A mission left minimized —
+    // or expiring while the user sits on the Calendar view — ended with plain
+    // SET_ACTIVE_MISSION 'none' and no miss recorded anywhere, so the streak
+    // shield would silently never have counted it.
+    /** A mission of `phase` mid-flight with `tasks`, expiring 30 min after its start. */
+    function runningMission(
+        tasks: MissionTask[],
+        loggedTimeoutAt?: string,
+        phase: 'morning' | 'evening' = 'morning',
+    ): MCState {
+        const isMorning = phase === 'morning';
+        const startedAt = new Date(isMorning ? todayAt(6, 0) : todayAt(19, 0)).toISOString();
+        return buildState({
+            activeMission: phase,
+            missions: [{
+                phase,
+                startsAt: isMorning ? MORNING_AT : EVENING_AT,
+                endsAt: isMorning ? '06:30' : '19:30',
+                durationMins: 30,
+                active: true,
+                startedAt,
+                loggedTimeoutAt,
+                tasks,
+            }],
+        });
+    }
+
+    /** One checklist task. The id is a parameter because a single-task mission
+     *  cannot tell `every` from `some` — the whole point of the fixtures below. */
+    const task = (completed: boolean, id = 'brush'): MissionTask =>
+        ({ id, label: id, icon: 'Sparkles', completed, locksAt: null, locked: false });
+
+    /** Indices of the two dispatches in call order, or -1. */
+    function order(dispatch: ReturnType<typeof vi.fn>) {
+        const types = dispatch.mock.calls.map(([a]) => a?.type);
+        return { timeout: types.indexOf('MARK_MISSION_TIMEOUT'), cleared: types.indexOf('SET_ACTIVE_MISSION') };
+    }
+
+    it('records the miss for a PARTLY finished mission that expires with no overlay on screen', () => {
+        // Two tasks, exactly one done. A single-task fixture cannot catch
+        // `every` -> `some` in the scheduler's `allDone`: under `some`, one
+        // ticked box in a five-task routine would read as a completed mission
+        // and the shield would never lose a segment.
+        stubIpcRenderer();
+        const dispatch = vi.fn();
+        vi.setSystemTime(todayAt(6, 29));
+
+        const partlyDone = runningMission([task(true, 'brush'), task(false, 'dress')]);
+        const { unmount } = renderScheduler(partlyDone, dispatch);
+        vi.setSystemTime(todayAt(6, 31)); // past startedAt + durationMins
+        vi.advanceTimersByTime(15_000);   // the expiry tick
+
+        const { timeout, cleared } = order(dispatch);
+        expect(timeout, 'the miss must be recorded').toBeGreaterThanOrEqual(0);
+        // Before clearing the phase: MARK_MISSION_TIMEOUT reads the mission that
+        // is still active, and SET_ACTIVE_MISSION's own log line needs the phase.
+        expect(timeout).toBeLessThan(cleared);
+        expect(dispatch.mock.calls[timeout][0].origin).toBe('scheduler');
+        // WHICH mission was missed, not merely that one was. A hardcoded phase
+        // stamps `loggedTimeoutAt` on the wrong mission, so the real one stays
+        // unguarded and can be charged again on the next tick.
+        expect(dispatch.mock.calls[timeout][0].missionPhase).toBe('morning');
+        unmount();
+    });
+
+    it('reports the EVENING phase when the evening mission is the one that expires', () => {
+        // Every other fixture in this file is the morning mission, so a
+        // hardcoded `missionPhase: 'morning'` would pass all of them. This is
+        // the case that fails.
+        stubIpcRenderer();
+        const dispatch = vi.fn();
+        vi.setSystemTime(todayAt(19, 29));
+
+        const evening = runningMission([task(true, 'shower'), task(false, 'pjs')], undefined, 'evening');
+        const { unmount } = renderScheduler(evening, dispatch);
+        vi.setSystemTime(todayAt(19, 31));
+        vi.advanceTimersByTime(15_000);
+
+        const { timeout } = order(dispatch);
+        expect(timeout, 'the miss must be recorded').toBeGreaterThanOrEqual(0);
+        expect(dispatch.mock.calls[timeout][0].missionPhase).toBe('evening');
+        unmount();
+    });
+
+    it('does not record a miss when every task was finished', () => {
+        stubIpcRenderer();
+        const dispatch = vi.fn();
+        vi.setSystemTime(todayAt(6, 29));
+
+        const allDone = runningMission([task(true, 'brush'), task(true, 'dress')]);
+        const { unmount } = renderScheduler(allDone, dispatch);
+        vi.setSystemTime(todayAt(6, 31));
+        vi.advanceTimersByTime(15_000);
+
+        expect(order(dispatch).timeout).toBe(-1);
+        expect(order(dispatch).cleared).toBeGreaterThanOrEqual(0);
+        unmount();
+    });
+
+    it('counts a mission with NO tasks at all as a miss', () => {
+        // PINS TODAY BEHAVIOUR, which is a judgement call and not obviously the
+        // only right answer: `allDone` is `tasks.length > 0 && every(...)`, so an
+        // empty checklist can never be "done" and expiring costs a shield
+        // segment. Catches the `tasks.length > 0 &&` guard being dropped —
+        // `[].every()` is true, which would turn a mission whose tasks were all
+        // removed (or not yet synced in) into a free success.
+        stubIpcRenderer();
+        const dispatch = vi.fn();
+        vi.setSystemTime(todayAt(6, 29));
+
+        const { unmount } = renderScheduler(runningMission([]), dispatch);
+        vi.setSystemTime(todayAt(6, 31));
+        vi.advanceTimersByTime(15_000);
+
+        expect(order(dispatch).timeout).toBeGreaterThanOrEqual(0);
+        unmount();
+    });
+
+    it('does not re-record a miss the visible overlay already marked', () => {
+        stubIpcRenderer();
+        const dispatch = vi.fn();
+        vi.setSystemTime(todayAt(6, 29));
+
+        const already = runningMission(
+            [task(true, 'brush'), task(false, 'dress')],
+            new Date(todayAt(6, 30)).toISOString(),
+        );
+        const { unmount } = renderScheduler(already, dispatch);
+        vi.setSystemTime(todayAt(6, 31));
+        vi.advanceTimersByTime(15_000);
+
+        // The reducer would no-op anyway, but a redundant dispatch still runs the
+        // log interceptor's speculative reduce on every tick.
+        expect(order(dispatch).timeout).toBe(-1);
         unmount();
     });
 

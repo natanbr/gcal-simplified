@@ -132,6 +132,20 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
         - **High-Performance Drag-and-Drop Overlay**: Dragging is executed via native HTML5 pointer capture and direct, uncontrolled DOM style updates (`transform: translate3d`). This completely bypasses React virtual DOM diffing during pointermove, maintaining 1:1 hardware responsiveness with 0ms scripting lag. A `<ProjectionOverlay>` isolates grid projections, and a development-only Performance HUD tracks frame rates and scripting times in real time.
         - **Unique Shape Instances & Jump-Back Prevention**: All generated shape instances are assigned unique IDs upon selection in `useBlocksGame.ts`, avoiding React key collisions. The slots in the tray are rendered transparent during dragging and unmounted upon successful placement, resolving the used shape "jump-back" visual glitch and ensuring proper state resets.
 
+- **Mission Streak Shield (missed-mission lockout)**:
+  - **One shared streak**: `missedMissionStreak` counts consecutive *failed* mission occurrences across morning and evening. Six in a row is roughly three days of earning nothing.
+  - **Miss / reset**: only an expired mission with unfinished tasks counts as a miss. A parent-cancelled mission and a mission skipped because the machine was asleep leave the streak alone. Any completed mission routine resets it to 0.
+  - **Reset re-arms the occurrence (decided 2026-09-03)**: a mission the parent resets *can* be counted as a miss again the same day. Reset means "do it again", and a second failure of a second attempt is a second miss. This applies to **`RESET_MISSION_WITH_TIMER`** (long-press), which restarts the clock and so genuinely grants that second attempt. Plain **`RESET_MISSION`** (short-press) resets only the checklist and leaves the timer running, so on an already-expired mission it grants no time at all — it therefore does **not** re-arm the miss, or one press would cost a segment for an attempt zero seconds long. Both are remote-reachable. Pinned by tests so neither half is "fixed" later.
+  - **Lock at 6 — the child's whole economy freezes (decided 2026-09-03)**, not just spending. Refused: deposit, vacuum, move, select a new goal, consume a completed reward, starting a quick game, **tapping an activity for a point, and claiming a finished responsibility**. The mood gauge also stops accruing, and because accrual is *skipped* rather than zeroed, unlocking cannot dump the frozen days back as progress. An earlier version froze spending only, on the reasoning that collecting was the way out; the stronger rule is what the owner wants and is simpler for a child to hold — while the shield is broken nothing moves, and a completed mission starts it again.
+  - **What never freezes**: completing a mission (the exit), and the parent's tools — granting tokens, granting a game token, handing a shield back, removing a token, refunding a goal. Locking any of those would make the lock inescapable or take the adult's override away.
+  - Every frozen control also *looks* refused (greyed, `🔒 Bank locked`), because a refused action deliberately writes no log line — so an enabled-looking button that silently does nothing leaves no trace for the child or the parent. Earning is never blocked — mission bonuses, responsibility claims and parent/remote grants still land, because collecting them is the way out. The locked flag is derived from the streak, never persisted.
+  - **Shield bar** (`ShieldPanel.tsx`, between the Mood Gauge and Privileges): a six-segment bar sub-card in Column 3 — full at 0 misses, one segment lost per miss; green 0–2, amber 3–4, red 5, empty and locked at 6. The colour is the whole message: there is **no** status caption ("shield is strong/cracking"). The only text on the card is the 🔒 **Bank locked** line, shown when the shield is broken.
+  - **Parent-adjustable shields (remote)**: the parent can hand a shield back or take one away from the phone. One remote action, `ADJUST_SHIELD`, carries a delta in *segments* (positive = give a shield back = streak down). It is clamped to the same 0…6 range, is attributed like any other remote action, and drives the same lock/unlock log lines — so a shield given back at 6 unlocks the bank exactly as a completed mission does. `missedMissionStreak` therefore rides the remote-sync broadcast, so the phone can draw the same bar. **Host-side only so far**: the action, its allowlist entry and its payload validator are live here, but the `mc-remote` app has not shipped the +/- buttons yet, so there is nothing to press today. Every shield move is logged and attributed to whoever made it — a parent taking the last shield reads "Last shield taken away", never "6 missions missed in a row".
+- **Quick-Game Availability Window**:
+  - Games are playable only *between* the day's missions: from the moment the morning mission has concluded (completed **or** failed) until the moment the evening mission starts.
+  - The rule is literal — "concluded", not "the morning window has passed". A morning that never ran at all (machine asleep at 06:00, app opened later) keeps games shut for the whole day; otherwise a child could earn the day's games by keeping the app closed through the routine. The escape hatch is human: the parent starts the mission by hand from Settings.
+  - Enforced by a pure selector used by the pedestal UI and by **two** reducer guards — `START_GAME` and `CONSUME_CASE`. They must agree: when only `START_GAME` was gated, redeeming a quick-game goal at the evening boundary destroyed the goal (no refund) for a game that was then refused. It fails **closed** on a time it cannot parse or a range it cannot honour (`25:00`). Deliberately separate from `isWakingHour`, which stays the basis of mood-token accrual.
+
 ## UX / UI Enhancements
 
 ### Enhanced Loading Indicator
@@ -550,3 +564,48 @@ Behavior changes shipped by the review's fix pass:
 - **E2E/dev tooling.** `test:headed`/`test:debug`/`test:ui` show the app window again; the shared MC
   fixture waits for real readiness signals (`.mc-root` + the persisted blob) instead of fixed
   sleeps, and closes the Electron process if a launch fails halfway.
+
+### 2026-09-02 Mission Streak Shield — bank/goals lockout + the quick-game window
+
+**New — Mission Streak Shield (missed-mission lockout).** A single counter, `missedMissionStreak`,
+tracks consecutive *failed* mission occurrences (morning and evening share one streak, so six in a
+row ≈ three days of earning nothing).
+
+- **What counts as a miss.** Only a mission that ran and expired with its tasks unfinished
+  (`MARK_MISSION_TIMEOUT`) increments the streak. A mission the parent cancelled
+  (`CANCEL_MISSION`), and a mission the scheduler *skipped* because the machine was asleep, both
+  leave the streak untouched — a weekend with the laptop closed must not freeze the bank.
+- **What resets it.** Any completed mission routine (`COMPLETE_MISSION_ROUTINE`) sets the streak
+  back to 0 — a single good morning clears the whole debt.
+- **Reliability.** The miss is recorded at the mission's real end, not at the overlay's. The
+  scheduler's expiry tick marks the timeout before it clears `activeMission`, so a mission that
+  expired while minimized (or with Mission Control not on screen) still counts. The reducer holds
+  the idempotency guard (`loggedTimeoutAt`), so the two dispatchers can never double-count.
+- **The lock.** At 6 consecutive misses the bank and the goal pedestals are **locked**: no
+  depositing, no vacuuming, no moving tokens, no selecting a new goal, no consuming a completed
+  reward. Earning still works — mission bonuses, responsibility claims and parent/remote token
+  grants all land normally, because collecting them is the way out. The locked state is *derived*
+  from the streak (`streak >= LOCK_AT`), never stored, so it cannot drift out of sync.
+- **Attribution.** Engaging and releasing the lock each write an activity-log entry with a `source`,
+  like every other state change — a bank that freezes silently is exactly the failure the
+  attribution rule exists to prevent.
+- **The Shield bar (Column 3 sub-card).** Six segments, full at zero misses, one segment lost per
+  miss: green at 0–2 missed, amber at 3–4, red at 5, empty + locked at 6. Placed as a sub-card in
+  the right-hand column alongside the Mood Gauge and Privileges. Visual design gated on an approved
+  mockup.
+
+**Changed — quick-game availability window.** Games are available only *between* the day's missions:
+from the moment the morning mission has concluded until the moment the evening mission starts.
+Previously the gate was `isWakingHour`, which is wider at both ends (it opens at the morning
+mission's *start* time and closes at the evening mission's *end* time), so a child could play
+before doing the morning routine and during the evening routine. The new window is a separate pure
+selector — `isWakingHour` is left alone because the mood-token accrual rate is derived from it — and
+it is enforced in the reducer (`START_GAME`), not only in the pedestal UI.
+
+- "Morning concluded" means *any* conclusion — completed or failed. Failing the morning already
+  costs behaviour progress and a shield segment; it does not additionally forfeit the day's games.
+- It does **not** mean "the morning window has elapsed". A first draft opened the window at 06:30
+  whether or not the routine ran, which handed the whole day's games to a child who simply kept the
+  app closed until 07:00 — it deleted the rule it was meant to enforce. A morning that genuinely
+  never ran therefore keeps games shut all day, and the parent recovers it by starting the mission
+  by hand from Settings.

@@ -8,6 +8,8 @@
 
 import type { MCState, MCAction, ActivityLogEntry } from '../types';
 import { mcReducer, selectTotalWealth } from './mcReducer';
+import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
+import { isQuickGameWindowOpen } from './gameWindow';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export type LogSource = NonNullable<ActivityLogEntry['source']>;
@@ -75,8 +77,16 @@ const UNLOGGED_ACTIONS = new Set<MCAction['type']>([
 
 export function createLogEntry(action: MCAction, state: MCState): ActivityLogEntry | null {
     if (UNLOGGED_ACTIONS.has(action.type)) return null;
+    // Mirror the reducer's shield lock — same predicate, not a copied list. A
+    // refused deposit that still logged "Deposited 3 tokens" would put a token
+    // movement in the parent's audit trail that never happened.
+    if (isRefusedByShieldLock(state, action)) return null;
 
-    const now = new Date().toISOString();
+    // The action's own instant, not the wall clock: the reducer decides every
+    // refusal from `action.timestamp`, and two separate clock reads can disagree
+    // about one dispatch at the boundary second (19:00:00.000) — the mirror
+    // would then log a movement the reducer refused.
+    const now = action.timestamp ?? new Date().toISOString();
     const id = self.crypto.randomUUID();
 
     /** Resolve a case id → highlighted goal name (e.g. **🎮 Game**) */
@@ -149,8 +159,28 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         case 'CONSUME_CASE': {
             const target = state.cases.find(c => c.id === action.caseId);
             if (!target || !target.reward) return null;
+            // Mirror the reducer's OTHER refusal on this case. Without it a
+            // redemption refused at the evening boundary still writes
+            // "Used: Quick Game -3" into the append-only trail for tokens that
+            // never moved.
+            if (target.reward === 'quick-game' && !isQuickGameWindowOpen(state, now)) return null;
             return { id, timestamp: now, icon: '🎁', message: `Used: ${rewardLabel(target.reward)}`, delta: -target.tokenCount, type: 'reward', colorKey: 'system', ...snap() };
         }
+        case 'ADJUST_SHIELD': {
+            // applyStreakChange only logs when the lock state CROSSES, so
+            // without this the phone could walk the shield 0 -> 5 unrecorded.
+            const before = shieldSegmentsLeft(state.missedMissionStreak);
+            const after = shieldSegmentsLeft(state.missedMissionStreak - action.delta);
+            if (before === after) return null; // clamped at an end — nothing moved
+            const gave = after > before;
+            return {
+                id, timestamp: now,
+                icon: gave ? '🛡️' : '💥',
+                message: `${gave ? 'Shield given back' : 'Shield taken away'} — ${after} / 6 left`,
+                type: 'mission', colorKey: 'system', ...snap(),
+            };
+        }
+
         case 'SET_ACTIVE_MISSION':
             if (action.phase === 'none') {
                 // Scheduler-driven expiry — record which phase just timed out so

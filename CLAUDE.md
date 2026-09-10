@@ -59,6 +59,36 @@ npm run release          # Version bump + build + GitHub publish (see /release)
 - **Attribution**: every state-changing action carries `origin` (`local | remote | scheduler |
   auto | system`) and every log entry carries `source`. A token movement with no attribution is a
   bug — the whole point is that a parent can see who moved what.
+- **Mission streak shield**: `missedMissionStreak` counts consecutive timed-out missions; at
+  `MISSED_LOCK_THRESHOLD` (6) the child's whole economy freezes. The locked flag is
+  **derived** (`isEconomyLocked`), never stored, and `applyStreakChange` is the only writer of the
+  counter *during a dispatch* — timeout, completion and the parent's `ADJUST_SHIELD` all go through
+  it, so the lock/unlock log line can never be written by one path and skipped by another
+  (hydration sanitizes once at load; that is the one other write). Guarded structurally by
+  `src/mission-control/__tests__/streak-writer-boundary.test.ts`, because a NEW reducer case that
+  assigns the field is by definition not covered by any existing behavioural test. Frozen: spending
+  (deposit, move, vacuum, select a goal, redeem, `START_GAME`) AND the child's own earning — the
+  activity `+1`, the responsibility claim, and the mood gauge's automatic accrual (the gauge is frozen by skipping `applyBehaviorSync`
+  in the reducer, which also leaves the anchor stale so unlocking cannot back-fill days of
+  progress at once). What must NEVER be added to the locked set is the way out and the adult's
+  override: `COMPLETE_MISSION_ROUTINE`, `ADJUST_SHIELD`, `ADD_TOKEN(S)`, `GRANT_GAME_TOKEN`,
+  `REMOVE_TOKEN`, `REFUND_CASE`. Lock any of those and the lock becomes inescapable, or the
+  parent loses control of it.
+- **Refusals must be silent in the log and visible on screen**: `isRefusedByShieldLock` is the single
+  predicate the reducer and `activityLog.ts` both call, so a refused action writes no derived log
+  line. A **hand-built** `ADD_LOG` bypasses that mirror entirely (`useQuickGameSession` is the one
+  such site), so any hand-built entry must re-check the same condition before dispatching. And a
+  refusal must be refused *before* any optimistic UI commits — the drag handlers return `false` when
+  locked so the token springs back, rather than animating a coin away that the reducer then keeps.
+- **A mission re-trigger clears `loggedTimeoutAt`**: it marks "this occurrence already timed out", so
+  a stale stamp surviving into the next day silently caps the streak (it capped at 2, and the shield
+  could never break). Any new field describing *this occurrence* belongs in the `SET_ACTIVE_MISSION`
+  fresh-start reset.
+- **Quick-game window**: games open only between the day's missions — `isQuickGameWindowOpen` in
+  `gameWindow.ts`, enforced in the `START_GAME` **and** `CONSUME_CASE` reducer cases (they must
+  agree, or redeeming at the boundary burns the goal for a game that is then refused), not only at
+  the pedestal. It fails **closed** on a time it cannot parse. Keep it separate from `isWakingHour`,
+  which is the divisor of the mood-token accrual rate.
 - **Remote actions**: `REMOTE_ALLOWED_ACTIONS` in `useRemoteControl.ts` is an allowlist. Adding a
   remote button means adding its action type there too.
 - **Skill progress**: `RECORD_QUIZ_ANSWER` is the only writer of `skillProgress` (bounded per-skill

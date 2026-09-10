@@ -120,6 +120,9 @@ describe('remote action allowlist', () => {
             // validated (PAYLOAD_VALIDATORS in the hook).
             const payloads: Record<string, Record<string, unknown>> = {
                 ADD_TOKENS: { amount: 1 },
+                SET_ACTIVE_MISSION: { phase: 'morning' },
+                ADJUST_SHIELD: { delta: 1 },
+                COMPLETE_MISSION_ROUTINE: { missionPhase: 'morning', bonusTokens: 2 },
                 ADJUST_BEHAVIOR_PROGRESS: { amount: 1, reason: 'test' },
                 ADJUST_MISSION_END: { missionPhase: 'morning', deltaMinutes: 5 },
                 SET_MOOD_WIND: { level: 1 },
@@ -237,7 +240,11 @@ describe('remote action allowlist', () => {
                 t => !TYPES_SENT_BY_REMOTE_APP.includes(t) &&
                     // Deliberate: mission completion/reset variants the remote
                     // reaches indirectly through COMPLETE_TASK flows.
-                    !['ADD_TOKEN', 'COMPLETE_MISSION_ROUTINE', 'RESET_MISSION_WITH_TIMER'].includes(t)
+                    // ADJUST_SHIELD is the host running AHEAD of the app on
+                    // purpose — the +/- shield buttons are specified in
+                    // docs/requirements.md and wired here, but mc-remote has not
+                    // shipped them yet. Remove this exemption once it does.
+                    !['ADD_TOKEN', 'ADJUST_SHIELD', 'COMPLETE_MISSION_ROUTINE', 'RESET_MISSION_WITH_TIMER'].includes(t)
             );
             expect(extras, `allowlist entries with no corresponding remote button: ${extras.join(', ')}`).toEqual([]);
         });

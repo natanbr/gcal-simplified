@@ -12,6 +12,7 @@ import type {
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { initialState, selectTotalWealth, MAX_GAME_TOKENS } from './mcReducer';
+import { sanitizeMissedStreak } from './missionStreak';
 import { createLogEntry } from './activityLog';
 import { sanitizeSkillProgress } from './skillProgress';
 import { REWARD_MAP } from '../rewardCatalogue';
@@ -97,6 +98,9 @@ export function loadPersistedState(): MCState {
                 ? Math.max(0, parsed.bankCount)
                 : initialState.bankCount,
             gameTokensLastGrantedDate: parsed.gameTokensLastGrantedDate ?? null,
+            // Absent in every blob written before the shield existed, and a NaN
+            // write serializes to null — either would poison `streak + 1`.
+            missedMissionStreak: sanitizeMissedStreak(parsed.missedMissionStreak),
             // A game only runs while its overlay is mounted, so an "active" game
             // can never survive a restart. Restoring it stranded the flag at true
             // forever (crash/quit mid-game, or a remote START_GAME while the

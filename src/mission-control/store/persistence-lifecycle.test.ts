@@ -15,6 +15,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mcReducer, initialState, MAX_GAME_TOKENS } from './mcReducer';
+import { MISSED_LOCK_THRESHOLD, isEconomyLocked } from './missionStreak';
 import { loadPersistedState, STORAGE_KEY } from './useMCStore';
 import type { MCState, ActivityLogEntry } from '../types';
 
@@ -202,5 +203,77 @@ describe('skillProgress hydration round-trip', () => {
         const reloaded = loadPersistedState();
         expect(reloaded.skillProgress.readingLevel).toBe(6);
         expect(Number.isFinite(reloaded.skillProgress.missedWords['ship'])).toBe(true);
+    });
+});
+
+describe('the mission-streak counter is sanitized on load', () => {
+    beforeEach(() => {
+        localStorage.removeItem(STORAGE_KEY);
+    });
+
+    /** A blob whose `missedMissionStreak` is raw JSON — hand-edited file, an
+     *  interrupted write, or a version skew. Written as text on purpose:
+     *  JSON.stringify cannot produce Infinity, but JSON.parse accepts it. */
+    function loadWithStreak(rawJson: string) {
+        localStorage.setItem(STORAGE_KEY, `{"bankCount":4,"missedMissionStreak":${rawJson}}`);
+        return loadPersistedState();
+    }
+
+    // These catch the loss of `sanitizeMissedStreak(parsed.missedMissionStreak)`
+    // in loadPersistedState: without it the bare `{...parsed}` spread restores
+    // whatever is on disk. A non-number streak then either pins the bank locked
+    // forever or can never lock at all, and neither is visible until a parent
+    // asks why the shield does nothing.
+    const HOSTILE: [label: string, raw: string, expected: number][] = [
+        ['a NaN write, which serializes to null', 'null', 0],
+        ['a stringified number', '"4"', 0],
+        ['a value past the lock threshold', '99', MISSED_LOCK_THRESHOLD],
+        ['a negative value', '-3', 0],
+        ['raw Infinity, which JSON.parse accepts', '1e999', MISSED_LOCK_THRESHOLD],
+        ['a fractional value', '2.7', 2],
+    ];
+
+    it.each(HOSTILE)('normalises %s', (_label, raw, expected) => {
+        const streak = loadWithStreak(raw).missedMissionStreak;
+
+        expect(streak).toBe(expected);
+        // ...and always a usable number, whatever the input was.
+        expect(Number.isInteger(streak)).toBe(true);
+        expect(streak).toBeGreaterThanOrEqual(0);
+        expect(streak).toBeLessThanOrEqual(MISSED_LOCK_THRESHOLD);
+    });
+
+    it('starts at zero for a blob written before the shield existed', () => {
+        // COVERAGE, NOT A MUTATION KILL, and deliberately kept: with the
+        // sanitize line deleted the spread simply leaves initialState 0 in
+        // place, so this stays green either way. It is here because a
+        // pre-feature blob is the single most common shape on a real machine
+        // after an update, and a future refactor could easily break it.
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ bankCount: 4, _migrationVersion: 1 }));
+
+        expect(loadPersistedState().missedMissionStreak).toBe(0);
+        expect(isEconomyLocked(loadPersistedState())).toBe(false);
+    });
+
+    it('preserves a legitimate mid-range streak exactly across a restart', () => {
+        // The sanitizer must not become a reset button: four real misses have
+        // to still be four after a relaunch, or quitting the app forgives the
+        // streak and the shield can never break.
+        expect(restart({ ...initialState, missedMissionStreak: 4 }).missedMissionStreak).toBe(4);
+    });
+
+    it('keeps a broken shield broken across a restart', () => {
+        // The lock is derived from the counter, so this is the counter's real
+        // consequence: a locked bank must survive a quit-and-relaunch. If it
+        // did not, restarting the app would be the way around the punishment.
+        // Deliberately NOT asserted with START_GAME: the quick-game window is
+        // shut in a fresh state anyway, so that would pass with or without the
+        // lock. A deposit has no window gate, so only the lock can refuse it.
+        const locked = restart({ ...initialState, missedMissionStreak: MISSED_LOCK_THRESHOLD, bankCount: 5 });
+        expect(isEconomyLocked(locked)).toBe(true);
+
+        const afterDeposit = mcReducer(locked, { type: 'DEPOSIT_TO_CASE', caseId: 0, amount: 1, timestamp: new Date().toISOString() });
+        expect(afterDeposit.bankCount).toBe(5);
+        expect(afterDeposit.cases[0].tokenCount).toBe(0);
     });
 });

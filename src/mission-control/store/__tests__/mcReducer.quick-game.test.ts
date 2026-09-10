@@ -63,12 +63,15 @@ describe('mcReducer — Quick Game Token Logic', () => {
         const stateWithActiveGoal: MCState = {
             ...stateWithTokens,
             gameTokens: 1,
+            // Redeeming a quick-game goal now obeys the same window as starting
+            // the game, so the state has to be inside it.
+            lastCompletedOrFailedMorningDate: '2026-09-02',
             cases: initialState.cases.map(c => 
                 c.id === 0 ? { ...c, status: 'active', reward: 'quick-game', tokenCount: 0 } : c
             )
         };
 
-        const action = { type: 'CONSUME_CASE' as const, caseId: 0 };
+        const action = { type: 'CONSUME_CASE' as const, caseId: 0, timestamp: '2026-09-02T12:00:00' };
         const nextState = mcReducer(stateWithActiveGoal, action);
 
         expect(nextState.gameTokens).toBe(1); // Still 1, token was used
@@ -94,8 +97,12 @@ describe('mcReducer — Quick Game Token Logic', () => {
         expect(nextState.cases[0].tokenCount).toBe(0);
     });
 
-    it('should set snakeGameActive to true on START_GAME', () => {
-        const nextState = mcReducer(initialState, { type: 'START_GAME' });
+    it('should set snakeGameActive to true on START_GAME inside the game window', () => {
+        // Games now only open between the day's missions, so the action needs a
+        // state where the morning routine has concluded and it is not yet
+        // evening. The window itself is covered in store/gameWindow.test.ts.
+        const betweenMissions: MCState = { ...initialState, lastCompletedOrFailedMorningDate: '2026-09-02' };
+        const nextState = mcReducer(betweenMissions, { type: 'START_GAME', timestamp: '2026-09-02T12:00:00' });
         expect(nextState.snakeGameActive).toBe(true);
     });
 
