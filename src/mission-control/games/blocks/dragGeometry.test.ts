@@ -2,9 +2,10 @@
 // The snapping maths, tested without a DOM. This is the part that can put a
 // block somewhere the child did not aim, so the rules the user set are asserted
 // literally: nearest valid neighbour, never further than 0.75 of a cell,
-// straight before diagonal on a tie, and — the one that matters most — an
-// invalid anchor with nothing valid in reach stays invalid rather than
-// teleporting the shape to a distant free spot.
+// straight before diagonal on a tie but a diagonal when the straights are
+// blocked, and — the one that matters most — an invalid anchor with nothing
+// valid in reach stays invalid rather than teleporting the shape to a distant
+// free spot.
 // ============================================================
 import { describe, it, expect } from 'vitest';
 import {
@@ -150,6 +151,45 @@ describe('snapAnchor — forgiveness', () => {
     it('forgives an overhang at the board edge', () => {
         expect(snapAnchor({ r: -0.6, c: 3 }, BLOCK_2X2, emptyGrid()))
             .toEqual({ anchor: { r: 0, c: 3 }, valid: true });
+    });
+
+    // ------------------------------------------------------------
+    // The four DIAGONAL entries in SNAP_OFFSETS. Deleting that line left the
+    // whole blocks suite green: every forgiveness case above is won by a
+    // straight offset, and the tie case asserts the straight one WINS, so it
+    // passes with the diagonals gone too. These four are what fails.
+    //
+    // Each case leaves exactly one diagonal in play. On an axis the diagonal
+    // points UP/LEFT along, the position sits half a cell BELOW/RIGHT of the
+    // rounded cell (2.5 rounds up to 3, so the neighbour beyond it is 0.5
+    // away); on an axis it points DOWN/RIGHT along, 0.49 ABOVE/LEFT of it
+    // (3.49 rounds down to 3, so the neighbour beyond it is 0.51 away).
+    // The chosen diagonal therefore lands at a squared distance of
+    // 0.50-0.5202, inside the 0.5625 radius, while the neighbours on the
+    // opposite sides are 1.49-1.5 away (2.2+ squared) and out of reach. With
+    // the rounded cell and both reachable straight neighbours blocked, the
+    // diagonal is the only candidate left — and with the diagonals gone the
+    // shape stays on the blocked rounded cell and the drop is refused.
+    // ------------------------------------------------------------
+
+    it('reaches the up-left diagonal when both straight neighbours are blocked', () => {
+        expect(snapAnchor({ r: 2.5, c: 2.5 }, DOT, gridWith([3, 3], [2, 3], [3, 2])))
+            .toEqual({ anchor: { r: 2, c: 2 }, valid: true });
+    });
+
+    it('reaches the up-right diagonal when both straight neighbours are blocked', () => {
+        expect(snapAnchor({ r: 2.5, c: 3.49 }, DOT, gridWith([3, 3], [2, 3], [3, 4])))
+            .toEqual({ anchor: { r: 2, c: 4 }, valid: true });
+    });
+
+    it('reaches the down-left diagonal when both straight neighbours are blocked', () => {
+        expect(snapAnchor({ r: 3.49, c: 2.5 }, DOT, gridWith([3, 3], [4, 3], [3, 2])))
+            .toEqual({ anchor: { r: 4, c: 2 }, valid: true });
+    });
+
+    it('reaches the down-right diagonal when both straight neighbours are blocked', () => {
+        expect(snapAnchor({ r: 3.49, c: 3.49 }, DOT, gridWith([3, 3], [4, 3], [3, 4])))
+            .toEqual({ anchor: { r: 4, c: 4 }, valid: true });
     });
 });
 

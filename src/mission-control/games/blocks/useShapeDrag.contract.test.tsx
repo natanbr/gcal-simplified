@@ -26,6 +26,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BlocksCanvas } from './BlocksCanvas';
 import type { BlocksGameState, GameShape } from './types';
 import type { QuizEngineApi } from '../quiz/types';
+import { TOUCH_LIFT_PX } from './dragGeometry';
 
 function stubEngine(): QuizEngineApi {
     return {
@@ -67,7 +68,12 @@ function rect(left: number, top: number, width: number, height: number): DOMRect
     return { left, top, width, height, x: left, y: top, right: left + width, bottom: top + height, toJSON: () => ({}) };
 }
 
-function ptr(type: string, init: { clientX: number; clientY: number; pointerId: number }) {
+/** `pointerType` is optional and defaults to '', i.e. the unlifted mouse path.
+ *  The touch path (a 1.5-cell lift) is opted into per event, as in
+ *  BlocksCanvas.lift.test.tsx — and only the pointerdown needs it, because the
+ *  lift is captured into the grab point when the drag starts. */
+interface PtrInit { clientX: number; clientY: number; pointerId: number; pointerType?: string }
+function ptr(type: string, init: PtrInit) {
     return new PointerEvent(type, { bubbles: true, ...init });
 }
 
@@ -276,6 +282,31 @@ describe('the board origin is measured from the board box model, not assumed', (
         pointerId: 1,
     };
 
+    /**
+     * The same SHAPE position as SNAPPED_FINGER, reached by a finger instead of
+     * a mouse. On touch the shape floats TOUCH_LIFT_PX above the fingertip, so
+     * the finger has to be exactly that much lower for the shape's top-left to
+     * land in the same place — which cancels out, whatever the lift is retuned
+     * to (dragGeometry.test.ts deliberately refuses to pin its value):
+     *
+     *   proxyOrigin.y = clientY − grabRow·PITCH − CELL_DISPLAY_SIZE/2 − lift
+     *                 = (SNAPPED_FINGER.clientY + lift) − 0 − 24 − lift
+     *                 = SNAPPED_FINGER.clientY − 24 = 98      ← the mouse case exactly
+     *
+     * Three readings of that one shape position land a whole cell apart, so
+     * this test is not a restatement of the mouse pair above:
+     *   measured inset (2px border + 8 padding → 20)  → (98 − 20)/52   = 1.5    → cell 2 ✔
+     *   declared inset (2.5 + 8 → 20.5)               → (98 − 20.5)/52 = 1.4904 → cell 1
+     *   lift dropped on touch (origin.y = 200 − 24)   → (176 − 20)/52  = 3.0    → cell 3
+     *                                                   (at today's 1.5-cell lift)
+     */
+    const SNAPPED_TOUCH = {
+        clientX: SNAPPED_FINGER.clientX,
+        clientY: SNAPPED_FINGER.clientY + TOUCH_LIFT_PX,
+        pointerId: 1,
+        pointerType: 'touch',
+    };
+
     it('uses the inset computed style reports, not the declared constant', () => {
         // Chromium reports the declared 2.5px border as its snapped used value
         // ("2px" at DPR 1, different again at the 125%/150% scaling common on
@@ -306,6 +337,43 @@ describe('the board origin is measured from the board box model, not assumed', (
         fireEvent(item, ptr('pointerdown', grabCorner(1)));
         act(() => { window.dispatchEvent(ptr('pointermove', SNAPPED_FINGER)); });
         act(() => { window.dispatchEvent(ptr('pointerup', SNAPPED_FINGER)); });
+
+        expect(seen.board).toBe(true);
+        expect(placeShape).toHaveBeenCalledWith(expect.anything(), 1, 1, 'standard', 0);
+    });
+
+    it('reads the computed inset on the TOUCH path too, where the shape is lifted', () => {
+        // The child's device is a Windows touchscreen, so pointerType is
+        // 'touch' for every drag it will ever see. The two tests above run the
+        // mouse branch (lift = 0), so the measured origin and the lift had
+        // never been exercised together: a lift applied to the raw board rect
+        // instead of the measured first cell, or dropped for a lifted drag,
+        // passes both of them.
+        const { board, item, placeShape } = setup(stateWith());
+        const seen = stubComputedBox(board, { borderLeftWidth: '2px', borderTopWidth: '2px' });
+
+        fireEvent(item, ptr('pointerdown', { ...grabCorner(1), pointerType: 'touch' }));
+        act(() => { window.dispatchEvent(ptr('pointermove', SNAPPED_TOUCH)); });
+        act(() => { window.dispatchEvent(ptr('pointerup', SNAPPED_TOUCH)); });
+
+        expect(seen.board, 'measureBoardOrigin never asked the board for its computed style').toBe(true);
+        expect(
+            placeShape,
+            'Row 1 means the declared inset won; row 3 means the touch lift was dropped.',
+        ).toHaveBeenCalledWith(expect.objectContaining({ id: 'dot' }), 2, 2, 'standard', 0);
+    });
+
+    it('falls back to the declared inset on the touch path as well', () => {
+        // The other branch under the same lift, so neither touch test can pass
+        // by the two insets happening to agree.
+        const { board, item, placeShape } = setup(stateWith());
+        const seen = stubComputedBox(board, {
+            borderLeftWidth: '', borderTopWidth: '', paddingLeft: '', paddingTop: '',
+        });
+
+        fireEvent(item, ptr('pointerdown', { ...grabCorner(1), pointerType: 'touch' }));
+        act(() => { window.dispatchEvent(ptr('pointermove', SNAPPED_TOUCH)); });
+        act(() => { window.dispatchEvent(ptr('pointerup', SNAPPED_TOUCH)); });
 
         expect(seen.board).toBe(true);
         expect(placeShape).toHaveBeenCalledWith(expect.anything(), 1, 1, 'standard', 0);

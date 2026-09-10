@@ -408,9 +408,10 @@
    Was a per-cell Framer Motion animation on backgroundColor + boxShadow — both
    main-thread paint properties, on up to 16 cells at once, right when the child
    grabs the next piece. transform/opacity only, so the compositor owns it.
-   The per-cell stagger is an inline animation-delay of (r + c) * 25ms; on the
-   8x8 board r + c maxes at 14, so the last cell finishes at 350 + 800 = 1150ms,
-   inside the 1200ms grid reset in useBlocksGame.ts. */
+   The per-cell stagger is an inline animation-delay; EXPLODE_STAGGER_MS in
+   GridCell.tsx owns that number and the arithmetic that keeps the last cell
+   inside the 1200ms grid reset in useBlocksGame.ts. Do not restate it here —
+   a second copy only rots. */
 @keyframes mc-cell-explode {
   0% { transform: scale(1) rotate(0deg); opacity: 1; }
   50% { transform: scale(1.2) rotate(45deg); opacity: 1; }

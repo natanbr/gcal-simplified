@@ -1,6 +1,6 @@
 import { useRef, useState, memo } from 'react';
 import {
-    GameShape, BlocksGameState, GRID_SIZE, CELL_DISPLAY_SIZE, BOARD_GAP, BOARD_BORDER, BOARD_PADDING,
+    BlocksGameState, GRID_SIZE, CELL_DISPLAY_SIZE, BOARD_GAP, BOARD_BORDER, BOARD_PADDING,
 } from './types';
 import { RescueQuizLayer } from './RescueQuizLayer';
 import type { QuizEngineApi } from '../quiz/types';
@@ -12,11 +12,12 @@ import { BlocksGrid } from './BlocksGrid';
 import { PerformanceHUD } from './PerformanceHUD';
 import { ClearedFeedbackOverlay } from './ClearedFeedbackOverlay';
 import { useShapeDrag } from './useShapeDrag';
+import type { PlaceShape } from './useShapeDrag';
 import type { Projection } from './dragGeometry';
 
 interface BlocksCanvasProps {
     gameState: BlocksGameState;
-    placeShape: (shape: GameShape, gridX: number, gridY: number, slotType: 'standard' | 'rescue', slotIndex: number) => boolean;
+    placeShape: PlaceShape;
     triggerRescueQuiz: () => void;
     resolveRescueQuiz: () => void;
     cancelRescueQuiz: () => void;
@@ -90,7 +91,7 @@ export function BlocksCanvas({
     const {
         boardRef, dragProxyRef, dragPerfRef, handleStartDrag,
         activeDragSlot, draggedShape, projection,
-    } = useShapeDrag({ grid: gameState.grid, placeShape, showProjection });
+    } = useShapeDrag({ grid: gameState.grid, placeShape });
 
     // Performance tracking
     const lastGridRef = useRef(gameState.grid);
