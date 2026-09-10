@@ -114,7 +114,10 @@ const RAW_HEX_BASELINE: Record<string, number> = {
     'src/mission-control/games/blocks/BlocksGameOverlay.tsx': 24,
     'src/mission-control/games/blocks/BlocksGrid.tsx': 1,
     'src/mission-control/games/blocks/ClearedFeedbackOverlay.tsx': 1,
-    'src/mission-control/games/blocks/GridCell.tsx': 16,
+    // 16 → 9 (2026-09-07): the Framer line-clear explosion keyframed 7 hex values
+    // through backgroundColor/boxShadow. It is a transform/opacity CSS animation
+    // now, so those colours are gone rather than relocated.
+    'src/mission-control/games/blocks/GridCell.tsx': 9,
     'src/mission-control/games/blocks/PerformanceHUD.tsx': 11,
     'src/mission-control/games/blocks/RescueSlot.tsx': 3,
     // Blocks is the one game with no canvas: shape `color` fields rendered as DOM
