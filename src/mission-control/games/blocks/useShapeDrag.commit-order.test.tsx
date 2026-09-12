@@ -28,68 +28,30 @@ import { useLayoutEffect } from 'react';
 import { render, within, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BlocksCanvas } from './BlocksCanvas';
-import type { BlocksGameState, GameShape } from './types';
 import type { PlaceShape } from './useShapeDrag';
-import type { QuizEngineApi } from '../quiz/types';
-
-function stubEngine(): QuizEngineApi {
-    return {
-        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
-        beginSession: vi.fn(),
-        setDifficulty: vi.fn(),
-        onAnswered: vi.fn(),
-        notifyQuizClosed: vi.fn(),
-    };
-}
-
-const DOT: GameShape = { id: 'dot', name: 'Dot', color: '#38bdf8', cells: [{ x: 0, y: 0 }] };
-
-// Real board geometry, as in the other drag suites: border box at (10,10),
-// 2.5px border + 8px padding, 48px cells on a 52px pitch.
-const BOARD_LEFT = 10;
-const BOARD_TOP = 10;
-const BOARD_SIZE = 433;
-const CONTENT_INSET = 10.5;
-const PITCH = 52;
-const HALF_CELL = 24;
-const TRAY_LEFT = 100;
-const TRAY_TOP = 100;
-const TRAY_CELL = 36;
+import {
+    BOARD_LEFT,
+    BOARD_SIZE,
+    BOARD_TOP,
+    DOT,
+    TRAY_CELL,
+    TRAY_LEFT,
+    TRAY_TOP,
+    cellCentre,
+    draggableItem,
+    emptyGrid,
+    grabCorner,
+    rect,
+    stateWith,
+    stubEngine,
+    stubItemRect,
+} from './dragTestKit';
 
 /** Grid values, as written by useBlocksGame.ts / types.ts. */
 const FILLED = 1;
 const METEOR = 2;
 
-/** Client coordinate that puts the corner-grabbed DOT squarely on cell (r, c).
- *  Squarely, with no fractional offset, so forgiveness snapping cannot quietly
- *  rescue the projection onto a neighbour: every neighbour is then a full cell
- *  away and SNAP_RADIUS_CELLS is 0.75. */
-const shapeAt = (r: number, c: number) => ({
-    clientX: BOARD_LEFT + CONTENT_INSET + PITCH * c + HALF_CELL,
-    clientY: BOARD_TOP + CONTENT_INSET + PITCH * r + HALF_CELL,
-});
-
-function rect(left: number, top: number, width: number, height: number): DOMRect {
-    return { left, top, width, height, x: left, y: top, right: left + width, bottom: top + height, toJSON: () => ({}) };
-}
-
 interface PtrInit { clientX: number; clientY: number; pointerId: number }
-function ptr(type: string, init: PtrInit) {
-    return new PointerEvent(type, { bubbles: true, ...init });
-}
-
-const emptyGrid = (): number[][] => Array.from({ length: 8 }, () => Array(8).fill(0));
-
-function stateWith(grid: number[][]): BlocksGameState {
-    return {
-        grid,
-        standardShapes: [DOT, null, null],
-        rescueShape: null,
-        rescueShapeLocked: true,
-        altitude: 0, score: 0, phase: 'playing', level: 0,
-        rescueQuizActive: false, clearedFeedback: null,
-    };
-}
 
 interface HarnessProps {
     grid: number[][];
@@ -108,12 +70,19 @@ interface HarnessProps {
 function CommitOrderHarness({ grid, placeShape, liftAt }: HarnessProps) {
     useLayoutEffect(() => {
         if (!liftAt) return;
-        window.dispatchEvent(ptr('pointerup', liftAt));
+        // A plain dispatch, because that is what a native `pointerup` is — and
+        // this line runs mid-commit, inside the one window this guard measures.
+        // fireEvent.pointerUp (used everywhere else in the drag suites) happens
+        // to work here too: verified 2026-09-12 that it still goes red with the
+        // recompute demoted to useEffect. But it wraps the dispatch in act(), and
+        // it only works because a nested act() does not flush before the outer
+        // one ends — a React/RTL detail this guard has no reason to depend on.
+        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, ...liftAt }));
     }, [liftAt]);
 
     return (
         <BlocksCanvas
-            gameState={stateWith(grid)}
+            gameState={stateWith(DOT, { grid })}
             placeShape={placeShape}
             triggerRescueQuiz={vi.fn()}
             resolveRescueQuiz={vi.fn()}
@@ -134,17 +103,13 @@ function setup(grid: number[][], placeShape: PlaceShape) {
     const board = scoped.getByTestId('blocks-grid');
     board.getBoundingClientRect = () => rect(BOARD_LEFT, BOARD_TOP, BOARD_SIZE, BOARD_SIZE);
 
-    const item = view.container.querySelector<HTMLDivElement>('div[style*="cursor: grab"]');
-    if (!item) throw new Error('draggable tray item not rendered');
-    item.getBoundingClientRect = () => rect(TRAY_LEFT, TRAY_TOP, TRAY_CELL, TRAY_CELL);
+    const item = draggableItem(view.container);
+    stubItemRect(item, DOT, TRAY_CELL, TRAY_LEFT, TRAY_TOP);
 
     /** The one cell the DOT's projection draws, or null when no ghost is shown. */
     const ghostCell = () => (scoped.queryByTestId('projection-overlay')?.children[0] ?? null) as HTMLDivElement | null;
     return { item, ghostCell, commit };
 }
-
-/** Grabs the tray item by its top-left cell, so the grabbed cell is (0,0). */
-const GRAB_CORNER: PtrInit = { clientX: TRAY_LEFT + 4, clientY: TRAY_TOP + 4, pointerId: 1 };
 
 const MUST_BE_LAYOUT =
     'The grid-keyed recompute in useShapeDrag.ts ran too late: a native pointerup ' +
@@ -159,9 +124,12 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         const placeShape = vi.fn().mockReturnValue(true);
         const { item, ghostCell, commit } = setup(emptyGrid(), placeShape);
 
-        fireEvent(item, ptr('pointerdown', GRAB_CORNER));
-        const finger = { ...shapeAt(3, 3), pointerId: 1 };
-        act(() => { window.dispatchEvent(ptr('pointermove', finger)); });
+        fireEvent.pointerDown(item, grabCorner(1));
+        // Squarely on (3,3), with no fractional offset, so forgiveness snapping
+        // cannot quietly rescue the projection onto a neighbour: every neighbour
+        // is a full cell away and SNAP_RADIUS_CELLS is 0.75.
+        const finger = { ...cellCentre(3, 3), pointerId: 1 };
+        fireEvent.pointerMove(window, finger);
         expect(ghostCell()!.style.background, 'precondition: the ghost is green on (3,3)')
             .toContain('74, 222, 128');
 
@@ -183,9 +151,12 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         blocked[3][3] = FILLED;
         const { item, ghostCell, commit } = setup(blocked, placeShape);
 
-        fireEvent(item, ptr('pointerdown', GRAB_CORNER));
-        const finger = { ...shapeAt(3, 3), pointerId: 1 };
-        act(() => { window.dispatchEvent(ptr('pointermove', finger)); });
+        fireEvent.pointerDown(item, grabCorner(1));
+        // Squarely on (3,3), with no fractional offset, so forgiveness snapping
+        // cannot quietly rescue the projection onto a neighbour: every neighbour
+        // is a full cell away and SNAP_RADIUS_CELLS is 0.75.
+        const finger = { ...cellCentre(3, 3), pointerId: 1 };
+        fireEvent.pointerMove(window, finger);
         expect(ghostCell()!.style.background, 'precondition: the ghost is red on (3,3)')
             .toContain('239, 68, 68');
 
