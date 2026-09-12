@@ -9,6 +9,17 @@
 //
 // Setup comes from dragTestKit — board geometry derived from types.ts, cell
 // sizes from the slot components themselves.
+//
+// Pointer type is chosen test by test, not per file. The child only plays on a
+// touchscreen, so the rescue grab scale, the refused second finger and the
+// palm's pointercancel run as touch. Their fingers sit at fingerBelow(r, c) —
+// TOUCH_LIFT_PX under the cell — so the lifted shape lands exactly where the
+// mouse version put it and every expected anchor is unchanged. Three stay on
+// the unlifted path on purpose: the border and gutter tests, whose literal
+// pixel offsets are the subject (under the lift, the inset is pinned by
+// useShapeDrag.contract.test.tsx's touch pair and most-overlap rounding by
+// BlocksCanvas.lift.test.tsx), and tap-to-return, which never moves and so
+// never projects — no pointer type changes it.
 // ============================================================
 import { fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -26,9 +37,9 @@ import {
     TRAY_LEFT,
     TRAY_SLOT_SPACING,
     TRAY_TOP,
-    cellCentre,
     dragProxy,
     draggableItems,
+    fingerBelow,
     grabCorner,
     rect,
     renderCanvas,
@@ -91,9 +102,11 @@ describe('BlocksCanvas drag geometry and gesture ownership', () => {
         stubItemRect(items[0], BAR_H, RESCUE_CELL, TRAY_LEFT, TRAY_TOP);
 
         // 55px into a 22px/1.5px-gap bar is the third cell (pitch 23.5 → index 2).
-        fireEvent.pointerDown(items[0], { clientX: TRAY_LEFT + 55, clientY: TRAY_TOP + 8, pointerId: 1 });
-        fireEvent.pointerMove(window, { ...cellCentre(4, 5), pointerId: 1 });
-        fireEvent.pointerUp(window, { ...cellCentre(4, 5), pointerId: 1 });
+        fireEvent.pointerDown(items[0], { clientX: TRAY_LEFT + 55, clientY: TRAY_TOP + 8, pointerId: 1, pointerType: 'touch' });
+        // Touch: the bar floats TOUCH_LIFT_PX above the finger, so the finger
+        // moved down by the lift instead of the expected row moving up by it.
+        fireEvent.pointerMove(window, { ...fingerBelow(4, 5), pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerUp(window, { ...fingerBelow(4, 5), pointerId: 1, pointerType: 'touch' });
 
         expect(placeShape).toHaveBeenCalledWith(expect.objectContaining({ id: 'bar-h' }), 3, 4, 'rescue', 0);
     });
@@ -103,15 +116,17 @@ describe('BlocksCanvas drag geometry and gesture ownership', () => {
         stubItemRect(items[0], BLOCK_2X2, TRAY_CELL, TRAY_LEFT, TRAY_TOP);
         stubItemRect(items[1], DOT, TRAY_CELL, TRAY_LEFT + TRAY_SLOT_SPACING, TRAY_TOP);
 
-        fireEvent.pointerDown(items[0], grabCorner(1));
-        fireEvent.pointerDown(items[1], grabCorner(2, { slot: 1 }));
+        fireEvent.pointerDown(items[0], grabCorner(1, { pointerType: 'touch' }));
+        fireEvent.pointerDown(items[1], grabCorner(2, { slot: 1, pointerType: 'touch' }));
 
         // Only the first slot is masked — the second finger started nothing.
         expect(items[0].style.opacity).toBe('0');
         expect(items[1].style.opacity).toBe('1');
 
-        fireEvent.pointerMove(window, { ...cellCentre(1, 1), pointerId: 1 });
-        fireEvent.pointerUp(window, { ...cellCentre(1, 1), pointerId: 1 });
+        // Touch: the finger sits TOUCH_LIFT_PX below (1,1) so the lifted shape
+        // still lands on (1,1) — the finger moved, the expected row did not.
+        fireEvent.pointerMove(window, { ...fingerBelow(1, 1), pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerUp(window, { ...fingerBelow(1, 1), pointerId: 1, pointerType: 'touch' });
 
         expect(placeShape).toHaveBeenCalledTimes(1);
         expect(placeShape).toHaveBeenCalledWith(expect.objectContaining({ id: 'block-2x2' }), 1, 1, 'standard', 0);
@@ -121,13 +136,16 @@ describe('BlocksCanvas drag geometry and gesture ownership', () => {
         const { items, placeShape, proxy } = setup(stateWith(BLOCK_2X2));
         stubItemRect(items[0], BLOCK_2X2, TRAY_CELL, TRAY_LEFT, TRAY_TOP);
 
-        fireEvent.pointerDown(items[0], grabCorner(1));
-        fireEvent.pointerMove(window, { ...cellCentre(2, 2), pointerId: 1 });
-        fireEvent.pointerCancel(window, { clientX: 0, clientY: 0, pointerId: 2 });
+        // Touch, palm included: Windows reports a resting palm as a touch pointer.
+        // The finger sits TOUCH_LIFT_PX below (2,2) so the lifted shape still
+        // lands on (2,2) — the finger moved, the expected row did not.
+        fireEvent.pointerDown(items[0], grabCorner(1, { pointerType: 'touch' }));
+        fireEvent.pointerMove(window, { ...fingerBelow(2, 2), pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerCancel(window, { clientX: 0, clientY: 0, pointerId: 2, pointerType: 'touch' });
 
         expect(proxy()).not.toBeNull();
 
-        fireEvent.pointerUp(window, { ...cellCentre(2, 2), pointerId: 1 });
+        fireEvent.pointerUp(window, { ...fingerBelow(2, 2), pointerId: 1, pointerType: 'touch' });
         expect(placeShape).toHaveBeenCalledWith(expect.anything(), 2, 2, 'standard', 0);
     });
 

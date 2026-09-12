@@ -14,6 +14,16 @@
 // stale geometry constant does not break a test, it quietly re-points it at a
 // board that does not exist. The geometry now comes from dragTestKit, derived
 // from types.ts, and the assertions below are unchanged.
+//
+// Five of the six run as touch: those whose defect only exists on a touchscreen
+// (a second finger or palm, an OS-cancelled touch, finger roll on release) or
+// whose expected anchor is reached through the lift (the grab-cell scale).
+// Where a test drops a shape, the finger sits at fingerBelow(r, c) —
+// TOUCH_LIFT_PX under the cell — so the lifted shape reaches the anchor the
+// mouse version did and every assertion is still the one written RED. In the
+// three ownership/cancel tests no assertion observes the lift, so no coordinate
+// moved. The rejected-drop test is neither — a refusal unmasks the slot the
+// same way for any pointer — so it stays on the unlifted path.
 // ============================================================
 import { fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -31,6 +41,7 @@ import {
     cellCentre,
     dragProxy,
     draggableItem,
+    fingerBelow,
     rect,
     renderCanvas,
     stateWith,
@@ -60,9 +71,11 @@ describe('BlocksCanvas gesture contract', () => {
 
         // Finger lands 140px into a 148.5px-wide bar: the 4th cell (index 3).
         // With a 48px divisor the code decides it was the 3rd cell (index 2).
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 140, clientY: TRAY_TOP + 18, pointerId: 1 });
-        fireEvent.pointerMove(window, { ...cellCentre(2, 5), pointerId: 1 });
-        fireEvent.pointerUp(window, { ...cellCentre(2, 5), pointerId: 1 });
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 140, clientY: TRAY_TOP + 18, pointerId: 1, pointerType: 'touch' });
+        // Touch: the bar floats TOUCH_LIFT_PX above the finger, so the finger
+        // moved down by the lift instead of the expected row moving up by it.
+        fireEvent.pointerMove(window, { ...fingerBelow(2, 5), pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerUp(window, { ...fingerBelow(2, 5), pointerId: 1, pointerType: 'touch' });
 
         // Grabbed by cell 3, dropped with that cell over column 5 ⇒ anchor column 2.
         expect(placeShape).toHaveBeenCalledWith(expect.objectContaining({ id: 'bar-h' }), 2, 2, 'standard', 0);
@@ -71,10 +84,11 @@ describe('BlocksCanvas gesture contract', () => {
     it('a pointerup from a different pointer (second finger, palm) does not drop the shape', () => {
         const { item, placeShape, proxy } = setup(BLOCK_2X2);
 
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
+        // Touch for both: only a touchscreen has a second finger or a palm.
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
         expect(proxy()).not.toBeNull();
 
-        fireEvent.pointerUp(window, { ...cellCentre(2, 2), pointerId: 2 });
+        fireEvent.pointerUp(window, { ...cellCentre(2, 2), pointerId: 2, pointerType: 'touch' });
 
         expect(placeShape).not.toHaveBeenCalled();
         expect(proxy()).not.toBeNull(); // finger 1 is still dragging
@@ -83,11 +97,13 @@ describe('BlocksCanvas gesture contract', () => {
     it('pointermove from a different pointer does not steer the dragged shape', () => {
         const { item, proxy } = setup(BLOCK_2X2);
 
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
-        fireEvent.pointerMove(window, { ...cellCentre(1, 1), pointerId: 1 });
+        // Touch for both. The comparison is before/after on the same lifted
+        // proxy, so the lift cancels out of it and no coordinate moved.
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerMove(window, { ...cellCentre(1, 1), pointerId: 1, pointerType: 'touch' });
         const underFinger1 = proxy()!.style.transform;
 
-        fireEvent.pointerMove(window, { ...cellCentre(5, 5), pointerId: 2 }); // palm
+        fireEvent.pointerMove(window, { ...cellCentre(5, 5), pointerId: 2, pointerType: 'touch' }); // palm
 
         expect(proxy()!.style.transform).toBe(underFinger1);
     });
@@ -95,11 +111,15 @@ describe('BlocksCanvas gesture contract', () => {
     it('drops the shape where the projection was last shown, not where the finger happened to lift', () => {
         const { item, placeShape } = setup(BLOCK_2X2);
 
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
-        fireEvent.pointerMove(window, { ...cellCentre(2, 2), pointerId: 1 });
-        // The green ghost is at (2,2). The lift registers one cell away (finger roll,
+        // Touch — finger roll on release is a fingertip thing. Both finger
+        // positions sit TOUCH_LIFT_PX below their cells, so the ghost and the
+        // one-cell-away release are where the mouse version had them: the
+        // finger moved, the expected row did not.
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerMove(window, { ...fingerBelow(2, 2), pointerId: 1, pointerType: 'touch' });
+        // The green ghost is at (2,2). The release registers one cell away (finger roll,
         // coalesced moves, or a frame of React latency on the ghost).
-        fireEvent.pointerUp(window, { ...cellCentre(3, 3), pointerId: 1 });
+        fireEvent.pointerUp(window, { ...fingerBelow(3, 3), pointerId: 1, pointerType: 'touch' });
 
         expect(placeShape).toHaveBeenCalledWith(expect.anything(), 2, 2, 'standard', 0);
     });
@@ -107,10 +127,11 @@ describe('BlocksCanvas gesture contract', () => {
     it('pointercancel ends the drag: proxy unmounts and the tray shape is visible again', () => {
         const { item, placeShape, proxy } = setup(BLOCK_2X2);
 
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
+        // Touch: the OS cancels a touch it takes over (edge swipe, palm rejection).
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
         expect(proxy()).not.toBeNull();
 
-        fireEvent.pointerCancel(window, { clientX: 0, clientY: 0, pointerId: 1 });
+        fireEvent.pointerCancel(window, { clientX: 0, clientY: 0, pointerId: 1, pointerType: 'touch' });
 
         expect(proxy()).toBeNull();
         expect(item.style.opacity).toBe('1');
@@ -121,6 +142,7 @@ describe('BlocksCanvas gesture contract', () => {
         const rejecting = vi.fn().mockReturnValue(false);
         const { item } = setup(BLOCK_2X2, rejecting);
 
+        // Unlifted on purpose — see the header.
         fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
         fireEvent.pointerMove(window, { ...cellCentre(2, 2), pointerId: 1 });
         fireEvent.pointerUp(window, { ...cellCentre(2, 2), pointerId: 1 });
