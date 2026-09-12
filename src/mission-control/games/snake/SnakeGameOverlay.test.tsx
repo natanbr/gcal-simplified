@@ -2,22 +2,12 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { SnakeGameOverlay } from './SnakeGameOverlay';
-import type { QuizEngineApi } from '../quiz/types';
+import { stubEngine } from '../quiz/quizTestKit';
 
 // Mock the canvas to avoid rendering issues in JSDOM
 vi.mock('./SnakeCanvas', () => ({
     SnakeCanvas: () => <div data-testid="snake-canvas-mock" />
 }));
-
-function stubEngine(): QuizEngineApi {
-    return {
-        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
-        beginSession: vi.fn(),
-        setDifficulty: vi.fn(),
-        onAnswered: vi.fn(),
-        notifyQuizClosed: vi.fn(),
-    };
-}
 
 describe('SnakeGameOverlay', () => {
     it('renders null when open is false', () => {

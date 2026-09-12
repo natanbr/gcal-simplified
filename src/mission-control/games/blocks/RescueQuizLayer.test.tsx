@@ -19,17 +19,7 @@
 import { render } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { RescueQuizLayer } from './RescueQuizLayer';
-import type { QuizEngineApi } from '../quiz/types';
-
-function stubEngine(): QuizEngineApi {
-    return {
-        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
-        beginSession: vi.fn(),
-        setDifficulty: vi.fn(),
-        onAnswered: vi.fn(),
-        notifyQuizClosed: vi.fn(),
-    };
-}
+import { stubEngine } from '../quiz/quizTestKit';
 
 function renderShell(): HTMLElement {
     const { container } = render(

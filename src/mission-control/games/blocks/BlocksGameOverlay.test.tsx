@@ -2,17 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BlocksGameOverlay } from './BlocksGameOverlay';
-import type { QuizEngineApi } from '../quiz/types';
-
-function stubEngine(): QuizEngineApi {
-    return {
-        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
-        beginSession: vi.fn(),
-        setDifficulty: vi.fn(),
-        onAnswered: vi.fn(),
-        notifyQuizClosed: vi.fn(),
-    };
-}
+import { stubEngine } from '../quiz/quizTestKit';
 
 const mockStartGame = vi.fn();
 const mockResetGame = vi.fn();
