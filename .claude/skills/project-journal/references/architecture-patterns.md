@@ -332,3 +332,22 @@ and sizing the board 428px instead of 433, for as long as it existed. Nothing fa
 of a 52px pitch never crosses a rounding boundary — **a stale geometry constant does not break a
 test, it quietly re-points it at a board that does not exist.** After migrating a guard suite's
 setup, prove it still bites by mutating the source it guards, not by watching it stay green.
+
+## 2026-09-12 — Converting a drag test to touch: move the finger, not the expectation
+
+**Learning:** Space Rescue floats a touch-dragged shape `TOUCH_LIFT_PX` (1.5 board cells) above the
+finger and projects the ghost from the shape. `BlocksCanvas.test.tsx` and
+`BlocksCanvas.gesture-defects.test.tsx` sent no `pointerType`, so forcing `lift: 0` in
+`useShapeDrag.ts` left all 12 of their tests green — the child's only real input path was invisible
+to them. The obvious conversion (keep the finger on `cellCentre(r, c)`, shift the expected row) is a
+trap: a half-cell lift leaves the shape on an exact `.5` boundary, so the expectation would pin
+`Math.round`'s tie rule rather than the gesture. And not every touch test observes the lift at all —
+second-finger, palm and pointercancel tests never assert where a shape lands, so a lift mutant
+cannot turn them red, and saying it did would be a false proof.
+**Action:** Convert with `fingerBelow(r, c)` from `dragTestKit` (the finger sits `TOUCH_LIFT_PX`
+lower, which cancels the lift whatever it is tuned to) and keep every `expect` byte-identical. Prove
+the conversion is *selective* with one `lift: 0` run — the RED set must equal the anchor-bearing
+conversions exactly — and prove the lift-free ones still bite with a mutant of the rule they guard
+(drop the `pointerId` ownership check, no-op the cancel handler), run before and after so the kill
+sets can be compared. Convert a test when its defect only exists on touch or its anchor is reached
+through the lift; leave pixel-literal geometry and pointer-agnostic refusals on the unlifted path.
