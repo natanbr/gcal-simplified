@@ -70,7 +70,7 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     'src/mission-control/components/GlobalBank.tsx': 407,
     // 376 → 362 on 2026-08-20 (RescueQuizLayer extracted), then OFF the backlog
     // on 2026-09-07: the drag gesture moved to useShapeDrag.ts and the file
-    // landed at 165. Re-adding it would need a fresh, deliberate entry.
+    // landed at 175. Re-adding it would need a fresh, deliberate entry.
     'src/mission-control/games/fruits/useFruitMergeGame.ts': 361,
     'src/mission-control/games/fruits/FruitMergeCanvas.tsx': 360,
     // Tightened 329 → 324 on 2026-08-20 (quiz question no longer stored in game

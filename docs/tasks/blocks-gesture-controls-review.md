@@ -114,7 +114,7 @@ and `npm run tsc` both exit clean. The spec is in `docs/requirements.md` under
   **red where the shape actually is** and the lift returns the shape to the bank rather than guessing.
 
 ## Structure
-The gesture left `BlocksCanvas.tsx`, which fell from 362 to 165 lines and is no longer on the
+The gesture left `BlocksCanvas.tsx`, which fell from 362 to 175 lines and is no longer on the
 file-size debt list. It now lives in five focused units:
 - `useShapeDrag.ts` — the gesture: pointer ownership, lift, projection, drop, teardown.
 - `dragGeometry.ts` — pure maths, no DOM: pointer to shape position, rounding, snapping. This is the

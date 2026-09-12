@@ -635,7 +635,7 @@ were found and reproduced by tests before any change was made
 - The grab cell is computed from the slot's rendered cell size instead of the 48px board constant.
 - The tray slot un-masks on release either way; a successful placement empties it in the
   same React commit, so a refused drop simply leaves the shape sitting in the bank.
-- The drag logic moved out of `BlocksCanvas.tsx` (362 → 165 lines, off the file-size debt list) into
+- The drag logic moved out of `BlocksCanvas.tsx` (362 → 175 lines, off the file-size debt list) into
   five units: `useShapeDrag.ts` for the gesture, `dragGeometry.ts` for the pure pointer-to-cell and
   snapping maths, `placement.ts` for the single "may this shape sit here" rule the ghost and the game
   now share, `boardOrigin.ts` for the one DOM measurement the drag depends on, and `dragPerf.ts`
