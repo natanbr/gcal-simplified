@@ -342,12 +342,14 @@ finger and projects the ghost from the shape. `BlocksCanvas.test.tsx` and
 to them. The obvious conversion (keep the finger on `cellCentre(r, c)`, shift the expected row) is a
 trap: a half-cell lift leaves the shape on an exact `.5` boundary, so the expectation would pin
 `Math.round`'s tie rule rather than the gesture. And not every touch test observes the lift at all —
-second-finger, palm and pointercancel tests never assert where a shape lands, so a lift mutant
-cannot turn them red, and saying it did would be a false proof.
+a test that never drops a shape (a foreign pointerup or pointermove, the owner's own pointercancel)
+cannot be turned red by a lift mutant, and saying it was would be a false proof. The same subjects
+tested *through* a drop (a refused second grab, a foreign pointercancel mid-drag) do observe it.
 **Action:** Convert with `fingerBelow(r, c)` from `dragTestKit` (the finger sits `TOUCH_LIFT_PX`
 lower, which cancels the lift whatever it is tuned to) and keep every `expect` byte-identical. Prove
 the conversion is *selective* with one `lift: 0` run — the RED set must equal the anchor-bearing
 conversions exactly — and prove the lift-free ones still bite with a mutant of the rule they guard
 (drop the `pointerId` ownership check, no-op the cancel handler), run before and after so the kill
-sets can be compared. Convert a test when its defect only exists on touch or its anchor is reached
+sets can be compared. A colour-only ghost precondition is not a position check: on an empty board
+every cell is green, so a lift regression slips past it and fails later under the wrong message. Convert a test when its defect only exists on touch or its anchor is reached
 through the lift; leave pixel-literal geometry and pointer-agnostic refusals on the unlifted path.
