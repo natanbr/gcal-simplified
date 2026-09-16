@@ -23,7 +23,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BLOCK_2X2, DOT, dragProxy, draggableItems, renderCanvas, stateWith } from './dragTestKit';
 
 /** An arbitrary point on a grabbable. No rect is stubbed here, so every item
- *  measures 0x0 and the grab clamps to cell (0,0) whichever item it hits.
+ *  measures 0x0 and the grab clamps into whichever shape it hits.
  *  Touch, because the case this gate exists for — a second finger tapping
  *  Refresh mid-drag — only happens on the touchscreen. No assertion reads a
  *  position, so the lift does not enter it. */

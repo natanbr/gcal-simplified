@@ -24,12 +24,11 @@
 // Asserted in BOTH directions on purpose: `not.toHaveBeenCalled()` on its own
 // passes vacuously if the harness never reaches the handler at all.
 //
-// Runs as touch. The recompute starts from where the LIFTED shape was last
-// drawn, so on the child's touchscreen there is a lift for it to keep; on the
-// mouse path the lift is 0, and a recompute that projected from the finger
-// instead of the shape would pass unnoticed. The finger sits at
-// fingerBelow(3, 3) — TOUCH_LIFT_PX under the cell — so the lifted DOT is
-// squarely on (3,3), exactly where the mouse version had it.
+// Runs as touch. The recompute starts from where the shape was last drawn,
+// which on the child's touchscreen includes its TOUCH_LIFT_PX float; on the
+// mouse path that float is 0, so a recompute that dropped it would pass
+// unnoticed. (`liftAt` below is the finger's release, not that float.) The
+// finger sits at fingerBelow(3, 3), so the floating DOT is squarely on (3,3).
 // ============================================================
 import { useLayoutEffect } from 'react';
 import { render, within, fireEvent, act } from '@testing-library/react';
@@ -122,7 +121,8 @@ const MUST_BE_LAYOUT =
     'The grid-keyed recompute in useShapeDrag.ts ran too late: a native pointerup ' +
     'arriving in the same commit as the new grid read the OLD projection. That effect ' +
     'must be a useLayoutEffect — a useEffect is flushed as a separate task, which ' +
-    'React cannot order a window listener against.';
+    'React cannot order a window listener against. (Or, on touch, the recompute no ' +
+    'longer projects from where the floating shape was last drawn.)';
 
 describe('a lift arriving in the same commit as a new grid sees the new grid', () => {
     beforeEach(() => vi.clearAllMocks());
@@ -139,6 +139,9 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         fireEvent.pointerMove(window, finger);
         expect(ghostCell()!.style.background, 'precondition: the ghost is green on (3,3)')
             .toContain('74, 222, 128');
+        // Colour alone would pass anywhere on an empty board. 1-indexed.
+        expect([ghostCell()!.style.gridRowStart, ghostCell()!.style.gridColumnStart], 'precondition: the ghost is on (3,3)')
+            .toEqual(['4', '4']);
 
         // The line-clear timer's commit: spawnObstacles drops a meteor into the
         // cell the ghost is sitting on, and the finger lifts in that same commit.
@@ -166,6 +169,8 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         fireEvent.pointerMove(window, finger);
         expect(ghostCell()!.style.background, 'precondition: the ghost is red on (3,3)')
             .toContain('239, 68, 68');
+        expect([ghostCell()!.style.gridRowStart, ghostCell()!.style.gridColumnStart], 'precondition: the ghost is on (3,3)')
+            .toEqual(['4', '4']);
 
         // The clear lands: (3,3) is empty again, and the child lifts on it.
         act(() => { commit(emptyGrid(), finger); });

@@ -21,8 +21,8 @@
 // Where a test drops a shape, the finger sits at fingerBelow(r, c) —
 // TOUCH_LIFT_PX under the cell — so the lifted shape reaches the anchor the
 // mouse version did and every assertion is still the one written RED. In the
-// three ownership/cancel tests no assertion observes the lift, so no coordinate
-// moved. The rejected-drop test is neither — a refusal unmasks the slot the
+// three ownership/cancel tests no assertion observes the lift. The
+// rejected-drop test is neither — a refusal unmasks the slot the
 // same way for any pointer — so it stays on the unlifted path.
 // ============================================================
 import { fireEvent } from '@testing-library/react';
@@ -98,9 +98,9 @@ describe('BlocksCanvas gesture contract', () => {
         const { item, proxy } = setup(BLOCK_2X2);
 
         // Touch for both. The comparison is before/after on the same lifted
-        // proxy, so the lift cancels out of it and no coordinate moved.
+        // proxy, so the lift cancels out of it.
         fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
-        fireEvent.pointerMove(window, { ...cellCentre(1, 1), pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerMove(window, { ...fingerBelow(1, 1), pointerId: 1, pointerType: 'touch' });
         const underFinger1 = proxy()!.style.transform;
 
         fireEvent.pointerMove(window, { ...cellCentre(5, 5), pointerId: 2, pointerType: 'touch' }); // palm
