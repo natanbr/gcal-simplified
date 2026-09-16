@@ -19,7 +19,7 @@
 import { createElement } from 'react';
 import { render } from '@testing-library/react';
 import { vi } from 'vitest';
-import type { QuizEngineApi } from '../quiz/types';
+import { stubEngine } from '../quiz/quizTestKit';
 import { BlocksCanvas } from './BlocksCanvas';
 import { RESCUE_CELL_SIZE } from './RescueSlot';
 import { TRAY_CELL_SIZE } from './StandardShapesTray';
@@ -180,16 +180,6 @@ export function stubItemRect(
         cols * cellSize + (cols - 1) * SHAPE_GAP,
         rows * cellSize + (rows - 1) * SHAPE_GAP,
     );
-}
-
-export function stubEngine(): QuizEngineApi {
-    return {
-        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
-        beginSession: vi.fn(),
-        setDifficulty: vi.fn(),
-        onAnswered: vi.fn(),
-        notifyQuizClosed: vi.fn(),
-    };
 }
 
 // ── Rendering ────────────────────────────────────────────────

@@ -27,6 +27,7 @@
 import { useLayoutEffect } from 'react';
 import { render, within, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { stubEngine } from '../quiz/quizTestKit';
 import { BlocksCanvas } from './BlocksCanvas';
 import type { PlaceShape } from './useShapeDrag';
 import {
@@ -43,7 +44,6 @@ import {
     grabCorner,
     rect,
     stateWith,
-    stubEngine,
     stubItemRect,
 } from './dragTestKit';
 
