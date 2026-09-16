@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BlocksGameOverlay } from './BlocksGameOverlay';
 import { stubEngine } from '../quiz/quizTestKit';
+import type { GamePhase } from './types';
 
 const mockStartGame = vi.fn();
 const mockResetGame = vi.fn();
@@ -12,17 +13,19 @@ const mockResolveRescueQuiz = vi.fn();
 const mockCancelRescueQuiz = vi.fn();
 const mockRefreshRescueShape = vi.fn();
 
-const mockGameState = {
+const freshGameState = () => ({
     grid: Array.from({ length: 8 }, () => Array(8).fill(0)),
     standardShapes: [null, null, null],
     rescueShape: null,
     rescueShapeLocked: true,
     altitude: 0,
     score: 0,
-    phase: 'waiting' as const,
+    phase: 'waiting' as GamePhase,
     level: 0,
     rescueQuizActive: false,
-};
+});
+
+const mockGameState = freshGameState();
 
 vi.mock('./useBlocksGame', () => ({
     useBlocksGame: () => ({
@@ -40,10 +43,7 @@ vi.mock('./useBlocksGame', () => ({
 describe('BlocksGameOverlay', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockGameState.phase = 'waiting';
-        mockGameState.score = 0;
-        mockGameState.altitude = 0;
-        mockGameState.level = 0;
+        Object.assign(mockGameState, freshGameState());
     });
 
     it('renders null when open is false', () => {
@@ -66,13 +66,14 @@ describe('BlocksGameOverlay', () => {
 
     it('renders victory overlay when phase is victory', () => {
         mockGameState.phase = 'victory';
+        mockGameState.score = 37;
         const mockClose = vi.fn();
         render(<BlocksGameOverlay open={true} onClose={mockClose} engine={stubEngine()} />);
-        
+
         expect(screen.getByText('Mission Complete!')).toBeDefined();
         const collectButton = screen.getByText('Collect Bonus! 🏆');
         fireEvent.click(collectButton);
-        expect(mockClose).toHaveBeenCalledWith(mockGameState.score);
+        expect(mockClose).toHaveBeenCalledWith(37);
     });
 
     it('renders game-over overlay when phase is game-over', () => {
@@ -80,16 +81,26 @@ describe('BlocksGameOverlay', () => {
         mockGameState.score = 42;
         const mockClose = vi.fn();
         render(<BlocksGameOverlay open={true} onClose={mockClose} engine={stubEngine()} />);
-        
+
         expect(screen.getByText('Mission Failed')).toBeDefined();
         expect(screen.getByText(/Space debris clogged the path! Score: 42/)).toBeDefined();
-        
+
+        // Opening the overlay already reset the game once; only the click may count.
+        mockResetGame.mockClear();
         const tryAgainButton = screen.getByText('Try Again 🔄');
         fireEvent.click(tryAgainButton);
-        expect(mockResetGame).toHaveBeenCalled();
+        expect(mockResetGame).toHaveBeenCalledTimes(1);
+        expect(mockClose).not.toHaveBeenCalled();
 
         const closeButton = screen.getByText('Close ✕');
         fireEvent.click(closeButton);
         expect(mockClose).toHaveBeenCalledWith(42);
+    });
+
+    it('sets the quiz difficulty from the board level', () => {
+        mockGameState.level = 3;
+        const engine = stubEngine();
+        render(<BlocksGameOverlay open={true} onClose={vi.fn()} engine={engine} />);
+        expect(engine.setDifficulty).toHaveBeenCalledWith(3, 3);
     });
 });

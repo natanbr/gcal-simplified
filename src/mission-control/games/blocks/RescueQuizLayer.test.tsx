@@ -58,4 +58,17 @@ describe('RescueQuizLayer', () => {
         expect(shell.style.zIndex).toBe('1000');
         expect(shell.style.inset).toBe('-12px');
     });
+
+    it('tells the engine the quiz closed when the layer unmounts', () => {
+        // Blocks ends a rescue quiz by unmounting this layer. notifyQuizClosed is
+        // what clears the engine's per-quiz mercy streak; without it, reading
+        // questions stop for the rest of the session and nothing else notices.
+        const engine = stubEngine();
+        const { unmount } = render(
+            <RescueQuizLayer engine={engine} onSolved={vi.fn()} onCancel={vi.fn()} />
+        );
+        expect(engine.notifyQuizClosed).not.toHaveBeenCalled();
+        unmount();
+        expect(engine.notifyQuizClosed).toHaveBeenCalledTimes(1);
+    });
 });
