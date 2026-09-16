@@ -23,6 +23,13 @@
 //
 // Asserted in BOTH directions on purpose: `not.toHaveBeenCalled()` on its own
 // passes vacuously if the harness never reaches the handler at all.
+//
+// Runs as touch. The recompute starts from where the LIFTED shape was last
+// drawn, so on the child's touchscreen there is a lift for it to keep; on the
+// mouse path the lift is 0, and a recompute that projected from the finger
+// instead of the shape would pass unnoticed. The finger sits at
+// fingerBelow(3, 3) — TOUCH_LIFT_PX under the cell — so the lifted DOT is
+// squarely on (3,3), exactly where the mouse version had it.
 // ============================================================
 import { useLayoutEffect } from 'react';
 import { render, within, fireEvent, act } from '@testing-library/react';
@@ -38,9 +45,9 @@ import {
     TRAY_CELL,
     TRAY_LEFT,
     TRAY_TOP,
-    cellCentre,
     draggableItem,
     emptyGrid,
+    fingerBelow,
     grabCorner,
     rect,
     stateWith,
@@ -51,7 +58,7 @@ import {
 const FILLED = 1;
 const METEOR = 2;
 
-interface PtrInit { clientX: number; clientY: number; pointerId: number }
+interface PtrInit { clientX: number; clientY: number; pointerId: number; pointerType: string }
 
 interface HarnessProps {
     grid: number[][];
@@ -124,11 +131,11 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         const placeShape = vi.fn().mockReturnValue(true);
         const { item, ghostCell, commit } = setup(emptyGrid(), placeShape);
 
-        fireEvent.pointerDown(item, grabCorner(1));
-        // Squarely on (3,3), with no fractional offset, so forgiveness snapping
-        // cannot quietly rescue the projection onto a neighbour: every neighbour
-        // is a full cell away and SNAP_RADIUS_CELLS is 0.75.
-        const finger = { ...cellCentre(3, 3), pointerId: 1 };
+        fireEvent.pointerDown(item, grabCorner(1, { pointerType: 'touch' }));
+        // The lifted shape squarely on (3,3), with no fractional offset, so
+        // forgiveness snapping cannot quietly rescue the projection onto a
+        // neighbour: every neighbour is a full cell away and SNAP_RADIUS_CELLS is 0.75.
+        const finger = { ...fingerBelow(3, 3), pointerId: 1, pointerType: 'touch' };
         fireEvent.pointerMove(window, finger);
         expect(ghostCell()!.style.background, 'precondition: the ghost is green on (3,3)')
             .toContain('74, 222, 128');
@@ -151,11 +158,11 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         blocked[3][3] = FILLED;
         const { item, ghostCell, commit } = setup(blocked, placeShape);
 
-        fireEvent.pointerDown(item, grabCorner(1));
-        // Squarely on (3,3), with no fractional offset, so forgiveness snapping
-        // cannot quietly rescue the projection onto a neighbour: every neighbour
-        // is a full cell away and SNAP_RADIUS_CELLS is 0.75.
-        const finger = { ...cellCentre(3, 3), pointerId: 1 };
+        fireEvent.pointerDown(item, grabCorner(1, { pointerType: 'touch' }));
+        // The lifted shape squarely on (3,3), with no fractional offset, so
+        // forgiveness snapping cannot quietly rescue the projection onto a
+        // neighbour: every neighbour is a full cell away and SNAP_RADIUS_CELLS is 0.75.
+        const finger = { ...fingerBelow(3, 3), pointerId: 1, pointerType: 'touch' };
         fireEvent.pointerMove(window, finger);
         expect(ghostCell()!.style.background, 'precondition: the ghost is red on (3,3)')
             .toContain('239, 68, 68');
