@@ -343,3 +343,17 @@ full cell, but a *dropped* offset moves it toward the next cell and still rounds
 assertions are no evidence: run the same mutations against the file before and after. Aim
 coordinate tests off-centre on purpose (gesture-defects' `OFF_CENTRE`), and name which suite owns
 each mutation that aim cannot see.
+
+## 2026-09-18 — Everything a window listener reads across a commit must be layout-synced
+
+**Learning:** The 2026-09-07 rework made the grid-keyed projection recompute a layout effect, because
+a native `pointerup` can land after a commit and before its passive flush. The same window hid a
+second stale read one level up: the drag's window listeners are subscribed in a passive effect and
+closed over `placeShape` and the projection function. useBlocksGame rebuilds `placeShape` whenever the
+grid changes and re-checks the cell against the grid it closed over, so a lift in that window called
+the old one and refused a cell the child had just been shown in green. The guard could not see it:
+the test kit's `placeShape` spy is stable and always accepts.
+**Action:** A listener that outlives renders (window, document, a subscription) reads every
+callback and value that can change mid-gesture through a ref synced in `useLayoutEffect`, not
+through its closure — and its test must use a collaborator shaped like production's (new identity
+per input, real validation), because a stable always-yes stub hides exactly this class of bug.
