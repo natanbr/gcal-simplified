@@ -6,7 +6,7 @@ import type { DragSlot, StartDragHandler } from './useShapeDrag';
 
 /** Passed to ShapeItem *and* to onStartDrag: the grabbed cell is derived from
  *  the size this slot really renders, which is smaller than the tray's. */
-const RESCUE_CELL_SIZE = 22;
+export const RESCUE_CELL_SIZE = 22;
 
 interface RescueSlotProps {
     rescueShape: GameShape | null;

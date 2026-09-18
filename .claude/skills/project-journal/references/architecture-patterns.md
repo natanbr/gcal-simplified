@@ -310,3 +310,46 @@ insetting by their sum.** Deliberate. A fractional border does not survive devic
 only an identical border gets snapped identically; insetting by the sum drew the ghost half a pixel
 out, which flips the rounding for a shape on a cell boundary. Do NOT "simplify" it to `inset:
 BOARD_CONTENT_INSET`.
+
+## 2026-09-10 — A shared test helper is a production file to the guards
+
+**Learning:** Consolidating the five blocks drag suites onto one
+`src/mission-control/games/blocks/dragTestKit.ts` hit two traps that neither the rule nor the
+filename suggests. First, `productionSources()` in `src/__tests__/helpers/sourceFiles.ts` excludes
+only `*.test.ts(x)` and `.d.ts` — so a *helper* under a styled root is scanned by
+`style-token-ratchet.test.ts` and `file-size-ratchet.test.ts` like any component. Copying the shape
+fixtures' `#f59e0b`/`#a78bfa`/`#38bdf8` into the kit would have failed the build as a **new** raw-hex
+violation, and a baseline entry for a file created that day would be exactly the lie the ratchet
+exists to prevent. Second, a `.tsx` that exports only functions and constants trips
+`react-refresh/only-export-components`, which the project lints at `--max-warnings 0` — and the rule
+is right, nothing in a test kit is a component.
+**Action:** Put shared test setup in a `.ts` file, using `createElement` for the one element it
+renders rather than reaching for `.tsx`. Derive fixtures from the production source (`SHAPE_POOL` /
+`HELP_SHAPES`) instead of retyping their literals — that satisfies the ratchets *and* removes the
+drift the kit exists to prevent. The drift is real and silent: `BlocksCanvas.gesture-defects.test.tsx`
+had been measuring the board's content box from the 8px padding alone, ignoring the 2.5px border,
+and sizing the board 428px instead of 433, for as long as it existed. Nothing failed, because 2.5px
+of a 52px pitch never crosses a rounding boundary — **a stale geometry constant does not break a
+test, it quietly re-points it at a board that does not exist.** After migrating a guard suite's
+setup, prove it still bites by mutating the source it guards, not by watching it stay green.
+
+## 2026-09-12 — Converting a drag test to touch: move the finger, not the expectation
+
+**Learning:** Space Rescue floats a touch-dragged shape `TOUCH_LIFT_PX` (1.5 board cells) above the
+finger and projects the ghost from the shape. `BlocksCanvas.test.tsx` and
+`BlocksCanvas.gesture-defects.test.tsx` sent no `pointerType`, so forcing `lift: 0` in
+`useShapeDrag.ts` left all 12 of their tests green — the child's only real input path was invisible
+to them. The obvious conversion (keep the finger on `cellCentre(r, c)`, shift the expected row) is a
+trap: a half-cell lift leaves the shape on an exact `.5` boundary, so the expectation would pin
+`Math.round`'s tie rule rather than the gesture. And not every touch test observes the lift at all —
+a test that never drops a shape (a foreign pointerup or pointermove, the owner's own pointercancel)
+cannot be turned red by a lift mutant, and saying it was would be a false proof. The same subjects
+tested *through* a drop (a refused second grab, a foreign pointercancel mid-drag) do observe it.
+**Action:** Convert with `fingerBelow(r, c)` from `dragTestKit` (the finger sits `TOUCH_LIFT_PX`
+lower, which cancels the lift whatever it is tuned to) and keep every `expect` byte-identical. Prove
+the conversion is *selective* with one `lift: 0` run — the RED set must equal the anchor-bearing
+conversions exactly — and prove the lift-free ones still bite with a mutant of the rule they guard
+(drop the `pointerId` ownership check, no-op the cancel handler), run before and after so the kill
+sets can be compared. A colour-only ghost precondition is not a position check: on an empty board
+every cell is green, so a lift regression slips past it and fails later under the wrong message. Convert a test when its defect only exists on touch or its anchor is reached
+through the lift; leave pixel-literal geometry and pointer-agnostic refusals on the unlifted path.

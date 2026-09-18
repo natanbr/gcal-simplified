@@ -18,60 +18,23 @@
 // `onClick` is undefined while gated, so that assertion passes whether the
 // button is disabled or not. The `disabled` state itself is the contract.
 // ============================================================
-import { render, within, fireEvent, act } from '@testing-library/react';
+import { within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BlocksCanvas } from './BlocksCanvas';
-import type { BlocksGameState, GameShape } from './types';
-import type { QuizEngineApi } from '../quiz/types';
+import { BLOCK_2X2, DOT, dragProxy, draggableItems, renderCanvas, stateWith } from './dragTestKit';
 
-function stubEngine(): QuizEngineApi {
-    return {
-        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
-        beginSession: vi.fn(),
-        setDifficulty: vi.fn(),
-        onAnswered: vi.fn(),
-        notifyQuizClosed: vi.fn(),
-    };
-}
-
-const BLOCK_2X2: GameShape = {
-    id: 'block-2x2', name: 'Block', color: '#f59e0b',
-    cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-};
-const DOT: GameShape = { id: 'dot', name: 'Dot', color: '#38bdf8', cells: [{ x: 0, y: 0 }] };
-
-interface PtrInit { clientX: number; clientY: number; pointerId: number }
-function ptr(type: string, init: PtrInit) {
-    return new PointerEvent(type, { bubbles: true, ...init });
-}
-
-const GRAB: PtrInit = { clientX: 120, clientY: 120, pointerId: 1 };
-
-function stateWith(): BlocksGameState {
-    return {
-        grid: Array.from({ length: 8 }, () => Array(8).fill(0)),
-        standardShapes: [BLOCK_2X2, null, null],
-        rescueShape: DOT,
-        // Unlocked, or the rescue shape gets no onPointerDown at all and there
-        // is nothing to put in flight.
-        rescueShapeLocked: false,
-        altitude: 0, score: 0, phase: 'playing', level: 0,
-        rescueQuizActive: false, clearedFeedback: null,
-    };
-}
+/** An arbitrary point on a grabbable. No rect is stubbed here, so every item
+ *  measures 0x0 and the grab clamps into whichever shape it hits.
+ *  Touch, because the case this gate exists for — a second finger tapping
+ *  Refresh mid-drag — only happens on the touchscreen. No assertion reads a
+ *  position, so the lift does not enter it. */
+const GRAB = { clientX: 120, clientY: 120, pointerId: 1, pointerType: 'touch' };
 
 function setup() {
-    const refreshRescueShape = vi.fn();
-    const { container } = render(
-        <BlocksCanvas
-            gameState={stateWith()}
-            placeShape={vi.fn().mockReturnValue(true)}
-            triggerRescueQuiz={vi.fn()}
-            resolveRescueQuiz={vi.fn()}
-            cancelRescueQuiz={vi.fn()}
-            engine={stubEngine()}
-            refreshRescueShape={refreshRescueShape}
-        />,
+    const { container } = renderCanvas(
+        // Unlocked, or the rescue shape gets no onPointerDown at all and there
+        // is nothing to put in flight.
+        stateWith(BLOCK_2X2, { rescueShape: DOT, rescueShapeLocked: false }),
+        vi.fn().mockReturnValue(true),
     );
     const scoped = within(container);
 
@@ -81,7 +44,7 @@ function setup() {
     const slot = scoped.getByText('Rescue Slot').parentElement;
     if (!slot) throw new Error('rescue slot did not render');
 
-    const grabbables = [...container.querySelectorAll<HTMLDivElement>('div[style*="cursor: grab"]')];
+    const grabbables = draggableItems(container);
     expect(grabbables, 'expected exactly one tray shape and one rescue shape').toHaveLength(2);
 
     const rescueItem = grabbables.find(el => slot.contains(el));
@@ -89,8 +52,8 @@ function setup() {
     if (!rescueItem || !trayItem) throw new Error('could not tell the rescue shape from the tray shape');
 
     const refresh = () => scoped.getByRole('button', { name: /refresh/i });
-    const proxy = () => container.querySelector('div[style*="z-index: 9999"]');
-    return { rescueItem, trayItem, refresh, proxy, refreshRescueShape };
+    const proxy = () => dragProxy(container);
+    return { rescueItem, trayItem, refresh, proxy };
 }
 
 describe('the Refresh button is gated on the rescue shape being in flight', () => {
@@ -104,7 +67,7 @@ describe('the Refresh button is gated on the rescue shape being in flight', () =
     it('is disabled while the RESCUE shape is in flight', () => {
         const { rescueItem, refresh, proxy } = setup();
 
-        fireEvent(rescueItem, ptr('pointerdown', GRAB));
+        fireEvent.pointerDown(rescueItem, GRAB);
         expect(proxy(), 'precondition: the rescue shape is actually in flight').not.toBeNull();
 
         expect(
@@ -120,7 +83,7 @@ describe('the Refresh button is gated on the rescue shape being in flight', () =
         // working button away from the child for no reason.
         const { trayItem, refresh, proxy } = setup();
 
-        fireEvent(trayItem, ptr('pointerdown', GRAB));
+        fireEvent.pointerDown(trayItem, GRAB);
         expect(proxy(), 'precondition: the tray shape is actually in flight').not.toBeNull();
 
         expect(
@@ -133,11 +96,11 @@ describe('the Refresh button is gated on the rescue shape being in flight', () =
     it('is enabled again once the rescue drag ends', () => {
         const { rescueItem, refresh, proxy } = setup();
 
-        fireEvent(rescueItem, ptr('pointerdown', GRAB));
+        fireEvent.pointerDown(rescueItem, GRAB);
         expect(refresh()).toBeDisabled();
 
         // A lift with no projection is a return-to-bank; it still ends the drag.
-        act(() => { window.dispatchEvent(ptr('pointerup', GRAB)); });
+        fireEvent.pointerUp(window, GRAB);
 
         expect(proxy(), 'precondition: the drag really ended').toBeNull();
         expect(

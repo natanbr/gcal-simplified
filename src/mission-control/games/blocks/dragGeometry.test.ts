@@ -17,20 +17,8 @@ import {
     snapAnchor,
 } from './dragGeometry';
 import { isPlaceable } from './placement';
-import { BOARD_CELL_PITCH, CELL_DISPLAY_SIZE, GameShape } from './types';
-
-const DOT: GameShape = { id: 'dot', name: 'Dot', color: '#38bdf8', cells: [{ x: 0, y: 0 }] };
-const BLOCK_2X2: GameShape = {
-    id: 'block-2x2', name: 'Block', color: '#f59e0b',
-    cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-};
-
-const emptyGrid = () => Array.from({ length: 8 }, () => Array(8).fill(0));
-const gridWith = (...filled: Array<[number, number]>) => {
-    const grid = emptyGrid();
-    for (const [r, c] of filled) grid[r][c] = 1;
-    return grid;
-};
+import { BLOCK_2X2, DOT, blockedGrid as gridWith, emptyGrid } from './dragTestKit';
+import { BOARD_CELL_PITCH, CELL_DISPLAY_SIZE } from './types';
 
 describe('proxyOrigin — where the dragged shape is drawn', () => {
     it('centres the grabbed cell on the pointer when there is no lift', () => {

@@ -5,7 +5,7 @@ import type { DragSlot, StartDragHandler } from './useShapeDrag';
 
 /** Passed to ShapeItem *and* to onStartDrag: the grabbed cell is derived from
  *  the size the slot really renders. */
-const TRAY_CELL_SIZE = 36;
+export const TRAY_CELL_SIZE = 36;
 
 interface StandardShapesTrayProps {
     standardShapes: (GameShape | null)[];
