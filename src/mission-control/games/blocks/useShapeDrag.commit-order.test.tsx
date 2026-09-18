@@ -24,10 +24,12 @@
 // Asserted in BOTH directions on purpose: `not.toHaveBeenCalled()` on its own
 // passes vacuously if the harness never reaches the handler at all.
 // ============================================================
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 import { render, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BlocksCanvas } from './BlocksCanvas';
+import { isPlaceable } from './placement';
+import type { PlaceShape } from './useShapeDrag';
 import {
     DOT,
     blockedGrid,
@@ -52,8 +54,27 @@ const SQUARELY_ON_3_3 = { ...cellCentre(3, 3), pointerId: 1 };
 
 interface PtrInit { clientX: number; clientY: number; pointerId: number }
 
+/**
+ * A placeShape shaped like production's: useBlocksGame rebuilds it whenever the
+ * grid changes and re-checks the cell against the grid it closed over. Accepted
+ * and refused drops are recorded separately, so a refusal cannot hide behind a
+ * "was called" assertion.
+ */
+interface GridClosedPlace { placed: ReturnType<typeof vi.fn>; refused: ReturnType<typeof vi.fn> }
+const placeShapeFor = (grid: number[][], { placed, refused }: GridClosedPlace): PlaceShape =>
+    (shape, gridX, gridY, slotType, slotIndex) => {
+        const ok = isPlaceable(grid, shape, { r: gridY, c: gridX });
+        (ok ? placed : refused)(shape, gridX, gridY, slotType, slotIndex);
+        return ok;
+    };
+
 interface HarnessProps {
     grid: number[][];
+    /** When set, placeShape is rebuilt per grid like production's; otherwise
+     *  the kit's stable, always-accepting spy. */
+    gridClosed?: GridClosedPlace;
+    /** Also dispatch a pointermove at the lift point, just before the lift. */
+    moveFirst?: boolean;
     /** Built once in setup and passed down, never inside the harness's render:
      *  new collaborator identities on every commit would change the very commit
      *  this guard isolates. */
@@ -69,23 +90,31 @@ interface HarnessProps {
  * effect on `liftAt` alone (rather than also on `grid`) keeps
  * react-hooks/exhaustive-deps happy without changing when it fires.
  */
-function CommitOrderHarness({ grid, props, liftAt }: HarnessProps) {
+function CommitOrderHarness({ grid, props, liftAt, gridClosed, moveFirst = false }: HarnessProps) {
+    const placeShape = useMemo(
+        () => (gridClosed ? placeShapeFor(grid, gridClosed) : props.placeShape),
+        [grid, gridClosed, props.placeShape],
+    );
+
     useLayoutEffect(() => {
         if (!liftAt) return;
+        if (moveFirst) window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, ...liftAt }));
         // A plain dispatch, not fireEvent: this runs mid-commit, inside the one
         // window this guard measures, and fireEvent would wrap it in act().
         window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, ...liftAt }));
-    }, [liftAt]);
+    }, [liftAt, moveFirst]);
 
-    return <BlocksCanvas {...props} gameState={stateWith(DOT, { grid })} />;
+    return <BlocksCanvas {...props} placeShape={placeShape} gameState={stateWith(DOT, { grid })} />;
 }
 
-function setup(grid: number[][]) {
+function setup(grid: number[][], gridClosed?: GridClosedPlace) {
     const props = canvasProps();
-    const view = render(<CommitOrderHarness grid={grid} props={props} liftAt={null} />);
+    const view = render(<CommitOrderHarness grid={grid} props={props} liftAt={null} gridClosed={gridClosed} />);
     /** Re-renders in place: the board, the tray item and their stubs survive. */
-    const commit = (nextGrid: number[][], liftAt: PtrInit | null) =>
-        view.rerender(<CommitOrderHarness grid={nextGrid} props={props} liftAt={liftAt} />);
+    const commit = (nextGrid: number[][], liftAt: PtrInit | null, moveFirst = false) =>
+        view.rerender(
+            <CommitOrderHarness grid={nextGrid} props={props} liftAt={liftAt} gridClosed={gridClosed} moveFirst={moveFirst} />,
+        );
 
     stubBoard(view.container);
     pinDraggables(view.container);
@@ -138,6 +167,51 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         act(() => { commit(emptyGrid(), SQUARELY_ON_3_3); });
 
         expect(placeShape, MUST_BE_LAYOUT)
+            .toHaveBeenCalledWith(expect.objectContaining({ id: 'dot' }), 3, 3, 'standard', 0);
+    });
+});
+
+const MUST_READ_LATEST =
+    'The window listener ran a callback from before the new grid committed. The ' +
+    'listeners live for the whole drag and are re-subscribed only in a passive ' +
+    'effect, so anything they read across a commit must be synced in a LAYOUT effect.';
+
+describe('a drop the ghost shows green is placed, even when the grid changes in the same commit', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('uses the placeShape built for the new grid, not the one the listener was subscribed with', () => {
+        // useBlocksGame rebuilds placeShape when the grid changes, and the old one
+        // re-checks the cell against the OLD grid. The child was shown green and
+        // lifts in the clear's commit: calling the old one refuses a legal drop.
+        const gridClosed = { placed: vi.fn(), refused: vi.fn() };
+        const { item, ghost, commit } = setup(blockedGrid([3, 3]), gridClosed);
+
+        fireEvent.pointerDown(item, grabCorner(1));
+        fireEvent.pointerMove(window, SQUARELY_ON_3_3);
+        expect(ghost()!.style.background, 'precondition: the ghost is red on (3,3)')
+            .toContain('239, 68, 68');
+
+        act(() => { commit(emptyGrid(), SQUARELY_ON_3_3); });
+
+        expect(gridClosed.refused, MUST_READ_LATEST).not.toHaveBeenCalled();
+        expect(gridClosed.placed).toHaveBeenCalledWith(expect.objectContaining({ id: 'dot' }), 3, 3, 'standard', 0);
+    });
+
+    it('projects a move in that same window against the new grid, not the old one', () => {
+        // A pointermove between the commit and the passive flush reaches the old
+        // listener too. Projected against the old grid it repaints the ghost red
+        // over the freed cell, and the lift that follows is a return-to-bank.
+        const gridClosed = { placed: vi.fn(), refused: vi.fn() };
+        const { item, ghost, commit } = setup(blockedGrid([3, 3]), gridClosed);
+
+        fireEvent.pointerDown(item, grabCorner(1));
+        fireEvent.pointerMove(window, SQUARELY_ON_3_3);
+        expect(ghost()!.style.background, 'precondition: the ghost is red on (3,3)')
+            .toContain('239, 68, 68');
+
+        act(() => { commit(emptyGrid(), SQUARELY_ON_3_3, true); });
+
+        expect(gridClosed.placed, MUST_READ_LATEST)
             .toHaveBeenCalledWith(expect.objectContaining({ id: 'dot' }), 3, 3, 'standard', 0);
     });
 });

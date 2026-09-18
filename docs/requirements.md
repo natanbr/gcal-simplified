@@ -679,3 +679,18 @@ were found and reproduced by tests before any change was made
 **Spec drift corrected**: the previous entry claimed "native HTML5 pointer capture" and "0ms
 scripting lag". There was no `setPointerCapture` call in the game, and the absence of pointer
 ownership is precisely what let a second finger take over a drag.
+
+### 2026-09-18 Space Rescue: a green drop is no longer refused when a line clear lands under it
+
+**Why**: a review of the drag test kit found that a drop the child was shown in green could still
+be refused. When the 1.2s line-clear timer frees the cell under a still finger, the ghost turns
+green in the same commit — but the drag's window listeners are only re-subscribed in a later
+passive effect, so a lift in between reached the previous `placeShape`, which re-checks the cell
+against the grid from before the clear and refused it: a silent return-to-bank after a green
+ghost, the exact failure the 2026-09-07 recompute was meant to remove.
+- The listeners now read `placeShape` and the projection function through a ref synced in a layout
+  effect, so a lift or a move in that window uses the grid the child is looking at. A side effect:
+  the listeners are no longer torn down and re-added on every grid change mid-drag.
+- Guarded by `useShapeDrag.commit-order.test.tsx`, whose harness can now give the canvas a
+  `placeShape` shaped like production's — rebuilt per grid and re-checking the cell. The kit's
+  default spy is stable and always accepts, which is why the existing guard could not see this.
