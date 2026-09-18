@@ -25,75 +25,39 @@
 // passes vacuously if the harness never reaches the handler at all.
 // ============================================================
 import { useLayoutEffect } from 'react';
-import { render, within, fireEvent, act } from '@testing-library/react';
+import { render, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BlocksCanvas } from './BlocksCanvas';
-import type { BlocksGameState, GameShape } from './types';
-import type { PlaceShape } from './useShapeDrag';
-import type { QuizEngineApi } from '../quiz/types';
+import {
+    DOT,
+    blockedGrid,
+    canvasProps,
+    cellCentre,
+    draggableItem,
+    emptyGrid,
+    ghostCell,
+    grabCorner,
+    pinDraggables,
+    stateWith,
+    stubBoard,
+} from './dragTestKit';
 
-function stubEngine(): QuizEngineApi {
-    return {
-        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
-        beginSession: vi.fn(),
-        setDifficulty: vi.fn(),
-        onAnswered: vi.fn(),
-        notifyQuizClosed: vi.fn(),
-    };
-}
-
-const DOT: GameShape = { id: 'dot', name: 'Dot', color: '#38bdf8', cells: [{ x: 0, y: 0 }] };
-
-// Real board geometry, as in the other drag suites: border box at (10,10),
-// 2.5px border + 8px padding, 48px cells on a 52px pitch.
-const BOARD_LEFT = 10;
-const BOARD_TOP = 10;
-const BOARD_SIZE = 433;
-const CONTENT_INSET = 10.5;
-const PITCH = 52;
-const HALF_CELL = 24;
-const TRAY_LEFT = 100;
-const TRAY_TOP = 100;
-const TRAY_CELL = 36;
-
-/** Grid values, as written by useBlocksGame.ts / types.ts. */
-const FILLED = 1;
+/** Grid value for a meteor, as written by useBlocksGame.ts / types.ts. */
 const METEOR = 2;
 
-/** Client coordinate that puts the corner-grabbed DOT squarely on cell (r, c).
- *  Squarely, with no fractional offset, so forgiveness snapping cannot quietly
- *  rescue the projection onto a neighbour: every neighbour is then a full cell
- *  away and SNAP_RADIUS_CELLS is 0.75. */
-const shapeAt = (r: number, c: number) => ({
-    clientX: BOARD_LEFT + CONTENT_INSET + PITCH * c + HALF_CELL,
-    clientY: BOARD_TOP + CONTENT_INSET + PITCH * r + HALF_CELL,
-});
-
-function rect(left: number, top: number, width: number, height: number): DOMRect {
-    return { left, top, width, height, x: left, y: top, right: left + width, bottom: top + height, toJSON: () => ({}) };
-}
+/** Squarely on (3,3), with no fractional offset, so forgiveness snapping cannot
+ *  quietly rescue the projection onto a neighbour: every neighbour is a full
+ *  cell away and SNAP_RADIUS_CELLS is 0.75. */
+const SQUARELY_ON_3_3 = { ...cellCentre(3, 3), pointerId: 1 };
 
 interface PtrInit { clientX: number; clientY: number; pointerId: number }
-function ptr(type: string, init: PtrInit) {
-    return new PointerEvent(type, { bubbles: true, ...init });
-}
-
-const emptyGrid = (): number[][] => Array.from({ length: 8 }, () => Array(8).fill(0));
-
-function stateWith(grid: number[][]): BlocksGameState {
-    return {
-        grid,
-        standardShapes: [DOT, null, null],
-        rescueShape: null,
-        rescueShapeLocked: true,
-        altitude: 0, score: 0, phase: 'playing', level: 0,
-        rescueQuizActive: false, clearedFeedback: null,
-    };
-}
 
 interface HarnessProps {
     grid: number[][];
-    placeShape: PlaceShape;
+    /** Built once in setup and passed down, never inside the harness's render:
+     *  new collaborator identities on every commit would change the very commit
+     *  this guard isolates. */
+    props: ReturnType<typeof canvasProps>;
     /** Non-null lifts the finger from the harness's OWN layout effect, i.e.
      *  after the child's layout effects have run and before any passive flush. */
     liftAt: PtrInit | null;
@@ -105,46 +69,33 @@ interface HarnessProps {
  * effect on `liftAt` alone (rather than also on `grid`) keeps
  * react-hooks/exhaustive-deps happy without changing when it fires.
  */
-function CommitOrderHarness({ grid, placeShape, liftAt }: HarnessProps) {
+function CommitOrderHarness({ grid, props, liftAt }: HarnessProps) {
     useLayoutEffect(() => {
         if (!liftAt) return;
-        window.dispatchEvent(ptr('pointerup', liftAt));
+        // A plain dispatch, not fireEvent: this runs mid-commit, inside the one
+        // window this guard measures, and fireEvent would wrap it in act().
+        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, ...liftAt }));
     }, [liftAt]);
 
-    return (
-        <BlocksCanvas
-            gameState={stateWith(grid)}
-            placeShape={placeShape}
-            triggerRescueQuiz={vi.fn()}
-            resolveRescueQuiz={vi.fn()}
-            cancelRescueQuiz={vi.fn()}
-            engine={stubEngine()}
-            refreshRescueShape={vi.fn()}
-        />
-    );
+    return <BlocksCanvas {...props} gameState={stateWith(DOT, { grid })} />;
 }
 
-function setup(grid: number[][], placeShape: PlaceShape) {
-    const view = render(<CommitOrderHarness grid={grid} placeShape={placeShape} liftAt={null} />);
-    /** Re-renders in place, so the board and tray rect stubs below survive. */
+function setup(grid: number[][]) {
+    const props = canvasProps();
+    const view = render(<CommitOrderHarness grid={grid} props={props} liftAt={null} />);
+    /** Re-renders in place: the board, the tray item and their stubs survive. */
     const commit = (nextGrid: number[][], liftAt: PtrInit | null) =>
-        view.rerender(<CommitOrderHarness grid={nextGrid} placeShape={placeShape} liftAt={liftAt} />);
+        view.rerender(<CommitOrderHarness grid={nextGrid} props={props} liftAt={liftAt} />);
 
-    const scoped = within(view.container);
-    const board = scoped.getByTestId('blocks-grid');
-    board.getBoundingClientRect = () => rect(BOARD_LEFT, BOARD_TOP, BOARD_SIZE, BOARD_SIZE);
-
-    const item = view.container.querySelector<HTMLDivElement>('div[style*="cursor: grab"]');
-    if (!item) throw new Error('draggable tray item not rendered');
-    item.getBoundingClientRect = () => rect(TRAY_LEFT, TRAY_TOP, TRAY_CELL, TRAY_CELL);
-
-    /** The one cell the DOT's projection draws, or null when no ghost is shown. */
-    const ghostCell = () => (scoped.queryByTestId('projection-overlay')?.children[0] ?? null) as HTMLDivElement | null;
-    return { item, ghostCell, commit };
+    stubBoard(view.container);
+    pinDraggables(view.container);
+    return {
+        item: draggableItem(view.container),
+        placeShape: props.placeShape,
+        ghost: () => ghostCell(view.container),
+        commit,
+    };
 }
-
-/** Grabs the tray item by its top-left cell, so the grabbed cell is (0,0). */
-const GRAB_CORNER: PtrInit = { clientX: TRAY_LEFT + 4, clientY: TRAY_TOP + 4, pointerId: 1 };
 
 const MUST_BE_LAYOUT =
     'The grid-keyed recompute in useShapeDrag.ts ran too late: a native pointerup ' +
@@ -156,20 +107,18 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
     beforeEach(() => vi.clearAllMocks());
 
     it('refuses the drop when the incoming grid blocks the cell the green ghost was on', () => {
-        const placeShape = vi.fn().mockReturnValue(true);
-        const { item, ghostCell, commit } = setup(emptyGrid(), placeShape);
+        const { item, placeShape, ghost, commit } = setup(emptyGrid());
 
-        fireEvent(item, ptr('pointerdown', GRAB_CORNER));
-        const finger = { ...shapeAt(3, 3), pointerId: 1 };
-        act(() => { window.dispatchEvent(ptr('pointermove', finger)); });
-        expect(ghostCell()!.style.background, 'precondition: the ghost is green on (3,3)')
+        fireEvent.pointerDown(item, grabCorner(1));
+        fireEvent.pointerMove(window, SQUARELY_ON_3_3);
+        expect(ghost()!.style.background, 'precondition: the ghost is green on (3,3)')
             .toContain('74, 222, 128');
 
         // The line-clear timer's commit: spawnObstacles drops a meteor into the
         // cell the ghost is sitting on, and the finger lifts in that same commit.
         const withMeteor = emptyGrid();
         withMeteor[3][3] = METEOR;
-        act(() => { commit(withMeteor, finger); });
+        act(() => { commit(withMeteor, SQUARELY_ON_3_3); });
 
         expect(placeShape, MUST_BE_LAYOUT).not.toHaveBeenCalled();
     });
@@ -178,19 +127,15 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         // The other direction, and the reason this pair is not vacuous: a
         // positive assertion also proves the harness's layout-effect dispatch
         // really reaches the pointerup handler.
-        const placeShape = vi.fn().mockReturnValue(true);
-        const blocked = emptyGrid();
-        blocked[3][3] = FILLED;
-        const { item, ghostCell, commit } = setup(blocked, placeShape);
+        const { item, placeShape, ghost, commit } = setup(blockedGrid([3, 3]));
 
-        fireEvent(item, ptr('pointerdown', GRAB_CORNER));
-        const finger = { ...shapeAt(3, 3), pointerId: 1 };
-        act(() => { window.dispatchEvent(ptr('pointermove', finger)); });
-        expect(ghostCell()!.style.background, 'precondition: the ghost is red on (3,3)')
+        fireEvent.pointerDown(item, grabCorner(1));
+        fireEvent.pointerMove(window, SQUARELY_ON_3_3);
+        expect(ghost()!.style.background, 'precondition: the ghost is red on (3,3)')
             .toContain('239, 68, 68');
 
         // The clear lands: (3,3) is empty again, and the child lifts on it.
-        act(() => { commit(emptyGrid(), finger); });
+        act(() => { commit(emptyGrid(), SQUARELY_ON_3_3); });
 
         expect(placeShape, MUST_BE_LAYOUT)
             .toHaveBeenCalledWith(expect.objectContaining({ id: 'dot' }), 3, 3, 'standard', 0);

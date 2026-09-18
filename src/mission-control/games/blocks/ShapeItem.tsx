@@ -31,6 +31,7 @@ export const ShapeItem = memo(function ShapeItem({
     return (
         <div
             onPointerDown={onPointerDown}
+            data-testid={onPointerDown ? 'draggable-shape' : undefined}
             style={{
                 cursor: onPointerDown ? 'grab' : 'default',
                 touchAction: 'none',
