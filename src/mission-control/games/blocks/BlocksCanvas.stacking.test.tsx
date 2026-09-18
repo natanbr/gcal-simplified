@@ -16,35 +16,19 @@
 // sides are read from rendered elements rather than hardcoded, so retuning
 // either number keeps the guard honest.
 // ============================================================
-import { render, within, fireEvent, act } from '@testing-library/react';
+import { render, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BlocksCanvas } from './BlocksCanvas';
 import { GridCell } from './GridCell';
-import type { BlocksGameState, GameShape } from './types';
-import type { QuizEngineApi } from '../quiz/types';
-
-function stubEngine(): QuizEngineApi {
-    return {
-        generator: () => ({ kind: 'numeric', skill: 'math-add', level: 0, text: '1 + 1 = ?', answer: 2 }),
-        beginSession: vi.fn(),
-        setDifficulty: vi.fn(),
-        onAnswered: vi.fn(),
-        notifyQuizClosed: vi.fn(),
-    };
-}
-
-const DOT: GameShape = { id: 'dot', name: 'Dot', color: '#38bdf8', cells: [{ x: 0, y: 0 }] };
-
-// Real board geometry, as in the other drag suites.
-const BOARD_LEFT = 10;
-const BOARD_TOP = 10;
-const BOARD_SIZE = 433;
-const CONTENT_INSET = 10.5;
-const PITCH = 52;
-const HALF_CELL = 24;
-const TRAY_LEFT = 100;
-const TRAY_TOP = 100;
-const TRAY_CELL = 36;
+import type { BlocksGameState } from './types';
+import {
+    DOT,
+    cellCentre,
+    dragProxy,
+    draggableItem,
+    grabCorner,
+    renderCanvas,
+    stateWith,
+} from './dragTestKit';
 
 /**
  * Every value a board cell can hold, from the contract in types.ts:
@@ -55,27 +39,6 @@ const TRAY_CELL = 36;
  */
 const CELL_VALUES = [0, 1, 2, 3, 4, 5];
 
-function rect(left: number, top: number, width: number, height: number): DOMRect {
-    return { left, top, width, height, x: left, y: top, right: left + width, bottom: top + height, toJSON: () => ({}) };
-}
-
-interface PtrInit { clientX: number; clientY: number; pointerId: number }
-function ptr(type: string, init: PtrInit) {
-    return new PointerEvent(type, { bubbles: true, ...init });
-}
-
-function stateWith(overrides: Partial<BlocksGameState> = {}): BlocksGameState {
-    return {
-        grid: Array.from({ length: 8 }, () => Array(8).fill(0)),
-        standardShapes: [DOT, null, null],
-        rescueShape: null,
-        rescueShapeLocked: true,
-        altitude: 0, score: 0, phase: 'playing', level: 0,
-        rescueQuizActive: false, clearedFeedback: null,
-        ...overrides,
-    };
-}
-
 /** The z-index a GridCell declares for one grid value. NaN when it declares none. */
 function cellZIndex(val: number): number {
     const { container } = render(<GridCell r={0} c={0} val={val} />);
@@ -85,35 +48,12 @@ function cellZIndex(val: number): number {
 }
 
 /** Drags the tray shape onto the board so the projection overlay is on screen. */
-function dragOntoBoard(state: BlocksGameState = stateWith()) {
-    const { container } = render(
-        <BlocksCanvas
-            gameState={state}
-            placeShape={vi.fn().mockReturnValue(true)}
-            triggerRescueQuiz={vi.fn()}
-            resolveRescueQuiz={vi.fn()}
-            cancelRescueQuiz={vi.fn()}
-            engine={stubEngine()}
-            refreshRescueShape={vi.fn()}
-        />,
-    );
+function dragOntoBoard(state: BlocksGameState = stateWith(DOT)) {
+    const { container } = renderCanvas(state);
     const scoped = within(container);
 
-    const board = scoped.getByTestId('blocks-grid');
-    board.getBoundingClientRect = () => rect(BOARD_LEFT, BOARD_TOP, BOARD_SIZE, BOARD_SIZE);
-
-    const item = container.querySelector<HTMLDivElement>('div[style*="cursor: grab"]');
-    if (!item) throw new Error('draggable tray item not rendered');
-    item.getBoundingClientRect = () => rect(TRAY_LEFT, TRAY_TOP, TRAY_CELL, TRAY_CELL);
-
-    fireEvent(item, ptr('pointerdown', { clientX: TRAY_LEFT + 4, clientY: TRAY_TOP + 4, pointerId: 1 }));
-    act(() => {
-        window.dispatchEvent(ptr('pointermove', {
-            clientX: BOARD_LEFT + CONTENT_INSET + PITCH * 3 + HALF_CELL,
-            clientY: BOARD_TOP + CONTENT_INSET + PITCH * 3 + HALF_CELL,
-            pointerId: 1,
-        }));
-    });
+    fireEvent.pointerDown(draggableItem(container), grabCorner(1));
+    fireEvent.pointerMove(window, { ...cellCentre(3, 3), pointerId: 1 });
 
     const overlay = scoped.getByTestId('projection-overlay');
     return { container, scoped, overlay };
@@ -161,7 +101,7 @@ describe('the landing projection stacks above the board cells', () => {
         // the held shape will land, so it must never cover the held shape.
         const { container, overlay } = dragOntoBoard();
 
-        const proxy = container.querySelector<HTMLElement>('div[style*="z-index: 9999"]');
+        const proxy = dragProxy(container);
         expect(proxy, 'precondition: the drag proxy is on screen').not.toBeNull();
 
         const proxyZ = Number.parseInt(proxy!.style.zIndex, 10);
@@ -173,7 +113,7 @@ describe('the landing projection stacks above the board cells', () => {
     it('still stacks below the line-clear feedback card', () => {
         // The card celebrates the clear that is repainting the board underneath
         // it; a ghost drawn over it would sit on top of the celebration.
-        const { scoped, overlay } = dragOntoBoard(stateWith({
+        const { scoped, overlay } = dragOntoBoard(stateWith(DOT, {
             clearedFeedback: { text: 'DOUBLE CLEAR', stars: 2, id: 'fb-1' },
         }));
 
@@ -184,5 +124,34 @@ describe('the landing projection stacks above the board cells', () => {
         const overlayZ = Number.parseInt(overlay.style.zIndex, 10);
         expect(Number.isFinite(cardZ) && Number.isFinite(overlayZ)).toBe(true);
         expect(overlayZ).toBeLessThan(cardZ);
+    });
+});
+
+describe('the held shape stacks above everything it is dragged across', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('paints above the tray shapes and the line-clear card', () => {
+        // The drag proxy is the one thing the child is holding: it must never
+        // pass under another tray shape or under the celebration card while it
+        // is dragged across them. Both sides read from rendered elements, so a
+        // retuned number keeps the guard honest.
+        const { container, scoped } = dragOntoBoard(stateWith(DOT, {
+            clearedFeedback: { text: 'DOUBLE CLEAR', stars: 2, id: 'fb-1' },
+        }));
+
+        const proxy = dragProxy(container);
+        expect(proxy, 'precondition: the drag proxy is on screen').not.toBeNull();
+        const card = scoped.getByText('DOUBLE CLEAR').parentElement;
+        if (!card) throw new Error('cleared-feedback card did not render');
+
+        const proxyZ = Number.parseInt(proxy!.style.zIndex, 10);
+        const trayShapeZ = Number.parseInt(draggableItem(container).style.zIndex, 10);
+        const cardZ = Number.parseInt(card.style.zIndex, 10);
+        expect(
+            [proxyZ, trayShapeZ, cardZ].every(Number.isFinite),
+            'a z-index did not render as a number, so the comparison below would be vacuous',
+        ).toBe(true);
+        expect(proxyZ, 'the held shape paints under the other tray shapes').toBeGreaterThan(trayShapeZ);
+        expect(proxyZ, 'the held shape paints under the line-clear card').toBeGreaterThan(cardZ);
     });
 });
