@@ -352,13 +352,14 @@ each mutation that aim cannot see.
 **Learning:** The drag's window listeners are subscribed in a passive effect and closed over
 `placeShape` and the projection function, both rebuilt on every grid change. They stay stale until
 the passive flush, and after a commit from a timer that flush is a separate scheduler callback, so a
-render that overruns the ~5ms slice lets a native move and lift run first. The gap is narrower than
-it first looked: a layout-effect `setState` (the recompute changing the ghost) is synchronous, and
-it flushes the pending passive effects before the task ends. So a still finger through a clear was
-always fine; the real failure was a move onto a cell that changed while the ghost did not. The
-first regression tests, and the first write-up, modelled the still-finger case: dispatching from a
-parent's layout effect reaches a point in the commit no native event can. The kit's stable,
-always-accepting `placeShape` spy had hidden the whole class.
+render that overruns the ~5ms slice lets a native move run first; the stale ghost it draws stands
+until the next move. The gap is narrower than it first looked: a layout-effect `setState` (the
+recompute changing the ghost) is synchronous, and it flushes the pending passive effects before the
+task ends. So a still finger through a clear was always fine; the real failure was a move onto a
+cell that changed while the ghost did not. The first regression tests, and the first write-up,
+modelled the still-finger case: when the commit also queued a synchronous update, dispatching from
+a parent's layout effect reaches a point no native event can. No test had moved the pointer inside
+the gap, and the kit's stable, always-accepting `placeShape` spy hid the `placeShape` half.
 **Action:** A listener that spans a gesture (drag, long-press) and consults state that changes
 during that gesture reads it through a ref synced in `useLayoutEffect`. A `keydown` handler that is
 one flush stale does no harm and needs none of this. Before writing a timing test, check the

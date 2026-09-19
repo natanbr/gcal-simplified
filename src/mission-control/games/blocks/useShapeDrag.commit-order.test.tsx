@@ -192,11 +192,14 @@ const SQUARELY_ON_3_4 = { ...cellCentre(3, 4), pointerId: 1 };
  * passive effects before the task ends, so the listeners are fresh before any
  * native event. When the ghost stays as it was, the passive flush is a separate
  * scheduler callback, and a render that overruns the ~5ms slice lets a native
- * move and lift land first. So every case here leaves the ghost unchanged on
- * (3,3) and moves onto the neighbour that changed.
+ * move land first. The stale ghost it draws stands until the next move, so the
+ * lift may come any time; here it lands in the gap too, which also reaches the
+ * stale placeShape. So every case leaves the ghost unchanged on (3,3) and moves
+ * onto the neighbour that changed.
  *
  * This proves the ref is synced before the passive flush. It cannot tell a
- * layout effect from a write during render, which jsdom orders the same way.
+ * layout effect from a write during render: React orders both before that
+ * flush, and only a render it throws away, which act() never does, separates them.
  */
 describe('a move and lift after a grid change that left the ghost unchanged see the new grid', () => {
     beforeEach(() => vi.clearAllMocks());
