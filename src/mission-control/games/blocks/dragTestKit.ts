@@ -7,8 +7,8 @@
 // `.ts` rather than `.tsx`: nothing here is a component, and
 // react-refresh/only-export-components lints `.tsx` only.
 //
-// ⚠️  Test helper. Import it from tests only — it imports vitest, which throws
-// when loaded outside the test runner.
+// ⚠️  Test helper. Import it from tests only — enforced by
+// src/__tests__/test-kit-boundary.test.ts, since nothing else would fail.
 // ============================================================
 import { createElement } from 'react';
 import { render, within } from '@testing-library/react';
