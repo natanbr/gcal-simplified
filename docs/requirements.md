@@ -685,15 +685,16 @@ ownership is precisely what let a second finger take over a drag.
 **Why**: a review of the drag test kit found that the drag's window listeners held on to the
 `placeShape` and projection function from before a grid change until React's passive flush
 re-subscribed them. That gap is narrow. When the 1.2s line-clear timer changes the ghost under
-the shape, its synchronous update flushes the listeners before any input, so a still finger was
-never affected. The gap opens only when the clear leaves the ghost as it was and the render
-overruns React's ~5ms scheduler slice; a move and lift in it then used the old board. A move onto a
-cell the clear had just freed showed red and returned to the tray, and a move onto a meteor that
-had just landed showed green for a drop that bounced.
+the shape, its synchronous update flushes the passive effects before any input, so a still finger
+was never affected. The gap opens only when the clear leaves the ghost as it was and the render
+overruns React's ~5ms scheduler slice; a move in it then used the old board, and the ghost it drew
+stood until the next move. A move onto a cell the clear had just freed showed red and returned to
+the tray, and a move onto a meteor that had just landed showed green for a drop that bounced.
 - The listeners now read both callbacks through a ref synced in a layout effect, so a move or a
   lift in that gap uses the board the child is looking at. A side effect: the listeners are no
   longer torn down and re-added on every grid change mid-drag.
 - Not reproducible by hand on demand: it needs a slow render and a move within that render's
   frame. Guarded by `useShapeDrag.commit-order.test.tsx`, which dispatches the move and lift in
   that gap with a `placeShape` shaped like production's (rebuilt per grid, re-checking the cell).
-  The kit's default spy is stable and always accepts, which is why no existing test could see it.
+  No existing test moved the pointer inside that gap, and the kit's default spy, stable and always
+  accepting, would have hidden the `placeShape` half even if one had.

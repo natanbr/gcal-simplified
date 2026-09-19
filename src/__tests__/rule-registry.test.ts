@@ -258,12 +258,12 @@ const REGISTRY: Rule[] = [
         defence: 'Enforced per LAUNCH, not per spec subject: every electron.launch must carry the throwaway-profile switch, or its spec must be named in NEEDS_REAL_PROFILE (8 left, may only shrink). The behavioural half is e2e/global-profile-leak-check.ts, which fails the run if a profile is left on disk — source text cannot prove cleanup ran.',
     },
     {
-        rule: 'Per-module test kits are imported from tests only; production code never imports a kit or a test library',
+        rule: 'Nothing stops production code importing a test kit or a test library but a guard; a new kit is named *TestKit / *Fixtures and listed in TEST_SUPPORT',
         source: 'CLAUDE.md → Testing → Fixtures',
         status: 'guarded',
         guard: 'src/__tests__/test-kit-boundary.test.ts',
-        verifiedRedBy: 'append to placement.ts, one at a time: `import { DOT } from \'./dragFixtures\'`, a re-export from \'../quiz/quizTestKit\', `import(\'./dragTestKit\')`, and `import { vi } from \'vitest\'` — each goes red naming the file and specifier; an unlisted blocks/fooFixtures.ts goes red too (proven 2026-09-18). Counterpart proof: a comment naming dragFixtures.ts stays GREEN.',
-        defence: 'Nothing else fails: a kit is not a *.test.* file, so tsc, lint and the build accept the import, and the kit\'s own `vitest` import is tree-shaken (vitest declares "sideEffects": false). The kit headers used to claim that import was a tripwire; a Vite build proved it is not.',
+        verifiedRedBy: 'append to placement.ts, one at a time: `import { DOT } from \'./dragFixtures\'`, a re-export from \'../quiz/quizTestKit\', `import(\'./dragTestKit\')`, and `import { vi } from \'vitest\'` — each goes red naming the file and specifier; unlisted blocks/fooFixtures.ts and blocks/snakeFixture.ts go red too (proven 2026-09-18). Counterpart proof: a comment that names dragFixtures.ts without an import-shaped `from \'…\'` stays GREEN.',
+        defence: 'Nothing else fails: a kit is not a *.test.* file, so tsc, lint and the build accept the import, and a kit\'s own `vitest` import is tree-shaken when its bindings go unused (vitest declares "sideEffects": false). The kit headers used to claim that import was a tripwire; a Vite build proved it is not. A kit that imports no test library is recognised only by its name or its TEST_SUPPORT entry.',
     },
 
     // ── Manual ───────────────────────────────────────────────────────────────

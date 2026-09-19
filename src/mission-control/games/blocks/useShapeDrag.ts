@@ -191,12 +191,12 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
     // The window listeners below live for the whole drag, but the grid changes
     // under it and useBlocksGame rebuilds placeShape with it. Both callbacks are
     // read through this ref, synced in a LAYOUT effect for the same reason as the
-    // recompute above: a native move and lift can land before the passive flush
-    // that re-subscribes the listeners. (Only when the grid change left the ghost
-    // as it was — a changed ghost's setState flushes the effects synchronously.)
-    // Read from their closure instead, a move onto a cell the clear just freed
-    // shows red, one onto a meteor that just landed shows green, and the lift
-    // places against that old grid.
+    // recompute above. Closed over instead, they would stay stale until a passive
+    // flush re-subscribed them, and a native move can land before that flush when
+    // the grid change left the ghost as it was (a changed ghost's setState
+    // flushes the effects synchronously). That move would show red over a cell
+    // the clear just freed, or green over a meteor that just landed, and the
+    // stale ghost would stand until the next move, whenever the lift came.
     const latestRef = useRef({ updateProjection, placeShape });
     useLayoutEffect(() => {
         latestRef.current = { updateProjection, placeShape };
