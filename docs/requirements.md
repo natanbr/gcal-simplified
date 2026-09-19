@@ -680,17 +680,20 @@ were found and reproduced by tests before any change was made
 scripting lag". There was no `setPointerCapture` call in the game, and the absence of pointer
 ownership is precisely what let a second finger take over a drag.
 
-### 2026-09-18 Space Rescue: a green drop is no longer refused when a line clear lands under it
+### 2026-09-18 Space Rescue: a move right after a line clear is judged against the new board
 
-**Why**: a review of the drag test kit found that a drop the child was shown in green could still
-be refused. When the 1.2s line-clear timer frees the cell under a still finger, the ghost turns
-green in the same commit — but the drag's window listeners are only re-subscribed in a later
-passive effect, so a lift in between reached the previous `placeShape`, which re-checks the cell
-against the grid from before the clear and refused it: a silent return-to-bank after a green
-ghost, the exact failure the 2026-09-07 recompute was meant to remove.
-- The listeners now read `placeShape` and the projection function through a ref synced in a layout
-  effect, so a lift or a move in that window uses the grid the child is looking at. A side effect:
-  the listeners are no longer torn down and re-added on every grid change mid-drag.
-- Guarded by `useShapeDrag.commit-order.test.tsx`, whose harness can now give the canvas a
-  `placeShape` shaped like production's — rebuilt per grid and re-checking the cell. The kit's
-  default spy is stable and always accepts, which is why the existing guard could not see this.
+**Why**: a review of the drag test kit found that the drag's window listeners held on to the
+`placeShape` and projection function from before a grid change until React's passive flush
+re-subscribed them. That gap is narrow. When the 1.2s line-clear timer changes the ghost under
+the shape, its synchronous update flushes the listeners before any input, so a still finger was
+never affected. The gap opens only when the clear leaves the ghost as it was and the render
+overruns React's ~5ms scheduler slice; a move and lift in it then used the old board. A move onto a
+cell the clear had just freed showed red and returned to the tray, and a move onto a meteor that
+had just landed showed green for a drop that bounced.
+- The listeners now read both callbacks through a ref synced in a layout effect, so a move or a
+  lift in that gap uses the board the child is looking at. A side effect: the listeners are no
+  longer torn down and re-added on every grid change mid-drag.
+- Not reproducible by hand on demand: it needs a slow render and a move within that render's
+  frame. Guarded by `useShapeDrag.commit-order.test.tsx`, which dispatches the move and lift in
+  that gap with a `placeShape` shaped like production's (rebuilt per grid, re-checking the cell).
+  The kit's default spy is stable and always accepts, which is why no existing test could see it.

@@ -176,11 +176,11 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
     // — one recompute per change, never one per frame.
     //
     // ⚠️ Must stay a LAYOUT effect. The grid change arrives from a setTimeout,
-    // so React commits and paints it and then schedules the passive flush as a
-    // separate task. `pointerup` is a native window listener, which React has no
-    // opportunity to order against that flush — so with useEffect the lift can
+    // so React schedules the passive flush as a separate scheduler callback, and
+    // a render that overruns the ~5ms slice lets queued input run before it.
+    // `pointerup` is a native window listener, so with useEffect the lift can
     // read a projection validated against the grid the child is no longer
-    // looking at. A layout effect runs inside the commit, before that paint.
+    // looking at. A layout effect runs inside the commit, before any input.
     useLayoutEffect(() => {
         const drag = activeDragRef.current;
         const origin = lastOriginRef.current;
@@ -191,10 +191,12 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
     // The window listeners below live for the whole drag, but the grid changes
     // under it and useBlocksGame rebuilds placeShape with it. Both callbacks are
     // read through this ref, synced in a LAYOUT effect for the same reason as the
-    // recompute above: a native pointer event can land after the commit and before
-    // the passive flush that would re-subscribe the listeners. Read from their
-    // closure instead, a move re-projects against the old grid and a lift calls a
-    // placeShape that refuses the cell the child was just shown in green.
+    // recompute above: a native move and lift can land before the passive flush
+    // that re-subscribes the listeners. (Only when the grid change left the ghost
+    // as it was — a changed ghost's setState flushes the effects synchronously.)
+    // Read from their closure instead, a move onto a cell the clear just freed
+    // shows red, one onto a meteor that just landed shows green, and the lift
+    // places against that old grid.
     const latestRef = useRef({ updateProjection, placeShape });
     useLayoutEffect(() => {
         latestRef.current = { updateProjection, placeShape };
