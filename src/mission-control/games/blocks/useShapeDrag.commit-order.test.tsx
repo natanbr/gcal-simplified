@@ -1,11 +1,13 @@
 // ============================================================
-// Commit-order guard: the grid-keyed recompute in useShapeDrag.ts must stay a
-// LAYOUT effect.
+// Commit-order guards: what useShapeDrag.ts reads across a grid change must be
+// synced in a LAYOUT effect — the grid-keyed recompute, and the callbacks the
+// window listeners call.
 //
 // The 1200ms line-clear timer in useBlocksGame.ts commits a new grid from a
-// setTimeout, and `pointerup` is a native window listener — React has no
-// opportunity to order that listener against a passive-effect flush. With
-// `useEffect` the lift is therefore validated against the grid the child is no
+// setTimeout, and `pointerup` is a native window listener. The passive flush
+// after that commit is a separate scheduler callback: when the render overruns
+// the scheduler's ~5ms slice, the browser runs queued input before it. With
+// `useEffect` the lift is then validated against the grid the child is no
 // longer looking at: a silent return-to-bank after a green ghost, or a refusal
 // on cells that are visibly empty.
 //
@@ -19,7 +21,9 @@
 // layout effect. React commits layout effects child-first, then parent, and
 // runs passive effects only after the whole layout pass, so the dispatch lands
 // in the one window between the child's layout effect and its passive effect.
-// That window is exactly where a native `pointerup` lands.
+// A native event can land in that window too, but only when the commit queued
+// no synchronous update of its own: one from a layout effect flushes the
+// passive effects before the task ends (see the second describe).
 //
 // Asserted in BOTH directions on purpose: `not.toHaveBeenCalled()` on its own
 // passes vacuously if the harness never reaches the handler at all.
@@ -35,6 +39,7 @@ import {
     blockedGrid,
     canvasProps,
     cellCentre,
+    dragProxy,
     draggableItem,
     emptyGrid,
     ghostCell,
@@ -122,6 +127,7 @@ function setup(grid: number[][], gridClosed?: GridClosedPlace) {
         item: draggableItem(view.container),
         placeShape: props.placeShape,
         ghost: () => ghostCell(view.container),
+        proxy: () => dragProxy(view.container),
         commit,
     };
 }
@@ -129,8 +135,8 @@ function setup(grid: number[][], gridClosed?: GridClosedPlace) {
 const MUST_BE_LAYOUT =
     'The grid-keyed recompute in useShapeDrag.ts ran too late: a native pointerup ' +
     'arriving in the same commit as the new grid read the OLD projection. That effect ' +
-    'must be a useLayoutEffect — a useEffect is flushed as a separate task, which ' +
-    'React cannot order a window listener against.';
+    'must be a useLayoutEffect — a useEffect is flushed in a separate scheduler ' +
+    'callback, which queued input can run ahead of.';
 
 describe('a lift arriving in the same commit as a new grid sees the new grid', () => {
     beforeEach(() => vi.clearAllMocks());
@@ -172,46 +178,67 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
 });
 
 const MUST_READ_LATEST =
-    'The window listener ran a callback from before the new grid committed. The ' +
-    'listeners live for the whole drag and are re-subscribed only in a passive ' +
-    'effect, so anything they read across a commit must be synced in a LAYOUT effect.';
+    'A window listener used a callback from before the new grid committed. The ' +
+    'listeners are re-subscribed only in the passive flush, so the callbacks they ' +
+    'read must be synced in a LAYOUT effect.';
 
-describe('a drop the ghost shows green is placed, even when the grid changes in the same commit', () => {
+/** Squarely on (3,4), the neighbour the grid change frees or fills. A full cell
+ *  from (3,3), so forgiveness snapping cannot pull the drop back onto it. */
+const SQUARELY_ON_3_4 = { ...cellCentre(3, 4), pointerId: 1 };
+
+/**
+ * The window the listeners' stale closures are reachable in. When a grid change
+ * alters the ghost, the recompute's setState is synchronous and flushes the
+ * passive effects before the task ends, so the listeners are fresh before any
+ * native event. When the ghost stays as it was, the passive flush is a separate
+ * scheduler callback, and a render that overruns the ~5ms slice lets a native
+ * move and lift land first. So every case here leaves the ghost unchanged on
+ * (3,3) and moves onto the neighbour that changed.
+ *
+ * This proves the ref is synced before the passive flush. It cannot tell a
+ * layout effect from a write during render, which jsdom orders the same way.
+ */
+describe('a move and lift after a grid change that left the ghost unchanged see the new grid', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('uses the placeShape built for the new grid, not the one the listener was subscribed with', () => {
-        // useBlocksGame rebuilds placeShape when the grid changes, and the old one
-        // re-checks the cell against the OLD grid. The child was shown green and
-        // lifts in the clear's commit: calling the old one refuses a legal drop.
+    it('places on a cell the grid change just freed', () => {
+        // With the old projection function the move reads (3,4) as still blocked
+        // and shows red; with the old placeShape a green drop there is refused.
+        // Either one alone sends the shape back to the tray.
         const gridClosed = { placed: vi.fn(), refused: vi.fn() };
-        const { item, ghost, commit } = setup(blockedGrid([3, 3]), gridClosed);
+        const { item, ghost, commit } = setup(blockedGrid([3, 4]), gridClosed);
 
         fireEvent.pointerDown(item, grabCorner(1));
         fireEvent.pointerMove(window, SQUARELY_ON_3_3);
-        expect(ghost()!.style.background, 'precondition: the ghost is red on (3,3)')
-            .toContain('239, 68, 68');
+        expect(ghost()!.style.background, 'precondition: the ghost is green on (3,3)')
+            .toContain('74, 222, 128');
 
-        act(() => { commit(emptyGrid(), SQUARELY_ON_3_3); });
+        act(() => { commit(emptyGrid(), SQUARELY_ON_3_4, true); });
 
         expect(gridClosed.refused, MUST_READ_LATEST).not.toHaveBeenCalled();
-        expect(gridClosed.placed).toHaveBeenCalledWith(expect.objectContaining({ id: 'dot' }), 3, 3, 'standard', 0);
+        expect(gridClosed.placed, MUST_READ_LATEST)
+            .toHaveBeenCalledWith(expect.objectContaining({ id: 'dot' }), 4, 3, 'standard', 0);
     });
 
-    it('projects a move in that same window against the new grid, not the old one', () => {
-        // A pointermove between the commit and the passive flush reaches the old
-        // listener too. Projected against the old grid it repaints the ghost red
-        // over the freed cell, and the lift that follows is a return-to-bank.
+    it('returns to the tray from a cell a meteor just landed on, instead of placing against the old grid', () => {
+        // With the old projection function the move shows green over the meteor.
+        // Production's placeShape then refuses inside its state update, but the
+        // child has been shown a green ghost for a drop that bounces.
         const gridClosed = { placed: vi.fn(), refused: vi.fn() };
-        const { item, ghost, commit } = setup(blockedGrid([3, 3]), gridClosed);
+        const { item, ghost, proxy, commit } = setup(emptyGrid(), gridClosed);
 
         fireEvent.pointerDown(item, grabCorner(1));
         fireEvent.pointerMove(window, SQUARELY_ON_3_3);
-        expect(ghost()!.style.background, 'precondition: the ghost is red on (3,3)')
-            .toContain('239, 68, 68');
+        expect(ghost()!.style.background, 'precondition: the ghost is green on (3,3)')
+            .toContain('74, 222, 128');
 
-        act(() => { commit(emptyGrid(), SQUARELY_ON_3_3, true); });
+        const withMeteor = emptyGrid();
+        withMeteor[3][4] = METEOR;
+        act(() => { commit(withMeteor, SQUARELY_ON_3_4, true); });
 
-        expect(gridClosed.placed, MUST_READ_LATEST)
-            .toHaveBeenCalledWith(expect.objectContaining({ id: 'dot' }), 3, 3, 'standard', 0);
+        // Proves the lift reached the handler, so the absences below are not vacuous.
+        expect(proxy(), 'precondition: the lift ended the drag').toBeNull();
+        expect(gridClosed.placed, MUST_READ_LATEST).not.toHaveBeenCalled();
+        expect(gridClosed.refused, MUST_READ_LATEST).not.toHaveBeenCalled();
     });
 });

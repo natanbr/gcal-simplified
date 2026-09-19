@@ -344,16 +344,20 @@ assertions are no evidence: run the same mutations against the file before and a
 coordinate tests off-centre on purpose (gesture-defects' `OFF_CENTRE`), and name which suite owns
 each mutation that aim cannot see.
 
-## 2026-09-18 — Everything a window listener reads across a commit must be layout-synced
+## 2026-09-18 — A gesture's window listeners read what changes mid-gesture through a layout-synced ref
 
-**Learning:** The 2026-09-07 rework made the grid-keyed projection recompute a layout effect, because
-a native `pointerup` can land after a commit and before its passive flush. The same window hid a
-second stale read one level up: the drag's window listeners are subscribed in a passive effect and
-closed over `placeShape` and the projection function. useBlocksGame rebuilds `placeShape` whenever the
-grid changes and re-checks the cell against the grid it closed over, so a lift in that window called
-the old one and refused a cell the child had just been shown in green. The guard could not see it:
-the test kit's `placeShape` spy is stable and always accepts.
-**Action:** A listener that outlives renders (window, document, a subscription) reads every
-callback and value that can change mid-gesture through a ref synced in `useLayoutEffect`, not
-through its closure — and its test must use a collaborator shaped like production's (new identity
-per input, real validation), because a stable always-yes stub hides exactly this class of bug.
+**Learning:** The drag's window listeners are subscribed in a passive effect and closed over
+`placeShape` and the projection function, both rebuilt on every grid change. They stay stale until
+the passive flush, and after a commit from a timer that flush is a separate scheduler callback, so a
+render that overruns the ~5ms slice lets a native move and lift run first. The gap is narrower than
+it first looked: a layout-effect `setState` (the recompute changing the ghost) is synchronous, and
+it flushes the pending passive effects before the task ends. So a still finger through a clear was
+always fine; the real failure was a move onto a cell that changed while the ghost did not. The
+first regression tests, and the first write-up, modelled the still-finger case: dispatching from a
+parent's layout effect reaches a point in the commit no native event can. The kit's stable,
+always-accepting `placeShape` spy had hidden the whole class.
+**Action:** A listener that spans a gesture (drag, long-press) and consults state that changes
+during that gesture reads it through a ref synced in `useLayoutEffect`. A `keydown` handler that is
+one flush stale does no harm and needs none of this. Before writing a timing test, check the
+scenario can happen with real events: a mid-commit harness proves ordering, not reachability. Test
+with a collaborator shaped like production's (new identity per input, real validation).
