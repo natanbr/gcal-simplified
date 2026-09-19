@@ -3,7 +3,7 @@
 //
 // Not a test file, so the style-token and file-size ratchets scan it like
 // production code: keep it small and free of raw hex. Import it from tests
-// only — it imports vitest, which throws when loaded outside the runner.
+// only — enforced by src/__tests__/test-kit-boundary.test.ts.
 // ============================================================
 
 import { vi } from 'vitest';

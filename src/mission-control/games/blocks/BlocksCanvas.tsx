@@ -150,6 +150,7 @@ export function BlocksCanvas({
             {draggedShape && (
                 <div
                     ref={dragProxyRef}
+                    data-testid="drag-proxy"
                     style={{
                         position: 'fixed',
                         left: 0,

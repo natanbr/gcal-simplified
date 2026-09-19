@@ -17,20 +17,8 @@ import {
     snapAnchor,
 } from './dragGeometry';
 import { isPlaceable } from './placement';
-import { BOARD_CELL_PITCH, CELL_DISPLAY_SIZE, GameShape } from './types';
-
-const DOT: GameShape = { id: 'dot', name: 'Dot', color: '#38bdf8', cells: [{ x: 0, y: 0 }] };
-const BLOCK_2X2: GameShape = {
-    id: 'block-2x2', name: 'Block', color: '#f59e0b',
-    cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-};
-
-const emptyGrid = () => Array.from({ length: 8 }, () => Array(8).fill(0));
-const gridWith = (...filled: Array<[number, number]>) => {
-    const grid = emptyGrid();
-    for (const [r, c] of filled) grid[r][c] = 1;
-    return grid;
-};
+import { BLOCK_2X2, DOT, blockedGrid, emptyGrid } from './dragFixtures';
+import { BOARD_CELL_PITCH, CELL_DISPLAY_SIZE } from './types';
 
 describe('proxyOrigin — where the dragged shape is drawn', () => {
     it('centres the grabbed cell on the pointer when there is no lift', () => {
@@ -111,24 +99,24 @@ describe('snapAnchor — rounding', () => {
 describe('snapAnchor — forgiveness', () => {
     it('snaps an unplaceable anchor to the nearest valid neighbour', () => {
         // Rounds onto the blocked cell (2,2); the cell below is 0.6 away.
-        expect(snapAnchor({ r: 2.4, c: 2 }, DOT, gridWith([2, 2])))
+        expect(snapAnchor({ r: 2.4, c: 2 }, DOT, blockedGrid([2, 2])))
             .toEqual({ anchor: { r: 3, c: 2 }, valid: true });
     });
 
     it('prefers the straight neighbour when a diagonal is exactly as close', () => {
         // Rounded (2,3) and the closer straight neighbour (2,2) are both blocked.
         // (3,3) — straight — and (3,2) — diagonal — are then equidistant.
-        expect(snapAnchor({ r: 2.45, c: 2.5 }, DOT, gridWith([2, 3], [2, 2])))
+        expect(snapAnchor({ r: 2.45, c: 2.5 }, DOT, blockedGrid([2, 3], [2, 2])))
             .toEqual({ anchor: { r: 3, c: 3 }, valid: true });
     });
 
     it('reaches a neighbour 0.7 of a cell away', () => {
-        expect(snapAnchor({ r: 2.3, c: 2 }, DOT, gridWith([2, 2])))
+        expect(snapAnchor({ r: 2.3, c: 2 }, DOT, blockedGrid([2, 2])))
             .toEqual({ anchor: { r: 3, c: 2 }, valid: true });
     });
 
     it('refuses the same neighbour at 0.8 of a cell — the radius is the whole guarantee', () => {
-        expect(snapAnchor({ r: 2.2, c: 2 }, DOT, gridWith([2, 2])))
+        expect(snapAnchor({ r: 2.2, c: 2 }, DOT, blockedGrid([2, 2])))
             .toEqual({ anchor: { r: 2, c: 2 }, valid: false });
         expect(SNAP_RADIUS_CELLS).toBeLessThan(1);
     });
@@ -136,7 +124,7 @@ describe('snapAnchor — forgiveness', () => {
     it('stays invalid where it landed when nothing valid is in reach', () => {
         // Squarely on a blocked cell: every neighbour is a full cell away, so the
         // shape must NOT jump to one of the eight empty cells around it.
-        const grid = gridWith([4, 4]);
+        const grid = blockedGrid([4, 4]);
         expect(snapAnchor({ r: 4, c: 4 }, DOT, grid)).toEqual({ anchor: { r: 4, c: 4 }, valid: false });
     });
 
@@ -173,22 +161,22 @@ describe('snapAnchor — forgiveness', () => {
     // ------------------------------------------------------------
 
     it('reaches the up-left diagonal when both straight neighbours are blocked', () => {
-        expect(snapAnchor({ r: 2.5, c: 2.5 }, DOT, gridWith([3, 3], [2, 3], [3, 2])))
+        expect(snapAnchor({ r: 2.5, c: 2.5 }, DOT, blockedGrid([3, 3], [2, 3], [3, 2])))
             .toEqual({ anchor: { r: 2, c: 2 }, valid: true });
     });
 
     it('reaches the up-right diagonal when both straight neighbours are blocked', () => {
-        expect(snapAnchor({ r: 2.5, c: 3.49 }, DOT, gridWith([3, 3], [2, 3], [3, 4])))
+        expect(snapAnchor({ r: 2.5, c: 3.49 }, DOT, blockedGrid([3, 3], [2, 3], [3, 4])))
             .toEqual({ anchor: { r: 2, c: 4 }, valid: true });
     });
 
     it('reaches the down-left diagonal when both straight neighbours are blocked', () => {
-        expect(snapAnchor({ r: 3.49, c: 2.5 }, DOT, gridWith([3, 3], [4, 3], [3, 2])))
+        expect(snapAnchor({ r: 3.49, c: 2.5 }, DOT, blockedGrid([3, 3], [4, 3], [3, 2])))
             .toEqual({ anchor: { r: 4, c: 2 }, valid: true });
     });
 
     it('reaches the down-right diagonal when both straight neighbours are blocked', () => {
-        expect(snapAnchor({ r: 3.49, c: 3.49 }, DOT, gridWith([3, 3], [4, 3], [3, 4])))
+        expect(snapAnchor({ r: 3.49, c: 3.49 }, DOT, blockedGrid([3, 3], [4, 3], [3, 4])))
             .toEqual({ anchor: { r: 4, c: 4 }, valid: true });
     });
 });
@@ -222,7 +210,7 @@ describe('projectShape', () => {
     });
 
     it('shows the snapped cells, not the cells under the raw position', () => {
-        const projection = projectShape({ r: 2.4, c: 2 }, DOT, gridWith([2, 2]));
+        const projection = projectShape({ r: 2.4, c: 2 }, DOT, blockedGrid([2, 2]));
         expect(projection).toEqual({ anchor: { r: 3, c: 2 }, cells: [{ r: 3, c: 2 }], valid: true });
     });
 });

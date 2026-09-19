@@ -635,7 +635,7 @@ were found and reproduced by tests before any change was made
 - The grab cell is computed from the slot's rendered cell size instead of the 48px board constant.
 - The tray slot un-masks on release either way; a successful placement empties it in the
   same React commit, so a refused drop simply leaves the shape sitting in the bank.
-- The drag logic moved out of `BlocksCanvas.tsx` (362 → 175 lines, off the file-size debt list) into
+- The drag logic moved out of `BlocksCanvas.tsx` (362 → 176 lines, off the file-size debt list) into
   five units: `useShapeDrag.ts` for the gesture, `dragGeometry.ts` for the pure pointer-to-cell and
   snapping maths, `placement.ts` for the single "may this shape sit here" rule the ghost and the game
   now share, `boardOrigin.ts` for the one DOM measurement the drag depends on, and `dragPerf.ts`
@@ -679,3 +679,22 @@ were found and reproduced by tests before any change was made
 **Spec drift corrected**: the previous entry claimed "native HTML5 pointer capture" and "0ms
 scripting lag". There was no `setPointerCapture` call in the game, and the absence of pointer
 ownership is precisely what let a second finger take over a drag.
+
+### 2026-09-18 Space Rescue: a move right after a line clear is judged against the new board
+
+**Why**: a review of the drag test kit found that the drag's window listeners held on to the
+`placeShape` and projection function from before a grid change until React's passive flush
+re-subscribed them. That gap is narrow. When the 1.2s line-clear timer changes the ghost under
+the shape, its synchronous update flushes the passive effects before any input, so a still finger
+was never affected. The gap opens only when the clear leaves the ghost as it was and the render
+overruns React's ~5ms scheduler slice; a move in it then used the old board, and the ghost it drew
+stood until the next move. A move onto a cell the clear had just freed showed red and returned to
+the tray, and a move onto a meteor that had just landed showed green for a drop that bounced.
+- The listeners now read both callbacks through a ref synced in a layout effect, so a move or a
+  lift in that gap uses the board the child is looking at. A side effect: the listeners are no
+  longer torn down and re-added on every grid change mid-drag.
+- Not reproducible by hand on demand: it needs a slow render and a move within that render's
+  frame. Guarded by `useShapeDrag.commit-order.test.tsx`, which dispatches the move and lift in
+  that gap with a `placeShape` shaped like production's (rebuilt per grid, re-checking the cell).
+  No existing test moved the pointer inside that gap, and the kit's default spy, stable and always
+  accepting, would have hidden the `placeShape` half even if one had.

@@ -176,17 +176,31 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
     // — one recompute per change, never one per frame.
     //
     // ⚠️ Must stay a LAYOUT effect. The grid change arrives from a setTimeout,
-    // so React commits and paints it and then schedules the passive flush as a
-    // separate task. `pointerup` is a native window listener, which React has no
-    // opportunity to order against that flush — so with useEffect the lift can
+    // so React schedules the passive flush as a separate scheduler callback, and
+    // a render that overruns the ~5ms slice lets queued input run before it.
+    // `pointerup` is a native window listener, so with useEffect the lift can
     // read a projection validated against the grid the child is no longer
-    // looking at. A layout effect runs inside the commit, before that paint.
+    // looking at. A layout effect runs inside the commit, before any input.
     useLayoutEffect(() => {
         const drag = activeDragRef.current;
         const origin = lastOriginRef.current;
         if (!drag || !origin) return;
         updateProjection(origin, drag);
     }, [updateProjection]);
+
+    // The window listeners below live for the whole drag, but the grid changes
+    // under it and useBlocksGame rebuilds placeShape with it. Both callbacks are
+    // read through this ref, synced in a LAYOUT effect for the same reason as the
+    // recompute above. Closed over instead, they would stay stale until a passive
+    // flush re-subscribed them, and a native move can land before that flush when
+    // the grid change left the ghost as it was (a changed ghost's setState
+    // flushes the effects synchronously). That move would show red over a cell
+    // the clear just freed, or green over a meteor that just landed, and the
+    // stale ghost would stand until the next move, whenever the lift came.
+    const latestRef = useRef({ updateProjection, placeShape });
+    useLayoutEffect(() => {
+        latestRef.current = { updateProjection, placeShape };
+    }, [updateProjection, placeShape]);
 
     useEffect(() => {
         if (!dragView) return;
@@ -210,7 +224,7 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
             // about where the shape is.
             const origin = proxyOrigin(e.clientX, e.clientY, drag.grab);
             moveProxy(origin);
-            updateProjection(origin, drag);
+            latestRef.current.updateProjection(origin, drag);
             if (import.meta.env.DEV) recordDragTick(dragPerfRef.current, start, performance.now());
         };
 
@@ -227,7 +241,7 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
 
             // A refused drop must be silent, and a successful one needs no
             // after-mask: the parent empties the slot in this same commit.
-            placeShape(drag.shape, anchor.c, anchor.r, drag.slot.slotType, drag.slot.slotIndex);
+            latestRef.current.placeShape(drag.shape, anchor.c, anchor.r, drag.slot.slotType, drag.slot.slotIndex);
         };
 
         const handlePointerCancel = (e: PointerEvent) => {
@@ -259,7 +273,7 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
             window.removeEventListener('blur', handleStranded);
             document.removeEventListener('visibilitychange', handleVisibility);
         };
-    }, [dragView, moveProxy, updateProjection, placeShape, clearDrag]);
+    }, [dragView, moveProxy, clearDrag]);
 
     return {
         boardRef,

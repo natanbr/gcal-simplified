@@ -310,3 +310,58 @@ insetting by their sum.** Deliberate. A fractional border does not survive devic
 only an identical border gets snapped identically; insetting by the sum drew the ghost half a pixel
 out, which flips the rounding for a shape on a cell boundary. Do NOT "simplify" it to `inset:
 BOARD_CONTENT_INSET`.
+
+## 2026-09-10 — A shared test helper is a production file to the guards
+
+**Learning:** Consolidating the blocks drag suites onto one shared kit (`blocks/dragTestKit.ts`, later
+split to keep a DOM-free `dragFixtures.ts`) hit two traps that neither the rule nor the filename
+suggests. First, `productionSources()` in `src/__tests__/helpers/sourceFiles.ts` excludes only
+`*.test.ts(x)` and `.d.ts`, so a *helper* under a styled root is scanned by `style-token-ratchet` and
+`file-size-ratchet` like any component. Copying the shape fixtures' hex colours into the kit would
+have failed the build as a **new** violation, and a baseline entry for a file created that day would
+be exactly the lie the ratchet exists to prevent. Second, `react-refresh/only-export-components` lints
+`.tsx` only, and there it treats a capitalised export initialised by a call (`DOT = fixture(...)`) as
+a component, then flags every lowercase helper beside it. Literal and arithmetic constants are exempt
+under this repo's `allowConstantExport`, and an `export *` draws a warning of its own.
+**Action:** Keep a test kit `.ts`, render with `createElement`, and derive fixtures from the
+production source (`SHAPE_POOL` / `HELP_SHAPES`) instead of retyping literals. That satisfies the
+ratchets *and* removes the drift the kit exists to prevent: gesture-defects had been measuring the
+board's content box from the 8px padding alone, ignoring the 2.5px border, and nothing failed — **a
+stale geometry constant does not break a test, it quietly re-points it at a board that does not
+exist.** Split DOM-free fixtures from render helpers, or a pure-maths suite loads the whole
+component tree. The same blindness runs the other way: nothing stops production code importing a
+kit. A bare `import 'vitest'` in the kit looked like a tripwire, but vitest declares
+`"sideEffects": false`, so a build drops it and the fixture ships silently. A bundled package's own
+import is never a guard; `src/__tests__/test-kit-boundary.test.ts` reads the imports instead.
+
+## 2026-09-18 — Correcting a test's input numbers can silently remove what it catches
+
+**Learning:** The kit "corrected" gesture-defects' drifted cell centres from 1.95 cells to exactly
+2.0. Every assertion stayed identical and every test stayed green, yet two guard tests stopped
+catching a floored snap and a grab offset by a whole cell instead of half: at a whole cell, those
+mutations land on the same anchor. The drifted constant had been the stricter one, by accident. No
+single aim catches everything either — at 0.75 a floor or an over-subtracted offset moves the shape a
+full cell, but a *dropped* offset moves it toward the next cell and still rounds back.
+**Action:** When a refactor changes the numbers a test feeds in, even to correct them, identical
+assertions are no evidence: run the same mutations against the file before and after. Aim
+coordinate tests off-centre on purpose (gesture-defects' `OFF_CENTRE`), and name which suite owns
+each mutation that aim cannot see.
+
+## 2026-09-18 — A gesture's window listeners read what changes mid-gesture through a layout-synced ref
+
+**Learning:** The drag's window listeners are subscribed in a passive effect and closed over
+`placeShape` and the projection function, both rebuilt on every grid change. They stay stale until
+the passive flush, and after a commit from a timer that flush is a separate scheduler callback, so a
+render that overruns the ~5ms slice lets a native move run first; the stale ghost it draws stands
+until the next move. The gap is narrower than it first looked: a layout-effect `setState` (the
+recompute changing the ghost) is synchronous, and it flushes the pending passive effects before the
+task ends. So a still finger through a clear was always fine; the real failure was a move onto a
+cell that changed while the ghost did not. The first regression tests, and the first write-up,
+modelled the still-finger case: when the commit also queued a synchronous update, dispatching from
+a parent's layout effect reaches a point no native event can. No test had moved the pointer inside
+the gap, and the kit's stable, always-accepting `placeShape` spy hid the `placeShape` half.
+**Action:** A listener that spans a gesture (drag, long-press) and consults state that changes
+during that gesture reads it through a ref synced in `useLayoutEffect`. A `keydown` handler that is
+one flush stale does no harm and needs none of this. Before writing a timing test, check the
+scenario can happen with real events: a mid-commit harness proves ordering, not reachability. Test
+with a collaborator shaped like production's (new identity per input, real validation).
