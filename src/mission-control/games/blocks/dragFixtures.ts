@@ -5,11 +5,9 @@
 // suite drifted onto a board that does not exist. dragTestKit.ts re-exports all
 // of this and adds the render helpers; a DOM-free suite imports this file alone.
 //
-// ⚠️  Test helper. Import it from tests only.
+// ⚠️  Test helper. Import it from tests only — enforced by
+// src/__tests__/test-kit-boundary.test.ts, since nothing else would fail.
 // ============================================================
-// Tripwire: vitest throws when loaded outside its runner, so a production module
-// that auto-imports a fixture fails loudly instead of shipping test code.
-import 'vitest';
 import type { BlocksGameState, GameShape } from './types';
 import {
     BOARD_BORDER,

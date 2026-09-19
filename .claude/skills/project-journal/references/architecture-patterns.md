@@ -329,7 +329,10 @@ ratchets *and* removes the drift the kit exists to prevent: gesture-defects had 
 board's content box from the 8px padding alone, ignoring the 2.5px border, and nothing failed — **a
 stale geometry constant does not break a test, it quietly re-points it at a board that does not
 exist.** Split DOM-free fixtures from render helpers, or a pure-maths suite loads the whole
-component tree.
+component tree. The same blindness runs the other way: nothing stops production code importing a
+kit. A bare `import 'vitest'` in the kit looked like a tripwire, but vitest declares
+`"sideEffects": false`, so a build drops it and the fixture ships silently. A bundled package's own
+import is never a guard; `src/__tests__/test-kit-boundary.test.ts` reads the imports instead.
 
 ## 2026-09-18 — Correcting a test's input numbers can silently remove what it catches
 
