@@ -334,6 +334,29 @@ kit. A bare `import 'vitest'` in the kit looked like a tripwire, but vitest decl
 `"sideEffects": false`, so a build drops it and the fixture ships silently. A bundled package's own
 import is never a guard; `src/__tests__/test-kit-boundary.test.ts` reads the imports instead.
 
+## 2026-09-12 — Converting a drag test to touch: move the finger, not the expectation
+
+**Learning:** Space Rescue floats a touch-dragged shape `TOUCH_LIFT_PX` (1.5 board cells) above the
+finger and projects the ghost from the shape. Most drag suites sent no `pointerType`, so forcing
+`lift: 0` in `useShapeDrag.ts` left every one of their tests green — the child's only real input
+path was invisible to them. The obvious conversion (keep the finger on `cellCentre(r, c)`, shift the
+expected row) is a trap: a half-cell lift leaves the shape on an exact `.5` boundary, so the
+expectation would pin `Math.round`'s tie rule rather than the gesture. And not every touch test
+observes the lift at all — a test that never drops a shape (a foreign pointerup or pointermove, the
+owner's own pointercancel) cannot be turned red by a lift mutant, and saying it was would be a false
+proof. The same subjects tested *through* a drop (a refused second grab, a foreign pointercancel
+mid-drag) do observe it.
+**Action:** Convert with `fingerBelow(r, c)` from `dragFixtures` (the finger sits `TOUCH_LIFT_PX`
+lower, which cancels the lift whatever it is tuned to, off-centre aims included) and keep every
+`expect` byte-identical. Prove the conversion is *selective* with one `lift: 0` run — the RED set
+must equal the anchor-bearing conversions exactly — and prove the lift-free ones still bite with a
+mutant of the rule they guard (drop the `pointerId` ownership check, no-op the cancel handler), run
+before and after so the kill sets can be compared. A colour-only ghost precondition is not a
+position check: on an empty board every cell is green, so a lift regression slips past it and fails
+later under the wrong message. Convert a test when its defect only exists on touch or its anchor is
+reached through the lift; leave pixel-literal geometry and pointer-agnostic refusals on the unlifted
+path.
+
 ## 2026-09-18 — Correcting a test's input numbers can silently remove what it catches
 
 **Learning:** The kit "corrected" gesture-defects' drifted cell centres from 1.95 cells to exactly
@@ -365,3 +388,30 @@ during that gesture reads it through a ref synced in `useLayoutEffect`. A `keydo
 one flush stale does no harm and needs none of this. Before writing a timing test, check the
 scenario can happen with real events: a mid-commit harness proves ordering, not reachability. Test
 with a collaborator shaped like production's (new identity per input, real validation).
+
+## 2026-09-20 — A test kit's oracle comes from what is drawn, not from what the code reads
+
+**Learning:** `dragFixtures`' `cellCentre` computed the expected cell with `BOARD_CELL_PITCH` — the
+constant `dragGeometry` divides by. Nothing renders with it: `BlocksGrid` lays the board out from
+`CELL_DISPLAY_SIZE` and `BOARD_GAP`. So the kit followed the code under test rather than the board
+the child sees, and the suites it replaced had been stricter by accident, each with its own literal
+`52`. That is a tautological oracle — expected value and code computed the same way, so a wrong
+formula agrees with itself — and it is the failure mode a *derived* kit invites, in exchange for the
+drift it removes. Mutating the pitch, of 45 drag tests:
+
+| drift | kit shares the constant | kit derives its own |
+|---|---|---|
+| +1px | 0 red | 0 red |
+| half the gap (−2px) | 0 red | 1 red |
+| the gap dropped (−4px) | 2 red | 7 red |
+
+**Deriving strictly improves detection, and does not make it complete.** A wrong pitch only shows
+once the accumulated error crosses a rounding boundary, so on an 8-cell board a 1px drift is
+invisible to both. Whoever wants that caught needs a test that aims far from the board origin (the
+lift suite's `BOARD_BOTTOM` aim is the one that does) or one that reads the DOM's own geometry.
+**Action:** When consolidating literals into derived constants, ask of each one: does production
+*render* with it, or only *compute* with it? Only the first is an honest source for an expected
+value; derive the rest from the rendering constants, even when that means restating the arithmetic
+the code happens to use. Still open by the same argument:
+`useShapeDrag.contract.test.tsx`'s `SNAPPED_FINGER` and `dragGeometry`'s `TOUCH_LIFT_PX` bounds are
+both expressed in `BOARD_CELL_PITCH`.
