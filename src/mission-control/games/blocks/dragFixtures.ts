@@ -12,7 +12,6 @@ import type { BlocksGameState, GameShape } from './types';
 import { TOUCH_LIFT_PX } from './dragGeometry';
 import {
     BOARD_BORDER,
-    BOARD_CELL_PITCH,
     BOARD_GAP,
     BOARD_PADDING,
     CELL_DISPLAY_SIZE,
@@ -29,6 +28,21 @@ import {
  * such constant and boardOrigin.ts reads computed style.
  */
 const CONTENT_INSET = BOARD_BORDER + BOARD_PADDING;
+
+/**
+ * Cell pitch, derived from what BlocksGrid DRAWS — a cell plus the grid gap —
+ * and deliberately NOT from types.ts's `BOARD_CELL_PITCH`, which nothing
+ * renders with: only dragGeometry's maths reads it.
+ *
+ * ⚠️ Sharing that constant makes this oracle circular: an expected cell computed
+ * with the code's own formula agrees with a wrong one. Mutating the pitch, of 45
+ * drag tests — shared vs derived: +1px 0 vs 0 red, half the gap 0 vs 1, the gap
+ * dropped 2 vs 7. Deriving strictly improves detection without completing it,
+ * because the error has to accumulate across cells before it crosses a rounding
+ * boundary; the lift suite's BOARD_BOTTOM aim is the one that reaches far
+ * enough to notice a small one.
+ */
+const PITCH = CELL_DISPLAY_SIZE + BOARD_GAP;
 
 export const HALF_CELL = CELL_DISPLAY_SIZE / 2;
 
@@ -53,8 +67,8 @@ export const BOARD_BOTTOM = BOARD_TOP + BOARD_SIZE;
  * OFF_CENTRE in BlocksCanvas.gesture-defects.test.tsx).
  */
 export const cellCentre = (r: number, c: number) => ({
-    clientX: BOARD_LEFT + CONTENT_INSET + BOARD_CELL_PITCH * c + HALF_CELL,
-    clientY: BOARD_TOP + CONTENT_INSET + BOARD_CELL_PITCH * r + HALF_CELL,
+    clientX: BOARD_LEFT + CONTENT_INSET + PITCH * c + HALF_CELL,
+    clientY: BOARD_TOP + CONTENT_INSET + PITCH * r + HALF_CELL,
 });
 
 /**
