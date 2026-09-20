@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Commit-order guards: what useShapeDrag.ts reads across a grid change must be
 // synced in a LAYOUT effect — the grid-keyed recompute, and the callbacks the
 // window listeners call.
@@ -66,8 +66,11 @@ const METEOR = 2;
  *  neighbour: every neighbour is a full cell away and SNAP_RADIUS_CELLS is 0.75. */
 const SQUARELY_ON_3_3 = { ...fingerBelow(3, 3), pointerId: 1, pointerType: 'touch' };
 
-/** The ghost cell (3,3) draws, 1-indexed as CSS grid lines. */
-const GHOST_ON_3_3 = ['4', '4'];
+/** Where a ghost cell reports itself: CSS grid lines, so 1-indexed. Derived
+ *  rather than written out, so a change in how the overlay places a cell fails
+ *  the precondition instead of agreeing with a restated literal. */
+const ghostLines = (r: number, c: number) => [String(r + 1), String(c + 1)];
+const GHOST_ON_3_3 = ghostLines(3, 3);
 const ghostAt = (cell: HTMLElement) => [cell.style.gridRowStart, cell.style.gridColumnStart];
 
 interface PtrInit { clientX: number; clientY: number; pointerId: number; pointerType: string }

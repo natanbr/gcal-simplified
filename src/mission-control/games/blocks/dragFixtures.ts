@@ -1,8 +1,9 @@
 // ============================================================
 // DOM-free fixtures for the Space Rescue drag suites: shapes, grids, game state,
 // and the board/tray geometry every expected coordinate is computed from. Every
-// number is DERIVED from types.ts, never restated — a restated copy is how one
-// suite drifted onto a board that does not exist. dragTestKit.ts re-exports all
+// number is DERIVED — from types.ts, or from the lift in dragGeometry.ts — and
+// never restated: a restated copy is how one suite drifted onto a board that
+// does not exist. Derive from what production RENDERS with, though: see PITCH. dragTestKit.ts re-exports all
 // of this and adds the render helpers; a DOM-free suite imports this file alone.
 //
 // ⚠️  Test helper. Import it from tests only — enforced by
@@ -35,12 +36,11 @@ const CONTENT_INSET = BOARD_BORDER + BOARD_PADDING;
  * renders with: only dragGeometry's maths reads it.
  *
  * ⚠️ Sharing that constant makes this oracle circular: an expected cell computed
- * with the code's own formula agrees with a wrong one. Mutating the pitch, of 45
- * drag tests — shared vs derived: +1px 0 vs 0 red, half the gap 0 vs 1, the gap
- * dropped 2 vs 7. Deriving strictly improves detection without completing it,
- * because the error has to accumulate across cells before it crosses a rounding
- * boundary; the lift suite's BOARD_BOTTOM aim is the one that reaches far
- * enough to notice a small one.
+ * with the code's own formula agrees with a wrong one. Deriving improves that
+ * without curing it — the error must accumulate across cells before it crosses
+ * a rounding boundary, so a small drift is still only visible to an aim far
+ * from the origin (the lift suite's BOARD_BOTTOM one). Measurements are in the
+ * journal, 2026-09-20.
  */
 const PITCH = CELL_DISPLAY_SIZE + BOARD_GAP;
 
@@ -59,7 +59,8 @@ export const BOARD_BOTTOM = BOARD_TOP + BOARD_SIZE;
 /**
  * Client coordinate at the centre of board cell (r, c); fractional indices are
  * welcome. For an unlifted drag it is also the pointer position that puts the
- * grabbed cell on (r, c).
+ * grabbed cell on (r, c) — on touch the shape floats, so a finger aims with
+ * `fingerBelow` instead and this one lands it on a half-cell tie.
  *
  * An integer centre proves the anchor only up to rounding direction — round,
  * floor and a centring error under half a cell all land on the same cell. A test
@@ -80,6 +81,10 @@ export const cellCentre = (r: number, c: number) => ({
  * Why not `cellCentre` on touch: at today's 1.5-cell lift, a finger on a cell
  * centre leaves the shape on a half-cell boundary, and the test would pin
  * Math.round's tie rule instead of the gesture.
+ *
+ * The cancelling cuts both ways: a *retuned* lift moves finger and shape
+ * together, so no suite aiming this way can see it. dragGeometry.test.ts bounds
+ * the value and BlocksCanvas.lift.test.tsx pins the transform it produces.
  */
 export const fingerBelow = (r: number, c: number) => {
     const { clientX, clientY } = cellCentre(r, c);
