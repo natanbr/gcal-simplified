@@ -9,6 +9,7 @@
 // src/__tests__/test-kit-boundary.test.ts, since nothing else would fail.
 // ============================================================
 import type { BlocksGameState, GameShape } from './types';
+import { TOUCH_LIFT_PX } from './dragGeometry';
 import {
     BOARD_BORDER,
     BOARD_CELL_PITCH,
@@ -55,6 +56,21 @@ export const cellCentre = (r: number, c: number) => ({
     clientX: BOARD_LEFT + CONTENT_INSET + BOARD_CELL_PITCH * c + HALF_CELL,
     clientY: BOARD_TOP + CONTENT_INSET + BOARD_CELL_PITCH * r + HALF_CELL,
 });
+
+/**
+ * cellCentre's touch twin: where the FINGER must be to put a *lifted* shape's
+ * grabbed cell on (r, c). The finger sits TOUCH_LIFT_PX lower, which cancels
+ * the lift exactly — whatever it is retuned to — so a test converted to touch
+ * keeps its expected anchor.
+ *
+ * Why not `cellCentre` on touch: at today's 1.5-cell lift, a finger on a cell
+ * centre leaves the shape on a half-cell boundary, and the test would pin
+ * Math.round's tie rule instead of the gesture.
+ */
+export const fingerBelow = (r: number, c: number) => {
+    const { clientX, clientY } = cellCentre(r, c);
+    return { clientX, clientY: clientY + TOUCH_LIFT_PX };
+};
 
 // ── Tray geometry ────────────────────────────────────────────
 

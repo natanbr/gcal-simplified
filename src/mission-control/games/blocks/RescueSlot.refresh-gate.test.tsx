@@ -23,8 +23,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BLOCK_2X2, DOT, draggableItems, renderCanvas, stateWith } from './dragTestKit';
 
 /** An arbitrary point on a grabbable. Which cell it grabs does not matter here,
- *  only whether a drag is in flight. */
-const GRAB = { clientX: 120, clientY: 120, pointerId: 1 };
+ *  only whether a drag is in flight. Touch, because the case this gate exists
+ *  for — a second finger tapping Refresh mid-drag — only happens on the
+ *  touchscreen. No assertion reads a position, so the lift does not enter it. */
+const GRAB = { clientX: 120, clientY: 120, pointerId: 1, pointerType: 'touch' };
 
 function setup() {
     const { container, proxy } = renderCanvas(
