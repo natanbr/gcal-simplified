@@ -27,6 +27,15 @@
 //
 // Asserted in BOTH directions on purpose: `not.toHaveBeenCalled()` on its own
 // passes vacuously if the harness never reaches the handler at all.
+//
+// Runs as touch. What is re-read across the grid change is where the shape was
+// last drawn, which on the child's touchscreen includes its TOUCH_LIFT_PX
+// float; on the mouse path that float is 0, so a recompute that dropped it
+// would pass unnoticed. (`liftAt` below is the finger's release, not that
+// float.) Each finger sits at fingerBelow, so the floating shape is squarely on
+// the named cell. Each precondition pins that cell as well as the ghost's
+// colour: on an empty board every cell is green, so colour alone would let a
+// lift regression through to fail later under the wrong message.
 // ============================================================
 import { useLayoutEffect, useMemo } from 'react';
 import { render, fireEvent, act } from '@testing-library/react';
@@ -38,10 +47,10 @@ import {
     DOT,
     blockedGrid,
     canvasProps,
-    cellCentre,
     dragProxy,
     draggableItem,
     emptyGrid,
+    fingerBelow,
     ghostCell,
     grabCorner,
     pinDraggables,
@@ -52,12 +61,19 @@ import {
 /** Grid value for a meteor, as written by useBlocksGame.ts / types.ts. */
 const METEOR = 2;
 
-/** Squarely on (3,3), with no fractional offset, so forgiveness snapping cannot
- *  quietly rescue the projection onto a neighbour: every neighbour is a full
- *  cell away and SNAP_RADIUS_CELLS is 0.75. */
-const SQUARELY_ON_3_3 = { ...cellCentre(3, 3), pointerId: 1 };
+/** The finger that puts the floating shape squarely on (3,3), with no fractional
+ *  offset, so forgiveness snapping cannot quietly rescue the projection onto a
+ *  neighbour: every neighbour is a full cell away and SNAP_RADIUS_CELLS is 0.75. */
+const SQUARELY_ON_3_3 = { ...fingerBelow(3, 3), pointerId: 1, pointerType: 'touch' };
 
-interface PtrInit { clientX: number; clientY: number; pointerId: number }
+/** Where a ghost cell reports itself: CSS grid lines, so 1-indexed. Derived
+ *  rather than written out, so a change in how the overlay places a cell fails
+ *  the precondition instead of agreeing with a restated literal. */
+const ghostLines = (r: number, c: number) => [String(r + 1), String(c + 1)];
+const GHOST_ON_3_3 = ghostLines(3, 3);
+const ghostAt = (cell: HTMLElement) => [cell.style.gridRowStart, cell.style.gridColumnStart];
+
+interface PtrInit { clientX: number; clientY: number; pointerId: number; pointerType: string }
 
 /**
  * A placeShape shaped like production's: useBlocksGame rebuilds it whenever the
@@ -136,7 +152,8 @@ const MUST_BE_LAYOUT =
     'The grid-keyed recompute in useShapeDrag.ts ran too late: a native pointerup ' +
     'arriving in the same commit as the new grid read the OLD projection. That effect ' +
     'must be a useLayoutEffect — a useEffect is flushed in a separate scheduler ' +
-    'callback, which queued input can run ahead of.';
+    'callback, which queued input can run ahead of. (Or, on touch, the recompute ' +
+    'no longer projects from where the floating shape was last drawn.)';
 
 describe('a lift arriving in the same commit as a new grid sees the new grid', () => {
     beforeEach(() => vi.clearAllMocks());
@@ -144,10 +161,11 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
     it('refuses the drop when the incoming grid blocks the cell the green ghost was on', () => {
         const { item, placeShape, ghost, commit } = setup(emptyGrid());
 
-        fireEvent.pointerDown(item, grabCorner(1));
+        fireEvent.pointerDown(item, grabCorner(1, { pointerType: 'touch' }));
         fireEvent.pointerMove(window, SQUARELY_ON_3_3);
         expect(ghost()!.style.background, 'precondition: the ghost is green on (3,3)')
             .toContain('74, 222, 128');
+        expect(ghostAt(ghost()!), 'precondition: the ghost is ON (3,3)').toEqual(GHOST_ON_3_3);
 
         // The line-clear timer's commit: spawnObstacles drops a meteor into the
         // cell the ghost is sitting on, and the finger lifts in that same commit.
@@ -164,10 +182,11 @@ describe('a lift arriving in the same commit as a new grid sees the new grid', (
         // really reaches the pointerup handler.
         const { item, placeShape, ghost, commit } = setup(blockedGrid([3, 3]));
 
-        fireEvent.pointerDown(item, grabCorner(1));
+        fireEvent.pointerDown(item, grabCorner(1, { pointerType: 'touch' }));
         fireEvent.pointerMove(window, SQUARELY_ON_3_3);
         expect(ghost()!.style.background, 'precondition: the ghost is red on (3,3)')
             .toContain('239, 68, 68');
+        expect(ghostAt(ghost()!), 'precondition: the ghost is ON (3,3)').toEqual(GHOST_ON_3_3);
 
         // The clear lands: (3,3) is empty again, and the child lifts on it.
         act(() => { commit(emptyGrid(), SQUARELY_ON_3_3); });
@@ -182,9 +201,10 @@ const MUST_READ_LATEST =
     'listeners are re-subscribed only in the passive flush, so the callbacks they ' +
     'read must be synced in a LAYOUT effect.';
 
-/** Squarely on (3,4), the neighbour the grid change frees or fills. A full cell
- *  from (3,3), so forgiveness snapping cannot pull the drop back onto it. */
-const SQUARELY_ON_3_4 = { ...cellCentre(3, 4), pointerId: 1 };
+/** The finger that puts the floating shape squarely on (3,4), the neighbour the
+ *  grid change frees or fills. A full cell from (3,3), so forgiveness snapping
+ *  cannot pull the drop back onto it. */
+const SQUARELY_ON_3_4 = { ...fingerBelow(3, 4), pointerId: 1, pointerType: 'touch' };
 
 /**
  * The window the listeners' stale closures are reachable in. When a grid change
@@ -211,10 +231,11 @@ describe('a move and lift after a grid change that left the ghost unchanged see 
         const gridClosed = { placed: vi.fn(), refused: vi.fn() };
         const { item, ghost, commit } = setup(blockedGrid([3, 4]), gridClosed);
 
-        fireEvent.pointerDown(item, grabCorner(1));
+        fireEvent.pointerDown(item, grabCorner(1, { pointerType: 'touch' }));
         fireEvent.pointerMove(window, SQUARELY_ON_3_3);
         expect(ghost()!.style.background, 'precondition: the ghost is green on (3,3)')
             .toContain('74, 222, 128');
+        expect(ghostAt(ghost()!), 'precondition: the ghost is ON (3,3)').toEqual(GHOST_ON_3_3);
 
         act(() => { commit(emptyGrid(), SQUARELY_ON_3_4, true); });
 
@@ -230,10 +251,11 @@ describe('a move and lift after a grid change that left the ghost unchanged see 
         const gridClosed = { placed: vi.fn(), refused: vi.fn() };
         const { item, ghost, proxy, commit } = setup(emptyGrid(), gridClosed);
 
-        fireEvent.pointerDown(item, grabCorner(1));
+        fireEvent.pointerDown(item, grabCorner(1, { pointerType: 'touch' }));
         fireEvent.pointerMove(window, SQUARELY_ON_3_3);
         expect(ghost()!.style.background, 'precondition: the ghost is green on (3,3)')
             .toContain('74, 222, 128');
+        expect(ghostAt(ghost()!), 'precondition: the ghost is ON (3,3)').toEqual(GHOST_ON_3_3);
 
         const withMeteor = emptyGrid();
         withMeteor[3][4] = METEOR;

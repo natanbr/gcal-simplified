@@ -47,7 +47,8 @@ function cellZIndex(val: number): number {
     return Number.parseInt(cell.style.zIndex, 10);
 }
 
-/** Drags the tray shape onto the board so the projection overlay is on screen. */
+/** Drags the tray shape onto the board so the projection overlay is on screen.
+ *  Unlifted mouse path on purpose: stacking order is the same for any pointer. */
 function dragOntoBoard(state: BlocksGameState = stateWith(DOT)) {
     const { container } = renderCanvas(state);
     const scoped = within(container);

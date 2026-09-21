@@ -8,6 +8,13 @@
 //
 // The two drop tests aim OFF_CENTRE on purpose; see its note before changing
 // any coordinate here.
+//
+// A test runs as touch when its defect only exists on a touchscreen (a second
+// finger or palm, an OS-cancelled touch, finger roll on release) or when its
+// expected anchor is reached through the lift (the grab-cell scale). Where a
+// shape is dropped, the finger aims with fingerBelow, OFF_CENTRE included. The
+// rejected drop is neither — a refusal unmasks the slot the same way for any
+// pointer — so it stays on the unlifted path.
 // ============================================================
 import { fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -20,6 +27,7 @@ import {
     TRAY_TOP,
     cellCentre,
     draggableItem,
+    fingerBelow,
     renderCanvas,
     stateWith,
 } from './dragTestKit';
@@ -50,8 +58,8 @@ describe('BlocksCanvas gesture contract', () => {
 
         // Finger lands 140px into a 148.5px-wide bar: the 4th cell (index 3).
         // With a 48px divisor the code decides it was the 3rd cell (index 2).
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 140, clientY: TRAY_TOP + 18, pointerId: 1 });
-        const drop = { ...cellCentre(1 + OFF_CENTRE, 4 + OFF_CENTRE), pointerId: 1 };
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 140, clientY: TRAY_TOP + 18, pointerId: 1, pointerType: 'touch' });
+        const drop = { ...fingerBelow(1 + OFF_CENTRE, 4 + OFF_CENTRE), pointerId: 1, pointerType: 'touch' };
         fireEvent.pointerMove(window, drop);
         fireEvent.pointerUp(window, drop);
 
@@ -64,10 +72,11 @@ describe('BlocksCanvas gesture contract', () => {
     it('a pointerup from a different pointer (second finger, palm) does not drop the shape', () => {
         const { item, placeShape, proxy } = setup(BLOCK_2X2);
 
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
+        // Touch for both: only a touchscreen has a second finger or a palm.
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
         expect(proxy()).not.toBeNull();
 
-        fireEvent.pointerUp(window, { ...cellCentre(2, 2), pointerId: 2 });
+        fireEvent.pointerUp(window, { ...cellCentre(2, 2), pointerId: 2, pointerType: 'touch' });
 
         expect(placeShape).not.toHaveBeenCalled();
         expect(proxy()).not.toBeNull(); // finger 1 is still dragging
@@ -76,11 +85,13 @@ describe('BlocksCanvas gesture contract', () => {
     it('pointermove from a different pointer does not steer the dragged shape', () => {
         const { item, proxy } = setup(BLOCK_2X2);
 
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
-        fireEvent.pointerMove(window, { ...cellCentre(1, 1), pointerId: 1 });
+        // Touch for both. The comparison is before/after on the same lifted
+        // proxy, so the lift cancels out of it.
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerMove(window, { ...fingerBelow(1, 1), pointerId: 1, pointerType: 'touch' });
         const underFinger1 = proxy()!.style.transform;
 
-        fireEvent.pointerMove(window, { ...cellCentre(5, 5), pointerId: 2 }); // palm
+        fireEvent.pointerMove(window, { ...cellCentre(5, 5), pointerId: 2, pointerType: 'touch' }); // palm
 
         expect(proxy()!.style.transform).toBe(underFinger1);
     });
@@ -88,12 +99,13 @@ describe('BlocksCanvas gesture contract', () => {
     it('drops the shape where the projection was last shown, not where the finger happened to lift', () => {
         const { item, placeShape } = setup(BLOCK_2X2);
 
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
-        fireEvent.pointerMove(window, { ...cellCentre(1 + OFF_CENTRE, 1 + OFF_CENTRE), pointerId: 1 });
+        // Touch — finger roll on release is a fingertip thing.
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerMove(window, { ...fingerBelow(1 + OFF_CENTRE, 1 + OFF_CENTRE), pointerId: 1, pointerType: 'touch' });
         // The green ghost is at (2,2): the shape sits three quarters of the way onto
-        // it. The lift registers one cell away (finger roll, coalesced moves, or a
+        // it. The release registers one cell away (finger roll, coalesced moves, or a
         // frame of React latency on the ghost).
-        fireEvent.pointerUp(window, { ...cellCentre(3, 3), pointerId: 1 });
+        fireEvent.pointerUp(window, { ...fingerBelow(3, 3), pointerId: 1, pointerType: 'touch' });
 
         expect(placeShape).toHaveBeenCalledWith(expect.anything(), 2, 2, 'standard', 0);
     });
@@ -101,10 +113,11 @@ describe('BlocksCanvas gesture contract', () => {
     it('pointercancel ends the drag: proxy unmounts and the tray shape is visible again', () => {
         const { item, placeShape, proxy } = setup(BLOCK_2X2);
 
-        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
+        // Touch: the OS cancels a touch it takes over (edge swipe, palm rejection).
+        fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1, pointerType: 'touch' });
         expect(proxy()).not.toBeNull();
 
-        fireEvent.pointerCancel(window, { clientX: 0, clientY: 0, pointerId: 1 });
+        fireEvent.pointerCancel(window, { clientX: 0, clientY: 0, pointerId: 1, pointerType: 'touch' });
 
         expect(proxy()).toBeNull();
         expect(item.style.opacity).toBe('1');
@@ -115,6 +128,7 @@ describe('BlocksCanvas gesture contract', () => {
         const rejecting = vi.fn().mockReturnValue(false);
         const { item } = setup(BLOCK_2X2, rejecting);
 
+        // Unlifted on purpose — see the header.
         fireEvent.pointerDown(item, { clientX: TRAY_LEFT + 10, clientY: TRAY_TOP + 10, pointerId: 1 });
         fireEvent.pointerMove(window, { ...cellCentre(2, 2), pointerId: 1 });
         fireEvent.pointerUp(window, { ...cellCentre(2, 2), pointerId: 1 });

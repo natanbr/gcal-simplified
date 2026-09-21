@@ -9,6 +9,16 @@
 //
 // Setup comes from dragTestKit: board geometry derived from types.ts, the board
 // and every draggable pinned.
+//
+// Pointer type is chosen test by test, not per file. The child only plays on a
+// touchscreen, so the rescue grab scale, the refused second finger and the
+// palm's pointercancel run as touch, aiming with fingerBelow.
+//
+// The border and gutter tests stay unlifted because their literal pixel offsets
+// are the subject; under the lift, the inset is pinned by
+// useShapeDrag.contract.test.tsx's touch pair and most-overlap rounding by
+// BlocksCanvas.lift.test.tsx. Tap-to-return never moves, so it never projects
+// and no pointer type changes it.
 // ============================================================
 import { fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -21,8 +31,8 @@ import {
     DOT,
     TRAY_LEFT,
     TRAY_TOP,
-    cellCentre,
     draggableItems,
+    fingerBelow,
     grabCorner,
     renderCanvas,
     stateWith,
@@ -73,9 +83,9 @@ describe('BlocksCanvas drag geometry and gesture ownership', () => {
         }));
 
         // 55px into a 22px/1.5px-gap bar is the third cell (pitch 23.5 → index 2).
-        fireEvent.pointerDown(items[0], { clientX: TRAY_LEFT + 55, clientY: TRAY_TOP + 8, pointerId: 1 });
-        fireEvent.pointerMove(window, { ...cellCentre(4, 5), pointerId: 1 });
-        fireEvent.pointerUp(window, { ...cellCentre(4, 5), pointerId: 1 });
+        fireEvent.pointerDown(items[0], { clientX: TRAY_LEFT + 55, clientY: TRAY_TOP + 8, pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerMove(window, { ...fingerBelow(4, 5), pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerUp(window, { ...fingerBelow(4, 5), pointerId: 1, pointerType: 'touch' });
 
         expect(placeShape).toHaveBeenCalledWith(expect.objectContaining({ id: 'bar-h' }), 3, 4, 'rescue', 0);
     });
@@ -83,15 +93,15 @@ describe('BlocksCanvas drag geometry and gesture ownership', () => {
     it('refuses a second grab while a drag is live', () => {
         const { items, placeShape } = setup(stateWith([BLOCK_2X2, DOT]));
 
-        fireEvent.pointerDown(items[0], grabCorner(1));
-        fireEvent.pointerDown(items[1], grabCorner(2, { index: 1 }));
+        fireEvent.pointerDown(items[0], grabCorner(1, { pointerType: 'touch' }));
+        fireEvent.pointerDown(items[1], grabCorner(2, { index: 1, pointerType: 'touch' }));
 
         // Only the first slot is masked — the second finger started nothing.
         expect(items[0].style.opacity).toBe('0');
         expect(items[1].style.opacity).toBe('1');
 
-        fireEvent.pointerMove(window, { ...cellCentre(1, 1), pointerId: 1 });
-        fireEvent.pointerUp(window, { ...cellCentre(1, 1), pointerId: 1 });
+        fireEvent.pointerMove(window, { ...fingerBelow(1, 1), pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerUp(window, { ...fingerBelow(1, 1), pointerId: 1, pointerType: 'touch' });
 
         expect(placeShape).toHaveBeenCalledTimes(1);
         expect(placeShape).toHaveBeenCalledWith(expect.objectContaining({ id: 'block-2x2' }), 1, 1, 'standard', 0);
@@ -99,13 +109,14 @@ describe('BlocksCanvas drag geometry and gesture ownership', () => {
 
     it('ignores a pointercancel from another pointer — Windows palm rejection cancels the palm, not the drag', () => {
         const { items, placeShape, proxy } = setup(stateWith(BLOCK_2X2));
-        fireEvent.pointerDown(items[0], grabCorner(1));
-        fireEvent.pointerMove(window, { ...cellCentre(2, 2), pointerId: 1 });
-        fireEvent.pointerCancel(window, { clientX: 0, clientY: 0, pointerId: 2 });
+        // Touch, palm included: Windows reports a resting palm as a touch pointer.
+        fireEvent.pointerDown(items[0], grabCorner(1, { pointerType: 'touch' }));
+        fireEvent.pointerMove(window, { ...fingerBelow(2, 2), pointerId: 1, pointerType: 'touch' });
+        fireEvent.pointerCancel(window, { clientX: 0, clientY: 0, pointerId: 2, pointerType: 'touch' });
 
         expect(proxy()).not.toBeNull();
 
-        fireEvent.pointerUp(window, { ...cellCentre(2, 2), pointerId: 1 });
+        fireEvent.pointerUp(window, { ...fingerBelow(2, 2), pointerId: 1, pointerType: 'touch' });
         expect(placeShape).toHaveBeenCalledWith(expect.anything(), 2, 2, 'standard', 0);
     });
 

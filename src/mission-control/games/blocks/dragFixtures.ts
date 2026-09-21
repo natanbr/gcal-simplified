@@ -1,17 +1,18 @@
 // ============================================================
 // DOM-free fixtures for the Space Rescue drag suites: shapes, grids, game state,
 // and the board/tray geometry every expected coordinate is computed from. Every
-// number is DERIVED from types.ts, never restated — a restated copy is how one
-// suite drifted onto a board that does not exist. dragTestKit.ts re-exports all
+// number is DERIVED — from types.ts, or from the lift in dragGeometry.ts — and
+// never restated: a restated copy is how one suite drifted onto a board that
+// does not exist. Derive from what production RENDERS with, though: see PITCH. dragTestKit.ts re-exports all
 // of this and adds the render helpers; a DOM-free suite imports this file alone.
 //
 // ⚠️  Test helper. Import it from tests only — enforced by
 // src/__tests__/test-kit-boundary.test.ts, since nothing else would fail.
 // ============================================================
 import type { BlocksGameState, GameShape } from './types';
+import { TOUCH_LIFT_PX } from './dragGeometry';
 import {
     BOARD_BORDER,
-    BOARD_CELL_PITCH,
     BOARD_GAP,
     BOARD_PADDING,
     CELL_DISPLAY_SIZE,
@@ -29,6 +30,20 @@ import {
  */
 const CONTENT_INSET = BOARD_BORDER + BOARD_PADDING;
 
+/**
+ * Cell pitch, derived from what BlocksGrid DRAWS — a cell plus the grid gap —
+ * and deliberately NOT from types.ts's `BOARD_CELL_PITCH`, which nothing
+ * renders with: only dragGeometry's maths reads it.
+ *
+ * ⚠️ Sharing that constant makes this oracle circular: an expected cell computed
+ * with the code's own formula agrees with a wrong one. Deriving improves that
+ * without curing it — the error must accumulate across cells before it crosses
+ * a rounding boundary, so a small drift is still only visible to an aim far
+ * from the origin (the lift suite's BOARD_BOTTOM one). Measurements are in the
+ * journal, 2026-09-20.
+ */
+const PITCH = CELL_DISPLAY_SIZE + BOARD_GAP;
+
 export const HALF_CELL = CELL_DISPLAY_SIZE / 2;
 
 /** The board's border box. Production reads only the rect's left/top, so the
@@ -44,7 +59,8 @@ export const BOARD_BOTTOM = BOARD_TOP + BOARD_SIZE;
 /**
  * Client coordinate at the centre of board cell (r, c); fractional indices are
  * welcome. For an unlifted drag it is also the pointer position that puts the
- * grabbed cell on (r, c).
+ * grabbed cell on (r, c) — on touch the shape floats, so a finger aims with
+ * `fingerBelow` instead and this one lands it on a half-cell tie.
  *
  * An integer centre proves the anchor only up to rounding direction — round,
  * floor and a centring error under half a cell all land on the same cell. A test
@@ -52,9 +68,28 @@ export const BOARD_BOTTOM = BOARD_TOP + BOARD_SIZE;
  * OFF_CENTRE in BlocksCanvas.gesture-defects.test.tsx).
  */
 export const cellCentre = (r: number, c: number) => ({
-    clientX: BOARD_LEFT + CONTENT_INSET + BOARD_CELL_PITCH * c + HALF_CELL,
-    clientY: BOARD_TOP + CONTENT_INSET + BOARD_CELL_PITCH * r + HALF_CELL,
+    clientX: BOARD_LEFT + CONTENT_INSET + PITCH * c + HALF_CELL,
+    clientY: BOARD_TOP + CONTENT_INSET + PITCH * r + HALF_CELL,
 });
+
+/**
+ * cellCentre's touch twin: where the FINGER must be to put a *lifted* shape's
+ * grabbed cell on (r, c). The finger sits TOUCH_LIFT_PX lower, which cancels
+ * the lift exactly — whatever it is retuned to — so a test converted to touch
+ * keeps its expected anchor.
+ *
+ * Why not `cellCentre` on touch: at today's 1.5-cell lift, a finger on a cell
+ * centre leaves the shape on a half-cell boundary, and the test would pin
+ * Math.round's tie rule instead of the gesture.
+ *
+ * The cancelling cuts both ways: a *retuned* lift moves finger and shape
+ * together, so no suite aiming this way can see it. dragGeometry.test.ts bounds
+ * the value and BlocksCanvas.lift.test.tsx pins the transform it produces.
+ */
+export const fingerBelow = (r: number, c: number) => {
+    const { clientX, clientY } = cellCentre(r, c);
+    return { clientX, clientY: clientY + TOUCH_LIFT_PX };
+};
 
 // ── Tray geometry ────────────────────────────────────────────
 
