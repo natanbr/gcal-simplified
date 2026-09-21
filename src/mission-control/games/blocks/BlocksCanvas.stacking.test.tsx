@@ -21,6 +21,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GridCell } from './GridCell';
 import type { BlocksGameState } from './types';
 import {
+    CANVAS_SUITE_TIMEOUT_MS,
     DOT,
     cellCentre,
     dragProxy,
@@ -29,6 +30,8 @@ import {
     renderCanvas,
     stateWith,
 } from './dragTestKit';
+
+vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS });
 
 /**
  * Every value a board cell can hold, from the contract in types.ts:

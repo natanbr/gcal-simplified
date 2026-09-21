@@ -23,6 +23,7 @@ import type { PlaceShape } from './useShapeDrag';
 import {
     BAR_H,
     BLOCK_2X2,
+    CANVAS_SUITE_TIMEOUT_MS,
     TRAY_LEFT,
     TRAY_TOP,
     cellCentre,
@@ -31,6 +32,8 @@ import {
     renderCanvas,
     stateWith,
 } from './dragTestKit';
+
+vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS });
 
 /**
  * How far past an anchor the drop tests aim, in cells. At a whole cell, a

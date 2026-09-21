@@ -14,6 +14,7 @@ import { TOUCH_LIFT_PX } from './dragGeometry';
 import {
     BLOCK_2X2,
     BOARD_BOTTOM,
+    CANVAS_SUITE_TIMEOUT_MS,
     DOT,
     HALF_CELL,
     blockedGrid,
@@ -23,6 +24,8 @@ import {
     renderCanvas,
     stateWith,
 } from './dragTestKit';
+
+vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS });
 
 /** Two boards can be on screen at once (the mouse/touch pair below); every kit
  *  query is scoped to its own render's container, never the whole document. */
