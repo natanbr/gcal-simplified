@@ -48,13 +48,11 @@ describe('useBlocksGame', () => {
         });
         
         const shape = HELP_SHAPES[0]; // 1x1
-        
-        let success = false;
+
         act(() => {
-            success = result.current.placeShape(shape, 0, 0, 'standard', 0);
+            result.current.placeShape(shape, 0, 0, 'standard', 0);
         });
 
-        expect(success).toBe(true);
         expect(result.current.gameState.grid[0][0]).toBe(1);
         expect(result.current.gameState.standardShapes[0]).toBeNull();
     });
@@ -79,12 +77,49 @@ describe('useBlocksGame', () => {
         });
 
         // Try placing again at the exact same location
-        let success = true;
+        const slotShape = result.current.gameState.standardShapes[1];
+        const before = result.current.gameState;
         act(() => {
-            success = result.current.placeShape(shape, 2, 2, 'standard', 1);
+            result.current.placeShape(shape, 2, 2, 'standard', 1);
         });
 
-        expect(success).toBe(false);
+        // Refused: nothing changed, and the shape is still in its slot.
+        expect(result.current.gameState).toBe(before);
+        expect(result.current.gameState.standardShapes[1]).toBe(slotShape);
+        expect(slotShape).not.toBeNull();
+    });
+
+    // The updater's re-checks are the only refusal placeShape has.
+    it('refuses a drop before the game has started', () => {
+        const { result } = renderHook(() => useBlocksGame());
+        act(() => {
+            result.current.gameState.grid[0][0] = 0;
+        });
+        const before = result.current.gameState;
+
+        act(() => {
+            result.current.placeShape(HELP_SHAPES[0], 0, 0, 'standard', 0);
+        });
+
+        expect(result.current.gameState).toBe(before);
+    });
+
+    it('refuses a drop from the rescue slot while it is locked', () => {
+        const { result } = renderHook(() => useBlocksGame());
+        act(() => {
+            result.current.startGame();
+        });
+        act(() => {
+            result.current.gameState.grid[0][0] = 0;
+        });
+        const before = result.current.gameState;
+        expect(before.rescueShapeLocked).toBe(true);
+
+        act(() => {
+            result.current.placeShape(HELP_SHAPES[0], 0, 0, 'rescue', 0);
+        });
+
+        expect(result.current.gameState).toBe(before);
     });
 
     it('clears lines and scores points', () => {

@@ -28,13 +28,15 @@ export type StartDragHandler = (
     cellSize: number,
 ) => void;
 
+/** Fire-and-forget: the game decides inside its state updater, so no caller can
+ *  be told the outcome. A refusal leaves the shape in its slot. */
 export type PlaceShape = (
     shape: GameShape,
     gridX: number,
     gridY: number,
     slotType: SlotType,
     slotIndex: number,
-) => boolean;
+) => void;
 
 interface ActiveDrag {
     pointerId: number;
