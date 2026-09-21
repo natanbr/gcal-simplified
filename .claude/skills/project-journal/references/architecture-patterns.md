@@ -419,3 +419,42 @@ value; derive the rest from the rendering constants, even when that means restat
 the code happens to use. Still open by the same argument:
 `useShapeDrag.contract.test.tsx`'s `SNAPPED_FINGER` and `dragGeometry`'s `TOUCH_LIFT_PX` bounds are
 both expressed in `BOARD_CELL_PITCH`.
+
+## 2026-09-21 — A synchronous test that times out is slow, not hung, and the first test pays for the file
+
+**Learning:** `RescueSlot.refresh-gate`'s first test (a render and one assertion) timed out at 5s
+under CPU contention. It was not a bad test. It was the most expensive *first* test in the suite.
+Vitest isolates each file in a fresh worker, so test #0 pays every cold start the file triggers.
+Measured with an inspector-profiled probe:
+- **The render is dominated by jsdom, not React.** About 60% of rendering `BlocksCanvas` cold is
+  jsdom 28's CSS engine (cssstyle, css-tree, @asamuzakjp/css-color) parsing every inline `style`.
+  That costs 185ms alone and 680ms in a normal full run, against 60ms / 200ms warm.
+- **`getByRole` has a fixed cold start.** Its first call cost ~100ms (370ms in a full run), and
+  scoping it to a 6-element subtree cost the same. The price is the role and accessible-name
+  machinery warming up, not DOM size.
+
+In a normal run all seven kit suites' #0 sat at 1.1–1.3s. With three runs sharing the machine they
+reached 3.3–5.9s, and the one that failed first in the repro was `BlocksCanvas.test.tsx`, which has
+no role query at all. Fixing refresh-gate's query alone would only have moved the flake to a
+neighbour. Also: Vitest checks a synchronous test's timeout *after* it returns (it cannot interrupt
+it), so for sync tests the timeout is a post-hoc speed limit with no hang detection to lose.
+**Action:** Remove the avoidable cost: refresh-gate queries `getByText(/refresh/i, { selector:
+'button' })` (under 1ms; `selector` keeps the real-`<button>` half of the contract). For the cost
+that is inherent (cold canvas render in jsdom), every suite importing `dragTestKit` sets
+`vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS })` (15s). `dragTestKit.timeout.test.ts`
+enforces it, because a suite that forgets goes green alone and flakes only on a busy machine.
+Contended repro (3 concurrent full runs): 9 runs before had 1 kit failure; 12 runs after had 0 kit
+failures, and the timeout is what carries that: `useShapeDrag.contract` #0 still took 5836ms, a fail
+at the old 5s. The whole run was *not* clean: 2 of the 12 failed in `electron/main_single_instance`
+(async `await import('./main')` stalling to exactly 5s, where the timeout really is hang detection;
+out of scope, not caused here). Refresh-gate #0 fell from median 3179 to 1449ms, but the after
+rounds were lighter (untouched kit suites fell 13-38% too), so not all of that is the query. The
+timeout holds only as a top-level `vi.setConfig` declared before the first test: Vitest fixes a
+test's timeout when `it()` is collected, so the same line in a `beforeAll`, or below a top-level
+`it()`, silently does nothing for that test (the guard checks for both).
+To diagnose a timing flake,
+rank per-test durations from `--reporter=json` across runs: pass/fail counts at a 1-in-6 flake rate
+prove nothing either way. The render cost itself only falls if the inline styles move into CSS
+classes, which is the same backlog as the raw-hex ratchet. **Trap when mutation-testing a timeout:**
+check the runner's own output, not a hand-rolled JSON filter. Mine reported "0 timed out" while all
+45 tests had.
