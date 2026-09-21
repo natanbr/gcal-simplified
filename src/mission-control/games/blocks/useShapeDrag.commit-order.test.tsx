@@ -10,6 +10,9 @@
 // `useEffect` the lift is then validated against the grid the child is no
 // longer looking at: a silent return-to-bank after a green ghost, or a refusal
 // on cells that are visibly empty.
+// (The clear now commits via flushSync, whose passive flush runs in the same
+// task, so production closes this gap at the source too. These guards keep
+// useShapeDrag correct for any grid change committed at default priority.)
 //
 // Neither obvious harness can tell the two effect kinds apart, so neither of
 // them is what this file does:
@@ -76,23 +79,23 @@ const ghostAt = (cell: HTMLElement) => [cell.style.gridRowStart, cell.style.grid
 interface PtrInit { clientX: number; clientY: number; pointerId: number; pointerType: string }
 
 /**
- * A placeShape shaped like production's: useBlocksGame rebuilds it whenever the
- * grid changes and re-checks the cell against the grid it closed over. Accepted
- * and refused drops are recorded separately, so a refusal cannot hide behind a
- * "was called" assertion.
+ * A placeShape rebuilt whenever the grid changes, re-checking the cell against
+ * the grid it closed over — how useBlocksGame's worked until it moved the check
+ * into its state updater and became stable. useShapeDrag must stay correct for
+ * a parent that does rebuild it. Accepted and refused drops are recorded
+ * separately, so a refusal cannot hide behind a "was called" assertion.
  */
 interface GridClosedPlace { placed: ReturnType<typeof vi.fn>; refused: ReturnType<typeof vi.fn> }
 const placeShapeFor = (grid: number[][], { placed, refused }: GridClosedPlace): PlaceShape =>
     (shape, gridX, gridY, slotType, slotIndex) => {
         const ok = isPlaceable(grid, shape, { r: gridY, c: gridX });
         (ok ? placed : refused)(shape, gridX, gridY, slotType, slotIndex);
-        return ok;
     };
 
 interface HarnessProps {
     grid: number[][];
-    /** When set, placeShape is rebuilt per grid like production's; otherwise
-     *  the kit's stable, always-accepting spy. */
+    /** When set, placeShape is rebuilt per grid (see placeShapeFor); otherwise
+     *  the kit's stable, never-refusing spy. */
     gridClosed?: GridClosedPlace;
     /** Also dispatch a pointermove at the lift point, just before the lift. */
     moveFirst?: boolean;

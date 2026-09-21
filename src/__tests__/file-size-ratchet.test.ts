@@ -73,13 +73,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // landed at 176. Re-adding it would need a fresh, deliberate entry.
     'src/mission-control/games/fruits/useFruitMergeGame.ts': 361,
     'src/mission-control/games/fruits/FruitMergeCanvas.tsx': 360,
-    // Tightened 329 → 324 on 2026-08-20 (quiz question no longer stored in game
-    // state), then 324 → 322 on 2026-08-24: the inline altitude→level if-chain
-    // became altitudeLevel() in types.ts, which also gave ALTITUDE_LEVELS its
-    // first consumer — the thresholds had been declared twice. Then 322 → 312 on
-    // 2026-09-07: the local canPlaceShape was the drag ghost's isPlaceable
-    // written a second time, and moved to blocks/placement.ts as one rule.
-    'src/mission-control/games/blocks/useBlocksGame.ts': 312,
+    // blocks/useBlocksGame.ts: 329 → 312 across 2026-08-20..09-07, then OFF the
+    // backlog on 2026-09-18 — line-clear marking and resolution moved to
+    // lineClear.ts when the clear timer left the state updater; landed at 295.
     // 311 → 324 on 2026-09-03 (the activity +1 and Claim buttons must LOOK
     // refused while the shield is broken — a refused action writes no log line,
     // so a live-looking button gives a dead tap with no trace on either side).

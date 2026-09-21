@@ -122,6 +122,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     - **Game Choice Selector**: Clicking the completed "Quick Game" pedestal opens a selector overlay allowing children to choose between playing **Snake** 🐍 or **Space Rescue** 🚀.
     - **Space Rescue Game Rules**:
       - **8x8 Space Grid**: Renders an 8x8 debris-clearing canvas with 10 handcrafted initial layouts. Cleared horizontal rows or vertical columns clear debris, scoring points and filling a Rocket Flight Path meter.
+      - **Line clears resolve exactly once**: a completed row or column explodes for 1.2s, then empties, and its satellite/electricity effects and the level's obstacles are applied once. A line scores once: a drop during the explosion that completes nothing new neither re-scores the exploding line nor delays it. A line completed while another is still exploding joins it: both empty together 1.2s after the later drop, and the feedback card stays up until then. The game is never declared over mid-explosion — those cells are about to be free. Starting a new game (which reopening Space Rescue does) cancels a pending clear. A drop in the same frame as a clear is judged against the cleared board.
       - **Proactive Shapes Generator**: Under the board, 3 active shapes are generated, guaranteed by a solver look-ahead algorithm to always have valid grid placements.
       - **4th Slot (Golden Rescue Shape)**: Holds a shape that is guaranteed to fit somewhere (ensuring players can always avoid game-over by solving math). Locked behind a math quiz (single-digit addition under 10). Tapping "Refresh" regenerates a new shape but locks the slot. Placing the 4th shape immediately replenishes the slot with a new locked shape.
       - **Game-Over Condition**: The game is over when none of the 3 standard shapes have any valid placements on the grid, the current Golden Rescue Shape does not fit, AND no other shape in the pool fits (meaning the grid is fully blocked and refreshing the Golden Rescue Shape cannot generate a placement).
@@ -698,3 +699,43 @@ the tray, and a move onto a meteor that had just landed showed green for a drop 
   that gap with a `placeShape` shaped like production's (rebuilt per grid, re-checking the cell).
   No existing test moved the pointer inside that gap, and the kit's default spy, stable and always
   accepting, would have hidden the `placeShape` half even if one had.
+
+### 2026-09-18 Space Rescue line clears resolve exactly once
+
+**Why**: found in the adversarial review of PR 158. `placeShape` started the 1.2s line-clear
+timer inside its React state updater, and React may run an updater more than once: StrictMode
+runs it twice in development, and in production a finger lift rendered ahead of a pending
+lower-priority update is replayed on top of it. Reproduced before the fix: one line-clearing drop
+left two timers under StrictMode and under a replayed drop, against one in the control.
+
+- Each clear is resolved once. The visible symptom of the double resolution was up to two extra
+  meteors whenever an electricity cell (level 3) was cleared; the satellite effect and the
+  obstacle top-up only act when nothing is there yet, so a second run changed nothing.
+- A drop in the same frame as the clear is judged against the cleared board. Previously, if the
+  clear dropped a meteor on the target cell, the shape showed placed for one frame and then
+  jumped back to the tray.
+- A clear React has to render twice — an update already queued when its timer fires, such as the
+  rescue quiz resolving — lands its meteors in the same cells both times. Where they land is now
+  rolled from a seed chosen once per clear; before, the second render re-rolled them.
+- A line completed while another is still exploding joins it, and both empty together 1.2s after
+  the later drop. Previously the first line's timer took the second line's feedback card down
+  early. Trade-off, chosen deliberately: an earlier line keeps exploding (and blocking its cells)
+  until 1.2s after the last line that joined it.
+- An electricity cell where a cleared row and a cleared column cross fires once, not once per
+  line.
+- A drop during the explosion no longer re-scores the exploding line. Pre-existing: a row of
+  exploding cells still read as "full", so every drop within 1.2s of a clear added +10 score,
+  +10 altitude and a fresh feedback card for a line already cleared. (Found by the review of this
+  change, where it had briefly become worse: each such drop also restarted the explosion.)
+- Completing a line in the last free cell no longer ends the game. Pre-existing: exploding cells
+  block placement, so the game-over check fired before they emptied, and "Mission Failed" stayed
+  up over a board with free cells.
+- Starting a new game mid-explosion — including reopening Space Rescue within 1.2s of a clear —
+  cancels the clear. Previously the old timer fired on the new board. Closing the game only
+  hides it; the clear resolves unseen.
+- `placeShape` returns nothing. The decision is made inside the updater, against state that can
+  be newer than the caller's render, so a boolean could be wrong; no production caller read it.
+  Its identity no longer changes with every grid change.
+
+Tests: `useBlocksGame.line-clear.test.tsx`, `lineClear.test.ts`. Line-clear marking and
+resolution moved to the pure `lineClear.ts`; `useBlocksGame.ts` came off the file-size backlog.

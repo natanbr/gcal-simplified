@@ -28,13 +28,15 @@ export type StartDragHandler = (
     cellSize: number,
 ) => void;
 
+/** Fire-and-forget: the game decides inside its state updater, so no caller can
+ *  be told the outcome. A refusal leaves the shape in its slot. */
 export type PlaceShape = (
     shape: GameShape,
     gridX: number,
     gridY: number,
     slotType: SlotType,
     slotIndex: number,
-) => boolean;
+) => void;
 
 interface ActiveDrag {
     pointerId: number;
@@ -175,12 +177,14 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
     // `updateProjection` closes over `grid`, so its identity IS the grid change
     // — one recompute per change, never one per frame.
     //
-    // ⚠️ Must stay a LAYOUT effect. The grid change arrives from a setTimeout,
-    // so React schedules the passive flush as a separate scheduler callback, and
-    // a render that overruns the ~5ms slice lets queued input run before it.
+    // ⚠️ Must stay a LAYOUT effect. A grid change committed from a setTimeout at
+    // default priority gets its passive flush as a separate scheduler callback,
+    // and a render that overruns the ~5ms slice lets queued input run before it.
     // `pointerup` is a native window listener, so with useEffect the lift can
     // read a projection validated against the grid the child is no longer
     // looking at. A layout effect runs inside the commit, before any input.
+    // (The line clear now commits via flushSync, whose passive flush runs in the
+    // same task — this keeps the drag correct however its parent schedules one.)
     useLayoutEffect(() => {
         const drag = activeDragRef.current;
         const origin = lastOriginRef.current;
@@ -189,7 +193,9 @@ export function useShapeDrag({ grid, placeShape }: UseShapeDragOptions) {
     }, [updateProjection]);
 
     // The window listeners below live for the whole drag, but the grid changes
-    // under it and useBlocksGame rebuilds placeShape with it. Both callbacks are
+    // under it and `updateProjection` is rebuilt with it. (useBlocksGame's
+    // placeShape is stable today; reading it here too keeps that the parent's
+    // choice, not a condition of correctness.) Both callbacks are
     // read through this ref, synced in a LAYOUT effect for the same reason as the
     // recompute above. Closed over instead, they would stay stale until a passive
     // flush re-subscribed them, and a native move can land before that flush when

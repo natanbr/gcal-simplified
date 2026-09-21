@@ -61,13 +61,13 @@ export const ghostCell = (container: HTMLElement) =>
  * BlocksCanvas's collaborators, built once and reused across rerenders so a
  * rerender changes only the game state.
  *
- * ⚠️ The default placeShape is held STABLE and always accepts, on purpose.
- * Production's does neither: useBlocksGame rebuilds it whenever the grid changes
- * and re-checks the cell against the grid it closed over. A test about what
- * happens when the grid changes under a drag must pass its own grid-closed
- * placeShape (see useShapeDrag.commit-order.test.tsx).
+ * ⚠️ The default placeShape is a bare, stable spy: it records the drop and never
+ * refuses it. Production's is stable too, but re-checks the cell inside its
+ * state updater, so a refusal there is invisible to a "was called" assertion. A
+ * test about what happens when the grid changes under a drag must pass its own
+ * cell-checking placeShape (see useShapeDrag.commit-order.test.tsx).
  */
-export function canvasProps(placeShape: PlaceShape = vi.fn().mockReturnValue(true)) {
+export function canvasProps(placeShape: PlaceShape = vi.fn()) {
     return {
         placeShape,
         triggerRescueQuiz: vi.fn(),

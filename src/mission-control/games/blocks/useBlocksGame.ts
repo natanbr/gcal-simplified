@@ -1,13 +1,27 @@
 import { useState, useCallback, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { isPlaceable } from './placement';
-import { 
-    GameShape, BlocksGameState, 
+import {
+    GameShape, BlocksGameState,
     GRID_SIZE, SHAPE_POOL, HELP_SHAPES, LEVEL_COMPLEX_SHAPES, INITIAL_LAYOUTS,
-    transformShape, applyClearEffects, spawnObstacles, altitudeLevel
+    transformShape, altitudeLevel
 } from './types';
+import { CLEAR_DELAY_MS, PendingClear, clearFeedback, markCompletedLines, resolvePendingClear } from './lineClear';
+
+/** The game the board renders, plus the clear still exploding on it — kept in
+ *  state so its timer is scheduled from what React committed (see lineClear.ts). */
+interface HookState { game: BlocksGameState; pendingClear: PendingClear | null }
+
+/** Lifts an updater of the game alone; a no-op stays the same reference. */
+const onGame = (update: (game: BlocksGameState) => BlocksGameState) => (prev: HookState): HookState => {
+    const game = update(prev.game);
+    return game === prev.game ? prev : { ...prev, game };
+};
 
 export function useBlocksGame() {
-    const [state, setState] = useState<BlocksGameState>(createInitialState);
+    const [{ game, pendingClear }, setState] = useState<HookState>(() => ({
+        game: createInitialState(), pendingClear: null,
+    }));
 
     function createInitialState(): BlocksGameState {
         const layoutIndex = Math.floor(Math.random() * INITIAL_LAYOUTS.length);
@@ -27,7 +41,7 @@ export function useBlocksGame() {
     }
 
     const resetGame = useCallback(() => {
-        setState(createInitialState());
+        setState({ game: createInitialState(), pendingClear: null });
     }, []);
 
     const hasAnyValidPlacement = useCallback((grid: number[][], shape: GameShape): boolean => {
@@ -102,7 +116,7 @@ export function useBlocksGame() {
     }, [hasAnyValidPlacement]);
 
     const startGame = useCallback(() => {
-        setState(prev => {
+        setState(onGame(prev => {
             const next = { ...prev, phase: 'playing' as const };
             // Generate standard shapes immediately on start
             const shapes: GameShape[] = [];
@@ -112,47 +126,48 @@ export function useBlocksGame() {
             next.standardShapes = shapes;
             next.rescueShape = selectRescueShape(next.grid);
             return next;
-        });
+        }));
     }, [selectProactiveShape, selectRescueShape]);
 
     const triggerRescueQuiz = useCallback(() => {
-        setState(prev => ({ ...prev, rescueQuizActive: true }));
+        setState(onGame(prev => ({ ...prev, rescueQuizActive: true })));
     }, []);
 
     /** The engine-driven overlay confirmed a counted correct answer. */
     const resolveRescueQuiz = useCallback(() => {
-        setState(prev => ({
+        setState(onGame(prev => ({
             ...prev,
             rescueShapeLocked: false,
             rescueQuizActive: false,
-        }));
+        })));
     }, []);
 
     /** Opt-in quiz: backing out costs nothing but the unlock. */
     const cancelRescueQuiz = useCallback(() => {
-        setState(prev => ({ ...prev, rescueQuizActive: false }));
+        setState(onGame(prev => ({ ...prev, rescueQuizActive: false })));
     }, []);
 
     const refreshRescueShape = useCallback(() => {
-        setState(prev => ({
+        setState(onGame(prev => ({
             ...prev,
             rescueShape: selectRescueShape(prev.grid),
             rescueShapeLocked: true,
-        }));
+        })));
     }, [selectRescueShape]);
 
+    /** Returns nothing on purpose: the updater decides against the latest state,
+     *  which can be newer than the caller's render (a clear landing in the same
+     *  frame as the lift), so no answer computed out here could be trusted. */
     const placeShape = useCallback((
-        shape: GameShape, gridX: number, gridY: number, 
+        shape: GameShape, gridX: number, gridY: number,
         slotType: 'standard' | 'rescue', slotIndex: number
-    ): boolean => {
-        if (state.phase !== 'playing') return false;
-        if (slotType === 'rescue' && state.rescueShapeLocked) return false;
-        if (!isPlaceable(state.grid, shape, { r: gridY, c: gridX })) return false;
-
-        setState(prev => {
-            if (prev.phase !== 'playing') return prev;
-            if (slotType === 'rescue' && prev.rescueShapeLocked) return prev;
-            if (!isPlaceable(prev.grid, shape, { r: gridY, c: gridX })) return prev;
+    ): void => {
+        const feedbackId = Date.now().toString();
+        setState(prevState => {
+            const prev = prevState.game;
+            if (prev.phase !== 'playing') return prevState;
+            if (slotType === 'rescue' && prev.rescueShapeLocked) return prevState;
+            if (!isPlaceable(prev.grid, shape, { r: gridY, c: gridX })) return prevState;
 
             const gridCopy = prev.grid.map(row => [...row]);
             
@@ -175,63 +190,8 @@ export function useBlocksGame() {
                 rescueShapeLocked = true; // relock slot
             }
 
-            // Check completed rows & columns
-            const rowsToClear: number[] = [];
-            const colsToClear: number[] = [];
-
-            for (let r = 0; r < GRID_SIZE; r++) {
-                if (gridCopy[r].every(cell => cell > 0)) rowsToClear.push(r);
-            }
-            for (let c = 0; c < GRID_SIZE; c++) {
-                if (gridCopy.every(row => row[c] > 0)) colsToClear.push(c);
-            }
-
-            // Stage 1: Mark for clearing
-            const linesCleared = rowsToClear.length + colsToClear.length;
-            let feedback = null;
-            
-            if (linesCleared > 0) {
-                const clearedCells: { r: number, c: number }[] = [];
-                const originalValues = new Map<string, number>();
-                rowsToClear.forEach(r => {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        originalValues.set(`${r}-${c}`, gridCopy[r][c]);
-                        gridCopy[r][c] = 4;
-                        clearedCells.push({ r, c });
-                    }
-                });
-                colsToClear.forEach(c => {
-                    for (let r = 0; r < GRID_SIZE; r++) {
-                        if (!originalValues.has(`${r}-${c}`)) {
-                            originalValues.set(`${r}-${c}`, gridCopy[r][c]);
-                        }
-                        gridCopy[r][c] = 4;
-                        clearedCells.push({ r, c });
-                    }
-                });
-
-                let text = "GOOD!";
-                let stars = 1;
-                if (linesCleared === 2) { text = "GREAT!"; stars = 2; }
-                if (linesCleared >= 3) { text = "EXCELLENT!"; stars = 3; }
-                feedback = { text, stars, id: Date.now().toString() };
-
-                setTimeout(() => {
-                    setState(current => {
-                        const nextGrid = current.grid.map(row => [...row]);
-                        clearedCells.forEach(({ r, c }) => {
-                            if (nextGrid[r][c] === 4) {
-                                nextGrid[r][c] = 0;
-                            }
-                        });
-
-                        applyClearEffects(nextGrid, clearedCells, originalValues);
-                        spawnObstacles(nextGrid, current.level);
-
-                        return { ...current, grid: nextGrid, clearedFeedback: null };
-                    });
-                }, 1200);
-            }
+            // Full lines explode now and are emptied by the effect below.
+            const { linesCleared, pendingClear } = markCompletedLines(gridCopy, prevState.pendingClear);
 
             // Scoring & Altitude progression
             const pointsGained = linesCleared * 10 + (linesCleared > 1 ? linesCleared * 5 : 0);
@@ -263,44 +223,67 @@ export function useBlocksGame() {
             }
 
             return {
-                ...prev,
-                grid: gridCopy,
-                standardShapes: finalStandardShapes,
-                rescueShape,
-                rescueShapeLocked,
-                score: nextScore,
-                altitude: nextAltitude,
-                level: nextLevel,
-                phase,
-                clearedFeedback: feedback || prev.clearedFeedback,
+                game: {
+                    ...prev,
+                    grid: gridCopy,
+                    standardShapes: finalStandardShapes,
+                    rescueShape,
+                    rescueShapeLocked,
+                    score: nextScore,
+                    altitude: nextAltitude,
+                    level: nextLevel,
+                    phase,
+                    clearedFeedback: linesCleared > 0 ? clearFeedback(linesCleared, feedbackId) : prev.clearedFeedback,
+                },
+                pendingClear,
             };
         });
-        return true;
-    }, [state.phase, state.grid, state.rescueShapeLocked, selectProactiveShape, selectRescueShape]);
+    }, [selectProactiveShape, selectRescueShape]);
 
-    // Check game over on grid change
+    // One timer per COMMITTED clear, however often React ran its updater. A
+    // joining line or a new game replaces `pendingClear` and unmounting drops it
+    // (closing the game only hides it); the identity check covers a fired timer.
     useEffect(() => {
-        if (state.phase !== 'playing') return;
-        
+        if (!pendingClear) return;
+        const timer = setTimeout(() => {
+            const seed = Math.random() * 2 ** 32; // out here: a replayed updater must roll the same meteors
+            // Sync, so the cleared board commits in this task: a lift landing first
+            // would render on the old board, then be refused on the new one.
+            flushSync(() => setState(prev => prev.pendingClear !== pendingClear ? prev : {
+                game: {
+                    ...prev.game,
+                    grid: resolvePendingClear(prev.game.grid, pendingClear, prev.game.level, seed),
+                    clearedFeedback: null,
+                },
+                pendingClear: null,
+            }));
+        }, CLEAR_DELAY_MS);
+        return () => clearTimeout(timer);
+    }, [pendingClear]);
+
+    // Check game over on grid change — never mid-explosion: those cells are about to be free.
+    useEffect(() => {
+        if (game.phase !== 'playing' || pendingClear) return;
+
         // Game is over if standard shapes cannot fit, AND the rescue shape cannot fit, AND no shape in the pool fits
-        const hasStandardPlacement = state.standardShapes.some(s => s && hasAnyValidPlacement(state.grid, s));
-        const hasRescuePlacement = state.rescueShape && hasAnyValidPlacement(state.grid, state.rescueShape);
-        
+        const hasStandardPlacement = game.standardShapes.some(s => s && hasAnyValidPlacement(game.grid, s));
+        const hasRescuePlacement = game.rescueShape && hasAnyValidPlacement(game.grid, game.rescueShape);
+
         let pool = [...SHAPE_POOL];
-        for (let l = 1; l <= state.level; l++) {
+        for (let l = 1; l <= game.level; l++) {
             if (LEVEL_COMPLEX_SHAPES[l]) {
                 pool = [...pool, ...LEVEL_COMPLEX_SHAPES[l]];
             }
         }
-        const anyPoolShapeFits = pool.some(s => hasAnyValidPlacement(state.grid, s));
+        const anyPoolShapeFits = pool.some(s => hasAnyValidPlacement(game.grid, s));
 
         if (!hasStandardPlacement && !hasRescuePlacement && !anyPoolShapeFits) {
-            setState(prev => ({ ...prev, phase: 'game-over' as const }));
+            setState(onGame(prev => ({ ...prev, phase: 'game-over' as const })));
         }
-    }, [state.grid, state.standardShapes, state.rescueShape, state.phase, state.level, hasAnyValidPlacement]);
+    }, [game.grid, game.standardShapes, game.rescueShape, game.phase, game.level, pendingClear, hasAnyValidPlacement]);
 
     return {
-        gameState: state,
+        gameState: game,
         startGame,
         resetGame,
         placeShape,

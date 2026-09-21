@@ -244,6 +244,7 @@ export function applyClearEffects(
     grid: number[][],
     clearedCells: { r: number; c: number }[],
     originalValues: Map<string, number>,
+    random: () => number = Math.random,
 ): void {
     clearedCells.forEach(({ r, c }) => {
         const origVal = originalValues.get(`${r}-${c}`);
@@ -260,8 +261,8 @@ export function applyClearEffects(
         if (origVal === 5) {
             let spawned = 0;
             for (let i = 0; i < 20 && spawned < 2; i++) {
-                const sr = Math.floor(Math.random() * GRID_SIZE);
-                const sc = Math.floor(Math.random() * GRID_SIZE);
+                const sr = Math.floor(random() * GRID_SIZE);
+                const sc = Math.floor(random() * GRID_SIZE);
                 if (grid[sr][sc] === 0) {
                     grid[sr][sc] = 2;
                     spawned++;
@@ -271,11 +272,11 @@ export function applyClearEffects(
     });
 }
 
-function spawnRandomCell(grid: number[][], value: number, count: number): void {
+function spawnRandomCell(grid: number[][], value: number, count: number, random: () => number): void {
     let placed = 0;
     for (let i = 0; i < 20 && placed < count; i++) {
-        const r = Math.floor(Math.random() * GRID_SIZE);
-        const c = Math.floor(Math.random() * GRID_SIZE);
+        const r = Math.floor(random() * GRID_SIZE);
+        const c = Math.floor(random() * GRID_SIZE);
         if (grid[r][c] === 0) {
             grid[r][c] = value;
             placed++;
@@ -283,14 +284,14 @@ function spawnRandomCell(grid: number[][], value: number, count: number): void {
     }
 }
 
-export function spawnObstacles(grid: number[][], level: number): void {
+export function spawnObstacles(grid: number[][], level: number, random: () => number = Math.random): void {
     if (level >= 1 && !grid.some(row => row.includes(2))) {
-        spawnRandomCell(grid, 2, 2);
+        spawnRandomCell(grid, 2, 2, random);
     }
     if (level >= 2 && !grid.some(row => row.includes(3))) {
-        spawnRandomCell(grid, 3, 1);
+        spawnRandomCell(grid, 3, 1, random);
     }
     if (level >= 3 && !grid.some(row => row.includes(5))) {
-        spawnRandomCell(grid, 5, 1);
+        spawnRandomCell(grid, 5, 1, random);
     }
 }
