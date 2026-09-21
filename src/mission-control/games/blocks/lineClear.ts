@@ -56,16 +56,30 @@ export function markCompletedLines(
     return { linesCleared, pendingClear: { cells } };
 }
 
+/** mulberry32: the same seed always rolls the same sequence. */
+function seededRandom(seed: number): () => number {
+    let state = seed >>> 0;
+    return () => {
+        state = (state + 0x6D2B79F5) >>> 0;
+        let t = Math.imul(state ^ (state >>> 15), state | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
 /** The board once `pending` has finished exploding: its cells emptied, their
- *  effects applied, and the level's obstacles topped up. */
-export function resolvePendingClear(grid: number[][], pending: PendingClear, level: number): number[][] {
+ *  effects applied, and the level's obstacles topped up. Where meteors land is
+ *  a pure function of `seed`, rolled by the caller OUTSIDE the state updater —
+ *  so an updater React replays lands them in the same cells again. */
+export function resolvePendingClear(grid: number[][], pending: PendingClear, level: number, seed: number): number[][] {
+    const random = seededRandom(seed);
     const next = grid.map(row => [...row]);
     for (const { r, c } of pending.cells) {
         if (next[r][c] === EXPLODING) next[r][c] = 0;
     }
     const originals = new Map(pending.cells.map(({ r, c, original }) => [`${r}-${c}`, original]));
-    applyClearEffects(next, pending.cells, originals);
-    spawnObstacles(next, level);
+    applyClearEffects(next, pending.cells, originals, random);
+    spawnObstacles(next, level, random);
     return next;
 }
 

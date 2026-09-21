@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { isPlaceable } from './placement';
 import {
     GameShape, BlocksGameState,
@@ -245,14 +246,17 @@ export function useBlocksGame() {
     useEffect(() => {
         if (!pendingClear) return;
         const timer = setTimeout(() => {
-            setState(prev => prev.pendingClear !== pendingClear ? prev : {
+            const seed = Math.random() * 2 ** 32; // out here: a replayed updater must roll the same meteors
+            // Sync, so the cleared board commits in this task: a lift landing first
+            // would render on the old board, then be refused on the new one.
+            flushSync(() => setState(prev => prev.pendingClear !== pendingClear ? prev : {
                 game: {
                     ...prev.game,
-                    grid: resolvePendingClear(prev.game.grid, pendingClear, prev.game.level),
+                    grid: resolvePendingClear(prev.game.grid, pendingClear, prev.game.level, seed),
                     clearedFeedback: null,
                 },
                 pendingClear: null,
-            });
+            }));
         }, CLEAR_DELAY_MS);
         return () => clearTimeout(timer);
     }, [pendingClear]);

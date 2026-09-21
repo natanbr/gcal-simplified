@@ -70,11 +70,24 @@ describe('resolvePendingClear', () => {
         grid[2][4] = 1; // debris straight above it: untouched
         const pending = markCompletedLines(grid, null).pendingClear!;
 
-        const next = resolvePendingClear(grid, pending, 0);
+        const next = resolvePendingClear(grid, pending, 0, 1);
 
         expect(next[3].every(cell => cell === 0)).toBe(true);
         expect([next[2][3], next[4][5], next[2][4]]).toEqual([0, 0, 1]);
         expect(grid[3].every(cell => cell === EXPLODING)).toBe(true); // input untouched
+    });
+
+    it('lands meteors in the same cells for the same seed, so a replayed clear rolls the same board', () => {
+        const grid = emptyGrid();
+        grid[3].fill(1);
+        grid[3][4] = 5; // electricity: its meteors land at random
+        const pending = markCompletedLines(grid, null).pendingClear!;
+
+        const once = resolvePendingClear(grid, pending, 1, 42);
+        const again = resolvePendingClear(grid, pending, 1, 42);
+
+        expect(once.flat().filter(cell => cell === 2).length).toBeGreaterThan(0);
+        expect(again).toEqual(once);
     });
 });
 
