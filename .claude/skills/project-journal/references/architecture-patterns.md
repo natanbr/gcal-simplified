@@ -40,6 +40,8 @@ Settled decisions from past reviews of `gcal-simplified`. The **false positives*
 
 **Keep impure calls out of the render path.** Extract functions calling `Date.now()` and friends to module scope, outside the component declaration.
 
+**A `setState` updater may run more than once — schedule nothing in it.** StrictMode runs it twice in dev; in production a sync-lane update (a pointerup, even from a native window listener — React reads `window.event`) rendered ahead of a pending default/transition update is *replayed* on top of it. `useBlocksGame.placeShape` started the line-clear `setTimeout` in its updater, so one clear resolved twice (2026-09-18). Put the pending thing in state and schedule from an effect keyed on the committed value, with cleanup (`lineClear.ts` + the effect in `useBlocksGame.ts`). A timer whose update must beat the next input wraps it in `flushSync`, or a lift in the same frame is rendered on the old state first and replayed on the new one. The effect's key must stay the *same object* when nothing changed: an exploding row (4s) still read as "full", so every drop minted a fresh `PendingClear` and restarted the timer — one fact ("exploding") stored twice, and the check read the copy that still said "full".
+
 **Shared time formatting.** Countdown / time-remaining math lives in a shared utility, not copy-pasted between panels and buttons.
 
 ## Games
@@ -69,6 +71,8 @@ Settled decisions from past reviews of `gcal-simplified`. The **false positives*
 **Clear localStorage in E2E `beforeEach`.** Stale Mission Control state (an active mission) bleeds across Electron runs and mounts a blocking overlay over the calendar UI. Explicit `localStorage.clear()` guarantees a clean slate.
 
 **Deterministic grid tests.** Grids that initialise randomly must have their target cells manually cleared to 0 inside `act()` before asserting on placement, or the test is flaky.
+
+**Reproducing an updater replay.** `renderHook(..., { wrapper: StrictMode })` for the dev double-run; `startTransition(() => otherUpdate())` then the call under test, in one `act`, for the production rebase (a bare call is default-lane and just batches); a timer plus `fireEvent.click` in one `act` for "input before the timer's render". Count what reached *committed* state (a marker the mocked effect writes into the grid), not spy calls — StrictMode's discarded run increments a spy too. **Trap:** after any `fireEvent`, React's dev build writes `window.event` back and jsdom keeps it, so every later update *in that file* reads as sync and can never be replayed — a replay test after a click passes vacuously. `Reflect.deleteProperty(window, 'event')` in that suite's `afterEach`. See `useBlocksGame.line-clear.test.tsx`.
 
 **Assert on visual tokens when counters are removed.** When a text counter (`x / y completed`) is replaced by visual tokens, assert on the count of the emoji element — remembering to account for header icons and button fallbacks in the expected number.
 
