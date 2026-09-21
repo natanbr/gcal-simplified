@@ -28,6 +28,7 @@ import {
     BLOCK_2X2,
     BOARD_LEFT,
     BOARD_TOP,
+    CANVAS_SUITE_TIMEOUT_MS,
     DOT,
     TRAY_LEFT,
     TRAY_TOP,
@@ -37,6 +38,8 @@ import {
     renderCanvas,
     stateWith,
 } from './dragTestKit';
+
+vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS });
 
 /** `items[i]` is the draggable `grabCorner(id, { index: i })` aims at. With an
  *  empty tray the rescue shape is the only draggable: index 0. */

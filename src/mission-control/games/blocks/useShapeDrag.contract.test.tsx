@@ -33,6 +33,7 @@ import { TOUCH_LIFT_PX } from './dragGeometry';
 import {
     BOARD_LEFT,
     BOARD_TOP,
+    CANVAS_SUITE_TIMEOUT_MS,
     DOT,
     HALF_CELL,
     blockedGrid,
@@ -46,6 +47,8 @@ import {
     renderCanvas,
     stateWith,
 } from './dragTestKit';
+
+vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS });
 
 /** `ghost()` is the one cell the DOT's projection draws, or null with no ghost. */
 function setup(gameState: BlocksGameState) {

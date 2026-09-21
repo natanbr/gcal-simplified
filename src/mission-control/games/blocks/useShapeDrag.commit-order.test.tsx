@@ -47,6 +47,7 @@ import { BlocksCanvas } from './BlocksCanvas';
 import { isPlaceable } from './placement';
 import type { PlaceShape } from './useShapeDrag';
 import {
+    CANVAS_SUITE_TIMEOUT_MS,
     DOT,
     blockedGrid,
     canvasProps,
@@ -60,6 +61,8 @@ import {
     stateWith,
     stubBoard,
 } from './dragTestKit';
+
+vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS });
 
 /** Grid value for a meteor, as written by useBlocksGame.ts / types.ts. */
 const METEOR = 2;

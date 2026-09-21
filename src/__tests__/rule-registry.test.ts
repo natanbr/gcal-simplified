@@ -265,6 +265,14 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: 'append to placement.ts, one at a time: `import { DOT } from \'./dragFixtures\'`, a re-export from \'../quiz/quizTestKit\', `import(\'./dragTestKit\')`, and `import { vi } from \'vitest\'` — each goes red naming the file and specifier; unlisted blocks/fooFixtures.ts and blocks/snakeFixture.ts go red too (proven 2026-09-18). Counterpart proof: a comment that names dragFixtures.ts without an import-shaped `from \'…\'` stays GREEN.',
         defence: 'Nothing else fails: a kit is not a *.test.* file, so tsc, lint and the build accept the import, and a kit\'s own `vitest` import is tree-shaken when its bindings go unused (vitest declares "sideEffects": false). The kit headers used to claim that import was a tripwire; a Vite build proved it is not. A kit that imports no test library is recognised only by its name or its TEST_SUPPORT entry.',
     },
+    {
+        rule: 'Every suite importing dragTestKit sets vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS }) — its first test renders BlocksCanvas cold',
+        source: 'CANVAS_SUITE_TIMEOUT_MS in src/mission-control/games/blocks/dragTestKit.ts (measurements: project journal, 2026-09-21)',
+        status: 'guarded',
+        guard: 'src/mission-control/games/blocks/dragTestKit.timeout.test.ts',
+        verifiedRedBy: 'delete the vi.setConfig line from BlocksCanvas.lift.test.tsx — red naming that file (proven 2026-09-21); so do a kit suite in a subfolder importing \'../dragTestKit\', one importing it with double quotes, one importing \'./dragTestKit.ts\', a .spec.tsx suite, and a suite whose line sits inside a beforeAll, is commented out, or comes after a top-level it() (the beforeAll and after-it forms were each proven to leave the 5s default in place). The constant itself was proven wired in all seven suites by setting it to 1: all 45 tests timed out.',
+        defence: 'Nothing else fails: a suite that forgets goes green alone and flakes only on a busy machine, where its first test pays jsdom\'s cold CSS parsing of the canvas\'s inline styles (up to 5.9s with three runs sharing the machine). Scope gap, by choice: the guard keys on importing the kit, not on rendering BlocksCanvas, so a suite that renders the canvas without the kit is not covered; none does today.',
+    },
 
     // ── Manual ───────────────────────────────────────────────────────────────
     {

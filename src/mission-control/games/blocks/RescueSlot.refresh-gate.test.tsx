@@ -20,7 +20,9 @@
 // ============================================================
 import { within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BLOCK_2X2, DOT, draggableItems, renderCanvas, stateWith } from './dragTestKit';
+import { BLOCK_2X2, CANVAS_SUITE_TIMEOUT_MS, DOT, draggableItems, renderCanvas, stateWith } from './dragTestKit';
+
+vi.setConfig({ testTimeout: CANVAS_SUITE_TIMEOUT_MS });
 
 /** An arbitrary point on a grabbable. Which cell it grabs does not matter here,
  *  only whether a drag is in flight. Touch, because the case this gate exists
@@ -49,7 +51,14 @@ function setup() {
     const trayItem = grabbables.find(el => !slot.contains(el));
     if (!rescueItem || !trayItem) throw new Error('could not tell the rescue shape from the tray shape');
 
-    const refresh = () => scoped.getByRole('button', { name: /refresh/i });
+    // Not getByRole: its first call in a worker costs ~100ms idle and ~370ms in a
+    // full parallel run — the role and accessible-name machinery warming up, not
+    // DOM size (scoped to this slot's 6 elements it cost the same). Added to the
+    // cold canvas render, that is what carried this file's first test past 5s.
+    // `selector` still demands a real <button>, whose `disabled` is the contract;
+    // what is given up is the accessible-name check (text is matched on the
+    // button's own text node, so wrapping "Refresh" in a span fails loudly).
+    const refresh = () => within(slot).getByText(/refresh/i, { selector: 'button' });
     return { rescueItem, trayItem, refresh, proxy };
 }
 

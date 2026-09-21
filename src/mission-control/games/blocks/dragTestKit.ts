@@ -21,6 +21,21 @@ import { BOARD_LEFT, BOARD_SIZE, BOARD_TOP, rect, stubItemOrigin } from './dragF
 
 export * from './dragFixtures';
 
+/**
+ * Test timeout for every suite that renders the drag tree through this kit, set
+ * with `vi.setConfig` at the top level of the file, before any test is declared —
+ * not in a hook: Vitest fixes each test's timeout when `it()` is collected. The
+ * first test of each file pays
+ * the cold render in a fresh worker, and ~60% of that is jsdom's CSS engine
+ * (cssstyle, css-tree, css-color) parsing the canvas's inline styles: 1.1-1.3s
+ * in a normal full run, up to 5.9s with three runs sharing the machine — past
+ * the 5s default. These tests are synchronous, and a timeout cannot interrupt
+ * synchronous code (Vitest checks it after the test returns), so raising it
+ * gives up no hang detection. An async test added to one of these suites would
+ * get 15s to hang instead of 5s. Measurements: project journal, 2026-09-21.
+ */
+export const CANVAS_SUITE_TIMEOUT_MS = 15_000;
+
 /** Pins the board's border box at (BOARD_LEFT, BOARD_TOP), the origin every
  *  `cellCentre` is computed against. Must run before the pointerdown: the drag
  *  measures the board once, at grab. */
