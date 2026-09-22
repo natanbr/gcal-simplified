@@ -123,9 +123,14 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     - **Space Rescue Game Rules**:
       - **8x8 Space Grid**: Renders an 8x8 debris-clearing canvas with 10 handcrafted initial layouts. Cleared horizontal rows or vertical columns clear debris, scoring points and filling a Rocket Flight Path meter.
       - **Line clears resolve exactly once**: a completed row or column explodes for 1.2s, then empties, and its satellite/electricity effects and the level's obstacles are applied once. A line scores once: a drop during the explosion that completes nothing new neither re-scores the exploding line nor delays it. A line completed while another is still exploding joins it: both empty together 1.2s after the later drop, and the feedback card stays up until then. The game is never declared over mid-explosion — those cells are about to be free. Starting a new game (which reopening Space Rescue does) cancels a pending clear. A drop in the same frame as a clear is judged against the cleared board.
-      - **Proactive Shapes Generator**: Under the board, 3 active shapes are generated, guaranteed by a solver look-ahead algorithm to always have valid grid placements.
+      - **Proactive Shapes Generator**: Under the board, 3 active shapes are dealt as one coherent hand rather than three independent draws, so the child is given a set that can actually be played out. Every dealt shape is guaranteed to have a valid placement **in the exact orientation it is dealt, at the moment it is dealt**. When the bank (or the rescue slot) is emptied while a line is exploding — by the drop that completed it, or by a later drop during the explosion — the emptied slots stay empty and are dealt when the clear resolves, after its obstacles have landed, so the new hand fits the board the child is actually left with. The rescue slot's Refresh is unavailable while the slot waits, so it cannot deal ahead of that. What the promise does not cover: shapes already in the bank before a clear resolves can still lose their space to the obstacles it adds (the level's asteroids and satellite, and the two asteroids a cleared electricity cell throws). The deal runs in four steps:
+        1. **Line-finisher**: with probability `X` the first shape is one that can complete a row or column. If the board is too empty for any shape to complete a line, this step is skipped rather than forced.
+        2. **Look-ahead**: if that shape can finish a line, the board is forecast forward as if the child plays it at its most profitable anchor and the line drains away. The remaining two shapes are judged against that forecast.
+        3. **Co-placement**: with probability `Y` the other two shapes are chosen so that *both* can be placed in the same round (in either order). If the board is too tight for any such pair, the deal falls back to shapes that finish a line — buying the space back — and then to two independent picks.
+        4. **Shuffle**: the three are shuffled before reaching the bank, so the helpful shape is not always in slot one.
+        `Y > X` at every level, and both ease off as altitude rises: `X` 0.8 → 0.5 and `Y` 1.0 → 0.85 across levels 0–3. The board already fights back with asteroids and satellites, so the deal deliberately stays generous. Rates live in `DIFFICULTY_BY_LEVEL` in `dealer.ts`.
       - **4th Slot (Golden Rescue Shape)**: Holds a shape that is guaranteed to fit somewhere (ensuring players can always avoid game-over by solving math). Locked behind a math quiz (single-digit addition under 10). Tapping "Refresh" regenerates a new shape but locks the slot. Placing the 4th shape immediately replenishes the slot with a new locked shape.
-      - **Game-Over Condition**: The game is over when none of the 3 standard shapes have any valid placements on the grid, the current Golden Rescue Shape does not fit, AND no other shape in the pool fits (meaning the grid is fully blocked and refreshing the Golden Rescue Shape cannot generate a placement).
+      - **Game-Over Condition**: The game is over when none of the 3 standard shapes have any valid placements on the grid, the current Golden Rescue Shape does not fit, AND no other shape in the pool fits **in any of its orientations** (meaning the grid is fully blocked and refreshing the Golden Rescue Shape cannot generate a placement).
       - **Rocket Path Progression**: As the rocket ascends (score clears), it triggers altitude levels:
         - *Level 1: Asteroid Impact*: Spawns unfillable locked "asteroid holes" on the grid.
         - *Level 2: Satellite Orbit*: Spawns a satellite block. Clearing the row/column containing it unlocks the 4th shape slot for free.
@@ -739,3 +744,42 @@ left two timers under StrictMode and under a replayed drop, against one in the c
 
 Tests: `useBlocksGame.line-clear.test.tsx`, `lineClear.test.ts`. Line-clear marking and
 resolution moved to the pure `lineClear.ts`; `useBlocksGame.ts` came off the file-size backlog.
+
+### 2026-09-21 Space Rescue deals a hand, not three loose shapes
+
+- **The clearing bias was dead code and always had been.** `selectProactiveShape` intended a 30%
+  chance of dealing a shape that could complete a line, but its predicate only asked "can this shape
+  be placed anywhere at all" — which is exactly what the candidate list had already been filtered by.
+  The branch therefore selected from the *same* set either way and has never influenced a deal since
+  the game shipped in `12b7cf3` on 2026-07-03.
+- **Shapes were verified in one orientation and dealt in another.** Selection checked the shape
+  template, then handed the child a randomly rotated and mirrored copy of it (`transformShape`). The
+  documented "guaranteed to always have valid grid placements" promise, and the Golden Rescue Shape's
+  "guaranteed to fit somewhere", were both only true of an orientation the child never received. The
+  dealer now enumerates each shape's distinct orientations and treats every orientation as its own
+  candidate, so the guarantee holds for the shape actually dealt. `transformShape` is deleted.
+- **The bank is now dealt as a coherent hand** — a line-finisher (chance `X`), a look-ahead to the
+  board as it will be once that line drains, and a co-placeable pair for the other two slots (chance
+  `Y`), shuffled before they reach the bank. See the "Proactive Shapes Generator" bullet for the
+  rules and rates. `Y > X` at every level and both stay generous: the player is eight.
+- **After a clearing drop, the next hand is dealt when the clear resolves.** The refill used to be
+  dealt the moment the bank emptied, while the line was still exploding — and exploding cells read as
+  occupied, so the hand was planned around lines about to vanish. Now a drop that empties the bank
+  (or the rescue slot) while a line is exploding leaves those slots empty for the rest of the
+  explosion (at most ~1.2s) and deals them when it resolves, against the board with its meteors
+  already landed; Refresh is disabled on the empty rescue slot so it cannot deal ahead of that. Planning against a
+  forecast of the drained board instead was tried and rejected in review: the new shape could be
+  refused at every position until the explosion ended, then lose its space to a meteor. The
+  resolution-time deal draws from a seed rolled outside the state updater, like the meteors, so a
+  replayed update deals the same hand.
+- **Game-over tries every orientation**, for consistency with the deal. This changes no outcome with
+  today's pool: every shape but the 2x2 contains a straight run of three and both trominoes are
+  templates, so if any turned copy fits, a tromino fits as declared.
+- **Structure.** `dealer.ts` (the deal's rules) and `candidates.ts` (the draws, with each template's
+  orientations cached) are new, and `placement.ts` grew from the single "may this shape sit here"
+  rule the drag ghost and the game share into that rule plus the searches built on it — every search
+  goes through the same check, so the ghost, the game and the dealer cannot disagree. The dealer takes
+  its randomness as a parameter (defaulting to `Math.random`), which is what makes the balance rules
+  testable; the logic previously sat in hook `useCallback`s reachable only through a randomly chosen
+  starting layout. The deal made at the drop itself still uses `Math.random`; seeding it is a separate
+  follow-up. `useBlocksGame.ts` went from 295 to 214 lines.
