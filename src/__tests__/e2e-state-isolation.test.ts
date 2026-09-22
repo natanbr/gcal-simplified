@@ -35,9 +35,9 @@
 //
 //     DOES THIS SPEC LAUNCH THE APP AGAINST THE REAL PROFILE?
 //
-// which is answerable exactly, because it is a property of the `electron.launch`
-// call. Every spec must either isolate every launch it makes, or be named in
-// NEEDS_REAL_PROFILE below. Adding a name to that list is the reviewable act;
+// which is answerable exactly, because it is a property of the launch call
+// (`launchApp`, or a raw `electron.launch`). Every spec must either isolate
+// every launch it makes, or be named in NEEDS_REAL_PROFILE below. Adding a name to that list is the reviewable act;
 // forgetting fails. This is the ratchet shape the repo already trusts.
 //
 // The behavioural half lives in e2e/global-profile-leak-check.ts, which fails
@@ -108,16 +108,22 @@ function specs(): Spec[] {
 }
 
 /**
- * The bodies of every `electron.launch(...)` call in a spec, as raw text.
+ * The bodies of every launch call in a spec, as raw text.
  *
  * Deliberately looks at the CALL rather than at imports. An import-based check
  * grants a whole-file exemption, so a spec could import the isolated fixture
  * and still hand-roll an un-isolated launch inside a test body — and
  * `mcApp.ts` exports `ELECTRON_MAIN` precisely to make that easy.
+ *
+ * Specs launch through `launchApp` (e2e/helpers/launchApp.ts), which passes its
+ * options straight to Playwright; e2e-launch-chokepoint.test.ts forbids any
+ * other way. Both call shapes are matched: if only the old `electron.launch(`
+ * were, every spec would show zero launches and this whole guard would pass
+ * without checking anything.
  */
 function launchCalls(source: string): string[] {
     const calls: string[] = [];
-    const marker = /(?:_?electron|electron)\s*\.\s*launch\s*\(/g;
+    const marker = /(?:\b_?electron\s*\.\s*launch|\blaunchApp)\s*\(/g;
 
     for (const match of source.matchAll(marker)) {
         // Walk from the opening paren to its match so the whole options object
@@ -163,7 +169,7 @@ describe('E2E state isolation', () => {
             if (NEEDS_REAL_PROFILE.includes(spec.name)) continue;
             const unisolated = launchCalls(spec.source).filter(c => !launchIsIsolated(c));
             if (unisolated.length > 0) {
-                offenders.push(`  e2e/${spec.name} — ${unisolated.length} un-isolated electron.launch call(s)`);
+                offenders.push(`  e2e/${spec.name} — ${unisolated.length} un-isolated launch call(s)`);
             }
         }
 

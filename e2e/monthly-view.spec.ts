@@ -5,11 +5,12 @@
  * navigate months, verify grid renders, and return to week view.
  */
 
-import { test, expect, _electron as electron } from '@playwright/test';
+import { expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { format, addMonths } from 'date-fns';
+import { launchApp, test } from './helpers/launchApp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +22,7 @@ test.describe('Monthly View', () => {
 
 
     test('can switch to monthly view and see the grid', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
+        const app = await launchApp({ args: [ELECTRON_MAIN] });
         const page = await app.firstWindow();
 
         await page.waitForLoadState('domcontentloaded');
@@ -63,7 +64,7 @@ test.describe('Monthly View', () => {
     });
 
     test('monthly view: navigate to next month and back', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
+        const app = await launchApp({ args: [ELECTRON_MAIN] });
         const page = await app.firstWindow();
 
         await page.waitForLoadState('domcontentloaded');
@@ -114,7 +115,7 @@ test.describe('Monthly View', () => {
     });
 
     test('monthly view: Today button returns to current month', async () => {
-        const app = await electron.launch({ args: [ELECTRON_MAIN] });
+        const app = await launchApp({ args: [ELECTRON_MAIN] });
         const page = await app.firstWindow();
 
         await page.waitForLoadState('domcontentloaded');

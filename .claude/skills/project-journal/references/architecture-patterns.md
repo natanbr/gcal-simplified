@@ -68,7 +68,7 @@ Settled decisions from past reviews of `gcal-simplified`. The **false positives*
 
 **`IntersectionObserver` must be stubbed in Vitest.** jsdom doesn't implement it. The stub lives in `src/test/setup.ts`; anything adding lazy-loading depends on it.
 
-**Clear localStorage in E2E `beforeEach`.** Stale Mission Control state (an active mission) bleeds across Electron runs and mounts a blocking overlay over the calendar UI. Explicit `localStorage.clear()` guarantees a clean slate.
+**Do NOT clear localStorage to get rid of a mission overlay in E2E.** A cleared store falls back to the default windows (06:00, 19:00) and *starts* a mission inside them. Every launch goes through `e2e/helpers/launchApp.ts`, which takes the mission clock out of play (see 2026-09-21, "The E2E suite passed or failed by the time of day").
 
 **Deterministic grid tests.** Grids that initialise randomly must have their target cells manually cleared to 0 inside `act()` before asserting on placement, or the test is flaky.
 
@@ -458,3 +458,32 @@ prove nothing either way. The render cost itself only falls if the inline styles
 classes, which is the same backlog as the raw-hex ratchet. **Trap when mutation-testing a timeout:**
 check the runner's own output, not a hand-rolled JSON filter. Mine reported "0 timed out" while all
 45 tests had.
+
+## 2026-09-21 — The E2E suite passed or failed by the time of day
+
+**Learning:** Same commit, same evening: 45 of 45 passed at 18:00, 30 failed from 19:02, 13 at 20:03.
+The mission scheduler runs on the wall clock and `MissionOverlay` is mounted on both views, so a
+launch inside a mission window (default evening 19:00–20:00) covered the app and every click timed
+out. After 20:00 the dev profile still had that mission *running*, resumed from an earlier launch,
+so the real-profile specs kept failing. Per-launch profile isolation did not help: a fresh profile
+gets the default windows, and `week-display-customization`'s `localStorage.clear()` (added to get rid
+of an overlay) put the store back on those defaults, which *started* one. Three non-obvious facts
+shaped the fix. (1) Playwright's Electron loader releases the app's `ready` inside
+`electron.launch()`, so the first document mounts before any test code. Nothing, not even
+`context().clock`, can be installed ahead of it. (2) Writing the blob while the app page is loaded
+races the store's debounced 500ms persist. `?lab=1` is store-free but stripped from the production
+build E2E runs. Every `file://` document shares one localStorage (verified: a blank page in the
+scratchpad read the app's `mc-state-v5`), so a checked-in `blank.html` is a store-free page in the
+same window. (3) The scheduler reads `missions[].startsAt/endsAt` and skips a phase whose
+`lastCompletedOrFailed*Date` is today. But `SET_SETTINGS` re-derives those windows from
+`settings`, and `MCStoreProvider` dispatches it at mount whenever the profile has remote pairing
+keys. Seeding only `missions[]` lasts a moment (a review cycle first read that case and missed
+it). Moving windows would also have been undone; marking the day concluded is not.
+**Action:** Launch only through `e2e/helpers/launchApp.ts` (guarded by
+`e2e-launch-chokepoint.test.ts`). It hops to `blank.html`, clears any running mission, and marks
+today's missions concluded. That touches 4 fields, needs no HH:MM math, and self-heals at midnight
+if a run is killed. On the real profile it puts those fields back on `close()`, and specs take
+`test` from `launchApp.ts`, whose teardown closes whatever a failed or timed-out test left open.
+A spec that tests missions starts one after launch. To reproduce clock failures on demand, use
+`E2E_SIMULATE_MISSION_WINDOW=1`, not the wall clock. It logs one line per launch, because the first
+full run with it was indistinguishable, by timing, from a run without it.
