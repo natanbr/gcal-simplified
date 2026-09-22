@@ -1,12 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
-import { isPlaceable } from './placement';
+import { isPlaceable, hasAnyPlacement } from './placement';
+import { GameShape, BlocksGameState, INITIAL_LAYOUTS, altitudeLevel } from './types';
 import {
-    GameShape, BlocksGameState,
-    GRID_SIZE, SHAPE_POOL, HELP_SHAPES, LEVEL_COMPLEX_SHAPES, INITIAL_LAYOUTS,
-    transformShape, altitudeLevel
-} from './types';
-import { CLEAR_DELAY_MS, PendingClear, clearFeedback, markCompletedLines, resolvePendingClear } from './lineClear';
+    CLEAR_DELAY_MS, PendingClear, clearFeedback, markCompletedLines, resolvePendingClear, withClearsDrained,
+} from './lineClear';
+import { dealStandardTriple, dealRescueShape, anyPoolShapeFits } from './dealer';
 
 /** The game the board renders, plus the clear still exploding on it — kept in
  *  state so its timer is scheduled from what React committed (see lineClear.ts). */
@@ -44,90 +43,14 @@ export function useBlocksGame() {
         setState({ game: createInitialState(), pendingClear: null });
     }, []);
 
-    const hasAnyValidPlacement = useCallback((grid: number[][], shape: GameShape): boolean => {
-        for (let r = 0; r < GRID_SIZE; r++) {
-            for (let c = 0; c < GRID_SIZE; c++) {
-                if (isPlaceable(grid, shape, { r, c })) return true;
-            }
-        }
-        return false;
-    }, []);
-
-    // Intelligent proactive shape selector
-    const selectProactiveShape = useCallback((grid: number[][], level: number): GameShape => {
-        let pool = [...SHAPE_POOL];
-        for (let l = 1; l <= level; l++) {
-            if (LEVEL_COMPLEX_SHAPES[l]) {
-                pool = [...pool, ...LEVEL_COMPLEX_SHAPES[l]];
-            }
-        }
-        
-        let selected: GameShape;
-        // Search for a shape that fits, prioritizing those that clear lines if possible
-        const fittingShapes = pool.filter(s => hasAnyValidPlacement(grid, s));
-        if (fittingShapes.length > 0) {
-            // 30% chance to return a line-clearing shape if available
-            const clearing = fittingShapes.filter(s => {
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        if (isPlaceable(grid, s, { r, c })) {
-                            return true; 
-                        }
-                    }
-                }
-                return false;
-            });
-            if (clearing.length > 0 && Math.random() < 0.3) {
-                selected = clearing[Math.floor(Math.random() * clearing.length)];
-            } else {
-                selected = fittingShapes[Math.floor(Math.random() * fittingShapes.length)];
-            }
-        } else {
-            // Fallback: check if any HELP_SHAPES fit
-            const fittingHelp = HELP_SHAPES.filter(s => hasAnyValidPlacement(grid, s));
-            if (fittingHelp.length > 0) {
-                selected = fittingHelp[Math.floor(Math.random() * fittingHelp.length)];
-            } else {
-                selected = HELP_SHAPES[0];
-            }
-        }
-        return {
-            ...selected,
-            id: `${selected.id}-${Math.random().toString(36).substring(2, 11)}`,
-            cells: transformShape(selected.cells),
-        };
-    }, [hasAnyValidPlacement]);
-
-    // Intelligent rescue shape selector (includes HELP_SHAPES for standard rescue utility)
-    const selectRescueShape = useCallback((grid: number[][]): GameShape => {
-        const pool = [...HELP_SHAPES, ...SHAPE_POOL];
-        const fittingShapes = pool.filter(s => hasAnyValidPlacement(grid, s));
-        let selected: GameShape;
-        if (fittingShapes.length > 0) {
-            selected = fittingShapes[Math.floor(Math.random() * fittingShapes.length)];
-        } else {
-            selected = HELP_SHAPES[0];
-        }
-        return {
-            ...selected,
-            id: `${selected.id}-${Math.random().toString(36).substring(2, 11)}`,
-            cells: transformShape(selected.cells),
-        };
-    }, [hasAnyValidPlacement]);
-
     const startGame = useCallback(() => {
-        setState(onGame(prev => {
-            const next = { ...prev, phase: 'playing' as const };
-            // Generate standard shapes immediately on start
-            const shapes: GameShape[] = [];
-            for (let i = 0; i < 3; i++) {
-                shapes.push(selectProactiveShape(next.grid, next.level));
-            }
-            next.standardShapes = shapes;
-            next.rescueShape = selectRescueShape(next.grid);
-            return next;
-        }));
-    }, [selectProactiveShape, selectRescueShape]);
+        setState(onGame(prev => ({
+            ...prev,
+            phase: 'playing' as const,
+            standardShapes: dealStandardTriple(prev.grid, prev.level),
+            rescueShape: dealRescueShape(prev.grid),
+        })));
+    }, []);
 
     const triggerRescueQuiz = useCallback(() => {
         setState(onGame(prev => ({ ...prev, rescueQuizActive: true })));
@@ -150,10 +73,10 @@ export function useBlocksGame() {
     const refreshRescueShape = useCallback(() => {
         setState(onGame(prev => ({
             ...prev,
-            rescueShape: selectRescueShape(prev.grid),
+            rescueShape: dealRescueShape(withClearsDrained(prev.grid)),
             rescueShapeLocked: true,
         })));
-    }, [selectRescueShape]);
+    }, []);
 
     /** Returns nothing on purpose: the updater decides against the latest state,
      *  which can be newer than the caller's render (a clear landing in the same
@@ -205,22 +128,22 @@ export function useBlocksGame() {
             // If victory reached
             const phase = nextAltitude >= 200 ? ('victory' as const) : prev.phase;
 
+            // The clear stays painted for CLEAR_DELAY_MS, and exploding cells read
+            // as occupied. Deal against the board as it will be once they drain,
+            // or the next hand is planned around lines that are about to vanish.
+            const dealBoard = withClearsDrained(gridCopy);
+
             // Handle replenishing rescue shape immediately if slot empty
             if (rescueShape === null) {
-                rescueShape = selectRescueShape(gridCopy);
+                rescueShape = dealRescueShape(dealBoard);
                 rescueShapeLocked = true;
             }
 
             // Check if all standard shapes placed
             const allStandardUsed = standardShapes.every(s => s === null);
-            let finalStandardShapes = standardShapes;
-            if (allStandardUsed) {
-                // Generate next round
-                finalStandardShapes = [];
-                for (let i = 0; i < 3; i++) {
-                    finalStandardShapes.push(selectProactiveShape(gridCopy, nextLevel));
-                }
-            }
+            const finalStandardShapes = allStandardUsed
+                ? dealStandardTriple(dealBoard, nextLevel)
+                : standardShapes;
 
             return {
                 game: {
@@ -238,7 +161,7 @@ export function useBlocksGame() {
                 pendingClear,
             };
         });
-    }, [selectProactiveShape, selectRescueShape]);
+    }, []);
 
     // One timer per COMMITTED clear, however often React ran its updater. A
     // joining line or a new game replaces `pendingClear` and unmounting drops it
@@ -266,21 +189,13 @@ export function useBlocksGame() {
         if (game.phase !== 'playing' || pendingClear) return;
 
         // Game is over if standard shapes cannot fit, AND the rescue shape cannot fit, AND no shape in the pool fits
-        const hasStandardPlacement = game.standardShapes.some(s => s && hasAnyValidPlacement(game.grid, s));
-        const hasRescuePlacement = game.rescueShape && hasAnyValidPlacement(game.grid, game.rescueShape);
+        const hasStandardPlacement = game.standardShapes.some(s => s && hasAnyPlacement(game.grid, s.cells));
+        const hasRescuePlacement = !!game.rescueShape && hasAnyPlacement(game.grid, game.rescueShape.cells);
 
-        let pool = [...SHAPE_POOL];
-        for (let l = 1; l <= game.level; l++) {
-            if (LEVEL_COMPLEX_SHAPES[l]) {
-                pool = [...pool, ...LEVEL_COMPLEX_SHAPES[l]];
-            }
-        }
-        const anyPoolShapeFits = pool.some(s => hasAnyValidPlacement(game.grid, s));
-
-        if (!hasStandardPlacement && !hasRescuePlacement && !anyPoolShapeFits) {
+        if (!hasStandardPlacement && !hasRescuePlacement && !anyPoolShapeFits(game.grid, game.level)) {
             setState(onGame(prev => ({ ...prev, phase: 'game-over' as const })));
         }
-    }, [game.grid, game.standardShapes, game.rescueShape, game.phase, game.level, pendingClear, hasAnyValidPlacement]);
+    }, [game.grid, game.standardShapes, game.rescueShape, game.phase, game.level, pendingClear]);
 
     return {
         gameState: game,

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { Position } from './types';
-import { transformShape, applyClearEffects, spawnObstacles, GRID_SIZE } from './types';
+import { applyClearEffects, spawnObstacles, GRID_SIZE } from './types';
 
 function makeGrid(fill = 0): number[][] {
     return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(fill));
@@ -10,101 +9,6 @@ function mockRandomSequence(values: number[]) {
     let idx = 0;
     vi.spyOn(Math, 'random').mockImplementation(() => values[idx++ % values.length]);
 }
-
-describe('transformShape', () => {
-    afterEach(() => {
-        vi.restoreAllMocks();
-    });
-
-    it('returns identity (rotation 0, no mirror) when random yields 0 then >= 0.5', () => {
-        mockRandomSequence([0.0, 0.9]);
-        const cells: Position[] = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }];
-        const result = transformShape(cells);
-        expect(result).toEqual([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }]);
-    });
-
-    it('applies 90° rotation (case 1) without mirror', () => {
-        mockRandomSequence([0.25, 0.9]);
-        const cells: Position[] = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }];
-        const result = transformShape(cells);
-        expect(result).toEqual([{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 0 }]);
-    });
-
-    it('applies 180° rotation (case 2) without mirror', () => {
-        mockRandomSequence([0.5, 0.9]);
-        const cells: Position[] = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }];
-        const result = transformShape(cells);
-        expect(result).toEqual([{ x: 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 0 }]);
-    });
-
-    it('applies 270° rotation (case 3) without mirror', () => {
-        mockRandomSequence([0.75, 0.9]);
-        const cells: Position[] = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }];
-        const result = transformShape(cells);
-        expect(result).toEqual([{ x: 0, y: 1 }, { x: 0, y: 0 }, { x: 1, y: 1 }]);
-    });
-
-    it('applies mirror after rotation 0', () => {
-        mockRandomSequence([0.0, 0.1]);
-        const cells: Position[] = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }];
-        const result = transformShape(cells);
-        expect(result).toEqual([{ x: 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 0 }]);
-    });
-
-    it('applies mirror after 90° rotation', () => {
-        mockRandomSequence([0.25, 0.1]);
-        const cells: Position[] = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }];
-        const result = transformShape(cells);
-        const minX = Math.min(...result.map(p => p.x));
-        const minY = Math.min(...result.map(p => p.y));
-        expect(minX).toBe(0);
-        expect(minY).toBe(0);
-        expect(result.every(p => p.x >= 0 && p.y >= 0)).toBe(true);
-    });
-
-    it('normalizes all coordinates to non-negative values', () => {
-        for (let rot = 0; rot < 4; rot++) {
-            for (const mir of [true, false]) {
-                mockRandomSequence([rot / 4, mir ? 0.1 : 0.9]);
-                const cells: Position[] = [{ x: 0, y: 0 }, { x: 1, y: 2 }, { x: 3, y: 1 }];
-                const result = transformShape(cells);
-                const allNonNeg = result.every(p => p.x >= 0 && p.y >= 0);
-                expect(allNonNeg).toBe(true);
-                const hasZeroX = result.some(p => p.x === 0);
-                const hasZeroY = result.some(p => p.y === 0);
-                expect(hasZeroX).toBe(true);
-                expect(hasZeroY).toBe(true);
-                vi.restoreAllMocks();
-            }
-        }
-    });
-
-    it('single cell always stays at (0,0)', () => {
-        for (let rot = 0; rot < 4; rot++) {
-            for (const mir of [true, false]) {
-                mockRandomSequence([rot / 4, mir ? 0.1 : 0.9]);
-                const result = transformShape([{ x: 0, y: 0 }]);
-                expect(result).toEqual([{ x: 0, y: 0 }]);
-                vi.restoreAllMocks();
-            }
-        }
-    });
-
-    it('preserves relative distances between cells', () => {
-        mockRandomSequence([0.25, 0.9]);
-        const cells: Position[] = [{ x: 0, y: 0 }, { x: 3, y: 0 }];
-        const result = transformShape(cells);
-        const dx = Math.abs(result[0].x - result[1].x);
-        const dy = Math.abs(result[0].y - result[1].y);
-        expect(dx + dy).toBe(3);
-    });
-
-    it('returns same number of cells as input', () => {
-        mockRandomSequence([0.5, 0.3]);
-        const cells: Position[] = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 1 }, { x: 3, y: 2 }];
-        expect(transformShape(cells)).toHaveLength(4);
-    });
-});
 
 describe('applyClearEffects', () => {
     afterEach(() => {
