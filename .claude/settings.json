@@ -21,10 +21,10 @@
     ],
     "ask": [
       "Bash(npm run release)",
-      "Bash(npm version:*)",
-      "Bash(git push:*)",
-      "Bash(git rebase:*)",
-      "Bash(git reset --hard:*)"
+      "Bash(git push * main*)",
+      "Bash(git push *:main*)",
+      "PowerShell(git push * main*)",
+      "PowerShell(git push *:main*)"
     ]
   }
 }
