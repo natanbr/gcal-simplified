@@ -75,7 +75,8 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     'src/mission-control/games/fruits/FruitMergeCanvas.tsx': 360,
     // blocks/useBlocksGame.ts: 329 → 312 across 2026-08-20..09-07, then OFF the
     // backlog on 2026-09-18 — line-clear marking and resolution moved to
-    // lineClear.ts when the clear timer left the state updater; landed at 295.
+    // lineClear.ts when the clear timer left the state updater; landed at 295,
+    // then 210 on 2026-09-21 when shape dealing moved to dealer.ts.
     // 311 → 324 on 2026-09-03 (the activity +1 and Claim buttons must LOOK
     // refused while the shield is broken — a refused action writes no log line,
     // so a live-looking button gives a dead tap with no trace on either side).

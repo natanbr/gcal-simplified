@@ -78,11 +78,12 @@ export function proxyOrigin(clientX: number, clientY: number, grab: GrabPoint): 
  * The shape's own position on the board, in cells — not the pointer's. This is
  * what makes a lifted shape placeable while the finger is still below the board.
  *
- * Invariant: dealt shapes are bounding-box-normalised — `transformShape` in
- * types.ts subtracts minX/minY from every cell after rotating and mirroring, so
- * the rendered top-left corner *is* the anchor cell. (Not every template starts
- * at (0,0): `staircase` and `cross` in LEVEL_COMPLEX_SHAPES only have a bounding
- * box that does.) A shape reaching here un-normalised would need its
+ * Invariant: dealt shapes are bounding-box-normalised — the dealer draws from
+ * `orientations()` in placement.ts, which runs `normalizeCells` (subtract
+ * minX/minY) on each rotated and mirrored form, and its last-resort monomino is
+ * already at the origin. So the rendered top-left corner *is* the anchor cell.
+ * (Not every template starts at (0,0): `staircase` and `cross` in
+ * LEVEL_COMPLEX_SHAPES only have a bounding box that does.) A shape reaching here un-normalised would need its
  * bounding-box offset subtracting.
  */
 export function anchorPosition(origin: { x: number; y: number }, board: BoardOrigin): CellPoint {

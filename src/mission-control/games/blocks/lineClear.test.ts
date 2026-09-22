@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clearFeedback, markCompletedLines, resolvePendingClear } from './lineClear';
+import { clearFeedback, markCompletedLines, resolvePendingClear, withClearsDrained } from './lineClear';
 import { GRID_SIZE } from './types';
 
 const EXPLODING = 4;
@@ -99,5 +99,21 @@ describe('clearFeedback', () => {
         [4, 'EXCELLENT!', 3],
     ])('%i line(s) → %s', (lines, text, stars) => {
         expect(clearFeedback(lines, 'id')).toEqual({ text, stars, id: 'id' });
+    });
+});
+
+describe('withClearsDrained', () => {
+    it('empties exploding cells and nothing else, without touching its input', () => {
+        const grid = emptyGrid();
+        grid[2] = Array<number>(GRID_SIZE).fill(EXPLODING);
+        grid[5][1] = 1;
+        grid[5][2] = 2;
+        grid[5][3] = 3;
+
+        const drained = withClearsDrained(grid);
+
+        expect(drained[2].every(cell => cell === 0)).toBe(true);
+        expect(drained[5].slice(1, 4)).toEqual([1, 2, 3]);
+        expect(grid[2][0]).toBe(EXPLODING);
     });
 });

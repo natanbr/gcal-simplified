@@ -219,27 +219,6 @@ export const INITIAL_LAYOUTS: number[][][] = [
     ],
 ];
 
-export function transformShape(cells: Position[]): Position[] {
-    const rotation = Math.floor(Math.random() * 4);
-    const mirror = Math.random() < 0.5;
-
-    const transformed = cells.map(({ x, y }) => {
-        let nx: number, ny: number;
-        switch (rotation) {
-            case 1: nx = -y; ny = x; break;
-            case 2: nx = -x; ny = -y; break;
-            case 3: nx = y; ny = -x; break;
-            default: nx = x; ny = y;
-        }
-        if (mirror) nx = -nx;
-        return { x: nx, y: ny };
-    });
-
-    const minX = Math.min(...transformed.map(p => p.x));
-    const minY = Math.min(...transformed.map(p => p.y));
-    return transformed.map(p => ({ x: p.x - minX, y: p.y - minY }));
-}
-
 export function applyClearEffects(
     grid: number[][],
     clearedCells: { r: number; c: number }[],
