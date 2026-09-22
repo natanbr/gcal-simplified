@@ -18,22 +18,29 @@
  * A fresh profile also means fresh Supabase pairing keys, so a test instance no
  * longer joins the household's real remote-control room.
  *
- * Each test therefore starts from `initialState`. Seed what the test needs with
- * `patchMCState` / `patchMCCollection` and reload; do not assume anything
- * carries over from a previous test or from the developer's own app.
+ * Each test therefore starts from `initialState`, except that launchApp has
+ * already marked today's missions as run so the wall clock cannot start one (see
+ * missionClock.ts). One visible consequence: with the morning concluded, the
+ * quick-game window (`isQuickGameWindowOpen`) is OPEN until the evening start.
+ * A spec that tests that gate must seed `lastCompletedOrFailedMorningDate`
+ * itself. Seed what the test needs with `patchMCState` / `patchMCCollection` and
+ * reload; do not assume anything carries over from a previous test or from the
+ * developer's own app.
  */
 
-import { test as base, _electron as electron, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { launchApp, test as base } from './launchApp';
+import { STORAGE_KEY } from './missionClock';
 import { createIsolatedUserData, removeUserData, userDataArg } from './userDataDir';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const ELECTRON_MAIN = path.join(__dirname, '../../dist-electron/main.js');
-export const STORAGE_KEY = 'mc-state-v5';
+export { STORAGE_KEY };
 
 /** Navigate the current window into Mission Control mode and let it settle. */
 export async function gotoMC(page: Page): Promise<void> {
@@ -63,7 +70,7 @@ export async function gotoMC(page: Page): Promise<void> {
  * closing the app — `mcTest` does both.
  */
 export async function launchMC(userDataDir: string): Promise<{ app: ElectronApplication; page: Page }> {
-    const app = await electron.launch({
+    const app = await launchApp({
         args: [ELECTRON_MAIN, userDataArg(userDataDir)],
         timeout: 60_000,
         env: { ...process.env, NODE_ENV: 'development' },

@@ -8,11 +8,12 @@
  * fail. See e2e/helpers/appConfig.ts.
  */
 
-import { test, expect, _electron as electron } from '@playwright/test';
+import { expect } from '@playwright/test';
 import type { ElectronApplication } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { restoreConfig, snapshotConfig, type ConfigSnapshot } from './helpers/appConfig';
+import { launchApp, test } from './helpers/launchApp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,7 @@ test.describe('Settings - Display & Power', () => {
 
     test.beforeEach(async () => {
         config = undefined;
-        electronApp = await electron.launch({
+        electronApp = await launchApp({
             args: [path.join(__dirname, '../dist-electron/main.js')],
             timeout: 60000,
             env: { ...process.env, NODE_ENV: 'development' }

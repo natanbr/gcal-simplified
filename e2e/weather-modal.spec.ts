@@ -1,6 +1,6 @@
-import { test, _electron as electron } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { launchApp, test } from './helpers/launchApp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 test.describe('Weather Drawer Test', () => {
     test('should display weather drawer', async () => {
         // Launch Electron app - use the main.js from dist-electron
-        const electronApp = await electron.launch({
+        const electronApp = await launchApp({
             args: [path.join(__dirname, '../dist-electron/main.js')],
             timeout: 60000,
             env: {

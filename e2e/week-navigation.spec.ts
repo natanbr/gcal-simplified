@@ -1,7 +1,8 @@
-import { test, _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test';
+import { expect, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format } from 'date-fns';
+import { launchApp, test } from './helpers/launchApp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,7 +13,7 @@ test.describe('Week Navigation', () => {
 
     test.beforeEach(async () => {
         // Launch Electron app
-        electronApp = await electron.launch({
+        electronApp = await launchApp({
             args: [path.join(__dirname, '../dist-electron/main.js')],
             timeout: 60000,
             env: {

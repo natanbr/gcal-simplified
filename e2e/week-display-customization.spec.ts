@@ -1,8 +1,9 @@
-import { test, _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test';
+import { expect, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format, startOfWeek } from 'date-fns';
 import { createIsolatedUserData, removeUserData, userDataArg } from './helpers/userDataDir';
+import { launchApp, test } from './helpers/launchApp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,15 +13,14 @@ test.describe('Week Display Customization', () => {
     let window: Page;
     // This spec is isolatable because it mocks `auth:check` itself and reloads
     // afterwards, so it never needs the developer's Google credentials. Without
-    // isolation its `localStorage.clear()` below wipes the real Mission Control
-    // store, and its settings saves rewrite the real weekStartDay — which is
+    // isolation its settings saves rewrite the real weekStartDay — which is
     // what several other specs assert dates against.
     let userDataDir: string;
 
     test.beforeEach(async () => {
         // Launch Electron app
         userDataDir = createIsolatedUserData();
-        electronApp = await electron.launch({
+        electronApp = await launchApp({
             args: [path.join(__dirname, '../dist-electron/main.js'), userDataArg(userDataDir)],
             timeout: 60000,
             env: {
@@ -88,10 +88,11 @@ test.describe('Week Display Customization', () => {
 
         });
 
-        // Clear local storage to ensure no active mission overlay blocks settings
-        await window.evaluate(() => {
-            localStorage.clear();
-        });
+        // No localStorage.clear() here. It used to keep a stale mission overlay
+        // off the settings button, but on a fresh store the default 19:00
+        // evening window STARTS one, so between 19:00 and 20:00 it caused the
+        // failure it was meant to prevent. The profile is throwaway, and
+        // launchApp has already taken the mission clock out of play.
 
         // Reload window to apply mocked handlers
         await window.reload();
