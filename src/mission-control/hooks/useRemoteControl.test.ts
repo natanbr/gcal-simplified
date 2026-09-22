@@ -12,25 +12,28 @@ vi.mock('../store/useMCStore', () => ({
 describe('useRemoteControl', () => {
     const mockDispatch = vi.fn();
     const unsubscribeMock = vi.fn();
+    const on = vi.fn<NonNullable<Window['ipcRenderer']>['on']>();
 
     beforeEach(() => {
         vi.clearAllMocks();
-        (useMCDispatch as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(mockDispatch);
-        
+        vi.mocked(useMCDispatch).mockReturnValue(mockDispatch);
+
         // Mock window.ipcRenderer
-        (window as unknown as { ipcRenderer: unknown }).ipcRenderer = {
-            on: vi.fn().mockReturnValue(unsubscribeMock),
+        on.mockReturnValue(unsubscribeMock);
+        window.ipcRenderer = {
+            on,
+            invoke: vi.fn(),
         };
     });
 
     afterEach(() => {
-        delete (window as unknown as { ipcRenderer: unknown }).ipcRenderer;
+        delete window.ipcRenderer;
     });
 
     it('subscribes to remote-control:action on mount', () => {
         renderHook(() => useRemoteControl());
 
-        expect(window.ipcRenderer.on).toHaveBeenCalledWith(
+        expect(on).toHaveBeenCalledWith(
             'remote-control:action',
             expect.any(Function)
         );
@@ -40,7 +43,7 @@ describe('useRemoteControl', () => {
         renderHook(() => useRemoteControl());
 
         // Get the listener passed to ipcRenderer.on
-        const listener = (window.ipcRenderer.on as unknown as vi.Mock).mock.calls[0][1];
+        const listener = on.mock.calls[0][1];
         
         const mockAction = { type: 'ADD_TOKEN' };
         listener(mockAction);
@@ -59,7 +62,7 @@ describe('useRemoteControl', () => {
         const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
         renderHook(() => useRemoteControl());
 
-        const listener = (window.ipcRenderer.on as unknown as vi.Mock).mock.calls[0][1];
+        const listener = on.mock.calls[0][1];
         
         listener({ type: 'SNAKE_DIR', dir: 'up' });
 

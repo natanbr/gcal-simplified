@@ -118,9 +118,8 @@ describe('preload bridge', () => {
     });
 
     it('does not leak node or electron internals onto the bridge', () => {
-        const surface = bridge as unknown as Record<string, unknown>;
         for (const forbidden of ['send', 'sendSync', 'postMessage', 'require', 'process']) {
-            expect(surface[forbidden]).toBeUndefined();
+            expect(bridge).not.toHaveProperty(forbidden);
         }
     });
 });

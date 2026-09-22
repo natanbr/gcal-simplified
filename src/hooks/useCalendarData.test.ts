@@ -1,15 +1,21 @@
 import { renderHook, act } from '@testing-library/react';
 import { useCalendarData } from './useCalendarData';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Mock ipcRenderer
-window.ipcRenderer = {
+const mockIpc = {
     invoke: vi.fn(),
-} as unknown as typeof window.ipcRenderer;
+    on: vi.fn(() => () => {}),
+} satisfies NonNullable<Window['ipcRenderer']>;
 
 describe('useCalendarData hook', () => {
     beforeEach(() => {
         vi.resetAllMocks();
+        window.ipcRenderer = mockIpc;
+    });
+
+    afterEach(() => {
+        delete window.ipcRenderer;
     });
 
     it('should initially have empty state', () => {
@@ -23,7 +29,7 @@ describe('useCalendarData hook', () => {
 
     it('should trigger fetch process on fetchEventsForMonth', async () => {
         const mockEvents = [{ id: '1', title: 'Test Event', start: '2026-02-01T10:00:00.000Z', end: '2026-02-01T11:00:00.000Z' }];
-        vi.mocked(window.ipcRenderer.invoke).mockResolvedValue(mockEvents);
+        vi.mocked(mockIpc.invoke).mockResolvedValue(mockEvents);
 
         const { result } = renderHook(() => useCalendarData());
 
@@ -50,7 +56,7 @@ describe('useCalendarData hook', () => {
         // Month start: Feb 01 2026 (Sun)
         // Month end: Feb 28 2026 (Sat)
         // Grid should exactly match this for Feb 2026
-        expect(window.ipcRenderer.invoke).toHaveBeenCalledWith(
+        expect(mockIpc.invoke).toHaveBeenCalledWith(
             'data:events',
             expect.any(String),
             expect.any(String)
@@ -61,7 +67,7 @@ describe('useCalendarData hook', () => {
         const mockEventsFirst = [{ id: '1', title: 'V1', start: '2026-02-01T10:00:00.000Z', end: '2026-02-01T11:00:00.000Z' }];
         const mockEventsSecond = [{ id: '1', title: 'V2', start: '2026-02-01T10:00:00.000Z', end: '2026-02-01T11:00:00.000Z' }];
 
-        const invokeMock = vi.mocked(window.ipcRenderer.invoke);
+        const invokeMock = vi.mocked(mockIpc.invoke);
         invokeMock.mockResolvedValueOnce(mockEventsFirst);
 
         const { result } = renderHook(() => useCalendarData());

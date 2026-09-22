@@ -93,8 +93,7 @@ describe('OAuth token lifecycle', () => {
 
             const service = new AuthService();
             // A refresh response: new access token, NO refresh token.
-            (service as unknown as { saveTokens: (t: unknown) => void })
-                .saveTokens({ access_token: 'new-access', expiry_date: 2 });
+            service['saveTokens']({ access_token: 'new-access', expiry_date: 2 });
 
             expect(storedTokens()?.refresh_token).toBe('THE-ONLY-REFRESH-TOKEN');
             expect(storedTokens()?.access_token).toBe('new-access');
@@ -105,16 +104,14 @@ describe('OAuth token lifecycle', () => {
             mocks.storeData.set('isEncrypted', false);
 
             const service = new AuthService();
-            (service as unknown as { saveTokens: (t: unknown) => void })
-                .saveTokens({ access_token: 'a', refresh_token: 'rotated-refresh' });
+            service['saveTokens']({ access_token: 'a', refresh_token: 'rotated-refresh' });
 
             expect(storedTokens()?.refresh_token).toBe('rotated-refresh');
         });
 
         it('stores cleanly on a first-ever login with nothing saved yet', () => {
             const service = new AuthService();
-            (service as unknown as { saveTokens: (t: unknown) => void })
-                .saveTokens({ access_token: 'a', refresh_token: 'first-refresh' });
+            service['saveTokens']({ access_token: 'a', refresh_token: 'first-refresh' });
 
             expect(storedTokens()?.refresh_token).toBe('first-refresh');
         });
@@ -167,8 +164,7 @@ describe('OAuth token lifecycle', () => {
             mocks.storeData.set('isEncrypted', true);
 
             const service = new AuthService();
-            (service as unknown as { saveTokens: (t: unknown) => void })
-                .saveTokens({ access_token: 'new' });
+            service['saveTokens']({ access_token: 'new' });
 
             const raw = JSON.parse(
                 Buffer.from(mocks.storeData.get('tokens') as string, 'base64').toString('utf-8')

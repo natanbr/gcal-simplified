@@ -30,7 +30,7 @@ vi.mock('../store/useMCStore', () => ({
 /** Grabs the listener the hook registers for `remote-control:action`. */
 function mountAndGetListener(): (payload: unknown) => void {
     let captured: ((payload: unknown) => void) | undefined;
-    (window as unknown as { ipcRenderer: unknown }).ipcRenderer = {
+    window.ipcRenderer = {
         on: vi.fn((channel: string, listener: (payload: unknown) => void) => {
             if (channel === 'remote-control:action') captured = listener;
             return vi.fn();
@@ -59,7 +59,7 @@ describe('remote action allowlist', () => {
     });
 
     afterEach(() => {
-        delete (window as unknown as { ipcRenderer?: unknown }).ipcRenderer;
+        delete window.ipcRenderer;
     });
 
     describe('refuses actions the remote has no business sending', () => {

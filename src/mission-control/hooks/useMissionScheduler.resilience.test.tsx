@@ -31,7 +31,7 @@ function buildState(overrides: Partial<MCState> = {}): MCState {
                 endsAt: '06:30',
                 durationMins: 30,
                 active: false,
-                startedAt: null,
+                startedAt: undefined,
                 tasks: [],
             },
         ],
@@ -62,7 +62,7 @@ function missionStarts(dispatch: ReturnType<typeof vi.fn>): boolean {
 function stubIpcRenderer() {
     const listeners: Record<string, (...args: unknown[]) => void> = {};
     const unsubscribe = vi.fn();
-    (window as unknown as { ipcRenderer: unknown }).ipcRenderer = {
+    window.ipcRenderer = {
         on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
             listeners[channel] = listener;
             return unsubscribe;
@@ -80,7 +80,7 @@ describe('mission scheduler — sleep/resume resilience', () => {
     afterEach(() => {
         vi.useRealTimers();
         vi.restoreAllMocks();
-        delete (window as unknown as { ipcRenderer?: unknown }).ipcRenderer;
+        delete window.ipcRenderer;
     });
 
     it('starts the mission when the timer fires on time', () => {
