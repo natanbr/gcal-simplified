@@ -26,6 +26,7 @@ export const RescueSlot = memo(function RescueSlot({
     onStartDrag,
 }: RescueSlotProps) {
     const dragInFlight = activeDragSlot?.slotType === 'rescue';
+    const refreshBlocked = dragInFlight || !rescueShape;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', width: 150, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: '20px 16px', justifyContent: 'center' }}>
@@ -79,13 +80,19 @@ export const RescueSlot = memo(function RescueSlot({
                 not cosmetic: refreshRescueShape re-locks the slot, and a locked slot
                 makes placeShape refuse a drop the child was already shown in green.
                 A second finger can reach this button mid-drag — the drag itself
-                ignores that pointer, but a click is not a pointer the drag owns. */}
+                ignores that pointer, but a click is not a pointer the drag owns.
+                An EMPTY slot is refused too: it only happens while a clear the rescue
+                shape finished is still exploding, and that clear deals the slot when
+                it resolves, meteors landed. Refreshing first would deal against the
+                board before they land, and the clear would then leave that shape be. */}
             <motion.button
-                whileHover={dragInFlight ? undefined : { scale: 1.05, background: 'rgba(255,255,255,0.1)', boxShadow: '0 0 15px rgba(255,255,255,0.1)' }}
-                whileTap={dragInFlight ? undefined : { scale: 0.95 }}
-                onClick={dragInFlight ? undefined : refreshRescueShape}
-                disabled={dragInFlight}
-                title={dragInFlight ? 'Finish placing the shape first' : 'Refresh shape (will lock)'}
+                whileHover={refreshBlocked ? undefined : { scale: 1.05, background: 'rgba(255,255,255,0.1)', boxShadow: '0 0 15px rgba(255,255,255,0.1)' }}
+                whileTap={refreshBlocked ? undefined : { scale: 0.95 }}
+                onClick={refreshBlocked ? undefined : refreshRescueShape}
+                disabled={refreshBlocked}
+                title={dragInFlight ? 'Finish placing the shape first'
+                    : !rescueShape ? 'A new shape arrives when the explosion ends'
+                    : 'Refresh shape (will lock)'}
                 style={{
                     background: 'rgba(255,255,255,0.08)',
                     border: '1.5px solid rgba(255,255,255,0.2)',
@@ -94,8 +101,8 @@ export const RescueSlot = memo(function RescueSlot({
                     fontSize: 14,
                     fontWeight: 900,
                     color: '#f8fafc',
-                    cursor: dragInFlight ? 'default' : 'pointer',
-                    opacity: dragInFlight ? 0.45 : 1,
+                    cursor: refreshBlocked ? 'default' : 'pointer',
+                    opacity: refreshBlocked ? 0.45 : 1,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

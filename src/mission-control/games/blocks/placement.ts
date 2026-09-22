@@ -121,10 +121,10 @@ export function hasAnyPlacement(grid: number[][], cells: Position[]): boolean {
 
 /**
  * Full rows and columns, for the dealer's forecast. ANY non-empty value counts,
- * so an asteroid the child can never cover still fills its row. The dealer only
- * ever reads boards with no exploding cells on them (it deals against
- * lineClear.withClearsDrained), which is why this can ignore the once-only rule
- * that lineClear.markCompletedLines enforces for the real board.
+ * so an asteroid the child can never cover still fills its row. A hand is only
+ * ever dealt on a board with no clear pending (useBlocksGame's refillBank), so
+ * there is no exploding cell here, which is why this can ignore the once-only
+ * rule that lineClear.markCompletedLines enforces for the real board.
  */
 export function findCompletedLines(grid: number[][]): { rows: number[]; cols: number[] } {
     const rows: number[] = [];

@@ -57,7 +57,7 @@ export function markCompletedLines(
 }
 
 /** mulberry32: the same seed always rolls the same sequence. */
-function seededRandom(seed: number): () => number {
+export function seededRandom(seed: number): () => number {
     let state = seed >>> 0;
     return () => {
         state = (state + 0x6D2B79F5) >>> 0;
@@ -81,17 +81,6 @@ export function resolvePendingClear(grid: number[][], pending: PendingClear, lev
     applyClearEffects(next, pending.cells, originals, random);
     spawnObstacles(next, level, random);
     return next;
-}
-
-/**
- * `grid` with every exploding cell already empty — the space the child will have
- * once the clear finishes. The dealer plans against this, not the painted board:
- * exploding cells read as occupied, so a hand dealt against them is planned
- * around lines that are about to vanish. Effects and obstacles are left out on
- * purpose; they are rolled at resolution, not forecast.
- */
-export function withClearsDrained(grid: number[][]): number[][] {
-    return grid.map(row => row.map(cell => (cell === EXPLODING ? 0 : cell)));
 }
 
 export function clearFeedback(linesCleared: number, id: string): NonNullable<BlocksGameState['clearedFeedback']> {

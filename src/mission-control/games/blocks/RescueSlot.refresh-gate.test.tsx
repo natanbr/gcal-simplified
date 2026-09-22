@@ -99,6 +99,18 @@ describe('the Refresh button is gated on the rescue shape being in flight', () =
         ).toBeEnabled();
     });
 
+    it('is disabled while the rescue slot is empty, waiting on the clear that will deal it', () => {
+        // The slot is only ever empty while a clear the rescue shape finished is
+        // still exploding. That clear deals the slot when it resolves, meteors
+        // landed; a Refresh first would deal against the board before they land,
+        // and the clear would then leave that shape where a meteor can take it.
+        const { container } = renderCanvas(stateWith(BLOCK_2X2, { rescueShape: null }));
+        const slot = within(container).getByText('Rescue Slot').parentElement;
+        if (!slot) throw new Error('rescue slot did not render');
+
+        expect(within(slot).getByText(/refresh/i, { selector: 'button' })).toBeDisabled();
+    });
+
     it('is enabled again once the rescue drag ends', () => {
         const { rescueItem, refresh, proxy } = setup();
 
