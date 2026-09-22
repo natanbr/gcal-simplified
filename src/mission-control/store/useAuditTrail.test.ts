@@ -15,7 +15,7 @@ import type { MCState, ActivityLogEntry } from '../types';
 const invoke = vi.fn();
 
 function stubIpc() {
-    (window as unknown as { ipcRenderer: unknown }).ipcRenderer = {
+    window.ipcRenderer = {
         invoke,
         on: vi.fn(() => vi.fn()),
     };
@@ -54,7 +54,7 @@ describe('useAuditTrail', () => {
 
     afterEach(() => {
         vi.useRealTimers();
-        delete (window as unknown as { ipcRenderer?: unknown }).ipcRenderer;
+        delete window.ipcRenderer;
     });
 
     it('mirrors a log entry to disk', async () => {
@@ -219,7 +219,7 @@ describe('useAuditTrail', () => {
     });
 
     it('does nothing when there is no IPC bridge (browser dev mode)', async () => {
-        delete (window as unknown as { ipcRenderer?: unknown }).ipcRenderer;
+        delete window.ipcRenderer;
 
         expect(() => {
             renderHook(() => useAuditTrail(stateWith([entry()])));

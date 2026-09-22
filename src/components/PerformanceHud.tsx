@@ -90,7 +90,7 @@ export function PerformanceHud() {
     useEffect(() => {
         if (!enabled) return;
 
-        const memApi = (performance as unknown as { memory?: HeapMemory }).memory;
+        const memApi = (performance as Performance & { memory?: HeapMemory }).memory;
 
         let frames = 0;
         let maxDelta = 0;

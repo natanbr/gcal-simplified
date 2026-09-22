@@ -296,12 +296,32 @@ const REGISTRY: Rule[] = [
         defence: 'Partially implied by the MC isolation guard (games cannot reach the parent app). Store access from a game would need an import-graph rule per game directory — worth adding if a game ever grows a store dependency.',
     },
     {
-        rule: 'TypeScript strict: no any, no `as unknown as X` laundering',
-        source: 'CLAUDE.md → Conventions → TypeScript',
-        status: 'guarded',
-        guard: '.eslintrc.cjs',
-        verifiedRedBy: 'npm run lint with an explicit any — @typescript-eslint/no-explicit-any errors',
-        defence: 'One justified `as unknown as` remains in PerformanceHud.tsx for the non-standard performance.memory API.',
+        rule: "TypeScript: no `any`, no `as unknown as X` laundering",
+        source: "CLAUDE.md → Conventions → TypeScript",
+        status: "guarded",
+        guard: "src/__tests__/type-laundering-guard.test.ts",
+        verifiedRedBy: "Two halves; 33 mutations, all proven 2026-09-21 by a harness that runs the guard's own sweep script (helpers/typeLaunderingSweep.cjs). Probes (sample code linted through the real config, as .ts and .tsx): delete the no-restricted-syntax block — the 15 laundering cases go red; narrow its selector to TSUnknownKeyword — the never/any/object cases (6); narrow it by location with `:not(:function *)` — the nested cases (4), or so it skips test callbacks — the `it(...)` case (2); set @typescript-eslint/no-explicit-any off — the `any` case (2); set @typescript-eslint/ban-types off — the `as {} as` case (2). Sweep (each linted file's resolved parser and rules compared with the probe's; the case names the files): an override turning laundering, or ban-types, off for **/*.test.ts(x) names every test file; one giving src/mission-control/**/*.tsx (excluding tests) its own selector names every such component; laundering off for src/mission-control/**/*.test.* names every Mission Control test; parser espree for e2e/** names every e2e file; a new top-level shared/ with the rule off for it names its file; a junction under src, or a link from src into electron, with the rule off under the link names the files seen through it. Ignore routes: e2e in ignorePatterns or src in .eslintignore reports every file under it; a new shared/ in .eslintignore, a top-level .shared/, a shared/.internal/, a src/node_modules/, a dot-folder under src and an ignored vendor/ whose TypeScript sits behind a link are each reported, as is an .mts file — while coverage/.tmp, an empty .vscode/, Playwright's artifacts folder and a dangling link (even one named stale.ts) fail nothing. Directives, read from the parser's own comments: inline rule config (bare, quoted or brace form) and block eslint-disable (bare, naming the rule, quoted, with a `*` or a multi-line reason, or after a glob string) are each reported. A --rule flag added to the lint script fails the pinned-command case. The seven-path version before the sweep stayed green under the two Mission Control overrides. History: the rule's first run on the real tree reported 38 sites in 12 files (2026-09-13).",
+        defence: "Until 2026-09-13 this rule was listed as guarded by .eslintrc.cjs while only its `any` half had a rule; the registry only checks that a guard file exists, so even deleting the rule would not have shown. The selector is syntactic, so these slip past it: a value already typed unknown and cast once; `(v as unknown)! as X` (the non-null assertion sits between the casts); an alias for unknown (`type U = unknown; v as U as X`); a single `as never` (skillProgress.test.ts has one); a `launder<T>(v: unknown): T` helper. `v as {} as X` is left to @typescript-eslint/ban-types, which is probed and swept because typescript-eslint v8 removes that rule. The sweep reads directives the way ESLint 8.57 does (its directive pattern and ` -- reason` split, applied to the parser's comments), so an ESLint upgrade that changes directive syntax needs that mirrored again; the sweep script itself is plain CommonJS outside both lint and tsc, and the test shape-checks everything it reports. Nor does any of it make IPC input typed: Electron types ipcMain.handle arguments as `any`, so a single `arg as Foo` there is neither laundering nor explicit any, and validation at the handler is the only defence. Escape hatches, uncapped, as of 2026-09-21: 3 `eslint-disable-next-line no-restricted-syntax -- reason` (negative tests feeding a deliberately ill-typed value to a runtime guard: mcReducer.purity.test.ts, weather_security.test.ts ×2) and 30 no-explicit-any disables, 3 of them in production code (electron/api.ts, UpdateNotification.tsx ×2). A no-restricted-syntax disable silences every selector under that rule, so a restriction later added to it inherits the three exemptions.",
+    },
+    {
+        rule: "TypeScript: strict",
+        source: "CLAUDE.md → Conventions → TypeScript",
+        status: "guarded",
+        guard: "src/__tests__/typescript-strict-config.test.ts",
+        verifiedRedBy: "Twelve mutations, each turning exactly one case red (proven 2026-09-21): `\"strictBuiltinIteratorReturn\": false` or `\"noCheck\": true` in tsconfig.json; electron/** or electron's tests added to its exclude, or e2e removed from its include (the compiled-file case names every dropped file); `// @ts-nocheck`, `// @TS-NOCHECK` or one spelled with a Kelvin sign (TypeScript lower-cases pragmas with Unicode rules) at the top of a production file; `\"strict\": true` deleted from tsconfig.node.json; and the tsc script changed to `tsc --strictNullChecks false`, to `npx tsc`, or to also compile a looser config (the pinned-command case). The pinned strict-flag list is compared with the installed compiler's own, so an upgrade that adds a flag fails too.",
+        defence: "The tsc command is pinned (`tsc`), not parsed: tsc accepts too many spellings to parse safely, so changing it means updating the configs this guard checks. It reads tsconfig.json and tsconfig.node.json through the compiler's own config parser, fails on noCheck, fails if any production source under src, electron or e2e, or any electron test, drops out of what tsconfig.json compiles, and fails on a @ts-nocheck in any of those files. tsconfig.node.json is compiled by no gate (plain `tsc` does not build project references); it is checked so that it is strict the moment one does. That gap is the next entry.",
+    },
+    {
+        rule: "TypeScript: strict — test files and root config files included",
+        source: "CLAUDE.md → Conventions → TypeScript",
+        status: "manual",
+        defence: "Manual here means unguarded pending a fix, not a judgement call: the rule is broken today and its error count is not guarded, so a new strict error in a src test passes every gate. `npm run tsc` compiles tsconfig.json, which excludes src/**/*.test.ts(x), src/**/__tests__/* and src/test/**; tsconfig.test.json inherits those excludes, and no gate runs it anyway (vitest reads it only under --typecheck, which no script passes). electron/*.test.ts ARE compiled. The root config files are unchecked too: vite.config.ts and vitest.config.ts belong to tsconfig.node.json, which plain `tsc` does not build, and playwright.config.ts is in no tsconfig at all. With the excludes removed, a probe config found 13 strict-mode errors in 6 src test files on 2026-09-21 (e.g. GoalPedestal.test.tsx renders without required props). Split out that day so the gap is counted by the tripwire below instead of hidden in a guarded entry. Closing it: fix the errors, give tsconfig.test.json its own exclude, and have the tsc script run it and tsconfig.node.json — the open task 'Type-check src unit tests in the tsc gate'.",
+    },
+    {
+        rule: "Discriminated unions over boolean-flag soup",
+        source: "CLAUDE.md → Conventions → TypeScript",
+        status: "manual",
+        defence: "A design judgement with no syntactic signature: a guard cannot tell a bag of related booleans from independent ones. Reviewed case by case by the architect lens. Registered 2026-09-21, when the TypeScript line was split into one entry per clause, so that no clause of it goes uncounted.",
     },
     {
         rule: 'Production build injects a strict Content-Security-Policy',
@@ -390,13 +410,16 @@ describe('rule registry', () => {
         // Not a quality bar — a tripwire. Adding a rule without a guard is
         // allowed, but it has to be a deliberate edit to this number.
         const unenforced = REGISTRY.filter(r => r.status === 'manual' || r.status === 'unguardable');
+        // Cap is 7 since 2026-09-21: the TypeScript line was split into one entry
+        // per clause, and two of them (strict for test and root config files, and
+        // discriminated unions) have no guard. Back to 6 once tsc covers src tests.
 
         expect(
             unenforced.length,
             `${unenforced.length} of ${REGISTRY.length} rules have no automated guard:\n  ` +
             unenforced.map(r => r.rule).join('\n  ') +
             `\n\nIf you added a rule without a guard, raise this number deliberately.`
-        ).toBeLessThanOrEqual(5);
+        ).toBeLessThanOrEqual(7);
     });
 
     it('covers a meaningful share of the rulebook', () => {

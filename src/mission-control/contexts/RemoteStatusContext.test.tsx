@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RemoteStatusProvider, useRemoteStatus } from './RemoteStatusContext';
 
 function TestComponent() {
@@ -32,10 +32,14 @@ describe('RemoteStatusContext', () => {
       return mockUnsubscribe;
     });
 
-    (window as unknown as { ipcRenderer: unknown }).ipcRenderer = {
+    window.ipcRenderer = {
       invoke: mockInvoke,
       on: mockOn,
     };
+  });
+
+  afterEach(() => {
+    delete window.ipcRenderer;
   });
 
   it('initially displays offline and pulls status from main process', async () => {

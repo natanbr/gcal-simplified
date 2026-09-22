@@ -1,24 +1,36 @@
-import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RemoteBridge } from './remote-bridge';
-import { createClient } from '@supabase/supabase-js';
-import { BrowserWindow } from 'electron';
-import { store } from './store';
+import type { store } from './store';
 
-// Mock Supabase
-vi.mock('@supabase/supabase-js', () => ({
-    createClient: vi.fn().mockReturnValue({
+/** The store mocks take its real signatures, so a config that drifts from
+ *  UserConfig fails to compile. The client is typed only as far as `channel`;
+ *  the channel object it returns is unchecked, and a re-run of init() would also
+ *  call removeChannel, which no test does. */
+interface ClientSlice { channel: (name: string) => unknown }
+interface WindowSlice { webContents: { send: (channel: string, ...args: unknown[]) => void } }
+
+const mocks = vi.hoisted(() => ({
+    createClient: vi.fn<(url: string, key: string) => ClientSlice>().mockReturnValue({
         channel: vi.fn().mockReturnValue({
             on: vi.fn().mockReturnThis(),
             subscribe: vi.fn().mockReturnThis(),
         }),
     }),
+    getAllWindows: vi.fn<() => WindowSlice[]>().mockReturnValue([{ webContents: { send: vi.fn() } }]),
+    storeGet: vi.fn<typeof store.get>(),
+    storeSet: vi.fn<typeof store.set>(),
+}));
+
+// Mock Supabase
+vi.mock('@supabase/supabase-js', () => ({
+    createClient: mocks.createClient,
 }));
 
 // Mock Electron components
 vi.mock('electron', () => ({
     app: { getPath: vi.fn().mockReturnValue('mock-path') },
     BrowserWindow: {
-        getAllWindows: vi.fn().mockReturnValue([{ webContents: { send: vi.fn() } }]),
+        getAllWindows: mocks.getAllWindows,
     },
     ipcMain: { handle: vi.fn() },
 }));
@@ -26,8 +38,8 @@ vi.mock('electron', () => ({
 // Mock Store
 vi.mock('./store', () => ({
     store: {
-        get: vi.fn(),
-        set: vi.fn(),
+        get: mocks.storeGet,
+        set: mocks.storeSet,
     },
 }));
 
@@ -41,7 +53,9 @@ describe('RemoteBridge (Main Process)', () => {
         process.env.VITE_SUPABASE_URL = mockSupabaseUrl;
         process.env.VITE_SUPABASE_ANON_KEY = mockSupabaseKey;
         
-        (store.get as unknown as Mock).mockReturnValue({
+        mocks.storeGet.mockReturnValue({
+            calendarIds: [],
+            taskListIds: [],
             remoteRoomId: 'room-123',
             remoteKey: 'secret-key',
         });
@@ -57,16 +71,17 @@ describe('RemoteBridge (Main Process)', () => {
 
     it('initializes Supabase client with env vars', () => {
         bridge.init();
-        expect(createClient).toHaveBeenCalledWith(mockSupabaseUrl, mockSupabaseKey);
+        expect(mocks.createClient).toHaveBeenCalledWith(mockSupabaseUrl, mockSupabaseKey);
     });
 
     it('subscribes to the correct channel based on roomId', () => {
         const mockChannel = { on: vi.fn().mockReturnThis(), subscribe: vi.fn() };
-        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
-        
+        // Held in a local: mock.results[n].value is typed `any` by vitest.
+        const client = { channel: vi.fn().mockReturnValue(mockChannel) };
+        mocks.createClient.mockReturnValue(client);
+
         bridge.init();
-        
-        const client = (createClient as unknown as Mock).mock.results[0].value;
+
         expect(client.channel).toHaveBeenCalledWith('remote-control:room-123');
         expect(mockChannel.on).toHaveBeenCalledWith('broadcast', { event: 'action' }, expect.any(Function));
         expect(mockChannel.subscribe).toHaveBeenCalled();
@@ -74,7 +89,7 @@ describe('RemoteBridge (Main Process)', () => {
 
     it('validates key and sends to renderer via IPC on message', () => {
         const mockWin = { webContents: { send: vi.fn() } };
-        (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+        mocks.getAllWindows.mockReturnValue([mockWin]);
 
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, callback) => {
@@ -89,7 +104,7 @@ describe('RemoteBridge (Main Process)', () => {
             }), 
             subscribe: vi.fn() 
         };
-        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+        mocks.createClient.mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
 
         bridge.init();
 
@@ -98,7 +113,7 @@ describe('RemoteBridge (Main Process)', () => {
 
     it('ignores message if key is invalid', () => {
         const mockWin = { webContents: { send: vi.fn() } };
-        (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+        mocks.getAllWindows.mockReturnValue([mockWin]);
 
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, callback) => {
@@ -113,7 +128,7 @@ describe('RemoteBridge (Main Process)', () => {
             }), 
             subscribe: vi.fn() 
         };
-        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+        mocks.createClient.mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
 
         bridge.init();
 
@@ -124,7 +139,7 @@ describe('RemoteBridge (Main Process)', () => {
 
     it('ignores duplicate messages with same msgId', () => {
         const mockWin = { webContents: { send: vi.fn() } };
-        (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+        mocks.getAllWindows.mockReturnValue([mockWin]);
 
         let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
         const mockChannel = { 
@@ -134,7 +149,7 @@ describe('RemoteBridge (Main Process)', () => {
             }), 
             subscribe: vi.fn() 
         };
-        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+        mocks.createClient.mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
 
         bridge.init();
 
@@ -161,7 +176,7 @@ describe('RemoteBridge (Main Process)', () => {
 
     it('ignores stale messages older than 60 seconds', () => {
         const mockWin = { webContents: { send: vi.fn() } };
-        (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+        mocks.getAllWindows.mockReturnValue([mockWin]);
 
         let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
         const mockChannel = { 
@@ -171,7 +186,7 @@ describe('RemoteBridge (Main Process)', () => {
             }), 
             subscribe: vi.fn() 
         };
-        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+        mocks.createClient.mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
 
         bridge.init();
 
@@ -188,7 +203,7 @@ describe('RemoteBridge (Main Process)', () => {
 
     it('forwards SYNC_REQUEST as remote:request-sync event', () => {
         const mockWin = { webContents: { send: vi.fn() } };
-        (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+        mocks.getAllWindows.mockReturnValue([mockWin]);
 
         let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
         const mockChannel = { 
@@ -198,7 +213,7 @@ describe('RemoteBridge (Main Process)', () => {
             }), 
             subscribe: vi.fn() 
         };
-        (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+        mocks.createClient.mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
 
         bridge.init();
 
@@ -219,7 +234,7 @@ describe('RemoteBridge (Main Process)', () => {
 
         it('notifies status changes and updates getStatus on subscribe callback', () => {
             const mockWin = { webContents: { send: vi.fn() } };
-            (BrowserWindow.getAllWindows as unknown as Mock).mockReturnValue([mockWin]);
+            mocks.getAllWindows.mockReturnValue([mockWin]);
 
             let subscribeCallback!: (status: 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR', err?: string) => void;
             const mockChannel = {
@@ -229,7 +244,7 @@ describe('RemoteBridge (Main Process)', () => {
                     return mockChannel;
                 })
             };
-            (createClient as unknown as Mock).mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
+            mocks.createClient.mockReturnValue({ channel: vi.fn().mockReturnValue(mockChannel) });
 
             bridge.init();
 

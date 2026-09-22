@@ -20,7 +20,7 @@ describe('WeatherService Security', () => {
 
     it('should validate latitude input to prevent parameter injection', async () => {
         // Attack payload: injecting extra query parameters
-        // We cast to any to simulate IPC call passing a string where a number is expected
+        // eslint-disable-next-line no-restricted-syntax -- negative test: an IPC caller can pass a string where a number is declared
         const maliciousLat = "50&hourly=sensitive_data" as unknown as number;
 
         // This should throw an error due to input validation
@@ -30,6 +30,7 @@ describe('WeatherService Security', () => {
     });
 
     it('should validate longitude input to prevent parameter injection', async () => {
+        // eslint-disable-next-line no-restricted-syntax -- negative test: an IPC caller can pass a string where a number is declared
         const maliciousLng = "-123&hourly=sensitive_data" as unknown as number;
         await expect(weatherService.getWeather(50.0, maliciousLng))
             .rejects.toThrow('Invalid coordinate type');
