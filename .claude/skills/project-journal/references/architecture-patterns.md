@@ -338,6 +338,82 @@ kit. A bare `import 'vitest'` in the kit looked like a tripwire, but vitest decl
 `"sideEffects": false`, so a build drops it and the fixture ships silently. A bundled package's own
 import is never a guard; `src/__tests__/test-kit-boundary.test.ts` reads the imports instead.
 
+## 2026-09-10 — A test on an open board proves nothing about a placement rule
+
+**Learning:** The Space Rescue dealer rewrite shipped 24 green tests, and mutation testing found
+three of them vacuous — including the one guarding the exact bug the rewrite existed to fix. All
+three shared one cause: the fixture board had 46+ free cells of 64. On a board that open, every
+shape fits, every pair co-fits, and the first candidate in the list happens to complete a line, so
+deleting the clearing bias, the shuffle and the entire co-placement engine changed nothing any
+assertion could observe. A second trap sits one step further in: on a board tight enough to
+discriminate, filling the last gap in a row COMPLETES it, the line clears, and the board hands back
+eight free cells — so a "full board minus one pocket" fixture silently becomes an open board the
+moment the code under test places anything.
+
+**Action:** For any rule about placement, fit or space, build the fixture to make exactly that rule
+observable, and give the fixture its own guard test. Two rules to follow concretely:
+- Scatter isolated single free cells so **every row and every column has a hole**. They stop lines
+  being complete (or completable) without adding placements, since the smallest pool shape is 3
+  cells. `dealer.test.ts`'s `horizontalCorridor` / `fourRunAndThreeRun` are the worked examples.
+- Assert the discriminating property of the fixture itself (`canBothBePlaced(board, BAR4, BAR4)`
+  must be `false`), so loosening the board fails loudly instead of quietly gutting the suite.
+Prefer a **frequency** assertion over set membership for anything shuffled or probabilistic: the
+shuffle guard passed while slot 0 held the gift in 1672 of 2000 deals, because it only asked whether
+the gift ever appeared elsewhere. Measure the mutant, then set the threshold between the two numbers
+and write both into the test comment.
+
+## 2026-09-10 — Enumerating orientations silently re-weights a shape pool
+
+**Learning:** Replacing a random `transformShape` with an enumeration of each shape's distinct
+orientations fixes a real bug (shapes were verified to fit in one orientation and dealt in another),
+but drawing uniformly over the resulting candidate list is NOT the same distribution as drawing
+uniformly over shapes. Orientation counts differ by shape: an L tetromino has 8, a T has 4, a bar
+has 2, a 2x2 square has 1. At level 0 that turns a flat 14.3% each into L 38% and square 4.8% — a
+difficulty increase nobody asked for, in a game for an eight-year-old. It also discards the pool's
+own hand-tuning: `SHAPE_POOL` lists the trominoes and bars twice each, which is how the easy shapes
+were given double odds.
+
+**Action:** When a set is expanded into variants, draw the **entity first, then the variant**
+(`pickCandidate` in `dealer.ts`). Any flat draw over an expanded list inherits the expansion's shape
+as a weighting. The same trap bit the pair search: walking a shuffled group list in nested-loop
+order always tests `(first, first)` first, which on an open board succeeds immediately and deals two
+copies of the same shape every round — shuffle the PAIRS, not the groups. `dealer.test.ts` pins the
+distribution at a max/min spread under 1.6 (the flat draw gives 3.5).
+
+**Also worth knowing:** string cell keys (`` `${r},${c}` ``) in a per-anchor hot loop cost ~4.5ms per
+deal, on the drop path. Numeric keys (`r * GRID_SIZE + c`) plus a short-circuiting `canCompleteLine`
+took it to ~1.1ms p50 / 3.2ms p99 on a real layout.
+
+## 2026-09-10 — Coupling by coincidence: ask who relied on the OLD input
+
+**Learning:** The blocks replenish deal used to plan against `gridCopy`, the grid that still has
+`CELL.CLEARING` (4) painted on it for 1200ms. That looked like a bug — it deals around lines that
+are about to vanish — so it was changed to deal against `withClearsDrained(gridCopy)`. The fix was
+right, and it silently broke something a room away: the game-over effect in `useBlocksGame.ts` reads
+`state.grid`, the PAINTED one. While those two were the same object, a dealt shape was guaranteed
+placeable on the grid the effect judged, so the effect could not false-fire. Nothing declared that
+invariant; it held by coincidence. After the fix, on a board whose only free region is the line just
+cleared, the freshly dealt hand does not fit the painted grid, the effect calls game-over mid
+explosion, and there is no way back — it early-returns once the phase is no longer `playing`, so the
+1200ms timeout that would have opened the board never gets to matter. Measured on a tight fixture:
+~88% of such clears ended the game.
+
+**Action:** When a fix changes what a value is computed **from**, the question is not "is the new
+input better?" but **"who else was relying on those two things being the same object?"** Grep the
+other readers of the old input before shipping. Concretely for this game: nothing may judge the board
+while a clear is pending. PR 161 made that explicit — the game-over effect returns early on
+`pendingClear`, the clear's own state — which is the right signal. Scanning the grid for exploding
+cells is the weaker substitute this entry originally prescribed: it infers the state from paint.
+
+**Also worth knowing:** all five game-over tests of the time set up a pre-jammed board with no clear
+in flight, so none of them could see this — CLAUDE.md's "negative" category was missing: the tests
+covered *when the game should end* and never *when it must not*. PR 161 fixed the same bug
+independently and added that test (`useBlocksGame.line-clear.test.tsx`, "completing lines in the
+last free cell is not game over").
+
+**Follow-up (2026-09-21):** the drained-board deal that exposed this coupling was itself replaced —
+see "Act on the state change, not on a forecast of it" (2026-09-21). The coupling lesson stands independently of that.
+
 ## 2026-09-12 — Converting a drag test to touch: move the finger, not the expectation
 
 **Learning:** Space Rescue floats a touch-dragged shape `TOUCH_LIFT_PX` (1.5 board cells) above the
@@ -360,6 +436,19 @@ position check: on an empty board every cell is green, so a lift regression slip
 later under the wrong message. Convert a test when its defect only exists on touch or its anchor is
 reached through the lift; leave pixel-literal geometry and pointer-agnostic refusals on the unlifted
 path.
+
+## 2026-09-12 — A brief's "false" premise may be true on a branch you haven't looked at
+
+**Learning:** The dealer brief said `canPlaceShape` had been replaced by `isPlaceable` in
+`placement.ts`. Checked against `main` and this branch's ancestry, neither existed, so the session
+reported the premise as wrong. It was true — on PR 155's unmerged branch, whose description is where
+the brief came from. The miss cost a same-path collision (two incompatible `placement.ts` files) that
+surfaced only at code review, instead of shaping the design from the first hour.
+
+**Action:** Before calling a brief's premise false, look beyond the checked-out branch:
+`git log --all --oneline --grep=<symbol>`, `git log --all -- <path>`, `gh pr list --state open`, and
+the other worktrees under `.claude/worktrees/`. If the premise holds somewhere else, say *where*, and
+treat that branch as the base the work will eventually have to land on.
 
 ## 2026-09-13 — A rule with two halves was `guarded` on one; a tsconfig `exclude` is inherited
 
@@ -508,3 +597,22 @@ if a run is killed. On the real profile it puts those fields back on `close()`, 
 A spec that tests missions starts one after launch. To reproduce clock failures on demand, use
 `E2E_SIMULATE_MISSION_WINDOW=1`, not the wall clock. It logs one line per launch, because the first
 full run with it was indistinguishable, by timing, from a run without it.
+
+## 2026-09-21 — Act on the state change, not on a forecast of it
+
+**Learning:** To stop the Space Rescue refill being planned around lines about to vanish, the deal
+was pointed at a forecast of the board with the exploding cells already drained. Two review lenses
+independently found what that bought: for up to 1.2s the child held a shape whose only room was the
+line still exploding, so it was refused at every position — worst in the last few hundred ms, when
+the explode animation had already shrunk those cells to visible holes that still refused. Then the
+clear resolved and its meteors could land in the very space the hand was dealt for. The forecast was
+right about the lines and wrong about everything the resolution does besides (meteors, satellite
+blast, electricity), and the child acted during the gap between promise and reality.
+
+**Action:** when an action depends on a state change that is already scheduled, run it *inside* the
+code that performs the change, against the result — not earlier against a prediction. Here: an
+emptied slot stays empty while a clear is pending, and the clear's resolve updater deals it against
+the board it leaves behind (`refillBank` in `useBlocksGame.ts`). The price is visible and honest (an
+empty tray during the explosion); the forecast's price was invisible and felt like the game being
+wrong. If that code runs in a state updater, draw its randomness from a seed rolled outside it, the
+same way the meteors are.

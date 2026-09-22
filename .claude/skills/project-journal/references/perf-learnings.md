@@ -147,3 +147,17 @@ shipped in full, 200ms poll and all.
 assume the fold reached the definition — verify by grepping a distinctive string from the component
 in `dist/assets/*.js` after `npx vite build`. The same applies to any `React.memo`/`forwardRef`
 export you expect a bundler to remove.
+
+## 2026-09-21 — Work derived from constants belongs in a module cache, not on the drop path
+
+**Learning:** The Space Rescue dealer enumerated every template's orientations (rotate, mirror,
+normalise, de-duplicate by sorted signature string) on every deal and every game-over check. The
+templates are module constants, so the result never changes — and it was 55-70% of what a
+bank-emptying drop cost (perf-sentinel's same-session bench: 0.46-0.99ms p50 before, 0.16-0.31ms
+after). A variant of "don't reallocate in hot loops": nothing allocated per iteration, but the whole
+derivation was recomputed per call.
+
+**Action:** anything computed only from module constants gets a module-level cache keyed by the
+constant's id (`orientationCache` in `candidates.ts`). If the cached value can reach mutable state —
+here, a dealt shape's `cells` — hand out copies, so no consumer can corrupt the cache for every
+later game.
