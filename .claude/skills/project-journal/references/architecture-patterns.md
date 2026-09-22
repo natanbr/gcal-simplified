@@ -361,6 +361,27 @@ later under the wrong message. Convert a test when its defect only exists on tou
 reached through the lift; leave pixel-literal geometry and pointer-agnostic refusals on the unlifted
 path.
 
+## 2026-09-13 — A rule with two halves was `guarded` on one; a tsconfig `exclude` is inherited
+
+**Learning:** The registry marked "no `any`, no `as unknown as`" as `guarded` by `.eslintrc.cjs`, but
+its `verifiedRedBy` only ever proved the `any` half. Nothing in the lint config could see a double
+assertion; 38 had accumulated. Checking it turned up a bigger hole: `npm run tsc` type-checks
+**no** `src/**/*.test.ts(x)`. tsconfig.json excludes them, and `tsconfig.test.json` overrides
+`include` but not `exclude`, so it silently inherits the exclusion (`tsc --listFilesOnly` proves
+it). 24 type errors were hiding there, including `vi.Mock` used as a type, which vitest 3 doesn't export.
+**Action:** A `verifiedRedBy` must prove *every clause* of the rule it guards, not just one. To ban
+syntax, prefer an AST `no-restricted-syntax` selector over a grep ratchet: it ignores prose and
+strings. Prove the selector with a probe file of should-flag and must-not-flag shapes. Before
+trusting a tsconfig for coverage, run `tsc --listFilesOnly -p <config>`: `extends` carries
+`exclude` along even when `include` is overridden.
+A config file named as a guard only proves the file exists; the registry cannot tell a deleted
+rule from a live one. Guard a lint rule with a test that lints a probe through the real config
+(`src/__tests__/type-laundering-guard.test.ts`), with cases that must and must not be flagged —
+then sweep every file the linter checks with `calculateConfigForFile` and assert each resolves the
+rule exactly as the probe did, and that none is ignored. An eslintrc `overrides` block *replaces* a
+rule's options for the files it matches, so a hand-picked set of probe paths only covers the globs
+someone thought of: seven paths stayed green while the rule was off for 73 Mission Control tests.
+
 ## 2026-09-18 — Correcting a test's input numbers can silently remove what it catches
 
 **Learning:** The kit "corrected" gesture-defects' drifted cell centres from 1.95 cells to exactly

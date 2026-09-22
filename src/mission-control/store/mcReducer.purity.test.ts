@@ -161,6 +161,7 @@ describe('mcReducer purity', () => {
 
     it('ignores an unknown action instead of throwing', () => {
         const state = richState();
+        // eslint-disable-next-line no-restricted-syntax -- negative test: an action type outside the union is the input under test
         expect(mcReducer(state, { type: 'NOT_A_REAL_ACTION' } as unknown as MCAction)).toBe(state);
     });
 
