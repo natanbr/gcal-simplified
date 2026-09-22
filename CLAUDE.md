@@ -122,7 +122,7 @@ Guards that enforce the above (fail `npm run test:unit`): `src/__tests__/timer-r
 
 - **Unit tests** (Vitest + jsdom): colocated `*.test.ts(x)` next to source, plus some `__tests__/` folders. Covers `src/**` and `electron/**`. Global setup: `src/test/setup.ts` (jest-dom + an `IntersectionObserver` stub — that is the *only* global mock).
 - **E2E tests** (Playwright): `e2e/*.spec.ts` — 60s timeout per test. Runs sequentially (`workers: 1`) because the specs that still use the real userData directory contend on the single-instance lock; the isolated ones no longer do.
-- **Fixtures**: there is no `src/__mocks__/`. Unit tests share per-module test kits that live beside the API they fake — `src/mission-control/games/quiz/quizTestKit.ts` (`stubEngine` for `QuizEngineApi`), and for the Space Rescue drag suites `src/mission-control/games/blocks/dragTestKit.ts` (render helpers, re-exporting the DOM-free `dragFixtures.ts`: shapes, grids, state and board geometry derived from `types.ts`). A kit is not a `*.test.*` file, so the ratchets scan it, and nothing in tsc, lint or the build stops production code importing it or a test library; `src/__tests__/test-kit-boundary.test.ts` does. Name a new kit `*TestKit.ts` or `*Fixtures.ts` and add it to that guard's `TEST_SUPPORT` list. E2E shares `e2e/helpers/` — `mcTest` (isolated Electron launch + Mission Control navigation), `userDataDir.ts`, `appConfig.ts`. Create a new fixtures location deliberately rather than assuming one exists.
+- **Fixtures**: there is no `src/__mocks__/`. Unit tests share per-module test kits that live beside the API they fake — `src/mission-control/games/quiz/quizTestKit.ts` (`stubEngine` for `QuizEngineApi`), and for the Space Rescue drag suites `src/mission-control/games/blocks/dragTestKit.ts` (render helpers, re-exporting the DOM-free `dragFixtures.ts`: shapes, grids, state and board geometry derived from `types.ts`). A kit is not a `*.test.*` file, so the ratchets scan it, and nothing in tsc, lint or the build stops production code importing it or a test library; `src/__tests__/test-kit-boundary.test.ts` does. Name a new kit `*TestKit.ts` or `*Fixtures.ts` and add it to that guard's `TEST_SUPPORT` list. E2E shares `e2e/helpers/` — `launchApp.ts` (the only launcher), `mcTest` (isolated Electron launch + Mission Control navigation), `missionClock.ts`, `userDataDir.ts`, `appConfig.ts`. Create a new fixtures location deliberately rather than assuming one exists.
 - **TDD is the default flow** for features and bugs: write the failing test first, confirm it is RED for the right reason, then implement. See `/task` and `/bug`.
 - **Four categories, not a coverage number.** Six real bugs shipped past 639 green tests because the
   suite only ever tested happy paths. For anything touching state, IPC, credentials or scheduling,
@@ -153,7 +153,7 @@ Guards that enforce the above (fail `npm run test:unit`): `src/__tests__/timer-r
   always `npx tsc && npx vite build` first, or you are testing a months-old binary. Compare the
   *set* of failing specs to a baseline, never the count. Windows run offscreen by default;
   `E2E_HEADED=1` to watch, `npx playwright show-report` for the report (it no longer auto-opens).
-- **userData isolation.** Every `electron.launch` must carry a throwaway profile
+- **userData isolation.** Every launch must carry a throwaway profile
   (`e2e/helpers/userDataDir.ts`), or its spec must be named in `NEEDS_REAL_PROFILE` in
   `src/__tests__/e2e-state-isolation.test.ts`. Six specs are isolated; the eight on that list still
   need real Google credentials and therefore **run against your real profile and mostly restore
@@ -162,6 +162,20 @@ Guards that enforce the above (fail `npm run test:unit`): `src/__tests__/timer-r
   appends to the real audit trail and joins the real Supabase room. Mocking `auth:check` the way
   `week-display-customization` does is what empties the list. The guard checks launches, not spec
   subject matter; `e2e/global-profile-leak-check.ts` fails the run if a profile is left behind.
+- **E2E launches go through `launchApp`** (`e2e/helpers/launchApp.ts`); nothing else may touch
+  Playwright's `_electron`. The mission scheduler runs on the wall clock and `MissionOverlay` covers
+  both views, so a launch inside a mission window (defaults 06:00 and 19:00), or on a profile with a
+  mission still running, blocked every click: 45 of 45 passed at 18:00, 30 failed from 19:02.
+  `launchApp` marks today's missions as already run and stops a running one before any spec code,
+  and on the real profile puts those fields back on close (`missionClock.ts`). Specs take `test`
+  from `launchApp.ts` (or `mcTest`), never from `@playwright/test`: its teardown closes whatever the
+  test launched, so a real-profile spec that fails or times out still restores. One app per test:
+  no `beforeAll`/`afterAll` (the first test's teardown would close a shared app). Never clear
+  localStorage or call `removeItem` under `e2e/`; the rebuilt store re-arms the 19:00 mission. A
+  spec that tests missions starts one itself after launch. `E2E_SIMULATE_MISSION_WINDOW=1` runs
+  every launch inside a live mission first. Guarded by `src/__tests__/e2e-launch-chokepoint.test.ts`;
+  `e2e/mission-clock-independence.spec.ts` is the behavioural half; the real-profile limits are
+  listed in `missionClock.ts`.
 - **`node scripts/verify-single-instance.mjs`** after any change to `main.ts` bootstrap — the lock is
   an OS guarantee that no unit test can verify.
 
