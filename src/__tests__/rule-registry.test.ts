@@ -188,6 +188,14 @@ const REGISTRY: Rule[] = [
         defence: 'Every OTHER streak test injects the counter by hand, which is why 975 tests were green over a counter that capped at 2. This file may only build state by dispatching real actions.',
     },
     {
+        rule: 'stampMissionActivity is the only writer of lastActiveAt (every start and end of a run) and nothing clears it, so the scheduler never restarts a stopped mission',
+        source: 'CLAUDE.md → Conventions → A mission re-trigger clears loggedTimeoutAt',
+        status: 'guarded',
+        guard: 'src/mission-control/__tests__/activity-stamp-boundary.test.ts',
+        verifiedRedBy: "add `lastActiveAt: undefined` to CANCEL_MISSION's mission reset in mcReducer.ts — both boundary cases fail, naming the file and the case; stop routing the wrapper through stampMissionActivity — the boundary test and 17 behavioural cases in useMissionScheduler.stop/early-start.test.tsx and mcReducer.mission-stop.test.ts go red (proven 2026-09-23).",
+        defence: 'The behavioural half is useMissionScheduler.stop.test.tsx and useMissionScheduler.early-start.test.tsx, which drive the real reducer through a stop in both windows, a mission started before its window and stopped inside it, a relaunch and a rollover. Their no-timer cases go red on their own if the arm-time checks in schedulePhase are dropped (20 timers in 10 s).',
+    },
+    {
         rule: 'ADJUST_SHIELD is the parent’s remote shield control, clamped and logged like any other streak move',
         source: 'CLAUDE.md → Conventions → Mission streak shield',
         status: 'guarded',

@@ -25,6 +25,10 @@ Root cause of the reported "CPU waking up on the Calendar view":
 2. **Behavior heartbeat churned state every 60 s** — each tick created a new store object → re-render of all `useMCState` consumers + a `localStorage` write + a remote broadcast, even at night. → `applyBehaviorSync` now returns the same reference when nothing accrues; only advances during active hours.
 3. **Dashboard "Syncing…" bar animated `width` forever** — the wrapper only faded to `opacity: 0` (never unmounted), so an infinite, layout-driven CSS loop ran continuously. → Animation classes are applied only while actually syncing.
 
+## Fix applied (2026-09-22)
+
+- **`useMissionScheduler` re-fired every second inside an open mission window**, running or not, on the Calendar view too: after each fire it re-armed at the window it had just handled (about 2 timers/s for up to 90 min a day). `timer-registry.test.ts` cannot see it, because it was a self-rescheduling `setTimeout`, not a `setInterval`. → The scheduler now aims at the next occurrence once today's has run (`Mission.lastActiveAt`, stamped at every start and end of a run), and never at an open window while any mission is running (the run ending re-arms it once). Pinned by `useMissionScheduler.stop.test.tsx` and `useMissionScheduler.early-start.test.tsx` (no timer armed in 10 s once the occurrence has run, while a mission started before its window runs into it, or while the other phase's mission blocks it), and by the named idle guard `idle-performance.test.tsx` (same assertion inside a handled window, while another mission runs, and outside every window).
+
 ## Live HUD (`src/components/PerformanceHud.tsx`)
 
 An always-on, bottom-right readout mounted at the App root (`src/App.tsx`) — visible on **both** views and during games. Colour is the primary signal (green → yellow → orange → red):

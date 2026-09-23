@@ -153,6 +153,12 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
           - **Refresh is refused while the rescue shape is in flight.** Refreshing re-locks the slot, which would make the game refuse a drop the child had already been shown in green. The button is disabled for the duration of a rescue drag only; a standard-tray drag leaves it live.
         - **Unique Shape Instances & Jump-Back Prevention**: All generated shape instances are assigned unique IDs upon selection in `useBlocksGame.ts`, avoiding React key collisions. The slots in the tray are rendered transparent during dragging and unmounted upon successful placement, resolving the used shape "jump-back" visual glitch and ensuring proper state resets.
 
+- **Mission scheduling (morning / evening windows)**:
+  - The scheduler starts each window's mission **once per occurrence**. It leaves an occurrence alone once it ended today (completed or failed), or once the mission **ran at any point since the window's start time**: it is running now, or it started or ended at or after that time, whoever started it (the scheduler, ▶ Start, or the phone).
+  - **A stopped mission stays stopped for the rest of its window (fixed 2026-09-22)**. A stop (hold "— Minimize" for 2 s, or the phone's Stop) is not a miss (the shield does not move) and not a conclusion (a stopped morning does not open the quick-game window). It still counts as the occurrence having run, so the scheduler does not start it again, including after a relaunch inside the same window. This holds for a mission started by hand *before* its window, still running when the window opens, and stopped inside it (closed 2026-09-23). ▶ Start and the phone's Start still start it by hand. The next day's occurrence starts as normal.
+  - A stop covers only the occurrences its run overlapped. Moving that phase's start time to later makes a new occurrence, and it starts at the new time. A mission started by hand *before* its window and stopped before the window opens does not cancel the scheduled one (completing or failing it early still does: that is today's outcome). Moving it to a start at or before the run's stop (or, for a running mission, before now) makes an occurrence that run already covers: it is not started again (open decision for Nathan, PR 170; before this fix a running mission moved earlier restarted at once).
+  - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load.
+  - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
 - **Mission Streak Shield (missed-mission lockout)**:
   - **One shared streak**: `missedMissionStreak` counts consecutive *failed* mission occurrences across morning and evening. Six in a row is roughly three days of earning nothing.
   - **Miss / reset**: only an expired mission with unfinished tasks counts as a miss. A parent-cancelled mission and a mission skipped because the machine was asleep leave the streak alone. Any completed mission routine resets it to 0.
@@ -901,6 +907,62 @@ change), `store/persistence-lifecycle.test.ts`, `store/useRemoteSync.privileges.
 `hooks/useRemoteControl.allowlist.test.ts`, and the structural pin
 `__tests__/privilege-suspension-boundary.test.ts`, which fails on any other read of
 `status === 'suspended'`.
+
+### 2026-09-22 A stopped mission no longer restarts itself
+
+**Why**: found by the release QA run and reproduced twice in the built app. Holding "— Minimize"
+for 2 s (the phone's Stop takes the same path) logged "⏹️ Mission stopped" at 03:47:16.035Z, then
+"🌙 evening mission started" by ⏰ the scheduler at .043Z, with the overlay back and a full timer.
+
+**Root cause**: the scheduler had no record of having started today's occurrence. It skipped a
+phase only when that phase's outcome date (`lastCompletedOrFailed<Phase>Date`) was today, and a
+stop records no outcome, rightly, because a stop is neither a miss nor a conclusion. The stop
+changes `missions`, the scheduler effect re-armed, aimed at the still-open window and fired a 0 ms
+timeout. The same blind spot made it re-aim at an open window every second for as long as the
+window lasted (about 2 timers a second, on the Calendar view too). `timer-registry.test.ts` never
+saw it, because it scans for `setInterval` and this was a self-rescheduling `setTimeout`.
+
+- **New field `Mission.lastActiveAt`**: when that mission last started *or* ended. Stamped by
+  `stampMissionActivity` (`store/missionActivity.ts`) from the `activeMission` transition, in the
+  reducer wrapper, so every way a run starts or ends stamps it, including any added later. From the
+  action's timestamp (the reducer stays pure), whoever started or stopped it. Unlike `startedAt`,
+  nothing clears it. It persists, and hydration keeps only a real instant. It does not ride the
+  phone broadcast.
+- **The scheduler leaves an occurrence alone** once it ended today, *or* the mission is running now,
+  *or* it last started or ended at or after the window's start: a run covers every occurrence it
+  overlapped. Checked when arming (so it no longer re-aims at a handled window, which also ends the
+  every-second re-fire) and when firing. It also no longer aims at an open window while *any*
+  mission runs (the fire could only do nothing, then re-arm a second later); the run ending
+  changes `missions` and re-arms it once.
+- **Unchanged, and pinned by tests**: the shield does not move on a stop; a stopped morning keeps
+  the quick-game window shut (it reads outcome dates, not triggers); ▶ Start and the phone's Start
+  still start a stopped mission; the next day's occurrence starts on its own, whether the app ran
+  overnight or was relaunched; a mission rescheduled to a later start is started at the new time.
+- **Decided here**: a stop covers the occurrences its run overlapped. Moving that phase later makes
+  a new occurrence. A mission started by hand earlier in the day and stopped before the window does
+  not cancel the scheduled one (a date-keyed stamp would have). A mission started by hand *before*
+  its window, still running when it opens and stopped inside it, stays stopped: the first version
+  stamped only the start and restarted it, and polled every second while it ran (closed 2026-09-23,
+  before merge, by stamping the end as well).
+- **Review round 1 (2026-09-23)**: a stamp in the future is ignored and dropped at load (a clock set
+  ahead then corrected would otherwise have skipped every occurrence, silently, until it caught up;
+  the old date-keyed check healed the next day). Pinned: a phone Stop with a clock behind, a resume
+  from sleep after a stop (`useMissionScheduler.lifecycle.test.tsx`), and the idle guard
+  `idle-performance.test.tsx` now asserts no timer is
+  armed in 10 s inside a handled window, while another mission runs, and outside every window.
+- **E2E helpers** (`e2e/helpers/missionClock.ts`): the "window open now" seed clears the stamp,
+  because inside a real window the first document has already started and stamped that mission in
+  the same minute. `forgetMissionStartedSince` drops the stamp of the mission the launch started,
+  so the real-profile restore does not stop the dev app from starting that window.
+
+Tests: `useMissionScheduler.stop.test.tsx` and `useMissionScheduler.early-start.test.tsx` (the real
+reducer through the real dispatch interceptor, shared `schedulerTestKit.ts`: stop in both windows,
+from the phone, restart, relaunch, overnight, reschedule, a mission started before its window, the
+other mission running across a window start, a late fire while running, and checks that no timer is
+armed in 10 s once the occurrence has run or while a mission runs), `mcReducer.mission-stop.test.ts`
+(the stamp on every start and end, the shield, the quick-game window, hydration),
+`activity-stamp-boundary.test.ts` (structural: only `stampMissionActivity` writes the stamp), and
+two cases in `e2e-mission-clock.test.ts`.
 
 ### 2026-09-23 Space Rescue: one drop deals one hand
 

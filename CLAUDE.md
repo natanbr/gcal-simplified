@@ -83,7 +83,11 @@ npm run release          # Bump + build + publish in one go; use /release, which
 - **A mission re-trigger clears `loggedTimeoutAt`**: it marks "this occurrence already timed out", so
   a stale stamp surviving into the next day silently caps the streak (it capped at 2, and the shield
   could never break). Any new field describing *this occurrence* belongs in the `SET_ACTIVE_MISSION`
-  fresh-start reset.
+  fresh-start reset. The opposite is `lastActiveAt`: stamped when a run starts **and** when it ends
+  (`stampMissionActivity`, derived from the `activeMission` transition in the reducer wrapper, its
+  only writer) and **never** cleared, because the scheduler reads it to know the occurrence already
+  ran. A stop records no outcome (not a miss, not a conclusion), so clearing it beside `startedAt`
+  restarts a stopped mission instantly (2026-09-22). Guarded by `activity-stamp-boundary.test.ts`.
 - **Quick-game window**: games open only between the day's missions — `isQuickGameWindowOpen` in
   `gameWindow.ts`, enforced in the `START_GAME` **and** `CONSUME_CASE` reducer cases (they must
   agree, or redeeming at the boundary burns the goal for a game that is then refused), not only at
