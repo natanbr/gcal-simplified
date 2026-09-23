@@ -29,7 +29,7 @@ npx vitest run src/path/to/file.test.ts  # Run a single unit test file
 npx vitest run --coverage                # Coverage (v8)
 
 # Release
-npm run release          # Version bump + build + GitHub publish (see /release)
+npm run release          # Bump + build + publish in one go; use /release, which splits it into gated steps
 ```
 
 **Definition of Done** for any code change — all four, no exceptions:
@@ -186,6 +186,7 @@ Guards that enforce the above (fail `npm run test:unit`): `src/__tests__/timer-r
 - [docs/requirements.md](docs/requirements.md) — living spec + dated changelog. One copy, one `# ` heading, changelog in date order. It was accidentally triplicated for months and the three copies drifted apart; `src/__tests__/docs-integrity.test.ts` now fails if a second copy appears.
 - [docs/test-coverage-plan.md](docs/test-coverage-plan.md) — phased coverage plan (counts are stale)
 - [docs/mission-control.md](docs/mission-control.md), `docs/tasks/*` — feature briefs and ADRs
+- [docs/release-qa-plan.md](docs/release-qa-plan.md) — pre-release QA: how to run it, must-do list, go/no-go, known bugs; the full catalogue by area is [docs/release-qa-checklist.md](docs/release-qa-checklist.md) (`/release` step 5)
 
 Update `docs/requirements.md` when shipped behavior changes. Don't let the spec drift.
 
@@ -202,4 +203,4 @@ The project's own commands, review subagents and skills live under `.claude/`; t
 - **Rebase over merge.** Before starting a task, verify you are on the latest `main` and report it.
 - **No WIP commits.** Don't commit unfinished work.
 - Conventional commit format: `feat:`, `fix:`, `docs:`, `perf:`, `refactor:`, `test:`. The message explains *why*.
-- Release requires `.env` with `GH_TOKEN`. Token troubleshooting and partial-failure recovery live in `/release`.
+- Publishing needs a GitHub token. `/release` hands the gh CLI's token to the publish step alone; a `GH_TOKEN` in `.env` is only a fallback, and it has expired before. The pre-release QA pass, token handling and partial-failure recovery live in `/release`.
