@@ -192,7 +192,6 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
   const economyLocked = isEconomyLocked(state);
 
   const handleTokenDrop = useCallback((tokenId: string, x: number, y: number): boolean => {
-    if (!layoutRects) return false;
     if (economyLocked) return false; // refuse before animating, or the token vanishes
     
     // Check if dropped on Bank
