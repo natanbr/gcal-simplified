@@ -25,6 +25,11 @@ export const STORAGE_KEY = 'mc-state-v5'; // bumped: added gameTokens fields
 
 const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 
+/** A real instant that is not in the future (a stamp written under a clock set ahead). */
+function isPastInstant(value: unknown): value is string {
+    return typeof value === 'string' && Date.parse(value) <= Date.now();
+}
+
 export function loadPersistedState(): MCState {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -70,6 +75,9 @@ export function loadPersistedState(): MCState {
                 return {
                     ...defaultM,
                     ...savedM,
+                    // Must survive a restart: a relaunch inside the window after a
+                    // stop would otherwise start the mission again.
+                    lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
                     tasks: defaultM.tasks.map(dt => {
                         const st = savedM.tasks?.find(t => t.id === dt.id);
                         // Always take icon + label from default (they're UI display values,

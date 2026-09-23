@@ -70,6 +70,45 @@ describe('idle perf — mission scheduler is gated', () => {
     });
 });
 
+// ── 1b. …and arms no timer chain between its exact-time fires ─────────────────
+// The scheduler's self-rescheduling setTimeout is invisible to
+// timer-registry.test.ts (it scans for setInterval). It used to re-aim at an
+// open window every second for the whole window, on the Calendar view too.
+describe('idle perf — mission scheduler arms nothing between fires', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    function timersArmedOver10s(state: MCState, now: Date): number {
+        vi.setSystemTime(now);
+        const { wrapper } = makeWrapper(state);
+        renderHook(() => useMissionScheduler(), { wrapper });
+        const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+        for (let t = 0; t < 10_000; t += 100) vi.advanceTimersByTime(100);
+        return setTimeoutSpy.mock.calls.length;
+    }
+
+    const at = (h: number, m: number) => { const d = new Date(); d.setHours(h, m, 0, 0); return d; };
+    const eveningRanAt = (iso: string): MCState => ({
+        ...initialState,
+        missions: initialState.missions.map(m => (m.phase === 'evening' ? { ...m, lastActiveAt: iso } : m)),
+    });
+
+    it('inside an open window whose occurrence already ran (stopped), nothing running', () => {
+        expect(timersArmedOver10s(eveningRanAt(todayAt(19, 2)), at(19, 4))).toBe(0);
+    });
+
+    it('inside an open window while another mission runs across its start', () => {
+        expect(timersArmedOver10s({ ...initialState, activeMission: 'morning' }, at(19, 4))).toBe(0);
+    });
+
+    it('outside every window', () => {
+        expect(timersArmedOver10s({ ...initialState }, at(14, 0))).toBe(0);
+    });
+});
+
 // ── 2. Behavior heartbeat must not churn state while idle ─────────────────────
 describe('idle perf — behavior heartbeat is churn-free when idle', () => {
     it('returns the SAME state object at night (outside the active window)', () => {

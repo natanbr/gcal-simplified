@@ -28,6 +28,7 @@ import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
 import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
+import { stampMissionActivity } from './missionActivity';
 import { createDefaultSkillProgress } from '../skills/types';
 import { canSelectReward, rewardCost } from '../rewardCatalogue';
 
@@ -380,9 +381,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             }
 
             // Only one mission at a time — if one is already running, ignore the new trigger
-            if (state.activeMission !== 'none') {
-                return state;
-            }
+            if (state.activeMission !== 'none') return state;
 
             const now = actionInstant(action);
             return {
@@ -545,7 +544,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...(activeIsBeingRescheduled ? { activeMission: 'none' as const } : {}),
                 // Live-update mission startsAt/endsAt from settings so scheduler picks them up.
                 // If the start time changes, clear startedAt, durationMins, and active
-                // so the scheduler can re-trigger at the new time without getting stuck.
+                // so nothing hangs. The scheduler restarts it only at a start this run did not reach (lastActiveAt).
                 missions: state.missions.map(m => {
                     if (m.phase !== 'morning' && m.phase !== 'evening') return m;
                     const isMorning = m.phase === 'morning';
@@ -798,7 +797,8 @@ function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: numb
 
 // Wrapper ensures invariants are always synced after *any* dispatch
 export function mcReducer(state: MCState, action: MCAction): MCState {
-    const nextState = _mcReducer(state, action);
+    // Any start or end stamps lastActiveAt, the scheduler's memory of a run (missionActivity.ts).
+    const nextState = stampMissionActivity(state, _mcReducer(state, action), actionInstant(action));
     
     const shouldSync = 
         action.type === 'SET_SETTINGS' ||
