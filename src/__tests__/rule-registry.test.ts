@@ -135,7 +135,21 @@ const REGISTRY: Rule[] = [
         source: 'CLAUDE.md → Conventions → Token economy',
         status: 'guarded',
         guard: 'src/mission-control/store/mcReducer.token-generation.test.ts',
-        verifiedRedBy: 'drop the nextMoodWind = 0 line in applyBehaviorSync',
+        verifiedRedBy: 'make moveGauge (store/moodGauge.ts) keep state.moodWind on a grant — the mood-reset cases in mcReducer.token-generation.test.ts go red',
+    },
+    {
+        rule: 'moveGauge is the only in-dispatch writer of behaviorProgress, and the game-token cap is checked only through gameTokenRoom (which counts a Quick-Game goal)',
+        source: 'CLAUDE.md → Conventions → Mood gauge writer',
+        status: 'guarded',
+        guard: 'src/__tests__/gauge-writer-boundary.test.ts',
+        verifiedRedBy: "each named by file:line (proven 2026-09-23 in an isolated copy): restore TOGGLE_WHINING's inline `behaviorProgress: Math.max(0, …)` in mcReducer.ts; move that clamp into a helper above _mcReducer; write `return { behaviorProgress }` (shorthand) or a computed key in missionStreak.ts; `nextState.behaviorProgress = 0` in mcReducer.ts; restore `Math.min(5, state.gameTokens + 1)` in REFUND_CASE, swapped, or across lines; a `gameTokens < 5` check.",
+    },
+    {
+        rule: 'The cap decides a gauge grant before the progress is spent: a gauge with no room holds at full',
+        source: 'CLAUDE.md → Conventions → Mood gauge writer',
+        status: 'guarded',
+        guard: 'src/mission-control/store/__tests__/mcReducer.mood-cap.test.ts',
+        verifiedRedBy: 'in moveGauge subtract `earned` instead of `granted` tokens of progress — 9 cases go red, the reported-bug case first (proven 2026-09-23 in an isolated copy).',
     },
     {
         rule: 'Every log entry carries a source; a token movement with no attribution is a bug',
