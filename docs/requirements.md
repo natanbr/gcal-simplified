@@ -123,8 +123,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     - Synchronized with the mobile remote web application (`mc-remote`) in real-time.
   - **Phone Games Privilege**:
     - Adding a new privilege for "Phone Games" (`phone-games` ID, `Smartphone` / `📱` icon).
-    - When suspended, it blocks the selection of the "Game" reward (cost 6 tokens) from the Goal Pedestals list of choices, and disables/locks the "Use!" button on any active completed "Game" goals.
-    - The "Quick Game" (Snake, cost 1 token) goal remains active and unaffected.
+    - When suspended, it blocks the selection of the "Game" reward (default cost 6 tokens) from the Goal Pedestals list of choices, and disables/locks the "Use!" button on any active completed "Game" goals.
+    - The "Quick Game" (Snake, default cost 1 token) goal remains active and unaffected.
   - **Quick Game Reward Option (Snake & Space Rescue)**:
     - **Game Choice Selector**: Clicking the completed "Quick Game" pedestal opens a selector overlay allowing children to choose between playing **Snake** 🐍 or **Space Rescue** 🚀.
     - **Space Rescue Game Rules**:
@@ -166,6 +166,12 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - Games are playable only *between* the day's missions: from the moment the morning mission has concluded (completed **or** failed) until the moment the evening mission starts.
   - The rule is literal — "concluded", not "the morning window has passed". A morning that never ran at all (machine asleep at 06:00, app opened later) keeps games shut for the whole day; otherwise a child could earn the day's games by keeping the app closed through the routine. The escape hatch is human: the parent starts the mission by hand from Settings.
   - Enforced by a pure selector used by the pedestal UI and by **two** reducer guards — `START_GAME` and `CONSUME_CASE`. They must agree: when only `START_GAME` was gated, redeeming a quick-game goal at the evening boundary destroyed the goal (no refund) for a game that was then refused. It fails **closed** on a time it cannot parse or a range it cannot honour (`25:00`). Deliberately separate from `isWakingHour`, which stays the basis of mood-token accrual.
+- **Reward costs and availability (⚙️ → 🎁 Rewards)**:
+  - The parent can change any reward's token cost and switch rewards off. The picker and the goal it creates use the **same** cost: `rewardCost()` in `rewardCatalogue.ts` returns the parent's cost, or the catalogue default when none is set. The picker and the settings editor render with it, and the `SELECT_CASE` reducer case charges with it. The action carries no cost, so no caller can choose one.
+  - A stored cost is sanitized to a whole number from 1 to 100. That is the range the settings input declares, and the editor clamps to it as the parent types. Settings are persisted unvalidated, and a goal draws one slot per token.
+  - A reward the parent switched off cannot be selected, even by a direct dispatch. A quick game cannot be selected without a game token. Both refusals write no log line (`canSelectReward`, shared by the reducer and `activityLog.ts`).
+  - **A goal keeps the cost it was chosen at.** Changing a cost affects goals chosen afterwards. An active goal keeps its stored `targetCount`, including across a restart. The Rewards tab says so: an open goal keeps its cost until it is used or refunded.
+  - Still enforced by the picker only: the suspended `phone-games` privilege hiding "Game", and the quick game's mood and time-window filters. `SELECT_CASE` is not remote-allowed, so the picker is its only dispatcher.
 
 ## UX / UI Enhancements
 
@@ -956,3 +962,29 @@ ever stops forcing a replay, which was proven by mutation to make the older suit
   given a drop, not that the coin is draggable. No E2E covers that today.
 - No shipped behaviour changed. One dead line left: `GoalPedestal`'s `if (!layoutRects) return false`,
   unreachable because the prop is required and `MissionControl` always passes it.
+
+### 2026-09-23 A custom reward cost is the cost charged
+
+- **Bug.** A parent set Game to 2 tokens in ⚙️ → 🎁 Rewards. The picker showed "🎮 Game 2 ⭐",
+  but the goal it created was 0 / 6. The picker read the parent's cost, while
+  `handleSelectReward` dispatched the catalogue cost from `REWARD_MAP`, and the reducer stored
+  whatever cost it was given. Every custom cost was shown and never charged.
+- **Fix.** The reducer now owns the lookup. `SELECT_CASE` no longer carries a `targetCount`: the
+  reducer prices the goal with `rewardCost(settings, reward)`, the same function the picker renders
+  with, so the two cannot drift apart again.
+- **Also refused now.** A reward the parent disabled was only hidden by the picker; a direct
+  dispatch still created it. The reducer refuses it now. A refused selection, including the
+  existing quick-game-without-a-game-token refusal, no longer logs "Goal selected" for a goal that
+  was never set.
+- **Existing goals are not repriced.** A goal keeps the `targetCount` it was chosen at. Before this
+  fix every goal was stored at the catalogue cost, so goals already open when this ships still need
+  the catalogue amount; a goal chosen afterwards gets the parent's cost.
+- **Stored costs are sanitized** to a whole number from 1 to 100, and the settings editor clamps
+  with the same function. The editor also displays through `rewardCost()`, so a cost stored before
+  this fix (say 500) shows as the 100 that is charged, in settings and on the pedestal alike. Before the fix a huge typed cost was shown but never charged; now it would
+  be charged, and the goal would draw that many token slots.
+- Not a trust issue today: `SELECT_CASE` is not in `REMOTE_ALLOWED_ACTIONS`, so the phone never
+  sent a cost.
+
+Tests: `store/__tests__/mcReducer.reward-cost.test.ts` (new), and a UI regression in
+`GoalPedestal.test.tsx` (the picker shows 2 ⭐ and the stored goal is 0 / 2).

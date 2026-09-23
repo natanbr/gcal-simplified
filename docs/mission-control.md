@@ -64,7 +64,9 @@ src/
 #### B. Goal Pedestals (Savings Cases)
 
 - 3 display cases with states: `empty → selecting → active`
-- Reward picker with fixed coin costs (hardcoded, not configurable)
+- Reward picker with per-reward coin costs: catalogue defaults, overridable (and switchable off)
+  in ⚙️ → 🎁 Rewards. The picker and `SELECT_CASE` both price through `rewardCost()` in
+  `rewardCatalogue.ts`; a goal keeps the cost it was chosen at
 - Vacuum button: transfers all bank coins into the case at once
 - Refund (trash lever): returns case coins to bank
 - Tokens can be moved individually between active pedestals via drag-and-drop
@@ -73,15 +75,19 @@ src/
 
 #### Official Reward Catalogue
 
-| Emoji | Reward            | Coins Required |
-| ----- | ----------------- | -------------- |
-| 🍿    | Movie + Popcorn   | 10             |
-| 🎬    | Show              | 10             |
-| 🔥    | Campfire          | 10             |
-| 🎮    | Game              | 6              |
-| 📖    | Extra Story       | 2              |
-| 💻    | Story with Points | 2              |
-| 🕹️    | Quick Game        | 1              |
+Default costs; the source of truth is `REWARDS` in `src/mission-control/rewardCatalogue.ts`.
+
+| Emoji | Reward            | Default coins |
+| ----- | ----------------- | ------------- |
+| 💻    | Story w/ Points   | 3             |
+| 🎮    | Game              | 6             |
+| 🏹    | Bow & Arrow       | 4             |
+| 🎬    | Short Show        | 8             |
+| 🎣    | Fishing           | 10            |
+| 🍿    | Movie + Popcorn   | 12            |
+| 🔥    | Fire              | 14            |
+| ❓    | Mystery Box       | 50            |
+| 🐍    | Quick Game        | 1             |
 
 #### C. Status Brow (Privileges)
 
