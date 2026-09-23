@@ -262,6 +262,7 @@ export type MCAction = (
     | { type: 'VACUUM_TO_CASE'; caseId: number }
     | { type: 'REFUND_CASE'; caseId: number }
     | { type: 'SET_PRIVILEGE_STATUS'; cardId: string; status: PrivilegeStatus; suspendedUntil: string | null }
+    | { type: 'EXPIRE_SUSPENSIONS' }
     | { type: 'COMPLETE_TASK'; missionPhase: MissionPhase; taskId: MissionTaskId }
     | { type: 'LOCK_TASK'; missionPhase: MissionPhase; taskId: MissionTaskId }
     | { type: 'SET_ACTIVE_MISSION'; phase: MissionPhase }

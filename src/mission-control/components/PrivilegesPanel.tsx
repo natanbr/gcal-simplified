@@ -9,12 +9,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState } from '../store/useMCStore.tsx';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
 import { formatSuspendedRemainingTime } from '../utils/timeUtils';
+import { isPrivilegeSuspended } from '../store/privileges';
 
 export function PrivilegesPanel({ interactive = false }: { interactive?: boolean }) {
     const state = useMCState();
     const { privileges } = state;
 
-    const suspendedList = privileges.filter(p => p.status === 'suspended');
+    const suspendedList = privileges.filter(p => isPrivilegeSuspended(p));
     const allActive = suspendedList.length === 0;
 
     // Force periodic re-render to update the countdowns

@@ -84,7 +84,10 @@ export function loadPersistedState(): MCState {
                 const savedR = parsed.responsibilities?.find(r => r.id === defaultR.id);
                 return savedR ? { ...defaultR, ...savedR } : defaultR;
             }),
-            // Merge privileges from defaults so new privileges (e.g. phone-games) always appear
+            // Merge privileges from defaults so new privileges (e.g. phone-games) always appear.
+            // Restored verbatim, even a suspension that ran out while the app was
+            // closed: useSuspensionExpiry lifts it on mount through a logged,
+            // attributed action. Settling it here was a silent state change.
             privileges: initialState.privileges.map(defaultPriv => {
                 const savedPriv = parsed.privileges?.find(p => p.id === defaultPriv.id);
                 return savedPriv ? { ...defaultPriv, ...savedPriv } : defaultPriv;

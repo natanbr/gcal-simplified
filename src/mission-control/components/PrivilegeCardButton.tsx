@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch } from '../store/useMCStore.tsx';
 import type { PrivilegeCard } from '../types';
 import { formatSuspendedRemainingTime } from '../utils/timeUtils';
+import { isPrivilegeSuspended } from '../store/privileges';
 
 // ── Icon map ──────────────────────────────────────────────────────────────────
 const PRIV_ICON: Record<string, string> = {
@@ -41,7 +42,7 @@ export function PrivilegeCardButton({ p, interactive = false }: PrivCardProps) {
     const [popupPos, setPopupPos]   = useState({ top: 80, left: 0 });
     const cardRef = useRef<HTMLButtonElement>(null);
 
-    const isSuspended = p.status === 'suspended';
+    const isSuspended = isPrivilegeSuspended(p);
     const countdown   = formatSuspendedRemainingTime(p.suspendedUntil);
 
     const handleClick = () => {

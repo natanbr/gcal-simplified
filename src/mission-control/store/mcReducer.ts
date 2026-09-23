@@ -27,6 +27,7 @@ import {
 import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
 import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
+import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { createDefaultSkillProgress } from '../skills/types';
 
 // The behavior/token-economy engine lives in behaviorSync.ts; re-export its
@@ -306,14 +307,12 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'SET_PRIVILEGE_STATUS':
-            return {
-                ...state,
-                privileges: state.privileges.map(p =>
-                    p.id === action.cardId
-                        ? { ...p, status: action.status, suspendedUntil: action.suspendedUntil }
-                        : p,
-                ),
-            };
+            return { ...state, privileges: setPrivilegeStatus(state.privileges, action) };
+
+        case 'EXPIRE_SUSPENSIONS': {
+            const privileges = expireLapsedSuspensions(state.privileges, Date.parse(action.timestamp ?? ''));
+            return privileges === state.privileges ? state : { ...state, privileges };
+        }
 
         case 'COMPLETE_TASK': {
             const nextState = { ...state };
