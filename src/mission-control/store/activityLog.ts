@@ -12,6 +12,7 @@ import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
+import { gameTokenRoom } from './moodGauge';
 import { REWARD_MAP, canSelectReward } from '../rewardCatalogue';
 
 export type LogSource = NonNullable<ActivityLogEntry['source']>;
@@ -158,6 +159,10 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         case 'REFUND_CASE': {
             const target = state.cases.find(c => c.id === action.caseId);
             if (!target) return null;
+            // A Quick-Game goal holds a game token, never bank tokens.
+            if (target.reward === 'quick-game') {
+                return { id, timestamp: now, icon: '↩️', message: `Game token returned from ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snap() };
+            }
             const tkn = target.tokenCount === 1 ? 'token' : 'tokens';
             return { id, timestamp: now, icon: '↩️', message: `${target.tokenCount} ${tkn} refunded from ${goalLabel(action.caseId)}`, type: 'system', colorKey: 'system', ...snap() };
         }
@@ -234,11 +239,11 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: '🔒', message: `Task locked: ${t.label}`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         }
         case 'GRANT_GAME_TOKEN':
-            if (state.gameTokens >= 5) return null; // capped — nothing happened
+            if (gameTokenRoom(state) <= 0) return null; // capped (a goal's token counts) — nothing happened
             return { id, timestamp: now, icon: '🎁', message: 'Mood token granted manually', type: 'reward', colorKey: 'system', ...snap() };
         case 'CONSUME_GAME_TOKEN':
             if (state.gameTokens <= 0) return null;
-            return { id, timestamp: now, icon: '🎮', message: 'Mood token spent on a game', type: 'reward', colorKey: 'system', ...snap() };
+            return { id, timestamp: now, icon: '🎮', message: 'Mood token removed', type: 'reward', colorKey: 'system', ...snap() };
         case 'RESET_GAME_TOKENS':
             return { id, timestamp: now, icon: '🧹', message: 'Mood tokens reset to zero', type: 'system', colorKey: 'system', ...snap() };
         case 'SET_MOOD_WIND': {
@@ -248,6 +253,7 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: '🌬️', message: `Mood set to ${names[clamped] ?? clamped}`, type: 'system', colorKey: 'system', ...snap() };
         }
         case 'ADJUST_BEHAVIOR_PROGRESS':
+            if (!Number.isFinite(action.amount)) return null; // refused by the reducer
             return { id, timestamp: now, icon: '📈', message: `Mood gauge adjusted (${action.amount > 0 ? '+' : ''}${action.amount}) — ${action.reason}`, type: 'system', colorKey: 'system', ...snap() };
         case 'SET_PRIVILEGE_STATUS': {
             // "In force" is judged by the shared predicate at the action's own

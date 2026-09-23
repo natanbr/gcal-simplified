@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import React from 'react';
-import { mcReducer, initialState } from '../store/mcReducer';
+import { mcReducer, initialState, MAX_GAME_TOKENS, PROGRESS_PER_TOKEN } from '../store/mcReducer';
 import { useMissionScheduler } from '../hooks/useMissionScheduler';
 import { MCContext } from '../store/useMCStore';
 import type { MCState } from '../types';
@@ -146,5 +146,35 @@ describe('idle perf — behavior heartbeat is churn-free when idle', () => {
         const next = mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAt(12, 0, 30) });
         expect(next).not.toBe(state);
         expect(next.behaviorProgress).toBeGreaterThan(50);
+    });
+
+    it('returns the SAME state object while the gauge is held full at the token cap, during active hours', () => {
+        // Held full = nothing can change until a token is spent, so every tick,
+        // including the ones past the 3-minute gap that would re-anchor, must be
+        // a no-op. This is an all-day state for a child who stops spending.
+        const state: MCState = {
+            ...initialState,
+            moodWind: 2,
+            gameTokens: MAX_GAME_TOKENS,
+            behaviorProgress: PROGRESS_PER_TOKEN,
+            moodLastResetDate: localDateString(),
+            behaviorLastUpdated: todayAt(12, 0),
+        };
+        for (let m = 1; m <= 10; m++) {
+            expect(mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAt(12, m) })).toBe(state);
+        }
+    });
+    it('returns the SAME state object while an empty gauge drains under a negative mood, during active hours', () => {
+        // The mirror of the held-full case: empty and draining cannot move.
+        const state: MCState = {
+            ...initialState,
+            moodWind: -2,
+            behaviorProgress: 0,
+            moodLastResetDate: localDateString(),
+            behaviorLastUpdated: todayAt(12, 0),
+        };
+        for (let m = 1; m <= 10; m++) {
+            expect(mcReducer(state, { type: 'SYNC_BEHAVIOR', timestamp: todayAt(12, m) })).toBe(state);
+        }
     });
 });

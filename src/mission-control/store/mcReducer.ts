@@ -21,9 +21,8 @@ import {
     applyBehaviorSync,
     getLocalDateString,
     MAX_ACTIVITY_LOGS,
-    MAX_GAME_TOKENS,
-    PROGRESS_PER_TOKEN,
 } from './behaviorSync';
+import { gameTokenRoom, moveGauge } from './moodGauge';
 import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
 import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
@@ -38,12 +37,11 @@ export {
     applyBehaviorSync,
     isWakingHour,
     MAX_ACTIVITY_LOGS,
-    MAX_GAME_TOKENS,
     MOOD_TOKENS_PER_DAY,
     moodHourlyRate,
-    PROGRESS_PER_TOKEN,
     selectTotalWealth,
 } from './behaviorSync';
+export { MAX_GAME_TOKENS, PROGRESS_PER_TOKEN } from './moodGauge';
 
 /**
  * The wall-clock instant an action happened.
@@ -298,7 +296,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             return {
                 ...state,
                 bankCount: state.bankCount + targetCase.tokenCount,
-                gameTokens: isQuickGame ? Math.min(5, state.gameTokens + 1) : state.gameTokens,
+                // Always fits: gameTokenRoom counted the goal's token all along.
+                gameTokens: isQuickGame ? state.gameTokens + 1 : state.gameTokens,
                 cases: state.cases.map(c =>
                     c.id === action.caseId
                         ? { ...c, status: 'empty', reward: null, tokenCount: 0 }
@@ -495,11 +494,13 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             const mission = !isGlobal ? state.missions.find(m => m.phase === action.missionPhase) : null;
             const nowDetected = isGlobal ? !state.whiningActive : (mission ? !mission.whiningDetected : false);
             
-            const behaviorDelta = nowDetected ? -10 : 2; 
-            
+            const behaviorDelta = nowDetected ? -10 : 2;
+
             return {
                 ...state,
-                behaviorProgress: Math.max(0, Math.min(100, state.behaviorProgress + behaviorDelta)),
+                // Pays no token itself: a gauge this fills is paid, logged, by the
+                // heartbeat, unless a negative mood drains it first.
+                ...moveGauge(state, behaviorDelta, 0).patch,
                 whiningActive: isGlobal ? nowDetected : state.whiningActive,
                 missions: state.missions.map(m => {
                     if (m.phase !== action.missionPhase) return m;
@@ -632,11 +633,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         // from. Automatic generation now comes only from the mood gauge
         // (applyBehaviorSync / MOOD_TOKENS_PER_DAY).
         case 'GRANT_GAME_TOKEN': {
-            if (state.gameTokens >= MAX_GAME_TOKENS) return state;
-            return {
-                ...state,
-                gameTokens: Math.min(MAX_GAME_TOKENS, state.gameTokens + 1),
-            };
+            // Counts a Quick-Game goal's token, or a later trash loses the coin.
+            if (gameTokenRoom(state) <= 0) return state;
+            return { ...state, gameTokens: state.gameTokens + 1 };
         }
 
         case 'CONSUME_GAME_TOKEN':
@@ -696,19 +695,12 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'ADJUST_BEHAVIOR_PROGRESS': {
-            let nextProgress = state.behaviorProgress + action.amount;
-            let nextGameTokens = state.gameTokens;
-            let nextMoodWind = state.moodWind;
-            if (nextProgress >= PROGRESS_PER_TOKEN) {
-                nextProgress -= PROGRESS_PER_TOKEN;
-                nextGameTokens = Math.min(MAX_GAME_TOKENS, nextGameTokens + 1);
-                nextMoodWind = 0; // same rule as the heartbeat grant
-            }
+            if (!Number.isFinite(action.amount)) return state; // activityLog.ts mirrors this
             return {
                 ...state,
-                behaviorProgress: Math.max(0, Math.min(PROGRESS_PER_TOKEN, nextProgress)),
-                gameTokens: nextGameTokens,
-                moodWind: nextMoodWind,
+                // At most one token per adjustment, as before the gauge could hold
+                // at full (the rest stays full; the heartbeat pays the next one).
+                ...moveGauge(state, action.amount, 1).patch,
                 behaviorDelta: action.amount,
             };
         }

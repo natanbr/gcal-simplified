@@ -9,8 +9,7 @@
 import { motion } from 'framer-motion';
 import { useMCState } from '../store/useMCStore.tsx';
 import { MOOD_TOKEN } from '../moodTokenConfig';
-
-const MAX_MOOD_TOKENS = 5;
+import { MAX_GAME_TOKENS } from '../store/moodGauge';
 
 const MOOD_LEVELS = [
     { level: -2, emoji: '😡', label: 'Angry', color: '#DC2626' },
@@ -192,7 +191,7 @@ function MoodTokenBank({ count }: { count: number }) {
             paddingTop: 8,
             borderTop: '1px solid rgba(167,139,250,0.1)',
         }}>
-            {Array.from({ length: MAX_MOOD_TOKENS }).map((_, i) => (
+            {Array.from({ length: MAX_GAME_TOKENS }).map((_, i) => (
                 <motion.div
                     key={i}
                     initial={false}
