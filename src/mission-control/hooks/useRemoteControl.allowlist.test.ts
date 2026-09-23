@@ -102,6 +102,29 @@ describe('remote action allowlist', () => {
             listener({ type: 'SET_MOOD_WIND' });
             expect(mockDispatch).not.toHaveBeenCalled();
         });
+
+        it('rejects a privilege change the reducer would store as garbage', () => {
+            // The reducer stores status and suspendedUntil as they arrive. A number
+            // end time is a year to one parser and a 1970 timestamp to another; an
+            // unknown status was logged as "locked".
+            const listener = mountAndGetListener();
+            const ok = { type: 'SET_PRIVILEGE_STATUS', cardId: 'phone-games', status: 'suspended', suspendedUntil: '2030-01-01T00:00:00.000Z' };
+            listener({ ...ok, suspendedUntil: 2030 });
+            listener({ ...ok, suspendedUntil: 'next tuesday' });
+            listener({ ...ok, suspendedUntil: null });
+            listener({ ...ok, status: 'bogus' });
+            listener({ ...ok, cardId: 7 });
+            listener({ ...ok, status: 'active', suspendedUntil: '2030-01-01T00:00:00.000Z' });
+            // Already over on this clock: stored, it would be lifted at once and
+            // log "suspension ended" with no "suspended" line before it.
+            listener({ ...ok, suspendedUntil: new Date(Date.now() - 60_000).toISOString() });
+            expect(mockDispatch).not.toHaveBeenCalled();
+            listener(ok);
+            listener({ ...ok, status: 'active', suspendedUntil: null });
+            // A build that leaves the field out must still be able to reinstate.
+            listener({ type: 'SET_PRIVILEGE_STATUS', cardId: 'phone-games', status: 'active' });
+            expect(mockDispatch).toHaveBeenCalledTimes(3);
+        });
     });
 
     describe('still accepts the legitimate remote surface', () => {
@@ -126,6 +149,7 @@ describe('remote action allowlist', () => {
                 ADJUST_BEHAVIOR_PROGRESS: { amount: 1, reason: 'test' },
                 ADJUST_MISSION_END: { missionPhase: 'morning', deltaMinutes: 5 },
                 SET_MOOD_WIND: { level: 1 },
+                SET_PRIVILEGE_STATUS: { cardId: 'phone-games', status: 'active', suspendedUntil: null },
             };
             for (const type of REMOTE_ALLOWED_ACTIONS) {
                 mockDispatch.mockClear();
