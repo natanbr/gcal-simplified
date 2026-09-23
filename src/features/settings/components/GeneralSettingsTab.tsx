@@ -35,7 +35,7 @@ export const GeneralSettingsTab: React.FC<GeneralSettingsTabProps> = ({ config, 
                                         <p className="text-xs text-zinc-500">
                                             {config.weekStartDay === 'sunday' ? "Calendar will start from Sunday of the current week." :
                                              config.weekStartDay === 'monday' ? "Calendar will start from Monday of the current week." :
-                                             "Calendar will start from today and show the next 7 days."}
+                                             "Calendar shows today and the next 6 days. Other weeks start on Monday."}
                                         </p>
                                     </div>
                                 </div>

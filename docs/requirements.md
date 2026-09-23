@@ -10,14 +10,16 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 - **7-Day View**: The calendar displays 7 days in a week view.
   - **Data Fetching and Caching**: Events are always fetched and loaded a full month at a time and cached locally. Navigating between weeks within a cached month is instantaneous, while a background process verifies the data is up-to-date.
-  - **Default View**: Shows the current week (7 days starting from today).
+  - **Default View**: Shows the current week. Its first day depends on Settings > General > Week Starts On: today (the default: today and the next 6 days), Monday or Sunday of the current week.
   - **Week Navigation**:
-    - **Next Week Button**: Navigates forward to the next week, always starting from Monday.
-    - **Previous Week Button**: Navigates backward to the previous week, always starting from Monday.
+    - **Next Week Button**: Navigates forward to the next week.
+    - **Previous Week Button**: Navigates backward to the previous week.
     - **Navigation Limit**: Cannot navigate to weeks before the current week (today).
-    - **"Today" Button**: Quick navigation to return to the current week view.
-  - **Week Start**: When navigating, weeks always start from Monday regardless of the current day.
-    - Example: If today is Wednesday and user clicks "Next Week", the view shows Monday-Sunday of the following week.
+    - **"Current Week" / "Back To Today" Button**: Reads "Current Week" while the current week is shown; elsewhere it reads "Back To Today" and returns to the current week view.
+  - **Week Start**: Weeks start on Monday for the `today` and `monday` settings and on Sunday for the `sunday` setting. With `today`, the current week is the one exception: it starts on today.
+    - Example (`today` and `monday` settings): If today is Wednesday and user clicks "Next Week", the view shows Monday-Sunday of the following week.
+    - **This includes the `today` setting.** `Week Starts On = today` anchors the *current* week only (returning to it lands on today again); every other week starts on Monday. Consequence: from a Thursday, "Next Week" re-shows the Mon-Wed already visible in the current view. Intended — a rolling window has no stable weekday anchor once you leave the current week.
+    - Guarded by `src/utils/__tests__/weekNavigation.test.ts` ("today mode anchors navigation to Monday from every weekday"), which exercises all seven weekdays so the rule cannot be verified only on the day the author happened to run it.
 - **Monthly View**: The calendar also supports a full month view.
   - **Grid Layout**: Displays a standard 6-week grid, typically 42 days, starting from the week that contains the 1st of the month.
   - **View Toggle**: Users can switch between "Weekly" and "Monthly" views using a toggle in the header.
@@ -583,6 +585,34 @@ Behavior changes shipped by the review's fix pass:
 - **E2E/dev tooling.** `test:headed`/`test:debug`/`test:ui` show the app window again; the shared MC
   fixture waits for real readiness signals (`.mc-root` + the persisted blob) instead of fixed
   sleeps, and closes the Electron process if a launch fails halfway.
+
+### 2026-08-28 Week navigation: the Monday anchor confirmed, three stale specs rewritten
+
+- **No behaviour change.** `getWeekStartDate` is untouched. This entry records a product decision that
+  had only ever been made implicitly, and rewrites the tests that contradicted it to assert the rule.
+- **The decision.** With `Week Starts On = today`, only the current week starts on today (returning to
+  it lands on today again). Any other week starts on Monday, as this document has said since the
+  initial release. The
+  owner reviewed the alternative (a rolling today+7 window) and confirmed the Monday anchor, accepting
+  that the first "next week" click re-shows the tail of the current view.
+- **Why it needed confirming.** The code originally implemented the rolling window;
+  `1f3c771` changed it to the Monday anchor and updated the unit test, but the commit message said only
+  "fix: calendar start day navigation" and no requirement was written. The intent was recoverable only
+  from a diff.
+- **The bug this closes.** Three specs in `e2e/week-navigation.spec.ts` still asserted the pre-`1f3c771`
+  rolling window. They shipped red in 0.0.41 and again in 0.0.42. Because the two behaviours coincide on
+  Mondays, the suite looked green to anyone who ran it on a Monday — the failure was a property of the
+  calendar, not of the code. On Tuesday 2026-09-22 the spec failed a full run with `Expected: '29',
+  Received: '28'`: today + 7 against the Monday the app actually shows.
+- **The guard.** `weekNavigation.test.ts` now pins offsets 0/1/2 from all seven weekdays, so the rule
+  can no longer be confirmed by an accident of the run date. Proven to fail: reverting
+  `getWeekStartDate` to `addWeeks(referenceDate, weekOffset)` fails 15 of its cases — and passes the
+  Monday ones, reproducing the original blind spot exactly.
+- **Docs/UI.** The `today` option in Settings > General now reads "Calendar shows today and the next 6
+  days. Other weeks start on Monday." instead of describing the first view only (the old "today and
+  the next 7 days" also read as eight days).
+- **Landed late.** Written and decided on 2026-08-28, then parked on a branch; rebased onto main on
+  2026-09-23. It is filed under the decision date.
 
 ### 2026-09-02 Mission Streak Shield — bank/goals lockout + the quick-game window
 
