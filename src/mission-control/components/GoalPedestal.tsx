@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch, useMCState } from '../store/useMCStore';
 import { isEconomyLocked } from '../store/missionStreak';
 import { isQuickGameWindowOpen } from '../store/gameWindow';
+import { isPhoneGamesSuspended } from '../store/privileges';
 import { Button3D } from './Button3D';
 import { MOOD_TOKEN } from '../moodTokenConfig';
 import { Token } from './Token';
@@ -413,12 +414,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-              {REWARDS.filter(r => {
-                  const phoneGamesPriv = state.privileges.find(p => p.id === 'phone-games');
-                  const isBlocked = phoneGamesPriv ? phoneGamesPriv.status === 'suspended' : false;
-                  if (r.id === 'game' && isBlocked) return false;
-                  return true;
-                }).map(r => {
+              {REWARDS.filter(r => !(r.id === 'game' && isPhoneGamesSuspended(state.privileges))).map(r => {
                 const config = state.settings.rewardConfigs?.[r.id];
                 const isEnabled = config ? config.enabled : true;
                 if (!isEnabled) return null;
@@ -562,8 +558,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
               ) : isComplete ? (
                 // Regular reward complete: Use! + Refund
                 (() => {
-                  const phoneGamesPriv = state.privileges.find(p => p.id === 'phone-games');
-                  const isPhoneGamesBlocked = phoneGamesPriv ? phoneGamesPriv.status === 'suspended' : false;
+                  const isPhoneGamesBlocked = isPhoneGamesSuspended(state.privileges);
                   // Everything the shield freezes must LOOK frozen: a refused action
                   // writes no log line, so a live-looking button that does nothing
                   // leaves the child and the parent with no trace.

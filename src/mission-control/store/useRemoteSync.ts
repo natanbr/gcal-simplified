@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { sanitizeMissedStreak } from './missionStreak';
+import { effectivePrivilege } from './privileges';
 import type { MCState } from '../types';
 
 /**
@@ -75,13 +76,18 @@ export function useRemoteSync(state: MCState) {
                 pointsRequired: r.pointsRequired,
                 completedAt: r.completedAt
             })),
-            privileges: stateRef.current.privileges.map(p => ({
-                id: p.id,
-                label: p.label,
-                icon: p.icon,
-                status: p.status,
-                suspendedUntil: p.suspendedUntil
-            }))
+            // What is in force now, not the stored flag: a lapsed suspension would
+            // otherwise reach the phone as still running (QA 2026-09-22).
+            privileges: stateRef.current.privileges.map(stored => {
+                const p = effectivePrivilege(stored);
+                return {
+                    id: p.id,
+                    label: p.label,
+                    icon: p.icon,
+                    status: p.status,
+                    suspendedUntil: p.suspendedUntil
+                };
+            })
         };
 
         if (window.ipcRenderer) {

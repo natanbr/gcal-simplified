@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mcReducer, initialState, MAX_GAME_TOKENS } from './mcReducer';
 import { MISSED_LOCK_THRESHOLD, isEconomyLocked } from './missionStreak';
 import { loadPersistedState, STORAGE_KEY } from './useMCStore';
+import { isPhoneGamesSuspended } from './privileges';
 import type { MCState, ActivityLogEntry } from '../types';
 
 /** Writes state the way MCStoreProvider's persist effect does, then reloads it. */
@@ -275,5 +276,54 @@ describe('the mission-streak counter is sanitized on load', () => {
         const afterDeposit = mcReducer(locked, { type: 'DEPOSIT_TO_CASE', caseId: 0, amount: 1, timestamp: new Date().toISOString() });
         expect(afterDeposit.bankCount).toBe(5);
         expect(afterDeposit.cases[0].tokenCount).toBe(0);
+    });
+});
+
+// ============================================================
+// Privilege suspensions across a restart. An expired suspension used to be
+// restored as `status: 'suspended'` and trusted, so a 1-day suspension became
+// indefinite (QA 2026-09-22). The loader now restores it verbatim and it is NOT
+// in force for any reader; the expiry timer then lifts it on mount through a
+// logged action (useSuspensionExpiry.test.tsx). The loader itself writes
+// nothing: a silent rewrite here was an unattributed state change.
+// ============================================================
+
+describe('privilege suspensions across a restart', () => {
+    const HOUR = 60 * 60 * 1000;
+    const withPhoneGames = (status: 'active' | 'suspended', suspendedUntil: string | null): MCState => ({
+        ...initialState,
+        privileges: initialState.privileges.map(p =>
+            p.id === 'phone-games' ? { ...p, status, suspendedUntil } : p,
+        ),
+    });
+    const phoneGames = (s: MCState) => s.privileges.find(p => p.id === 'phone-games')!;
+
+    beforeEach(() => {
+        localStorage.removeItem(STORAGE_KEY);
+    });
+
+    it('is not in force when the suspension ran out while the app was closed', () => {
+        const reloaded = restart(withPhoneGames('suspended', new Date(Date.now() - HOUR).toISOString()));
+        expect(isPhoneGamesSuspended(reloaded.privileges)).toBe(false);
+    });
+
+    it('stays not in force over repeated relaunches (the QA repro survived three)', () => {
+        let state = withPhoneGames('suspended', new Date(Date.now() - HOUR).toISOString());
+        for (let i = 0; i < 3; i++) state = restart(state);
+        expect(isPhoneGamesSuspended(state.privileges)).toBe(false);
+    });
+
+    it('the loader writes no log line and changes nothing by itself', () => {
+        const until = new Date(Date.now() - HOUR).toISOString();
+        const reloaded = restart({ ...withPhoneGames('suspended', until), activityLogs: [] });
+        expect(reloaded.activityLogs).toEqual([]);
+        expect(phoneGames(reloaded)).toMatchObject({ status: 'suspended', suspendedUntil: until });
+    });
+
+    it('keeps a running suspension exactly as it was, and in force (negative)', () => {
+        const until = new Date(Date.now() + HOUR).toISOString();
+        const reloaded = restart(withPhoneGames('suspended', until));
+        expect(phoneGames(reloaded)).toMatchObject({ status: 'suspended', suspendedUntil: until });
+        expect(isPhoneGamesSuspended(reloaded.privileges)).toBe(true);
     });
 });

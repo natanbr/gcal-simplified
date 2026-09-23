@@ -10,6 +10,8 @@ import type { MCState, MCAction, ActivityLogEntry } from '../types';
 import { mcReducer, selectTotalWealth } from './mcReducer';
 import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
+import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
+import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export type LogSource = NonNullable<ActivityLogEntry['source']>;
@@ -244,6 +246,36 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         }
         case 'ADJUST_BEHAVIOR_PROGRESS':
             return { id, timestamp: now, icon: '📈', message: `Mood gauge adjusted (${action.amount > 0 ? '+' : ''}${action.amount}) — ${action.reason}`, type: 'system', colorKey: 'system', ...snap() };
+        case 'SET_PRIVILEGE_STATUS': {
+            // "In force" is judged by the shared predicate at the action's own
+            // instant, so a no-op (reinstating a lapsed suspension, suspending
+            // into the past, re-sending the same one) writes no line.
+            const card = state.privileges.find(p => p.id === action.cardId);
+            if (!card) return null;
+            const nowMs = Date.parse(now);
+            const name = `**${card.label}**`;
+            if (action.status === 'suspended') {
+                const endMs = parseSuspensionEnd(action.suspendedUntil);
+                if (endMs === null || endMs <= nowMs) return null;
+                if (isPrivilegeSuspended(card, nowMs) && card.suspendedUntil === action.suspendedUntil) return null;
+                return { id, timestamp: now, icon: '🚫', message: `${name} suspended ${formatSuspensionLength(endMs, nowMs)}`, type: 'system', colorKey: 'system', ...snap() };
+            }
+            if (action.status === 'active') {
+                if (!isPrivilegeSuspended(card, nowMs) && card.status !== 'locked') return null;
+                return { id, timestamp: now, icon: '✅', message: `${name} reinstated`, type: 'system', colorKey: 'system', ...snap() };
+            }
+            if (action.status !== 'locked' || card.status === 'locked') return null;
+            return { id, timestamp: now, icon: '🔒', message: `${name} locked`, type: 'system', colorKey: 'system', ...snap() };
+        }
+        case 'EXPIRE_SUSPENSIONS': {
+            // Names the end time, not only "now": a suspension that ran out while
+            // the app was closed is lifted, and logged, at the next launch.
+            const nowMs = Date.parse(now);
+            const ended = state.privileges.filter(p => effectivePrivilege(p, nowMs) !== p);
+            if (!Number.isFinite(nowMs) || ended.length === 0) return null;
+            const names = ended.map(p => `**${p.label}** suspension ended (${formatLogStamp(parseSuspensionEnd(p.suspendedUntil) ?? nowMs)})`);
+            return { id, timestamp: now, icon: '✅', message: names.join(', '), type: 'system', colorKey: 'system', ...snap() };
+        }
         case 'CLEAR_LOGS': {
             // The interceptor dispatches ADD_LOG *after* the reducer wipes the
             // ring, so this entry survives the clear it records — and from the

@@ -4,6 +4,13 @@ import { MCContext, loadPersistedState, STORAGE_KEY } from './useMCStore';
 import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
 import { useRemoteSync } from './useRemoteSync';
 import { useAuditTrail } from './useAuditTrail';
+import { useSuspensionExpiry } from './useSuspensionExpiry';
+
+/** Inside the provider: it dispatches through the logging interceptor. */
+function SuspensionExpiry(): null {
+    useSuspensionExpiry();
+    return null;
+}
 
 export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
     const [state, dispatch] = useReducer(mcReducer, undefined, loadPersistedState);
@@ -55,6 +62,7 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
 
     return (
         <MCContext.Provider value={contextValue}>
+            <SuspensionExpiry />
             {children}
         </MCContext.Provider>
     );

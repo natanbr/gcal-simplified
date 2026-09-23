@@ -67,6 +67,7 @@ const LOGGABLE_ACTIONS: MCAction[] = [
     { type: 'RESET_GAME_TOKENS' },
     { type: 'SET_MOOD_WIND', level: 2 },
     { type: 'ADJUST_BEHAVIOR_PROGRESS', amount: 10, reason: 'good listening' },
+    { type: 'SET_PRIVILEGE_STATUS', cardId: 'phone-games', status: 'suspended', suspendedUntil: '2026-08-20T12:00:00.000Z' },
     { type: 'END_GAME' },
 ];
 

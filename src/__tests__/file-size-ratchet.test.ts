@@ -49,7 +49,8 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // then 804 → 828 the same day for the RECORD_QUIZ_ANSWER case (reading
     // practice). Net −205 vs. the pre-split file; the case itself delegates to
     // store/skillProgress.ts and is mostly the in-reducer level-change log.
-    'src/mission-control/store/mcReducer.ts': 827,
+    // 827 → 826 on 2026-09-23 (the privilege cases delegate to store/privileges.ts).
+    'src/mission-control/store/mcReducer.ts': 826,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
@@ -62,7 +63,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // over a stale state; and gating the OTHER three spend controls — the regular
     // Use button, the vacuum, and the reward picker — which were dispatching
     // actions the reducer silently refused while still looking enabled).
-    'src/mission-control/components/GoalPedestal.tsx': 649,
+    // 649 → 644 on 2026-09-22 (the two inline Phone Games checks became one
+    // call to isPhoneGamesSuspended in store/privileges.ts).
+    'src/mission-control/components/GoalPedestal.tsx': 644,
     'src/components/Dashboard.tsx': 504,
     'src/mission-control/components/MissionOverlay.tsx': 493,
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
