@@ -64,8 +64,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // Use button, the vacuum, and the reward picker — which were dispatching
     // actions the reducer silently refused while still looking enabled).
     // 649 → 644 on 2026-09-22 (the two inline Phone Games checks became one
-    // call to isPhoneGamesSuspended in store/privileges.ts).
-    'src/mission-control/components/GoalPedestal.tsx': 644,
+    // call to isPhoneGamesSuspended in store/privileges.ts),
+    // 644 → 643 on 2026-09-23 (dead `if (!layoutRects)` guard dropped from the
+    // drop callback — the prop is required and MissionControl always passes it).
+    'src/mission-control/components/GoalPedestal.tsx': 643,
     'src/components/Dashboard.tsx': 504,
     'src/mission-control/components/MissionOverlay.tsx': 493,
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
