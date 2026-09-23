@@ -150,8 +150,11 @@ function seedInPage({ key, kind }: { key: string; kind: FailingState }): void {
         state['lastCompletedOrFailedMorningDate'] = null;
         state['lastCompletedOrFailedEveningDate'] = null;
         state['settings'] = { ...(state['settings'] as object), eveningStartsAt: startsAt, eveningDurationMins: minutes };
+        // lastActiveAt too: inside a real window the first document already
+        // started (and stamped) the evening mission, in this same minute, and
+        // the scheduler never starts an occurrence that has run since.
         state['missions'] = missions.map(m => m['phase'] === 'evening'
-            ? { ...m, startsAt, endsAt, active: false, startedAt: undefined, durationMins: undefined }
+            ? { ...m, startsAt, endsAt, active: false, startedAt: undefined, durationMins: undefined, lastActiveAt: undefined }
             : { ...m, active: false });
     }
     localStorage.setItem(key, JSON.stringify(state));
@@ -182,6 +185,9 @@ export function forgetMissionStartedSince(slice: MissionSlice, launchedAt: numbe
             const stopped: Record<string, unknown> = { ...m, active: false };
             delete stopped['startedAt'];
             delete stopped['durationMins'];
+            // The launch's start stamped it. Put back, the dev app's scheduler
+            // would treat that window as already run and never start it.
+            delete stopped['lastActiveAt'];
             return stopped;
         }),
     };
