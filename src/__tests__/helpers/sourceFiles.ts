@@ -3,7 +3,7 @@
 // Not a test file — vitest only collects *.test.*
 // ============================================================
 
-import { readdirSync, readFileSync, type Dirent } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, type Dirent } from 'node:fs';
 import { join, relative, sep, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,24 +14,37 @@ const IGNORED_DIRS = new Set([
     'test-results', 'playwright-report', 'coverage', '.claude',
 ]);
 
+/**
+ * Whether a directory entry names something that can actually be opened. A link
+ * pointing nowhere names nothing, and listing one costs whichever guard reads the
+ * path: with a dangling src/stale-probe.ts planted, file-size-ratchet,
+ * end-game-dispatcher and test-kit-boundary throw ENOENT out of readSource, and
+ * typescript-strict-config reports the path as a source the app config dropped
+ * (all four proven 2026-09-23). Both source walks share this predicate.
+ */
+export function entryResolves(dirent: Dirent, absolutePath: string): boolean {
+    return !dirent.isSymbolicLink() || existsSync(absolutePath);
+}
+
 /** Repo-relative path with POSIX separators, so baselines are stable across platforms. */
 export function toRepoPath(absolute: string): string {
     return relative(repoRoot, absolute).split(sep).join('/');
 }
 
 /**
- * Every production TypeScript source file under the given repo-relative roots.
- * Excludes tests, type declarations, and build output.
+ * Every production TypeScript source file under the given absolute directories.
+ * Excludes tests, type declarations, and build output. Absolute so that the walk
+ * itself can be tested against a temporary tree, rather than by planting a probe
+ * file inside the repo while other suites are walking it.
  */
-export function productionSources(roots: string[] = ['src', 'electron']): string[] {
+export function productionSourcesIn(directories: string[]): string[] {
     const out: string[] = [];
 
     function walk(dir: string): void {
         let entries: Dirent[];
         try {
-            // withFileTypes reports a link as a link, so a dangling one costs no
-            // statSync (an ENOENT here fails four guards for the wrong reason) and
-            // a linked directory is never descended into, so a junction cannot loop.
+            // withFileTypes reports a link as a link, so a linked directory is never
+            // descended into and a junction cannot loop.
             entries = readdirSync(dir, { withFileTypes: true });
         } catch {
             return; // directory may not exist
@@ -46,15 +59,24 @@ export function productionSources(roots: string[] = ['src', 'electron']): string
             } else if (
                 /\.tsx?$/.test(entry) &&
                 !/\.test\.tsx?$/.test(entry) &&
-                !entry.endsWith('.d.ts')
+                !entry.endsWith('.d.ts') &&
+                entryResolves(dirent, full)
             ) {
                 out.push(full);
             }
         }
     }
 
-    for (const root of roots) walk(join(repoRoot, root));
+    for (const directory of directories) walk(directory);
     return out.sort();
+}
+
+/**
+ * Every production TypeScript source file under the given repo-relative roots.
+ * Excludes tests, type declarations, and build output.
+ */
+export function productionSources(roots: string[] = ['src', 'electron']): string[] {
+    return productionSourcesIn(roots.map(root => join(repoRoot, root)));
 }
 
 export function readSource(absolutePath: string): string {
