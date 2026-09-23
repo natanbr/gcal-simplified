@@ -1,11 +1,30 @@
 import { expect, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { format } from 'date-fns';
+import { addWeeks, format, startOfWeek } from 'date-fns';
 import { launchApp, test } from './helpers/launchApp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * The date the grid's first column shows at a given week offset.
+ *
+ * Mirrors docs/requirements.md, "Week Start": `weekStartDay: 'today'` anchors the
+ * initial view on today, and every navigated week starts on Monday. Built from
+ * date-fns primitives rather than by importing `getWeekStartDate`, deliberately — a
+ * test that asks the code under test to compute its own expectation agrees with that
+ * code no matter what it does.
+ *
+ * Weekday-independent by construction. The expectations this replaced were
+ * `today + 7 * offset`, which matches the real behaviour only when the suite runs on a
+ * Monday, so these specs were red on six days out of seven from 1f3c771 onwards.
+ */
+const expectedWeekStart = (today: Date, weekOffset: number): Date =>
+    weekOffset === 0 ? today : addWeeks(startOfWeek(today, { weekStartsOn: 1 }), weekOffset);
+
+const expectedFirstDayNumber = (today: Date, weekOffset: number): string =>
+    format(expectedWeekStart(today, weekOffset), 'd');
 
 test.describe('Week Navigation', () => {
     let electronApp: ElectronApplication;
@@ -40,6 +59,20 @@ test.describe('Week Navigation', () => {
 
         // Wait for the calendar to load
         await window.waitForSelector('[data-testid="calendar-grid"]', { timeout: 30000 });
+
+        // This spec launches against the developer's real userData directory (it is on
+        // NEEDS_REAL_PROFILE in src/__tests__/e2e-state-isolation.test.ts), so weekStartDay
+        // is whatever the app is configured with. Every assertion below assumes 'today'.
+        // Say so out loud instead of failing later as an unexplained date mismatch.
+        // Asked of the app itself (store.get and its fallbacks), not re-parsed from
+        // config.json, so the check cannot drift from what the calendar actually uses.
+        const settings = await window.evaluate(() => globalThis.window.ipcRenderer?.invoke('settings:get'));
+        const weekStartDay =
+            typeof settings === 'object' && settings !== null && 'weekStartDay' in settings
+                ? settings.weekStartDay
+                : undefined;
+        expect(weekStartDay, 'week-navigation.spec.ts assumes the profile uses weekStartDay=today')
+            .toBe('today');
     });
 
     test.afterEach(async () => {
@@ -58,7 +91,7 @@ test.describe('Week Navigation', () => {
         const today = new Date();
         // Check that the first day column shows Today
         const firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeader).toHaveText(format(today, 'd'), { timeout: 10000 });
+        await expect(firstDayHeader).toHaveText(expectedFirstDayNumber(today, 0), { timeout: 10000 });
     });
 
     test('should show next week button', async () => {
@@ -78,19 +111,16 @@ test.describe('Week Navigation', () => {
 
     test('should navigate to next week when next week button is clicked', async () => {
         const today = new Date();
-        const nextWeekSameDay = new Date(today);
-        nextWeekSameDay.setDate(today.getDate() + 7);
 
-        // Click next week button
         const nextWeekButton = window.getByTestId('next-week-button');
         await nextWeekButton.click();
-
-        // Wait for update
         await waitForSync();
 
-        // The first day header should be today+7 (same weekday, next week)
+        // Navigated weeks are Monday-anchored whatever weekday today is, so this
+        // asserts the same rule seven days a week.
         const firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeader).toHaveText(format(nextWeekSameDay, 'd'), { timeout: 10000 });
+        await expect(firstDayHeader).toHaveText(expectedFirstDayNumber(today, 1), { timeout: 10000 });
+        await expect(window.locator('[data-testid="day-header-name"]').first()).toHaveText(/monday/i);
     });
 
     test('should navigate back to current week when today button is clicked', async () => {
@@ -109,7 +139,7 @@ test.describe('Week Navigation', () => {
 
         // Check that we're back to current week (starting with today)
         const firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeader).toHaveText(format(today, 'd'), { timeout: 10000 });
+        await expect(firstDayHeader).toHaveText(expectedFirstDayNumber(today, 0), { timeout: 10000 });
     });
 
     test('should disable previous week button when at current week', async () => {
@@ -128,10 +158,6 @@ test.describe('Week Navigation', () => {
 
     test('should navigate back one week when previous week button is clicked', async () => {
         const today = new Date();
-        const nextWeekSameDay = new Date(today);
-        nextWeekSameDay.setDate(today.getDate() + 7);
-        const nextNextWeekSameDay = new Date(today);
-        nextNextWeekSameDay.setDate(today.getDate() + 14);
 
         const nextWeekButton = window.getByTestId('next-week-button');
         await nextWeekButton.click();
@@ -140,14 +166,14 @@ test.describe('Week Navigation', () => {
         await waitForSync();
 
         let firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeader).toHaveText(format(nextNextWeekSameDay, 'd'));
+        await expect(firstDayHeader).toHaveText(expectedFirstDayNumber(today, 2));
 
         const prevWeekButton = window.getByTestId('prev-week-button');
         await prevWeekButton.click();
         await waitForSync();
 
         firstDayHeader = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeader).toHaveText(format(nextWeekSameDay, 'd'), { timeout: 10000 });
+        await expect(firstDayHeader).toHaveText(expectedFirstDayNumber(today, 1), { timeout: 10000 });
     });
 
     // Since a6d448c the app fetches a 16-day forecast, so next week's day
@@ -170,22 +196,31 @@ test.describe('Week Navigation', () => {
         await expect(weatherContainers.first()).toBeVisible();
     });
 
-    test('should not highlight Monday in future weeks if today is not Monday', async () => {
+    // Was "should not highlight Monday in future weeks if today is not Monday", a title from
+    // the rolling-window era: under the Monday anchor the first column of a future week IS
+    // Monday, so the old name asserted against the requirement. The old body could not fail
+    // on its own either — `day-header-number` never carries a `bg-*` class (today is marked
+    // with `text-family-cyan`), so `not.toHaveClass(/bg-family-cyan/)` was vacuously true and
+    // only the date assertion above it ever went red.
+    test('should not mark any day in a future week as today', async () => {
         const today = new Date();
-        const nextWeekSameDay = new Date(today);
-        nextWeekSameDay.setDate(today.getDate() + 7);
-        const nextWeekDayStr = format(nextWeekSameDay, 'd');
+        const dayNumbers = window.locator('[data-testid="day-header-number"]');
 
-        // Navigate to next week
+        // Positive control: the current week's first column is today and wears the marker.
+        // Without this, the negated check below could pass against a renamed class forever.
+        await expect(dayNumbers.first()).toHaveClass(/text-family-cyan/);
+
         const nextWeekButton = window.getByTestId('next-week-button');
         await nextWeekButton.click();
         await waitForSync();
 
-        // Find first day column (same weekday as today, but next week)
-        const firstDayHeaderNumber = window.locator('[data-testid="day-header-number"]').first();
-        await expect(firstDayHeaderNumber).toHaveText(nextWeekDayStr);
+        await expect(dayNumbers.first()).toHaveText(expectedFirstDayNumber(today, 1));
+        await expect(dayNumbers).toHaveCount(7);
 
-        // If it's not today, it should NOT have bg-family-cyan
-        await expect(firstDayHeaderNumber).not.toHaveClass(/bg-family-cyan/);
+        // A Monday-anchored future week begins strictly after today from every weekday,
+        // so no column in it may wear the today colour.
+        for (let i = 0; i < 7; i++) {
+            await expect(dayNumbers.nth(i)).not.toHaveClass(/text-family-cyan/);
+        }
     });
 });

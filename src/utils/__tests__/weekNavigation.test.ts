@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../weekNavigation';
-import { format } from 'date-fns';
+import { format, addWeeks } from 'date-fns';
 
 describe('weekNavigation', () => {
     describe('getWeekStartDate', () => {
@@ -24,6 +24,41 @@ describe('weekNavigation', () => {
                 const wednesday = new Date(2026, 1, 4, 18, 41, 50);
                 const result = getWeekStartDate(wednesday, 2, 'today');
                 expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-16');
+            });
+        });
+
+        // Regression guard for the weekday dependency that let three specs in
+        // e2e/week-navigation.spec.ts sit red for months: they asserted a rolling
+        // today+7 window, which coincides with the real behaviour on Mondays only.
+        //
+        // 'today' anchors the FIRST view (offset 0) and nothing else. Every navigated
+        // week is Monday-anchored — docs/requirements.md, "Week Start". Established
+        // deliberately in 1f3c771; do not revert to addWeeks(referenceDate, offset).
+        describe('today mode anchors navigation to Monday from every weekday', () => {
+            // Mon 2026-02-02 .. Sun 2026-02-08 — one full week, so no weekday is untested.
+            const WEEK = [2, 3, 4, 5, 6, 7, 8].map(day => new Date(2026, 1, day, 18, 41, 50));
+
+            it.each(WEEK)('offset 0 returns the reference date itself (%s)', (reference) => {
+                expect(format(getWeekStartDate(reference, 0, 'today'), 'yyyy-MM-dd'))
+                    .toBe(format(reference, 'yyyy-MM-dd'));
+            });
+
+            it.each(WEEK)('offset 1 returns Monday 2026-02-09 (%s)', (reference) => {
+                const result = getWeekStartDate(reference, 1, 'today');
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-09');
+                expect(result.getDay()).toBe(1);
+            });
+
+            it.each(WEEK)('offset 2 returns Monday 2026-02-16 (%s)', (reference) => {
+                const result = getWeekStartDate(reference, 2, 'today');
+                expect(format(result, 'yyyy-MM-dd')).toBe('2026-02-16');
+                expect(result.getDay()).toBe(1);
+            });
+
+            it('is not a rolling today+7 window when today is not a Monday', () => {
+                const tuesday = new Date(2026, 1, 3, 18, 41, 50);
+                expect(format(getWeekStartDate(tuesday, 1, 'today'), 'yyyy-MM-dd'))
+                    .not.toBe(format(addWeeks(tuesday, 1), 'yyyy-MM-dd'));
             });
         });
 
