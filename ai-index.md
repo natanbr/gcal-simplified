@@ -26,6 +26,7 @@ A strictly isolated application module — the kid-facing reward/mission app.
   `MCStoreProvider.tsx` (mounts the heartbeat, remote sync and audit bridge),
   `activityLog.ts` (action → human-readable log entry, with attribution),
   `useBehaviorHeartbeat.ts` (60s mood accrual — the ONLY token generator),
+  `behaviorSync.ts` (the accrual engine), `moodGauge.ts` (`moveGauge`, the one writer of the gauge),
   `useRemoteSync.ts`, `useAuditTrail.ts` (mirrors log entries to the on-disk trail).
 * **`components/activity-log/`**: the parent-facing review surface —
   `logSources.ts` (source metadata + the pure daily roll-up), `LogSummaryStrip.tsx`

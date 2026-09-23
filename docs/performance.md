@@ -11,7 +11,7 @@ Renderer timers that are allowed to fire on an idle Calendar (kept intentionally
 | `Dashboard.tsx` data refresh | 5 min | Calendar needs fresh events/tasks/weather. |
 | `useCurrentDate.ts` | 60 s | Midnight rollover; bails out (no re-render) unless the day changed. |
 | `useTheme.ts` | 60 s | Time-based light/dark; bails out unless the theme changed. |
-| `useBehaviorHeartbeat.ts` | 60 s | Mood-progress accrual. **Idle-optimized:** `mcReducer` returns the *same* state ref when nothing accrues (night / out of active window), so idle ticks cause no re-render and no persist. |
+| `useBehaviorHeartbeat.ts` | 60 s | Mood-progress accrual. **Idle-optimized:** `mcReducer` returns the *same* state ref when nothing accrues (night / out of active window / gauge held full at the 5-token cap), so idle ticks cause no re-render and no persist. |
 
 Everything else (mission expiry poll, live clock, game loops, privilege countdown) is gated to an active mission / open game / the Mission Control view and does **not** run on an idle Calendar.
 
