@@ -18,6 +18,7 @@ import {
     forgetMissionStartedSince,
     quietMissionClock,
     seedFailingState,
+    STORAGE_KEY,
     type MissionSlice,
 } from '../../e2e/helpers/missionClock';
 
@@ -68,6 +69,17 @@ describe('forgetMissionStartedSince', () => {
         expect(forgetMissionStartedSince(noStart, LAUNCHED_AT)).toBe(noStart);
     });
 
+    it('drops the activity stamp the launch wrote, so the dev app can still start that window', () => {
+        // The first document's start stamped `lastActiveAt`. Restoring it
+        // would make the dev app's scheduler treat the window as already run.
+        const slice = sliceWithEveningStartedAt(new Date(LAUNCHED_AT + 400).toISOString());
+        const [, evening] = slice['missions'] as Array<Record<string, unknown>>;
+        evening['lastActiveAt'] = new Date(LAUNCHED_AT + 400).toISOString();
+
+        const forgotten = forgetMissionStartedSince(slice, LAUNCHED_AT);
+        expect((forgotten['missions'] as Array<Record<string, unknown>>)[1]).not.toHaveProperty('lastActiveAt');
+    });
+
     it('never mutates the slice it was given', () => {
         const slice = sliceWithEveningStartedAt(new Date(LAUNCHED_AT + 400).toISOString());
         const before = JSON.stringify(slice);
@@ -91,8 +103,11 @@ interface FakedPage {
     evaluate(...args: unknown[]): Promise<unknown>;
 }
 
-/** Just enough of a Playwright Page for missionClock: every call resolves, and is recorded. */
-function fakePage(): { page: Page; goto: ReturnType<typeof vi.fn> } {
+type InPage = (fn: (arg: unknown) => unknown, arg: unknown) => unknown;
+
+/** Just enough of a Playwright Page for missionClock: every call resolves, and is recorded.
+ *  `evaluate` resolves to `{}` unless a test hands it a body to run. */
+function fakePage(evaluate: InPage = () => ({})): { page: Page; goto: ReturnType<typeof vi.fn> } {
     const context = {};
     const goto = vi.fn(async () => null);
     const fake: FakedPage = {
@@ -101,7 +116,7 @@ function fakePage(): { page: Page; goto: ReturnType<typeof vi.fn> } {
         goto,
         waitForURL: vi.fn(async () => undefined),
         waitForFunction: vi.fn(async () => undefined),
-        evaluate: vi.fn(async () => ({})),
+        evaluate: vi.fn(async (fn: (arg: unknown) => unknown, arg: unknown) => evaluate(fn, arg)),
     };
     return { page: fake as Page, goto };
 }
@@ -117,6 +132,27 @@ describe('seedFailingState', () => {
         const { page } = fakePage();
         await quietMissionClock(page, { launchedAt: LAUNCHED_AT, keep: () => undefined });
         await expect(seedFailingState(page, 'window-open-now')).rejects.toThrow(/throwaway profile/);
+    });
+
+    it('clears the activity stamp when it seeds a window, or the scheduler would not start it', async () => {
+        // Inside a real window the first document starts (and stamps) the
+        // mission, and the seed's window starts in that same minute.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 8, 22, 14, 0));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            missions: [{ phase: 'evening', startsAt: '19:00', endsAt: '20:00', active: false, lastActiveAt: new Date().toISOString() }],
+        }));
+        const { page } = fakePage((fn, arg) => fn(arg)); // runs the in-page function against jsdom
+        try {
+            await quietMissionClock(page, { launchedAt: Date.now() });
+            await seedFailingState(page, 'window-open-now');
+            const blob = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as { missions: Array<Record<string, unknown>> };
+            expect(blob.missions[0]['startsAt']).toBe('14:00');
+            expect(blob.missions[0]).not.toHaveProperty('lastActiveAt');
+        } finally {
+            vi.useRealTimers();
+            localStorage.clear();
+        }
     });
 
     it('seeds a throwaway launch (one quieted without `keep`)', async () => {
