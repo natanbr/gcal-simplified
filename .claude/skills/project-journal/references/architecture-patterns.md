@@ -768,3 +768,24 @@ its spelling. When a case must be conditional, skip at run time (`ctx.skip()`), 
 says X", make absence fail first (`expect(value).toBeDefined()`), because `?? []` turns a deleted
 setting into a pass. Every one of these was found by running the mutation, not by reading: an
 assertion nobody has watched fail is a guess about what it checks.
+
+## 2026-09-23 — `git add -A` after `reset --soft origin/main` reverts whatever landed in between
+
+**Learning:** Squashing PR 176 with `git reset --soft origin/main && git add -A && git commit`
+silently reverted five commits that were already on main (the Monday-anchor tests, the locked-coin
+-drop tests in GlobalBank and GoalPedestal, a Settings hint, a spec, changelog and journal
+entries). All 1413 tests stayed green, because deleting somebody else's tests removes the very
+things that would have failed, and the ratchets only object to files getting *worse*. The mechanism
+is worktree-specific and easy to miss: every worktree of this repo shares one `.git`, so
+`origin/main` moves under you whenever any other session fetches. The reset moved HEAD and the
+index to that newer main while the working tree still held the older one, and `add -A` faithfully
+recorded the difference — a revert — as if it were my change. It survived my own gates, a
+three-lens review and a PR write-up, and was caught only by an independent reviewer diffing the
+branch against main. The rebuild hit the same trap a second time: `origin/main` advanced again
+*during* the rebuild, so the tree briefly mixed two mains.
+**Action:** Never build a commit from a base you read more than once. Pin it — `MAIN=$(git rev-parse
+origin/main)` — and use `$MAIN` for the reset, the diff and the proof. Prefer `git rebase
+origin/main` (which replays diffs) over reset+`add -A` (which replays a tree). Before pushing a
+squash, run `git diff --stat <base>...HEAD` and read the file list: it must contain only files you
+meant to touch, and a deletion count in someone else's file is the signature of this bug. A green
+suite is not evidence here — that is exactly what makes it dangerous.
