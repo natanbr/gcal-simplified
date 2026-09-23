@@ -10,6 +10,7 @@
 // ============================================================
 
 import type { MCState, MCSettings, ActivityLogEntry } from '../types';
+import { isGaugeHeldFull, moveGauge, PROGRESS_PER_TOKEN } from './moodGauge';
 
 /** Ring-buffer size for the in-app activity log. The durable, uncapped record
  *  lives on disk in the main process (electron/audit-log.ts). Lives here rather
@@ -29,14 +30,6 @@ export function getLocalDateString(d: Date = new Date()): string {
 export function selectTotalWealth(state: MCState): number {
     return state.bankCount + state.cases.reduce((sum, c) => sum + c.tokenCount, 0);
 }
-
-// ---- Helpers for Behavior Progress ----
-
-/** Progress points that fill the gauge from empty to one game token. */
-export const PROGRESS_PER_TOKEN = 100;
-
-/** Hard cap on banked game tokens. */
-export const MAX_GAME_TOKENS = 5;
 
 /**
  * Game tokens earned per *full active day*, keyed by mood level (-2..+2).
@@ -65,6 +58,9 @@ export function moodHourlyRate(moodWind: number, settings: MCSettings): number {
     if (perDay === 0) return 0;
 
     const { startMins, endMins } = getWakingBounds(settings);
+    // A time cleared in Settings ('' has no minutes) makes the bounds NaN. Fail
+    // closed: a NaN rate used to flow through the grant into the token count.
+    if (!Number.isFinite(startMins) || !Number.isFinite(endMins)) return 0;
     // Guard against a degenerate/inverted window producing an infinite rate.
     const activeHours = Math.max(0.5, (endMins - startMins) / 60);
 
@@ -175,6 +171,16 @@ function calculateBehaviorDelta(state: MCState, nowIso: string): { progressDelta
     const activeMs = activeWindowOverlapMs(lastUpdate, now, state.settings);
     if (hourlyRate === 0 || activeMs <= 0) return keep;
 
+    // Held full at the cap: filling further changes nothing, so keep the anchor
+    // too. This must precede the gap re-anchor below, or a held gauge would
+    // allocate a new state every 3 minutes all day. The stale anchor is safe:
+    // once a token is spent, the first tick sees a long gap and re-anchors with
+    // no back-fill. A negative mood (hourlyRate < 0) still drains.
+    if (hourlyRate > 0 && isGaugeHeldFull(state)) return keep;
+    // The mirror case: empty and draining cannot move either. Without this an
+    // empty gauge under a negative mood allocated a new state every minute.
+    if (hourlyRate < 0 && state.behaviorProgress <= 0) return keep;
+
     // In-window, but the gap is larger than a heartbeat → the app was closed or
     // the machine asleep. Don't back-fill that span; re-anchor so the next tick
     // resumes accrual from now.
@@ -206,53 +212,32 @@ export function applyBehaviorSync(state: MCState, nowIso: string): MCState {
         return { ...state, behaviorLastUpdated: nextLastUpdated };
     }
 
-    let nextProgress = state.behaviorProgress + progressDelta;
-    let nextGameTokens = state.gameTokens;
-    let nextMoodWind = state.moodWind;
-    let grantLog: ActivityLogEntry | null = null;
+    const { patch, granted } = moveGauge(state, progressDelta, Number.POSITIVE_INFINITY);
 
-    if (nextProgress >= PROGRESS_PER_TOKEN) {
-        const tokensToGrant = Math.floor(nextProgress / PROGRESS_PER_TOKEN);
-        nextProgress = nextProgress % PROGRESS_PER_TOKEN;
-        nextGameTokens = Math.min(MAX_GAME_TOKENS, nextGameTokens + tokensToGrant);
-
-        // The grant is written here, inside the reducer, rather than by the
-        // dispatch interceptor — this is the one token movement no user action
-        // triggers, so it is exactly the one that must never go unlogged.
-        // The id is derived from the sync anchor (not random) to keep the
-        // reducer pure and replayable.
-        const granted = nextGameTokens - state.gameTokens;
-        if (granted > 0) {
-            // Earning a token spends the good mood that earned it: the child
-            // starts the next token from Neutral and earns their way back up.
-            // Gated on an actual grant — at the token cap nothing is earned,
-            // and a parent-set mood must not vanish with no log entry.
-            nextMoodWind = 0;
-            grantLog = {
-                id: `auto-mood-token-${nextLastUpdated}`,
-                timestamp: nextLastUpdated,
-                icon: '😊',
-                message: granted === 1
-                    ? 'Mood token earned (mood gauge full)'
-                    : `${granted} mood tokens earned (mood gauge full)`,
-                delta: 0, // game tokens, not bank tokens
-                type: 'reward',
-                colorKey: 'system',
-                source: 'auto',
-                gameTokens: nextGameTokens,
-                bankTokens: state.bankCount,
-                totalTokens: selectTotalWealth(state),
-            };
-        }
-    } else if (nextProgress < 0) {
-        nextProgress = 0;
-    }
+    // The grant is written here, inside the reducer, rather than by the
+    // dispatch interceptor — this is the one token movement no user action
+    // triggers, so it is exactly the one that must never go unlogged.
+    // The id is derived from the sync anchor (not random) to keep the
+    // reducer pure and replayable.
+    const grantLog: ActivityLogEntry | null = granted > 0 ? {
+        id: `auto-mood-token-${nextLastUpdated}`,
+        timestamp: nextLastUpdated,
+        icon: '😊',
+        message: granted === 1
+            ? 'Mood token earned (mood gauge full)'
+            : `${granted} mood tokens earned (mood gauge full)`,
+        delta: 0, // game tokens, not bank tokens
+        type: 'reward',
+        colorKey: 'system',
+        source: 'auto',
+        gameTokens: patch.gameTokens,
+        bankTokens: state.bankCount,
+        totalTokens: selectTotalWealth(state),
+    } : null;
 
     return {
         ...state,
-        behaviorProgress: nextProgress,
-        gameTokens: nextGameTokens,
-        moodWind: nextMoodWind,
+        ...patch,
         behaviorLastUpdated: nextLastUpdated,
         behaviorDelta: progressDelta,
         activityLogs: grantLog

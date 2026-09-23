@@ -13,7 +13,8 @@ import type { ActivityLogEntry, MCAction, MCState, MissionPhase } from '../types
 
 /** Mirrors ActivityLogEntry['source'] without importing activityLog.ts (that would cycle). */
 type LogSource = NonNullable<ActivityLogEntry['source']>;
-import { getLocalDateString, MAX_ACTIVITY_LOGS, MAX_GAME_TOKENS, PROGRESS_PER_TOKEN } from './behaviorSync';
+import { getLocalDateString, MAX_ACTIVITY_LOGS } from './behaviorSync';
+import { moveGauge } from './moodGauge';
 
 /** Consecutive misses that break the shield and freeze the child's economy. */
 export const MISSED_LOCK_THRESHOLD = 6;
@@ -200,7 +201,7 @@ export function applyMissionTimeout(
 
     return {
         ...state,
-        behaviorProgress: Math.max(0, state.behaviorProgress - TIMEOUT_BEHAVIOR_PENALTY),
+        ...moveGauge(state, -TIMEOUT_BEHAVIOR_PENALTY, 0).patch,
         ...applyStreakChange(state, sanitizeMissedStreak(state.missedMissionStreak) + 1, nowIso, 'missed'),
         ...outcomeDatePatch(missionPhase, nowIso),
         missions: state.missions.map(m =>
@@ -229,22 +230,12 @@ export function applyMissionRoutineComplete(
 
     const whining = mission.whiningDetected ?? false;
     // "without wining will add points. with wining will result in no change"
-    let nextProgress = state.behaviorProgress + (whining ? 0 : COMPLETION_BEHAVIOR_BONUS);
-    let nextGameTokens = state.gameTokens;
-    const crossed = nextProgress >= PROGRESS_PER_TOKEN;
-    if (crossed) {
-        nextProgress -= PROGRESS_PER_TOKEN;
-        nextGameTokens = Math.min(MAX_GAME_TOKENS, nextGameTokens + 1);
-    }
-
     return {
         ...state,
         activeMission: 'none',
         bankCount: state.bankCount + bonusTokens,
-        behaviorProgress: nextProgress,
-        gameTokens: nextGameTokens,
+        ...moveGauge(state, whining ? 0 : COMPLETION_BEHAVIOR_BONUS, 1).patch, // earning a token resets mood
         ...applyStreakChange(state, 0, nowIso, 'completed'),
-        ...(crossed ? { moodWind: 0 } : {}), // earning a token resets mood — same rule as the heartbeat grant
         ...outcomeDatePatch(missionPhase, nowIso),
         missions: state.missions.map(m =>
             m.phase === missionPhase

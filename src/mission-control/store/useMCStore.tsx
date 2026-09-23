@@ -11,7 +11,8 @@ import type {
     MissionPhase,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
-import { initialState, selectTotalWealth, MAX_GAME_TOKENS } from './mcReducer';
+import { initialState, selectTotalWealth } from './mcReducer';
+import { sanitizeBehaviorProgress, sanitizeGameTokens } from './moodGauge';
 import { sanitizeMissedStreak } from './missionStreak';
 import { createLogEntry } from './activityLog';
 import { sanitizeSkillProgress } from './skillProgress';
@@ -52,23 +53,25 @@ export function loadPersistedState(): MCState {
                 .slice(0, 200);
         }
 
+        // Merge cases from initialState so new cases (e.g. 4th slot) always appear
+        const cases = initialState.cases.map(defaultCase => {
+            const savedCase = parsed.cases?.find(c => c.id === defaultCase.id);
+            if (!savedCase) return defaultCase;
+            return {
+                ...defaultCase,
+                ...savedCase,
+                targetCount: savedCase.targetCount ?? defaultCase.targetCount,
+                reward: savedCase.reward && VALID_REWARD_IDS.has(savedCase.reward) ? savedCase.reward : null,
+                status: savedCase.reward && !VALID_REWARD_IDS.has(savedCase.reward) ? 'empty' : savedCase.status,
+            };
+        });
+
         return {
             ...initialState,
             ...parsed,
             // Merge saved settings over defaults (so new settings fields always have values)
             settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
-            // Merge cases from initialState so new cases (e.g. 4th slot) always appear
-            cases: initialState.cases.map(defaultCase => {
-                const savedCase = parsed.cases?.find(c => c.id === defaultCase.id);
-                if (!savedCase) return defaultCase;
-                return {
-                    ...defaultCase,
-                    ...savedCase,
-                    targetCount: savedCase.targetCount ?? defaultCase.targetCount,
-                    reward: savedCase.reward && VALID_REWARD_IDS.has(savedCase.reward) ? savedCase.reward : null,
-                    status: savedCase.reward && !VALID_REWARD_IDS.has(savedCase.reward) ? 'empty' : savedCase.status,
-                };
-            }),
+            cases,
             missions: initialState.missions.map(defaultM => {
                 const savedM = parsed.missions?.find(m => m.phase === defaultM.phase);
                 if (!savedM) return defaultM;
@@ -101,9 +104,10 @@ export function loadPersistedState(): MCState {
                 return savedPriv ? { ...defaultPriv, ...savedPriv } : defaultPriv;
             }),
             activityLogs,
-            // Clamp to the cap; never top tokens back up on restart (that would
-            // let a restart refund spent game tokens).
-            gameTokens: Math.min(MAX_GAME_TOKENS, Math.max(0, parsed.gameTokens ?? initialState.gameTokens)),
+            // Clamp to the cap (counting Quick-Game goals); never top tokens back up
+            // on restart (that would refund spent game tokens); a corrupt null is 0.
+            gameTokens: sanitizeGameTokens(parsed.gameTokens, initialState.gameTokens, cases),
+            behaviorProgress: sanitizeBehaviorProgress(parsed.behaviorProgress, initialState.behaviorProgress),
             // A corrupt write (NaN serializes to null) must not propagate.
             bankCount: typeof parsed.bankCount === 'number' && Number.isFinite(parsed.bankCount)
                 ? Math.max(0, parsed.bankCount)
