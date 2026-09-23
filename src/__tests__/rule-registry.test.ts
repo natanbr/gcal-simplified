@@ -163,7 +163,7 @@ const REGISTRY: Rule[] = [
         status: 'guarded',
         guard: 'src/mission-control/store/__tests__/mcReducer.streak-lock.test.ts',
         verifiedRedBy: "drop the isRefusedByShieldLock call from createLogEntry — all 5 'writes no activity-log line' cases go red; or remove the window mirror from activityLog.ts's CONSUME_CASE branch — the refused-redemption log case goes red (proven 2026-09-03).",
-        defence: 'The drag-handler half (refuse BEFORE the exit animation, so the token springs back instead of vanishing) is covered by the component tests in GlobalBank.test.tsx / GoalPedestal.test.tsx.',
+        defence: 'Only the log half is guarded. The drag-handler half (refuse BEFORE the exit animation, so the token springs back instead of vanishing) has NO test: this entry used to say GlobalBank.test.tsx / GoalPedestal.test.tsx covered it, but neither file drops a coin or reaches handleTokenDrop, and neither changed after the claim was written (found 2026-09-21 while type-checking those files).',
     },
     {
         rule: 'A mission re-trigger clears loggedTimeoutAt, so consecutive misses actually accumulate',
