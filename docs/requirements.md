@@ -781,8 +781,8 @@ resolution moved to the pure `lineClear.ts`; `useBlocksGame.ts` came off the fil
   goes through the same check, so the ghost, the game and the dealer cannot disagree. The dealer takes
   its randomness as a parameter (defaulting to `Math.random`), which is what makes the balance rules
   testable; the logic previously sat in hook `useCallback`s reachable only through a randomly chosen
-  starting layout. The deal made at the drop itself still uses `Math.random`; seeding it is a separate
-  follow-up. `useBlocksGame.ts` went from 295 to 214 lines.
+  starting layout. The deal made at the drop itself still used `Math.random` here; it was seeded on
+  2026-09-23. `useBlocksGame.ts` went from 295 to 214 lines.
 
 ### 2026-09-21 `npm run tsc` type-checks the unit tests
 
@@ -814,3 +814,28 @@ no script runs that. 22 type errors had piled up in 9 test files.
 - Found along the way: the rule registry claimed the "refuse a locked drag before the coin
   animates" half of the shield rule was covered by the GlobalBank/GoalPedestal tests. Neither
   file drops a coin. The claim is corrected; the tests are still to be written.
+
+### 2026-09-23 Space Rescue: one drop deals one hand
+
+**Why**: the follow-up left open by the coherent-hand dealer (2026-09-21). `placeShape` dealt the
+replacement hand with `Math.random` from inside its React state updater, and React may run an
+updater more than once — StrictMode twice in development, and in production a finger lift rendered
+ahead of a pending lower-priority update is replayed on top of it. Each run re-rolled, so two
+consecutive committed frames could show different shapes in the tray after a single drop: the child
+sees the shapes they were just dealt swap for others under their finger. Reproduced before the fix
+in `useBlocksGame.deal-replay.test.tsx` — a replayed drop committed two different hands.
+
+- **The hand a drop deals is now fixed before the drop is applied.** One seed per call, rolled
+  outside the updater next to the feedback id, exactly as the line clear's meteors are; every draw
+  the dealer makes — which shape, which orientation, the React key suffix — comes from it.
+- **Starting a game and refreshing the rescue slot deal the same way.** Both rolled unseeded inside
+  their updaters too; the rescue refresh was the most visible, since the shape it hands over was the
+  reward for a maths answer.
+- **`refillBank` takes a seed, not a generator.** A seeded generator is stateful: built outside the
+  updater and captured, the replay would continue its sequence instead of repeating it, and the
+  hands would still differ. Taking the number and building the generator inside makes that
+  impossible to get wrong. Same reason the clear timer passes its seed on.
+
+Tests: `useBlocksGame.deal-replay.test.tsx` (4 cases — the bank-emptying drop, the rescue-emptying
+drop, the opening hand, the rescue refresh), each asserting that more than one frame committed (so
+the replay really happened) and that they are identical.
