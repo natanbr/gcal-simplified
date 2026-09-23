@@ -111,6 +111,11 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Responsibility Progress**: Point-based tracking using visual point dots (no text counters). Shows Done status and a "Claim" button once the target point goal is met.
   - **Privilege Suspension System**:
     - Privileges can be suspended for a duration (1 Day, 3 Days, 1 Week, or 2 Weeks).
+    - **A suspension ends by itself** at its end time (`suspendedUntil`), with no action from the parent. Every surface asks one predicate, `isPrivilegeSuspended` in `store/privileges.ts`, which reads the stored status *and* the clock: the card's red hazard look, the dashboard summary, the Goal picker and the "Use!" lock. The stored `status: 'suspended'` is only the parent's last decision and is never trusted on its own. A suspension with no readable end time is not in force. The end time is read one way everywhere (`parseSuspensionEnd`): a date string, never a number.
+    - At the end time, one `setTimeout` (`store/useSuspensionExpiry.ts`, armed only while a suspension is stored) dispatches `EXPIRE_SUSPENSIONS`. The stored card becomes active, every surface re-renders at once (including a completed Game goal's "Use!" and the Settings tab), and the phone is sent the change. The timer is clamped to what `setTimeout` can hold and re-aimed when the machine wakes.
+    - On relaunch, a suspension that ended while the app was closed is loaded as it was stored, and is not in force for any reader. The expiry timer fires at once and lifts it through the same logged action. The phone remote receives what is in force at each broadcast, so an ended suspension reaches it as active with no end time.
+    - Suspending, reinstating and the automatic end each write an activity-log line: "🚫 **Phone Games** suspended for 1 day (until 23 Sep 10:00)", "✅ **Phone Games** reinstated" and "✅ **Phone Games** suspension ended (23 Sep 10:00)". Suspend and reinstate are attributed to this machine or to the phone; the automatic end is attributed `auto`. The end line names the end time because a suspension that ended while the app was closed is logged at the next launch. A request that changes nothing writes no line: reinstating a privilege that is already in force, suspending with an end time that has passed, and re-sending the identical suspension. Unlocking a `locked` card logs "reinstated".
+    - The phone's `SET_PRIVILEGE_STATUS` is validated before it reaches the store: a known status, a string card id, and, only when suspending, a readable date-string end time that is still ahead (otherwise `null` or absent). A suspension already over on arrival is refused, so the log never shows "suspension ended" without a "suspended" line.
     - Shows remaining time with a countdown badge on the button and in an active suspensions summary below the buttons.
     - Located inside a dedicated card (`PrivilegesPanel`) in Column 3, underneath the Snake Game/Game Token panel.
     - Synchronized with the mobile remote web application (`mc-remote`) in real-time.
@@ -814,6 +819,52 @@ no script runs that. 22 type errors had piled up in 9 test files.
 - Found along the way: the rule registry claimed the "refuse a locked drag before the coin
   animates" half of the shield rule was covered by the GlobalBank/GoalPedestal tests. Neither
   file drops a coin. The claim is corrected; the tests are still to be written.
+
+### 2026-09-22 An expired privilege suspension lifts by itself; suspend and reinstate are logged
+
+**Why**: found by the 2026-09-22 QA run in the built app. Phone Games was stored as
+`status: 'suspended'` with `suspendedUntil` an hour in the past. The card stayed red with hazard
+stripes and no countdown, 🎮 Game was missing from "Pick a Goal", and the state survived three
+relaunches. A 1-day suspension lasted until the parent pressed "✅ Reinstate". Root cause: four
+readers compared the stored `status === 'suspended'` directly, and nothing ever set it back. The
+countdown badge was the only thing that read the clock, which is why the badge disappeared while
+the card stayed red. A second gap sat in the same area: `createLogEntry` had no
+`SET_PRIVILEGE_STATUS` case, so suspending or reinstating left no line in the log, from Settings
+or from the phone.
+
+- "Suspended right now" is now derived, not stored: `isPrivilegeSuspended(card)` in
+  `store/privileges.ts` requires the stored status and an end time still ahead. The card, the
+  dashboard summary, the Goal picker filter and the "Use!" lock all call it. Same pattern as
+  `isEconomyLocked`. The suspension ends exactly when the countdown badge disappears.
+- A missing or unreadable end time means not in force. The type contract already said
+  `null` = not suspended, and no screen writes that pair.
+- One timer, not a poll: `useSuspensionExpiry` (mounted inside `MCStoreProvider`) arms a single
+  `setTimeout` to the earliest stored end and dispatches `EXPIRE_SUSPENSIONS` (origin `auto`).
+  The reducer lifts what has ended at the action's timestamp and returns the same state when
+  nothing has. It is armed only while a suspension is stored, clamped to 2^31-1 ms, and re-aimed
+  on `system:resume`. First version had no timer and relied on re-renders; review found the
+  "Use!" button and an already-connected phone kept the suspension until an unrelated change.
+- Hydration restores a suspension verbatim; the timer lifts an ended one at launch and logs it.
+  An earlier version rewrote it silently at load, which was an unattributed state change and
+  turned a temporary clock change into a permanent lift with no trace.
+- The phone payload still sends what is in force at broadcast time (`effectivePrivilege`).
+  **Phone-visible change**: the payload fields are unchanged; only their values differ.
+- Suspend, reinstate and the automatic end write a log line (🚫 with length and end time, ✅,
+  ✅ "suspension ended"), attributed `local`, `remote` or `auto`, with the balance snapshot.
+  No-ops are silent. The end time is parsed one way (`parseSuspensionEnd`), and the phone's
+  `SET_PRIVILEGE_STATUS` payload is validated in `useRemoteControl`.
+- Not changed: phone-games blocking is still enforced only in the UI. The reducer does not
+  refuse a `SELECT_CASE game` or a `CONSUME_CASE` sent from the phone while Phone Games is
+  suspended. That was already the case before this fix.
+
+Tests: `store/useSuspensionExpiry.test.tsx` (timer at the end exactly, nothing armed when idle,
+the setTimeout clamp, re-aim on wake, lift + one `auto` log line through the real store, a lift at
+launch), `components/privilege-expiry.test.tsx` (card, picker, "Use!" unlocking with no other
+change), `store/persistence-lifecycle.test.ts`, `store/useRemoteSync.privileges.test.ts`,
+`store/privileges.test.ts` (one parser for card and badge), `store/activityLog.privileges.test.ts`,
+`hooks/useRemoteControl.allowlist.test.ts`, and the structural pin
+`__tests__/privilege-suspension-boundary.test.ts`, which fails on any other read of
+`status === 'suspended'`.
 
 ### 2026-09-23 Space Rescue: one drop deals one hand
 

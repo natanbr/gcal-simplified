@@ -648,3 +648,26 @@ a UTF-16 BOM nor strips a UTF-8 one, so a `// @ts-nocheck` in a UTF-16LE file �
 PowerShell 5.1 redirection writes — was honoured by tsc and invisible to the scan until it moved
 to `ts.sys.readFile`. Every other source-reading ratchet in `src/__tests__/` still has that blind
 spot.
+
+## 2026-09-22 — A stored status with an end time needs a derived "in force now" AND an event at the end
+
+**Learning:** `PrivilegeCard` stores `status: 'suspended'` plus `suspendedUntil`, and nothing in
+the app ever flipped the status back. Four readers (`PrivilegeCardButton`, `PrivilegesPanel`,
+`GoalPedestal` ×2) trusted the flag, so a 1-day suspension became indefinite and survived every
+relaunch. Only `formatSuspendedRemainingTime` read the clock, so the countdown badge disappeared on
+time while the red card stayed. The first fix was derivation only ("no new timer"). Review found it
+incomplete: a derived value only changes on screen when something re-renders, and nothing did at
+the end time. "Use!" stayed locked and a connected phone kept the suspension until an unrelated
+dispatch. The same fix also settled lapsed suspensions silently at hydration, which was an
+unattributed state change and made a one-off clock jump a permanent lift. And the two readers
+parsed the end two ways (`Date.parse(2030)` is a year, `new Date(2030)` is 1970).
+**Action:** When state has a time limit: (1) derive "in force now" through ONE predicate that reads
+the clock (`isPrivilegeSuspended`), with ONE parser for the end (`parseSuspensionEnd`, string
+only); (2) make the end an event: one `setTimeout` to the earliest end (`useSuspensionExpiry`,
+armed only while something is pending, clamped to 2^31-1 ms, re-aimed on `system:resume`, and
+re-armed rather than dispatched if it fires early) dispatching an attributed action
+(`EXPIRE_SUSPENSIONS`, origin `auto`) whose reducer case returns the same state when nothing
+lapsed; (3) never rewrite time-derived state at load, let the same event lift it at mount so it
+is logged. Pin the raw read structurally (`__tests__/privilege-suspension-boundary.test.ts`). In
+a fake-timer test, advance to just before the end in its own `act()`: one big jump lets the
+mount's other timers re-render after the end and pass without the fix.
