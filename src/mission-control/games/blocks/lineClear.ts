@@ -8,6 +8,7 @@
 // ⚠️  Internal to src/mission-control/games/blocks/ only.
 // ============================================================
 import { GRID_SIZE, applyClearEffects, spawnObstacles, BlocksGameState } from './types';
+import { seededRandom } from './rng';
 
 export const CLEAR_DELAY_MS = 1200;
 const EXPLODING = 4;
@@ -54,17 +55,6 @@ export function markCompletedLines(
     rows.forEach(r => lineIndices.forEach(c => mark(r, c)));
     cols.forEach(c => lineIndices.forEach(r => mark(r, c)));
     return { linesCleared, pendingClear: { cells } };
-}
-
-/** mulberry32: the same seed always rolls the same sequence. */
-export function seededRandom(seed: number): () => number {
-    let state = seed >>> 0;
-    return () => {
-        state = (state + 0x6D2B79F5) >>> 0;
-        let t = Math.imul(state ^ (state >>> 15), state | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
 }
 
 /** The board once `pending` has finished exploding: its cells emptied, their

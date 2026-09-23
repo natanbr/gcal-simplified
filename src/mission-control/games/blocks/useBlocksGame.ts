@@ -2,9 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { isPlaceable, hasAnyPlacement } from './placement';
 import { GameShape, BlocksGameState, INITIAL_LAYOUTS, altitudeLevel } from './types';
-import {
-    CLEAR_DELAY_MS, PendingClear, clearFeedback, markCompletedLines, resolvePendingClear, seededRandom,
-} from './lineClear';
+import { CLEAR_DELAY_MS, PendingClear, clearFeedback, markCompletedLines, resolvePendingClear } from './lineClear';
+import { seededRandom } from './rng';
 import { dealStandardTriple, dealRescueShape, anyPoolShapeFits } from './dealer';
 
 /** The game the board renders, plus the clear still exploding on it — kept in
@@ -14,15 +13,18 @@ interface HookState { game: BlocksGameState; pendingClear: PendingClear | null }
 /**
  * The seed for one deal, rolled OUTSIDE the state updater that spends it.
  *
- * React may run an updater more than once — StrictMode twice in development, a
- * sync-lane update replayed on top of a pending lower-priority one in
- * production — and a re-roll deals a different hand on the second run, so the
- * tray changes shapes under the child's finger after a single drop.
+ * React may run an updater more than once — StrictMode twice in development
+ * (only one of which commits), and in production a sync-lane update replayed on
+ * top of a pending lower-priority one, where BOTH runs commit. A re-roll deals a
+ * different hand on the second run, so the tray would change shapes under the
+ * child's finger after a single drop. No lower-priority writer on this hook's
+ * state exists today, which is why nobody has seen it; one new deferred update
+ * is all it would take.
  *
  * Only the number is rolled out here. The generator must be built INSIDE the
  * updater: a `seededRandom` closure captured outside is stateful, so the second
  * run would continue its sequence rather than repeat it — which is why
- * `refillBank` takes the seed rather than an `Rng`.
+ * `refillBank` and `refreshRescue` take the seed rather than an `Rng`.
  */
 const rollSeed = () => Math.random() * 2 ** 32;
 
@@ -57,6 +59,17 @@ function refillBank(game: BlocksGameState, seed: number): BlocksGameState {
         standardShapes: bankEmpty ? dealStandardTriple(game.grid, game.level, rng) : game.standardShapes,
         rescueShape: rescueEmpty ? dealRescueShape(game.grid, rng) : game.rescueShape,
         rescueShapeLocked: rescueEmpty ? true : game.rescueShapeLocked,
+    };
+}
+
+/** A fresh, locked rescue shape. Takes the seed for the same reason
+ *  `refillBank` does: no call site should be in a position to build the
+ *  generator on a line that a tidy-up could hoist out of the updater. */
+function refreshRescue(game: BlocksGameState, seed: number): BlocksGameState {
+    return {
+        ...game,
+        rescueShape: dealRescueShape(game.grid, seededRandom(seed)),
+        rescueShapeLocked: true,
     };
 }
 
@@ -111,11 +124,7 @@ export function useBlocksGame() {
 
     const refreshRescueShape = useCallback(() => {
         const dealSeed = rollSeed();
-        setState(onGame(prev => ({
-            ...prev,
-            rescueShape: dealRescueShape(prev.grid, seededRandom(dealSeed)),
-            rescueShapeLocked: true,
-        })));
+        setState(onGame(prev => refreshRescue(prev, dealSeed)));
     }, []);
 
     /** Returns nothing on purpose: the updater decides against the latest state,
