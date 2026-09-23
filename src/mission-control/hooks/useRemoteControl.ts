@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useMCDispatch } from '../store/useMCStore';
+import { parseSuspensionEnd } from '../utils/timeUtils';
 import type { MCAction } from '../types';
 
 /**
@@ -61,6 +62,17 @@ const PAYLOAD_VALIDATORS: Partial<Record<MCAction['type'], (a: MCAction) => bool
     ADJUST_BEHAVIOR_PROGRESS: a => a.type === 'ADJUST_BEHAVIOR_PROGRESS' && Number.isFinite(a.amount),
     ADJUST_MISSION_END: a => a.type === 'ADJUST_MISSION_END' && Number.isFinite(a.deltaMinutes),
     SET_MOOD_WIND: a => a.type === 'SET_MOOD_WIND' && Number.isFinite(a.level),
+    // The reducer stores both fields as they arrive. A NUMBER end time is a year
+    // to Date.parse and a 1970 timestamp to new Date; an unknown status was
+    // logged as "locked". Only a suspension carries an end time, and it must
+    // still be ahead here: one already over would be lifted at once and log
+    // "suspension ended" with no "suspended" line. (Named `action` so the
+    // privilege-suspension boundary guard reads `.status` as intent.)
+    SET_PRIVILEGE_STATUS: action => action.type === 'SET_PRIVILEGE_STATUS'
+        && typeof action.cardId === 'string'
+        && (action.status === 'suspended'
+            ? (parseSuspensionEnd(action.suspendedUntil) ?? 0) > Date.now()
+            : (action.status === 'active' || action.status === 'locked') && action.suspendedUntil == null),
 };
 
 const SNAKE_KEY_MAP: Record<string, string> = {
