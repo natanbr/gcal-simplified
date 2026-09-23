@@ -78,6 +78,19 @@ Settled decisions from past reviews of `gcal-simplified`. The **false positives*
 
 **Assert on visual tokens when counters are removed.** When a text counter (`x / y completed`) is replaced by visual tokens, assert on the count of the emoji element — remembering to account for header icons and button fallbacks in the expected number.
 
+**A test that derives its expectation from `new Date()` can be green by calendar accident.** Three
+specs in `e2e/week-navigation.spec.ts` asserted a rolling `today + 7` week start while the app is
+Monday-anchored. The two agree on Mondays, so the suite looked green to anyone who happened to run it
+on one, and the specs shipped red in 0.0.41 and 0.0.42. If an expectation depends on the current date, either pin
+the clock or assert the *rule* (`startOfWeek(today, { weekStartsOn: 1 })`) rather than one day's
+arithmetic — and back it with a unit test that loops all seven weekdays, which is the only thing that
+makes the run date irrelevant.
+
+**Check that a negated class assertion can fail at all.** The same spec ended with
+`not.toHaveClass(/bg-family-cyan/)` on `day-header-number`, an element that never carries a `bg-*`
+class — today is marked with `text-family-cyan`. The assertion was vacuously true for its whole life.
+A `not.` assertion earns its place only if you have seen it go red.
+
 **Commit tests inside the active worktree.** New test files left untracked in the parent repo while working in a git worktree silently break suite parity.
 
 ## Workflow hygiene
