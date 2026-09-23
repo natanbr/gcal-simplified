@@ -16,7 +16,8 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { dealStandardTriple, dealRescueShape, difficultyFor, Rng } from './dealer';
+import { dealStandardTriple, dealRescueShape, difficultyFor } from './dealer';
+import { Rng } from './rng';
 import {
     CELL,
     hasAnyPlacement,

@@ -6,8 +6,7 @@
 
 import { GameShape, Position } from './types';
 import { orientations } from './placement';
-
-export type Rng = () => number;
+import { Rng } from './rng';
 
 /** A shape template paired with one concrete orientation of it. */
 export interface Candidate {

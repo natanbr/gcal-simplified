@@ -161,3 +161,22 @@ derivation was recomputed per call.
 constant's id (`orientationCache` in `candidates.ts`). If the cached value can reach mutable state —
 here, a dealt shape's `cells` — hand out copies, so no consumer can corrupt the cache for every
 later game.
+
+## 2026-09-23 — A random draw inside a replayable updater costs a remount, not just a flicker
+
+A `setState` updater React runs twice (StrictMode in dev, a sync-lane update rebased over a pending
+lower-priority one in production) re-rolls any `Math.random()` inside it, so the two runs commit
+different values. When a drawn value feeds a React **key**, that is not a cosmetic difference: the
+dealer's id suffix feeds `StandardShapesTray`'s `key={shape.id}`, so the two frames disagreed on
+every key and React tore down and rebuilt up to three tray slots and their cells — on the drop path,
+exactly where the 2026-09-07 drag work cared about latency. Seeding the updater (roll the seed
+outside, build the generator inside — see `architecture-patterns.md`) is therefore the correctness
+fix *and* a small saving.
+
+Corollary when reviewing any updater: grep whether anything it randomises ends up in a `key`.
+
+Measured while reviewing PR 171, for the budget record: mulberry32 costs ~1.15x `Math.random` per
+call and its closure is scalar-replaced away by TurboFan, so the swap is below the noise floor
+(A/B deltas flipped sign across board occupancies). `dealStandardTriple` makes ~114 rng calls on an
+open board, ~31 at 60% fill — the deal is *cheaper* on a crowded board, because fewer candidates
+fit and there are fewer anchor pairs to walk.

@@ -817,25 +817,44 @@ no script runs that. 22 type errors had piled up in 9 test files.
 
 ### 2026-09-23 Space Rescue: one drop deals one hand
 
-**Why**: the follow-up left open by the coherent-hand dealer (2026-09-21). `placeShape` dealt the
-replacement hand with `Math.random` from inside its React state updater, and React may run an
-updater more than once — StrictMode twice in development, and in production a finger lift rendered
-ahead of a pending lower-priority update is replayed on top of it. Each run re-rolled, so two
-consecutive committed frames could show different shapes in the tray after a single drop: the child
-sees the shapes they were just dealt swap for others under their finger. Reproduced before the fix
-in `useBlocksGame.deal-replay.test.tsx` — a replayed drop committed two different hands.
+**Why**: the follow-up left open by the coherent-hand dealer (2026-09-21), and the same class of
+defect as the line clear's meteors (2026-09-18). `placeShape` dealt the replacement hand with
+`Math.random` from inside its React state updater, and React may run an updater more than once —
+StrictMode twice in development, and in production an update rendered ahead of a pending
+lower-priority one is replayed on top of it, where both runs commit. Each run re-rolled, so two
+consecutive committed frames could hold different shapes, and the child would watch the hand they
+were just dealt swap for another.
 
-- **The hand a drop deals is now fixed before the drop is applied.** One seed per call, rolled
-  outside the updater next to the feedback id, exactly as the line clear's meteors are; every draw
+**Honest status: nobody has seen this happen, and today nobody can.** The replay needs a
+lower-priority writer on this hook's state to be pending when the finger lifts; the app has none
+(there is no `startTransition` or `useTransition` anywhere in `src/`, and the one deferred writer —
+the rescue quiz resolving — runs while the quiz overlay covers the board and tray). StrictMode runs
+the updater twice but commits once, so development shows nothing either. This is a guard against a
+class of bug, not a repair of a reported one: one new deferred update on this hook is all it would
+take, and the reproduction in `useBlocksGame.deal-replay.test.tsx` has to construct that update
+itself.
+
+- **The hand a drop deals is fixed before the drop is applied.** One seed per call, rolled outside
+  the updater next to the feedback id, exactly as the line clear rolls its meteor seed; every draw
   the dealer makes — which shape, which orientation, the React key suffix — comes from it.
 - **Starting a game and refreshing the rescue slot deal the same way.** Both rolled unseeded inside
-  their updaters too; the rescue refresh was the most visible, since the shape it hands over was the
-  reward for a maths answer.
-- **`refillBank` takes a seed, not a generator.** A seeded generator is stateful: built outside the
-  updater and captured, the replay would continue its sequence instead of repeating it, and the
-  hands would still differ. Taking the number and building the generator inside makes that
-  impossible to get wrong. Same reason the clear timer passes its seed on.
+  their updaters too. (The 🔄 Refresh button, note, re-locks the slot: the shape it hands over is
+  the one that will cost the *next* maths answer. The reward for answering — `resolveRescueQuiz` —
+  only unlocks the shape already in the slot, deals nothing and was never affected.)
+- **`refillBank` and `refreshRescue` take a seed, not a generator.** A seeded generator is stateful:
+  built outside the updater and captured, the replay would continue its sequence instead of
+  repeating it, and the hands would still differ. Taking the number and building the generator
+  inside makes that impossible to express. `dealStandardTriple` and `dealRescueShape` lost their
+  `= Math.random` default for the same reason — a forgotten argument is now a type error rather
+  than a silent re-roll.
+- **A small saving on the drop path**, measured during review: the tray keys each slot on the
+  shape's id, whose suffix comes from the dealer's draw. Two frames that disagreed on every id made
+  React tear down and rebuild up to three slots and their cells; identical ids reconcile in place.
+- **Structure.** `seededRandom` and the `Rng` type moved out of `lineClear.ts` (a module about line
+  clears) into `rng.ts`, since both the clear and the dealer draw from it.
 
-Tests: `useBlocksGame.deal-replay.test.tsx` (4 cases — the bank-emptying drop, the rescue-emptying
-drop, the opening hand, the rescue refresh), each asserting that more than one frame committed (so
-the replay really happened) and that they are identical.
+Tests: `useBlocksGame.deal-replay.test.tsx` — five cases (the bank-emptying drop, the
+rescue-emptying drop, the opening hand, the rescue refresh, and that consecutive drops roll
+different seeds). Each replay case asserts both that the dealer really ran twice and that the
+committed frames are identical; the first assertion is what keeps the suite honest if the harness
+ever stops forcing a replay, which was proven by mutation to make the older suites pass vacuously.

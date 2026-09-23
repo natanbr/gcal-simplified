@@ -6,8 +6,10 @@
 // independent draws, so the child is handed a hand that can actually be played
 // out. See docs/requirements.md → "Proactive Shapes Generator".
 //
-// Randomness comes in as an `rng` parameter (defaulting to Math.random), which
-// is what makes the balance rules testable, and lets a caller pass a seeded one.
+// Randomness comes in as a REQUIRED `rng` parameter. No Math.random default:
+// every caller inside a React state updater must pass a seeded generator, and a
+// default would let a forgotten argument reintroduce the re-rolling deal
+// (2026-09-23) without so much as a type error.
 // ============================================================
 
 import { GameShape, SHAPE_POOL, HELP_SHAPES, LEVEL_COMPLEX_SHAPES } from './types';
@@ -19,9 +21,8 @@ import {
     linesClearedBy,
     projectPlacement,
 } from './placement';
-import { Candidate, Rng, candidatesFor, groupByTemplate, pick, pickCandidate, shuffle, toGameShape } from './candidates';
-
-export type { Rng };
+import { Candidate, candidatesFor, groupByTemplate, pick, pickCandidate, shuffle, toGameShape } from './candidates';
+import { Rng } from './rng';
 
 export interface Difficulty {
     /** Chance the first shape is one that can finish a line. */
@@ -175,7 +176,7 @@ function dealPair(
  * 3. the other two are chosen so both fit in the round (`pairChance`),
  * 4. and the three are shuffled, so the gift is not always in slot one.
  */
-export function dealStandardTriple(grid: number[][], level: number, rng: Rng = Math.random): GameShape[] {
+export function dealStandardTriple(grid: number[][], level: number, rng: Rng): GameShape[] {
     const { clearChance, pairChance } = difficultyFor(level);
     const candidates = candidatesFor(poolForLevel(level));
     const fitting = candidates.filter(c => hasAnyPlacement(grid, c.cells));
@@ -214,7 +215,7 @@ export function anyPoolShapeFits(grid: number[][], level: number): boolean {
  * this slot is the promise that a maths answer can always rescue the child from
  * a game-over — a monomino is a legitimate answer when one cell is all there is.
  */
-export function dealRescueShape(grid: number[][], rng: Rng = Math.random): GameShape {
+export function dealRescueShape(grid: number[][], rng: Rng): GameShape {
     const candidates = candidatesFor([...HELP_SHAPES, ...SHAPE_POOL]);
     const fitting = candidates.filter(c => hasAnyPlacement(grid, c.cells));
     const chosen = fitting.length > 0 ? pickCandidate(fitting, rng) : fallbackCandidate(grid, rng);
