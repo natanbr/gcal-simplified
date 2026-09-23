@@ -1101,3 +1101,33 @@ Tests: `store/__tests__/mcReducer.mood-cap.test.ts` and `mcReducer.mood-cap-life
 (new), `src/__tests__/gauge-writer-boundary.test.ts` (new, structural), and a held-full case in
 `__tests__/idle-performance.test.tsx`.
 
+### 2026-09-23 `npm run tsc` type-checks the root config files
+
+**Why**: the type-check gate skipped the three files that configure the build, the unit runner and
+the E2E runner. `vite.config.ts` and `vitest.config.ts` live in `tsconfig.node.json`, which
+`tsconfig.json` lists under `references`, and plain `tsc` never builds a referenced project;
+`playwright.config.ts` was in no tsconfig at all. A type error in any of them passed every
+Definition-of-Done gate. The 2026-09-21 change above named all three as knowingly unchecked; this
+closes that list.
+
+- `npm run tsc` is now `tsc && tsc -p tsconfig.test.json && tsc -p tsconfig.node.json --composite
+  false --noEmit`, and that project includes every root `*.config.ts`. `npm run build` still
+  type-checks the app config only.
+- Both flags on the third step are load-bearing, each verified by running the mutation. Without
+  `--noEmit` the run writes `vite.config.js`, `vitest.config.js` and `playwright.config.js` into the
+  repo root, and Vite loads `vite.config.js` in preference to `vite.config.ts`, so a stale emitted
+  copy would silently become the build config. Without `--composite false` it leaves
+  `tsconfig.node.tsbuildinfo` there, untracked and not gitignored, because `composite` forces
+  incremental mode even under `--noEmit`. `composite` itself stays: without it the gate's first step
+  fails with TS6306, and it is what gives these files their settings in the editor.
+- `tsconfig.node.json` also gained `target`/`lib`/`types` for Node. Without them the new check
+  accepted `document.querySelector(...)` inside `playwright.config.ts` — a browser type space for
+  files that only ever run in Node.
+
+Tests: `typecheck-coverage.test.ts` owns which files are checked (`UNCHECKED_BY_DESIGN` is now
+empty, plus vacuity cases that the script runs the root-config project and the walk really yields
+the root configs); `typescript-strict-config.test.ts` owns the command and now pins that no step
+emits or leaves a build-info file. The rule-registry entry moved from `manual` to `guarded` and the
+unguarded tripwire dropped from 7 to 6. Also fixed on the way: the shared source walk listed
+symlinks that point nowhere, which made four guard suites fail for the wrong reason
+(`helpers/sourceFiles.test.ts`).

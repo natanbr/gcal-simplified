@@ -17,7 +17,7 @@ You are the master architect, PM, UX expert, developer and QA of this project!
 # Development
 npm run dev              # Vite dev server (5173) + Electron with HMR
 npm run build            # tsc + vite build + electron-builder
-npm run tsc              # Type-check: app config, then tsconfig.test.json (unit tests too)
+npm run tsc              # Type-check: app config, tsconfig.test.json (unit tests), root *.config.ts
 npm run lint             # ESLint (zero warnings tolerance)
 
 # Testing
@@ -36,7 +36,13 @@ npm run release          # Bump + build + publish in one go; use /release, which
 1. New/changed tests are GREEN
 2. No regressions in the existing suite
 3. `npm run lint` exits clean (`--max-warnings 0`)
-4. `npm run tsc` exits with 0 errors — it checks every file under src/, electron/ and e2e/, unit tests included (guarded by `src/__tests__/typecheck-coverage.test.ts`). `npm run build` type-checks the app config only
+4. `npm run tsc` exits with 0 errors — it checks every file under src/, electron/ and e2e/, unit tests
+   included, plus the root `*.config.ts` files (guarded by `src/__tests__/typecheck-coverage.test.ts`).
+   Those configs live in `tsconfig.node.json`, which plain `tsc` never builds because it is a referenced
+   project, so the script runs it by name; its `--noEmit` stops an emitted `vite.config.js` shadowing
+   `vite.config.ts`, and `--composite false` stops a `tsconfig.node.tsbuildinfo` landing in the repo root
+   (both flags guarded by `src/__tests__/typescript-strict-config.test.ts`). `npm run build` type-checks
+   the app config only
 
 ## Architecture
 **Electron desktop app** (React + Vite + TypeScript) with two domains: the **Calendar app** (`src/components/`, `src/features/`, `src/hooks/`) and the kid-facing **Mission Control** (`src/mission-control/`, isolated — see Conventions). The map — process model, store internals, always-mounted bridges, remote control, auth — lives in [ai-index.md](ai-index.md). What stays here are the invariants that cause bugs when broken:

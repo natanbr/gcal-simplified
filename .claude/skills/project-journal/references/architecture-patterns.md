@@ -746,3 +746,25 @@ be an early return that keeps the anchor. If it isn't, the 3-minute gap re-ancho
 state every few minutes, all day. Test that by ticking past that horizon and asserting the same
 reference.
 
+## 2026-09-23 — A pinned command sees a flag removed, never one added; and `it.runIf` reads its condition too early
+
+**Learning:** Closing the last hole in the tsc gate (the root `*.config.ts` files, PR 176) produced
+two guards that read stronger than they were. First, `typescript-strict-config` pins the command as
+a string, so any edit must touch two lines — but equality only catches a flag being *taken away*.
+Appending `--noCheck` to both `scripts.tsc` and `TSC_SCRIPT` left every guard green while
+`npm run tsc` exited 0 on a real TS2322: the whole gate off, nothing red. The fix was not another
+pin but reading each step's *effective* options — the config file's options with the step's flags
+over the top, which is the precedence tsc itself applies — and asserting on those. Second, the new
+walk test gated its central case with `it.runIf(linkable)`, where `linkable` is set in `beforeAll`.
+Vitest evaluates a `runIf`/`skipIf` condition while it *collects* the file, which is before any
+hook has run, so the case always ran; on a machine that refuses symlinks it would have passed with
+no link present. A warning printed "SKIPPED" next to a green check. Third, the first spelling of
+"the root configs are typed against Node" read `options.lib ?? []` and `.not.toContain('lib.dom')`
+— which passes when `lib` is *deleted*, the exact mutation it existed to catch, because an absent
+`lib` is `undefined` rather than the materialised default.
+**Action:** When a guard models a command, assert on the options the command resolves to, not on
+its spelling. When a case must be conditional, skip at run time (`ctx.skip()`), never with
+`it.runIf` on a value a hook assigns. And when an assertion means "this setting is present and
+says X", make absence fail first (`expect(value).toBeDefined()`), because `?? []` turns a deleted
+setting into a pass. Every one of these was found by running the mutation, not by reading: an
+assertion nobody has watched fail is a guess about what it checks.

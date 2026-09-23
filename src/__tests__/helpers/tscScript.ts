@@ -9,21 +9,34 @@
 // callers, so a new step reaches both guards at once.
 // ============================================================
 
+/** One `tsc` invocation in a script: which config, and the arguments it is given. */
+export interface TscStep {
+    config: string;
+    /** Everything after `tsc`, verbatim — for a caller that reads the flags. */
+    args: string[];
+}
+
 /**
- * The tsconfig each `tsc` in a script runs: `-p`/`--project`, else tsconfig.json.
- * Flag-blind by design — it answers "which configs", not "with which options",
- * which is why typescript-strict-config also pins the command verbatim.
+ * Each `tsc` in a script, with the tsconfig it runs: `-p`/`--project`, else
+ * tsconfig.json. The parse stays deliberately literal — it answers "which
+ * configs", not "is this command equivalent to that one", which is why
+ * typescript-strict-config also pins the command verbatim.
  */
-export function configsRunBy(script: string): string[] {
+export function stepsRunBy(script: string): TscStep[] {
     return script
         .split(/&&|\|\||;/)
         .map(command => command.trim().split(/\s+/))
         .filter(([bin]) => bin === 'tsc')
-        .map(args => {
+        .map(([, ...args]) => {
             if (args.includes('-b') || args.includes('--build')) {
-                throw new Error(`build mode is not modelled by this guard: "${args.join(' ')}"`);
+                throw new Error(`build mode is not modelled by this guard: "tsc ${args.join(' ')}"`);
             }
             const flag = args.findIndex(arg => arg === '-p' || arg === '--project');
-            return flag === -1 ? 'tsconfig.json' : args[flag + 1];
+            return { config: flag === -1 ? 'tsconfig.json' : args[flag + 1], args };
         });
+}
+
+/** The tsconfig each `tsc` in a script runs. */
+export function configsRunBy(script: string): string[] {
+    return stepsRunBy(script).map(step => step.config);
 }

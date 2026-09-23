@@ -1,11 +1,27 @@
 {
   "compilerOptions": {
+    // Required by the `references` entry in tsconfig.json — which is also what
+    // applies these settings to the root configs in the editor. Dropping it is
+    // not an option: `tsc -p tsconfig.json`, the first step of the gate, then
+    // fails with TS6306. `npm run tsc` compiles this project with
+    // `--composite false --noEmit`, because plain `tsc` never builds a
+    // referenced project, and composite forces incremental mode, which writes
+    // tsconfig.node.tsbuildinfo into the repo root even under --noEmit.
     "composite": true,
+    // These files run in Node, never in a browser. Without lib/types the check
+    // would accept `document.querySelector(...)` in playwright.config.ts, which
+    // is most of the value of checking a config file at all.
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "strict": true
   },
-  "include": ["vite.config.ts", "vitest.config.ts"]
+  // Every root *.config.ts. That this project is compiled at all is guarded by
+  // src/__tests__/typecheck-coverage.test.ts, and the flags above by
+  // src/__tests__/typescript-strict-config.test.ts.
+  "include": ["*.config.ts"]
 }
