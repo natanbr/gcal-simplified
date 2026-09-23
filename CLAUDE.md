@@ -56,6 +56,13 @@ npm run release          # Bump + build + publish in one go; use /release, which
   `MOOD_TOKENS_PER_DAY` (tokens per active day, not per hour) and are converted by
   `moodHourlyRate(mood, settings)` against the configured active window. Earning a token resets
   `moodWind` to 0. Do not reintroduce a calendar-day or on-mount grant.
+- **Mood gauge writer**: `moveGauge` in `store/moodGauge.ts` is the only writer of `behaviorProgress`
+  during a dispatch — heartbeat, mission bonus, missed mission, whining and the parent's adjustment
+  all spread its `patch`. It decides the grant against the cap *before* spending the progress (a
+  gauge with no room holds at full) and ignores a non-finite amount. Every game-token cap check —
+  the gauge and the parent's grant — goes through `gameTokenRoom`, which counts a Quick-Game goal's
+  token (a trash refunds it; a raw `gameTokens >= 5` let a grant fill that room and the refund was
+  clamped away). Guarded by `src/__tests__/gauge-writer-boundary.test.ts`.
 - **Attribution**: every state-changing action carries `origin` (`local | remote | scheduler |
   auto | system`) and every log entry carries `source`. A token movement with no attribution is a
   bug — the whole point is that a parent can see who moved what.
