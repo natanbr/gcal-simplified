@@ -36,8 +36,11 @@ interface Rule {
     /** Where it is declared. */
     source: string;
     status: Status;
-    /** Repo-relative path to the enforcing test. Required for guarded/ratcheted. */
-    guard?: string;
+    /** Repo-relative path(s) to the enforcing test. Required for guarded/ratcheted.
+     *  Several are allowed because a rule can need more than one file to be fully
+     *  enforced — naming the second one in `defence` instead leaves it unchecked,
+     *  since `defence` is prose and only `guard` is asserted to exist. */
+    guard?: string | string[];
     /** How the guard was proven to actually fail. Manual recipe, deliberately
      *  not automated — a mutation-testing framework is more machinery than this
      *  project wants. */
@@ -163,7 +166,18 @@ const REGISTRY: Rule[] = [
         status: 'guarded',
         guard: 'src/mission-control/store/__tests__/mcReducer.streak-lock.test.ts',
         verifiedRedBy: "drop the isRefusedByShieldLock call from createLogEntry — all 5 'writes no activity-log line' cases go red; or remove the window mirror from activityLog.ts's CONSUME_CASE branch — the refused-redemption log case goes red (proven 2026-09-03).",
-        defence: 'Only the log half is guarded. The drag-handler half (refuse BEFORE the exit animation, so the token springs back instead of vanishing) has NO test: this entry used to say GlobalBank.test.tsx / GoalPedestal.test.tsx covered it, but neither file drops a coin or reaches handleTokenDrop, and neither changed after the claim was written (found 2026-09-21 while type-checking those files).',
+        defence: 'This entry guards the log half only. The drag-handler half is the next entry, guarded since 2026-09-23.',
+    },
+    {
+        rule: 'A locked drop is refused BEFORE the optimistic UI commits, so the coin springs back instead of vanishing',
+        source: 'CLAUDE.md → Conventions → Refusals must be silent in the log and visible on screen',
+        status: 'guarded',
+        guard: [
+            'src/mission-control/components/GlobalBank.test.tsx',
+            'src/mission-control/components/GoalPedestal.test.tsx',
+        ],
+        verifiedRedBy: "delete `if (economyLocked) return false` from GlobalBank's handleTokenDrop — the locked case goes red with 2 coins left in a pile of 3; delete it from GoalPedestal's — both locked cases (onto the bank, onto another goal) go red with 1 coin left in 2 slots. Read the lock once at mount (`useRef(isEconomyLocked(state))`) — the six 'while the screen stays open' cases go red and nothing else does. Start GlobalBank's exit animation BEFORE the guard — the vanishing-coin assertion goes red while the coin count alone stays green, because GlobalBank keeps a deposited coin mounted and only shrinks it. Stop Token springing back (`if (false && !consumed)`) — the locked cases go red. Shifting every drop point off the targets reds only the UNLOCKED controls, which is exactly what those controls are for (all proven 2026-09-23 on an isolated copy).",
+        defence: "Both files assert the RENDERED pile — on the release frame as well as after the exit window — never only the store: the reducer refuses MOVE_TOKEN too, so a store count stays green over the bug that shipped (the coin animated away and the count kept its old total). Each locked case is paired with an unlocked drop at the same point, so a refusal cannot pass by missing the target, and the lock is moved by ADJUST_SHIELD mid-test so a lock read once at mount cannot pass. KNOWN BLIND SPOT: these tests call the drop handler through a mocked Framer gesture, so they prove the DECISION, not that the gesture is reachable — deleting `drag` from Token.tsx leaves them all green, and no E2E covers the coin (see docs/test-coverage-plan.md).",
     },
     {
         rule: 'A mission re-trigger clears loggedTimeoutAt, so consecutive misses actually accumulate',
@@ -342,10 +356,17 @@ const REGISTRY: Rule[] = [
 
 const GUARDED_STATUSES: Status[] = ['guarded', 'ratcheted'];
 
+/** Normalizes `guard` so both checks below see the same shape. An empty array is
+ *  "no guard named" — test the length, never the truthiness of `[]`. */
+function guardFiles(rule: Rule): string[] {
+    if (!rule.guard) return [];
+    return Array.isArray(rule.guard) ? rule.guard : [rule.guard];
+}
+
 describe('rule registry', () => {
     it('names a guard file for every guarded or ratcheted rule', () => {
         const missing = REGISTRY
-            .filter(r => GUARDED_STATUSES.includes(r.status) && !r.guard)
+            .filter(r => GUARDED_STATUSES.includes(r.status) && guardFiles(r).length === 0)
             .map(r => r.rule);
 
         expect(missing, `status says enforced but no guard file is named:\n  ${missing.join('\n  ')}`).toEqual([]);
@@ -353,8 +374,9 @@ describe('rule registry', () => {
 
     it('points every guard at a file that actually exists', () => {
         const broken = REGISTRY
-            .filter(r => r.guard && !existsSync(join(repoRoot, r.guard)))
-            .map(r => `  ${r.rule}\n    → missing: ${r.guard}`);
+            .flatMap(r => guardFiles(r).map(guard => ({ rule: r.rule, guard })))
+            .filter(({ guard }) => !existsSync(join(repoRoot, guard)))
+            .map(({ rule, guard }) => `  ${rule}\n    → missing: ${guard}`);
 
         expect(
             broken,
