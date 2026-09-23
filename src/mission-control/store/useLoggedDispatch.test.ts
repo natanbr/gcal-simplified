@@ -60,7 +60,7 @@ describe('createLogEntry — snapshots match reducer output', () => {
 
     it('MOVE_TOKEN bank→case decrements the bank snapshot but keeps total', () => {
         const state = applyActions([
-            { type: 'SELECT_CASE', caseId: 0, reward: 'show', targetCount: 5 },
+            { type: 'SELECT_CASE', caseId: 0, reward: 'show' },
         ]);
         const action: MCAction = { type: 'MOVE_TOKEN', from: 'bank', to: 0 };
         const log = createLogEntry(action, state);
@@ -71,7 +71,7 @@ describe('createLogEntry — snapshots match reducer output', () => {
     it('invalid MOVE_TOKEN (empty bank) leaves the snapshot unchanged', () => {
         const state: MCState = { ...initialState, bankCount: 0 };
         const withCase = applyActions([
-            { type: 'SELECT_CASE', caseId: 0, reward: 'show', targetCount: 5 },
+            { type: 'SELECT_CASE', caseId: 0, reward: 'show' },
         ], state);
         const log = createLogEntry({ type: 'MOVE_TOKEN', from: 'bank', to: 0 }, withCase);
         expect(log?.bankTokens).toBe(0);
@@ -79,7 +79,7 @@ describe('createLogEntry — snapshots match reducer output', () => {
 
     it('CONSUME_CASE reduces total wealth by the case tokens, bank untouched', () => {
         const state = applyActions([
-            { type: 'SELECT_CASE', caseId: 0, reward: 'show', targetCount: 2 },
+            { type: 'SELECT_CASE', caseId: 0, reward: 'show' },
             { type: 'DEPOSIT_TO_CASE', caseId: 0, amount: 2 },
         ]);
         const log = createLogEntry({ type: 'CONSUME_CASE', caseId: 0 }, state);

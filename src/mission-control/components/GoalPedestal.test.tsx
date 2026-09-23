@@ -75,6 +75,12 @@ function renderPedestal(case_: DisplayCase, bankCount = 3) {
     );
 }
 
+/** Reads the goal back out of the store: the pedestal's own `case_` is a prop. */
+function StoredGoalProbe({ caseId }: { caseId: number }) {
+    const goal = useMCState().cases.find(c => c.id === caseId);
+    return <output data-testid="stored-goal">{`${goal?.reward ?? 'none'} ${goal?.tokenCount} / ${goal?.targetCount}`}</output>;
+}
+
 describe('GoalPedestal', () => {
     it('shows "Add goal" text when the case is empty', () => {
         renderPedestal(emptyCase);
@@ -174,6 +180,62 @@ describe('GoalPedestal', () => {
         expect(screen.queryByText('🎁 Use!')).not.toBeInTheDocument();
 
         localStorage.clear();
+    });
+
+    it('creates the goal at the custom cost the picker shows (0 / 2, not the catalogue 0 / 6)', async () => {
+        localStorage.setItem('mc-state-v5', JSON.stringify({
+            settings: { rewardConfigs: { game: { enabled: true, targetCount: 2 } } },
+        }));
+        try {
+            render(
+                <MCStoreProvider>
+                    <DragLayer>
+                        <GoalPedestal case_={emptyCase} cases={[emptyCase]} bankCount={3} layoutRects={{ bank: null, cases: {} }} />
+                        <StoredGoalProbe caseId={emptyCase.id} />
+                    </DragLayer>
+                </MCStoreProvider>
+            );
+            await act(async () => {
+                fireEvent.click(screen.getByLabelText('Add a new goal'));
+            });
+            const gameButton = screen.getByText('Game').closest('button')!;
+            expect(gameButton).toHaveTextContent('2 ⭐');
+
+            await act(async () => {
+                fireEvent.click(gameButton);
+            });
+            expect(screen.getByTestId('stored-goal')).toHaveTextContent('game 0 / 2');
+        } finally {
+            localStorage.clear();
+        }
+    });
+
+    it('shows and charges a stored out-of-range cost as the clamped 100 (not 1000 slots)', async () => {
+        localStorage.setItem('mc-state-v5', JSON.stringify({
+            settings: { rewardConfigs: { game: { enabled: true, targetCount: 1000 } } },
+        }));
+        try {
+            render(
+                <MCStoreProvider>
+                    <DragLayer>
+                        <GoalPedestal case_={emptyCase} cases={[emptyCase]} bankCount={3} layoutRects={{ bank: null, cases: {} }} />
+                        <StoredGoalProbe caseId={emptyCase.id} />
+                    </DragLayer>
+                </MCStoreProvider>
+            );
+            await act(async () => {
+                fireEvent.click(screen.getByLabelText('Add a new goal'));
+            });
+            const gameButton = screen.getByText('Game').closest('button')!;
+            expect(gameButton).toHaveTextContent('100 ⭐');
+
+            await act(async () => {
+                fireEvent.click(gameButton);
+            });
+            expect(screen.getByTestId('stored-goal')).toHaveTextContent('game 0 / 100');
+        } finally {
+            localStorage.clear();
+        }
     });
 });
 

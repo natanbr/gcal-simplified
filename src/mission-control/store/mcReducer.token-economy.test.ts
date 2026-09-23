@@ -74,12 +74,12 @@ describe('mcReducer — REMOVE_TOKEN', () => {
 // ── SELECT_CASE ─────────────────────────────────────────────────────────────
 
 describe('mcReducer — SELECT_CASE', () => {
-    it('sets case status to active with the chosen reward and targetCount', () => {
-        const state = mcReducer(initialState, {
+    it('sets case status to active with the chosen reward at its configured cost', () => {
+        const configured = { ...initialState, settings: { ...initialState.settings, rewardConfigs: { game: { enabled: true, targetCount: 7 } } } };
+        const state = mcReducer(configured, {
             type: 'SELECT_CASE',
             caseId: 0,
             reward: 'game',
-            targetCount: 7,
         });
         expect(case0(state).status).toBe('active');
         expect(case0(state).reward).toBe('game');
@@ -91,7 +91,6 @@ describe('mcReducer — SELECT_CASE', () => {
             type: 'SELECT_CASE',
             caseId: 0,
             reward: 'movie-popcorn',
-            targetCount: 5,
         });
         state.cases.filter(c => c.id !== 0).forEach(c => {
             expect(c.status).toBe(initialState.cases.find(ic => ic.id === c.id)!.status);
@@ -103,7 +102,6 @@ describe('mcReducer — SELECT_CASE', () => {
             type: 'SELECT_CASE',
             caseId: 1,
             reward: 'show',
-            targetCount: 3,
         });
         expect(state.bankCount).toBe(initialState.bankCount);
     });

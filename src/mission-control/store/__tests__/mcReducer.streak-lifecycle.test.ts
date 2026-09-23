@@ -144,7 +144,7 @@ describe('mission streak — the lock a real child would actually hit', () => {
         // dropping out of the locked set, and any future change that lets the
         // real-miss path reach a streak the lock predicate does not recognise.
         let s: MCState = { ...initialState };
-        s = mcReducer(s, { type: 'SELECT_CASE', caseId: 0, reward: 'campfire', targetCount: 4, timestamp: `${day(1)}T18:00:00` });
+        s = mcReducer(s, { type: 'SELECT_CASE', caseId: 0, reward: 'campfire', timestamp: `${day(1)}T18:00:00` });
 
         // Control: the same deposit works while the shield still holds.
         s = mcReducer(s, { type: 'DEPOSIT_TO_CASE', caseId: 0, amount: 1, timestamp: `${day(1)}T18:05:00` });

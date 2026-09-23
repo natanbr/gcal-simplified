@@ -14,7 +14,6 @@ describe('mcReducer — Quick Game Token Logic', () => {
             type: 'SELECT_CASE' as const, 
             caseId: 0, 
             reward: 'quick-game' as const, 
-            targetCount: 1 
         };
         const nextState = mcReducer(stateWithTokens, action);
 
@@ -32,7 +31,6 @@ describe('mcReducer — Quick Game Token Logic', () => {
             type: 'SELECT_CASE' as const, 
             caseId: 0, 
             reward: 'quick-game' as const, 
-            targetCount: 1 
         };
         const nextState = mcReducer(stateNoTokens, action);
 

@@ -36,7 +36,7 @@ const SAMPLE_ACTIONS: MCAction[] = [
     { type: 'ADD_TOKEN' },
     { type: 'ADD_TOKENS', amount: 2, source: 'mission', label: 'Morning' },
     { type: 'REMOVE_TOKEN' },
-    { type: 'SELECT_CASE', caseId: 0, reward: 'game', targetCount: 5 },
+    { type: 'SELECT_CASE', caseId: 0, reward: 'game' },
     { type: 'DEPOSIT_TO_CASE', caseId: 0, amount: 1 },
     { type: 'MOVE_TOKEN', from: 'bank', to: 0 },
     { type: 'VACUUM_TO_CASE', caseId: 0 },

@@ -12,7 +12,7 @@ import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
-import { REWARD_MAP } from '../rewardCatalogue';
+import { REWARD_MAP, canSelectReward } from '../rewardCatalogue';
 
 export type LogSource = NonNullable<ActivityLogEntry['source']>;
 
@@ -124,6 +124,9 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         case 'REMOVE_TOKEN':
             return { id, timestamp: now, icon: '🪙', message: 'Manual token removed', delta: -1, type: 'manual', colorKey: 'bank', ...snap() };
         case 'SELECT_CASE':
+            // The reducer's own refusal predicate: a disabled reward, or a quick
+            // game with no game token, must not log a goal that was never set.
+            if (!canSelectReward(state, action.reward)) return null;
             return { id, timestamp: now, icon: '🎯', message: `Goal selected: ${rewardLabel(action.reward)}`, type: 'system', colorKey: 'system', ...snap() };
         case 'DEPOSIT_TO_CASE': {
             const tkn = action.amount === 1 ? 'token' : 'tokens';

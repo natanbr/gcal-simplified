@@ -29,6 +29,7 @@ import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, is
 import { isQuickGameWindowOpen } from './gameWindow';
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { createDefaultSkillProgress } from '../skills/types';
+import { canSelectReward, rewardCost } from '../rewardCatalogue';
 
 // The behavior/token-economy engine lives in behaviorSync.ts; re-export its
 // public names so existing consumers keep importing from this module.
@@ -205,15 +206,14 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             return { ...state, bankCount: Math.max(0, state.bankCount - 1) };
 
         case 'SELECT_CASE': {
+            if (!canSelectReward(state, action.reward)) return state; // activityLog.ts mirrors this
             const isQuickGame = action.reward === 'quick-game';
-            if (isQuickGame && state.gameTokens <= 0) return state;
-
             return {
                 ...state,
                 gameTokens: isQuickGame ? state.gameTokens - 1 : state.gameTokens,
                 cases: state.cases.map(c =>
                     c.id === action.caseId
-                        ? { ...c, status: 'active', reward: action.reward, targetCount: action.targetCount }
+                        ? { ...c, status: 'active', reward: action.reward, targetCount: rewardCost(state.settings, action.reward) }
                         : c,
                 ),
             };

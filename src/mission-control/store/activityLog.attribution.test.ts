@@ -45,7 +45,7 @@ const LOGGABLE_ACTIONS: MCAction[] = [
     { type: 'ADD_TOKENS', amount: 3, source: 'responsibility', label: 'Recycling' },
     { type: 'ADD_TOKENS', amount: 1, source: 'manual' },
     { type: 'REMOVE_TOKEN' },
-    { type: 'SELECT_CASE', caseId: 1, reward: 'game', targetCount: 5 },
+    { type: 'SELECT_CASE', caseId: 1, reward: 'game' },
     { type: 'DEPOSIT_TO_CASE', caseId: 0, amount: 1 },
     { type: 'MOVE_TOKEN', from: 'bank', to: 0 },
     { type: 'MOVE_TOKEN', from: 0, to: 'bank' },

@@ -54,7 +54,7 @@ const stamp = (a: MCAction): MCAction => ({ ...a, timestamp: NOON });
 // The CHILD's economy — everything they can spend or earn on their own.
 // A broken shield freezes all of it.
 const FROZEN_ACTIONS: MCAction[] = [
-    { type: 'SELECT_CASE', caseId: 2, reward: 'campfire', targetCount: 4 },
+    { type: 'SELECT_CASE', caseId: 2, reward: 'campfire' },
     { type: 'DEPOSIT_TO_CASE', caseId: 1, amount: 2 },
     { type: 'MOVE_TOKEN', from: 'bank', to: 1 },
     { type: 'VACUUM_TO_CASE', caseId: 1 },
