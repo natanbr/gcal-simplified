@@ -671,3 +671,27 @@ lapsed; (3) never rewrite time-derived state at load, let the same event lift it
 is logged. Pin the raw read structurally (`__tests__/privilege-suspension-boundary.test.ts`). In
 a fake-timer test, advance to just before the end in its own `act()`: one big jump lets the
 mount's other timers re-render after the end and pass without the fix.
+
+## 2026-09-23 — When the reducer refuses too, the store cannot see an optimistic-UI bug
+
+**Learning:** The rule registry said the locked-drop spring-back was "covered by the component tests
+in GlobalBank.test.tsx / GoalPedestal.test.tsx"; neither file performed a drag. A `defence` line is
+prose — nothing checks it. And the obvious test would not have caught the bug either: the reducer
+refuses `MOVE_TOKEN` while the shield is broken, so with the handler's lock check deleted the store
+still reads 3 coins. Only the rendered pile shows the coin that was animated away. Two jsdom traps on
+the way: the framer Proxy mock hands Token's `onDragEnd` to React as the DOM `dragend` handler, which
+gets no `info`; and jsdom has no `DragEvent`, so `fireEvent.dragEnd(el, { clientX })` loses the point.
+**Action:** when a UI guard duplicates a reducer guard, assert what the child sees (rendered count,
+spring-back), never only the store, and prove it red by deleting the UI guard alone. Assert on the
+release frame as well as after the exit window — "ends up back in the pile" and "never leaves the
+pile" are different promises, and only the second is what the child complained about. To drive a
+drop, have the mock rebuild `info.point` from the event (`pageX`/`pageY` — that is what Framer's
+`extractEventInfo` reports, and jsdom derives them from `clientX`/`clientY`) and dispatch
+`new MouseEvent('dragend', …)`; pair every refused drop with an accepted one at the
+same point, or a point that misses the target passes the refusal test for the wrong reason. Before
+trusting a registry `defence` that names tests, open them — and prefer `guard: [a, b]`, which the
+registry asserts exists, over a second file named only in `defence`, which nothing checks.
+**What this shape cannot prove:** a mocked gesture supplies the `info` the component reads, so the
+suite proves the DECISION given a drop, never that the drop is reachable — deleting `drag` from
+`Token.tsx` leaves all 28 green. Reachability of a gesture is E2E's job; say so in the guard's own
+`defence` rather than letting the next reader assume the mock covers it.
