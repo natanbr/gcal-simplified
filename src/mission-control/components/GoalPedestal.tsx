@@ -14,7 +14,7 @@ import { Button3D } from './Button3D';
 import { MOOD_TOKEN } from '../moodTokenConfig';
 import { Token } from './Token';
 import type { DisplayCase, RewardIcon } from '../types';
-import { REWARDS, REWARD_MAP } from '../rewardCatalogue';
+import { REWARDS, REWARD_MAP, canSelectReward, rewardCost } from '../rewardCatalogue';
 
 let _caseTokenIdCounter = 0;
 const newCaseTokenId = (caseId: number) => `ct-${caseId}-${_caseTokenIdCounter++}`;
@@ -258,8 +258,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
   }, [isComplete]);
 
   const handleSelectReward = (rewardId: RewardIcon) => {
-    const meta = REWARD_MAP[rewardId];
-    dispatch({ type: 'SELECT_CASE', caseId: case_.id, reward: rewardId, targetCount: meta.targetCount });
+    dispatch({ type: 'SELECT_CASE', caseId: case_.id, reward: rewardId }); // the reducer prices it
     setIsSelecting(false);
   };
 
@@ -414,12 +413,10 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
               {REWARDS.filter(r => !(r.id === 'game' && isPhoneGamesSuspended(state.privileges))).map(r => {
-                const config = state.settings.rewardConfigs?.[r.id];
-                const isEnabled = config ? config.enabled : true;
-                if (!isEnabled) return null;
-                if (r.id === 'quick-game' && (state.moodWind < 0 || state.gameTokens < 1 || !isWithinSessionHours)) return null;
+                if (!canSelectReward(state, r.id)) return null; // the reducer's own refusal
+                if (r.id === 'quick-game' && (state.moodWind < 0 || !isWithinSessionHours)) return null;
 
-                const displayTargetCount = config ? config.targetCount : r.targetCount;
+                const displayTargetCount = rewardCost(state.settings, r.id); // what SELECT_CASE charges
                 return (
                 <motion.button
                   key={r.id}

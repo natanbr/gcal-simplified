@@ -256,7 +256,7 @@ export type MCAction = (
     | { type: 'ADD_TOKEN' }
     | { type: 'ADD_TOKENS'; amount: number; source: 'manual' | 'mission' | 'responsibility'; label?: string }
     | { type: 'REMOVE_TOKEN' }
-    | { type: 'SELECT_CASE'; caseId: number; reward: RewardIcon; targetCount: number }
+    | { type: 'SELECT_CASE'; caseId: number; reward: RewardIcon } // cost: rewardCost(), never the caller's
     | { type: 'DEPOSIT_TO_CASE'; caseId: number; amount: number }
     | { type: 'MOVE_TOKEN'; from: 'bank' | number; to: 'bank' | number }
     | { type: 'VACUUM_TO_CASE'; caseId: number }

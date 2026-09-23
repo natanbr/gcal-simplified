@@ -5,7 +5,7 @@
 // ============================================================
 
 import React, { useState } from 'react';
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
 import { MCStoreProvider } from '../store/MCStoreProvider';
@@ -242,5 +242,43 @@ describe('MCSettingsOverlay — save', () => {
         });
 
         expect(capturedPhase).toBe(DEFAULT_SETTINGS.morningStartsAt);
+    });
+});
+
+// ── Rewards tab: the editor shows the cost the picker shows and SELECT_CASE charges ──
+
+describe('MCSettingsOverlay — reward costs', () => {
+    async function openRewardsWith(rewardConfigs: Record<string, { enabled: boolean; targetCount: number }>) {
+        localStorage.setItem('mc-state-v5', JSON.stringify({ settings: { rewardConfigs } }));
+        await renderAndOpen();
+        await act(async () => { fireEvent.click(screen.getByText('🎁 Rewards')); });
+    }
+    /** The number input in the Game row (label span → label group → row). */
+    const gameCostInput = () =>
+        within(screen.getByText('Game').parentElement!.parentElement!).getByRole('spinbutton') as HTMLInputElement;
+
+    it('shows a stored out-of-range cost as the clamped cost that will be charged (100, not 1000)', async () => {
+        await openRewardsWith({ game: { enabled: true, targetCount: 1000 } });
+        expect(gameCostInput().value).toBe('100');
+    });
+
+    it('stores a typed cost clamped to 1..100, not the raw number typed', async () => {
+        // Assert the SAVED value: the input displays through rewardCost(), which
+        // clamps on its own, so the field would read 100 even if 1000 were stored.
+        let savedGameCost: number | undefined;
+        function StoredCost() {
+            savedGameCost = useMCState().settings.rewardConfigs?.game?.targetCount;
+            return null;
+        }
+        render(<MCStoreProvider><StoredCost /><MCSettingsOverlay open onClose={() => {}} /></MCStoreProvider>);
+        await act(async () => { fireEvent.click(screen.getByText('🎁 Rewards')); });
+        await act(async () => { fireEvent.change(gameCostInput(), { target: { value: '1000' } }); });
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-settings-save')); });
+        expect(savedGameCost).toBe(100);
+    });
+
+    it('tells the parent that an open goal keeps the cost it was chosen at', async () => {
+        await openRewardsWith({});
+        expect(screen.getByText(/open goal keeps its cost/i)).toBeInTheDocument();
     });
 });

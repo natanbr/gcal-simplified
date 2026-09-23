@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch } from '../store/useMCStore';
 import type { MCSettings } from '../types';
-import { REWARDS } from '../rewardCatalogue';
+import { REWARDS, clampRewardCost, isRewardEnabled, rewardCost } from '../rewardCatalogue';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useRemoteStatus } from '../contexts/RemoteStatusContext';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
@@ -530,10 +530,10 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                             <span style={{ fontSize: 18 }}>🎁</span>
                                             <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Reward Settings</span>
                                         </div>
-                                        <p style={{ fontSize: 12, color: 'var(--mc-text-muted)'}}>Enable/disable rewards and set custom token targets.</p>
+                                        <p style={{ fontSize: 12, color: 'var(--mc-text-muted)'}}>Enable/disable rewards and set custom token targets. A new cost applies to goals chosen from now on: an open goal keeps its cost until it is used or refunded.</p>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                             {REWARDS.map(r => {
-                                                const config = draft.rewardConfigs?.[r.id] ?? { enabled: true, targetCount: r.targetCount };
+                                                const config = { enabled: isRewardEnabled(draft, r.id), targetCount: rewardCost(draft, r.id) }; // what the picker shows and SELECT_CASE charges
                                                 return (
                                                     <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.6)', padding: '10px 14px', borderRadius: 12, border: '1px solid rgba(160,150,230,0.2)' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 140 }}>
@@ -550,7 +550,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                                     max={100}
                                                                     value={config.targetCount}
                                                                     onChange={e => {
-                                                                        const val = Math.max(1, Number(e.target.value));
+                                                                        const val = clampRewardCost(Number(e.target.value)); // the cost SELECT_CASE will charge
                                                                         set('rewardConfigs', { ...draft.rewardConfigs, [r.id]: { ...config, targetCount: val } });
                                                                     }}
                                                                     style={{
