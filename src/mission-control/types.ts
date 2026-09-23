@@ -83,6 +83,7 @@ export interface Mission {
     startedAt?: string;
     /** Tracks if we already logged the timeout so it doesn't log on remount */
     loggedTimeoutAt?: string;
+    lastActiveAt?: string; // last start or end of a run; never cleared (store/missionActivity.ts)
     tasks: MissionTask[];
     active: boolean;
     whiningDetected?: boolean;

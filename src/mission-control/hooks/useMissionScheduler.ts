@@ -38,6 +38,29 @@ function nextOccurrence(hhmm: string): Date {
     return target;
 }
 
+/**
+ * True when the occurrence of `phase` starting at `occurrenceStart` needs no
+ * scheduler start: it ended today (completed or failed), or the mission ran at
+ * some point since its start time — it is running now, or it last started or
+ * ended at or after that time. The run is what covers a STOP, which records no
+ * outcome: a stop is not a miss (the shield) and not a conclusion (the
+ * quick-game window). Without it a stopped mission was restarted 8 ms later.
+ * A stamp in the future is ignored: it was written under a clock set ahead, and
+ * trusting it would skip every occurrence, silently, until the clock caught up.
+ */
+function occurrenceHandled(s: MCState, phase: MissionPhase, occurrenceStart: Date): boolean {
+    const todayStr = getLocalDateString();
+    const concluded =
+        phase === 'morning' ? s.lastCompletedOrFailedMorningDate === todayStr
+        : phase === 'evening' ? s.lastCompletedOrFailedEveningDate === todayStr
+        : false;
+    const stamp = s.missions.find(m => m.phase === phase)?.lastActiveAt;
+    const activeAt = stamp === undefined ? Number.NaN : Date.parse(stamp);
+    return concluded
+        || s.activeMission === phase
+        || (activeAt >= occurrenceStart.getTime() && activeAt <= Date.now());
+}
+
 export function useMissionScheduler(): void {
     const { state } = useMCStore();
     const dispatch = useMCDispatch();
@@ -92,9 +115,17 @@ export function useMissionScheduler(): void {
             // open must aim at today's occurrence — nextOccurrence alone rolls
             // to tomorrow the second the start time has passed, which is how a
             // sleep spanning 06:00 used to lose the whole day's mission.
+            // Only while that occurrence is pending and nothing else runs, though:
+            // either way the fire does nothing, and the re-schedule below brought
+            // it back every second until the window closed. A mission ending
+            // changes `missions`, which re-arms this effect in time to start it.
             if (endsAt) {
                 const todayStart = occurrenceToday(hhmm);
-                if (todayStart.getTime() <= Date.now() && Date.now() < occurrenceToday(endsAt).getTime()) {
+                const windowOpen = todayStart.getTime() <= Date.now() && Date.now() < occurrenceToday(endsAt).getTime();
+                // stateRef, not the effect's `state`: the 1 s re-schedule re-enters
+                // here without a render.
+                const s = stateRef.current;
+                if (windowOpen && s.activeMission === 'none' && !occurrenceHandled(s, phase, todayStart)) {
                     target = todayStart;
                 }
             }
@@ -102,13 +133,7 @@ export function useMissionScheduler(): void {
                 timeouts.delete(id); // Clean up self first
 
                 const s = stateRef.current;
-                const todayStr = getLocalDateString();
-                const alreadyRun =
-                    phase === 'morning'
-                        ? s.lastCompletedOrFailedMorningDate === todayStr
-                        : phase === 'evening'
-                        ? s.lastCompletedOrFailedEveningDate === todayStr
-                        : false;
+                const alreadyRun = occurrenceHandled(s, phase, target);
 
                 if (!firedTooLate(target, `${phase} mission`, endsAt)) {
                     // Only trigger if no mission is currently running AND it hasn't run today yet
