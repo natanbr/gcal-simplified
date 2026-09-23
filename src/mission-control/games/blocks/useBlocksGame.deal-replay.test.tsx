@@ -16,7 +16,12 @@
 //     that has quietly stopped forcing a replay, bug and all (proven by
 //     mutation: drop the transition below and restore the bug, still green).
 //     Counting calls is safe HERE precisely because this file never uses
-//     StrictMode, where the discarded run would be counted too.
+//     StrictMode, where the discarded run would be counted too. Two is the
+//     number React 18 produces for this harness, and it is a property of
+//     React's scheduling, not of the dealer: if these four ever fail together
+//     while the seeds are plainly rolled outside the updaters, the harness has
+//     stopped forcing a replay. Fix the harness. Do NOT relax the count to 1 —
+//     that is the vacuous suite this file was rewritten to escape.
 //   · the committed frames are IDENTICAL — recorded in a layout effect,
 //     because it is the committed frames that the child sees.
 //
@@ -88,7 +93,9 @@ describe('useBlocksGame — a deal React replays', () => {
 
     beforeEach(async () => {
         vi.useFakeTimers();
-        let n = 0; // varied, so two independent rolls would deal different hands
+        // Varied on purpose: two independent rolls must land differently, or the
+        // last test and both id filters below would pass on a repeated seed.
+        let n = 0;
         vi.spyOn(Math, 'random').mockImplementation(() => (n++ * 0.6180339887) % 1);
         // Reset the counters AND put the real dealer back: these are module-level
         // vi.fn()s, so what a previous test left on them would otherwise stand.
@@ -125,7 +132,7 @@ describe('useBlocksGame — a deal React replays', () => {
             () => game().cancelRescueQuiz(),
         );
 
-        expect(dealStandardTriple).toHaveBeenCalledTimes(2);
+        expect(dealStandardTriple, 'the harness must still force a replay — see the file header').toHaveBeenCalledTimes(2);
         const dealt = frames.filter(frame => frame.bankFull);
         expect(dealt.length).toBeGreaterThan(1);
         expect(dealsIn(dealt).size).toBe(1);
@@ -146,7 +153,7 @@ describe('useBlocksGame — a deal React replays', () => {
             () => game().cancelRescueQuiz(),
         );
 
-        expect(dealRescueShape).toHaveBeenCalledTimes(2);
+        expect(dealRescueShape, 'the harness must still force a replay — see the file header').toHaveBeenCalledTimes(2);
         // Only frames holding a NEW rescue shape: the one just played satisfies
         // "has a rescue shape" too, and would hide a slot that never re-dealt.
         const dealt = frames.filter(frame => frame.rescueId !== null && frame.rescueId !== played.id);
@@ -160,7 +167,7 @@ describe('useBlocksGame — a deal React replays', () => {
             () => game().cancelRescueQuiz(),
         );
 
-        expect(dealStandardTriple).toHaveBeenCalledTimes(2);
+        expect(dealStandardTriple, 'the harness must still force a replay — see the file header').toHaveBeenCalledTimes(2);
         const dealt = frames.filter(frame => frame.phase === 'playing');
         expect(dealt.length).toBeGreaterThan(1);
         expect(dealsIn(dealt).size).toBe(1);
@@ -177,7 +184,7 @@ describe('useBlocksGame — a deal React replays', () => {
             () => game().cancelRescueQuiz(),
         );
 
-        expect(dealRescueShape).toHaveBeenCalledTimes(2);
+        expect(dealRescueShape, 'the harness must still force a replay — see the file header').toHaveBeenCalledTimes(2);
         const dealt = frames.filter(frame => frame.rescueId !== before);
         expect(dealt.length).toBeGreaterThan(1);
         expect(dealsIn(dealt).size).toBe(1);
