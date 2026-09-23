@@ -912,3 +912,17 @@ rescue-emptying drop, the opening hand, the rescue refresh, and that consecutive
 different seeds). Each replay case asserts both that the dealer really ran twice and that the
 committed frames are identical; the first assertion is what keeps the suite honest if the harness
 ever stops forcing a replay, which was proven by mutation to make the older suites pass vacuously.
+
+### 2026-09-23 The locked-drop refusal is guarded by tests that drop a coin
+
+- The 2026-09-21 entry above left this open: the registry claim was corrected, the tests were not
+  written. They are now. `GlobalBank.test.tsx` and `GoalPedestal.test.tsx` release a real coin at a
+  point inside real layout rects — bank onto a goal, goal onto the bank, goal onto another goal —
+  each with the shield broken and with it holding.
+- They assert the rendered pile on the release frame AND after the exit window, not the store: the
+  reducer refuses `MOVE_TOKEN` while the shield is broken, so a store count stays green over the bug
+  that shipped (the coin animated away, the count kept its old total).
+- Known limit, recorded in the registry: the gesture itself is mocked, so these prove the decision
+  given a drop, not that the coin is draggable. No E2E covers that today.
+- No shipped behaviour changed. One dead line left: `GoalPedestal`'s `if (!layoutRects) return false`,
+  unreachable because the prop is required and `MissionControl` always passes it.
