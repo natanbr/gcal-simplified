@@ -35,7 +35,7 @@ const IGNORED_DIRS = new Set([
 ]);
 
 /** Checked by no config the tsc script runs, knowingly. Each line is a hole.
- *  tsconfig.node.json holds the first two but `tsc` does not build project
+ *  tsconfig.node.json holds the last two but `tsc` does not build project
  *  references, and playwright.config.ts is in no tsconfig at all — the rule
  *  registry's "TypeScript: strict — root config files included" entry owns
  *  this list, and the follow-up task that adds a third tsc step empties it. */
@@ -44,7 +44,7 @@ const UNCHECKED_BY_DESIGN = ['playwright.config.ts', 'vite.config.ts', 'vitest.c
 /** A declaration file is in a config's file list but `skipLibCheck: true` means
  *  tsc reports nothing from inside it, so counting one as covered would be a
  *  lie. sourceFiles.productionSources drops them for the same reason. */
-const DECLARATION = /\.d\.tsx?$/;
+const DECLARATION = /\.d\.[cm]?tsx?$/;
 
 const TEST_FILE = /\.(test|spec)\.tsx?$/;
 
