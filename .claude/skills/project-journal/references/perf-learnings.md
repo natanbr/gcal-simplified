@@ -162,6 +162,26 @@ constant's id (`orientationCache` in `candidates.ts`). If the cached value can r
 here, a dealt shape's `cells` — hand out copies, so no consumer can corrupt the cache for every
 later game.
 
+## 2026-09-22 — A self-rescheduling `setTimeout` is a poll the timer registry cannot see
+
+**Learning:** `useMissionScheduler.schedulePhase` re-arms itself 1 s after every fire, and aimed at
+today's occurrence whenever that window was open, without asking whether the occurrence had already
+run. So for the whole window (30 min mornings, 60 min evenings, on the Calendar view too) it armed
+about 2 timers a second: a 0 ms fire that did nothing, then the next 1 s re-arm. `timer-registry`
+scans for `setInterval` only, so this 1 Hz poll passed every guard. It was found only because it was
+the second path by which a stopped mission restarted (see requirements, 2026-09-22). A fix in the
+fire callback alone would have stopped the restart and kept the poll.
+**Action:** A recursive `setTimeout` is an interval. Decide at *arm* time whether there is anything
+to wait for, and aim at the next real event (here: tomorrow once today's occurrence ran). To prove
+it, spy on `setTimeout` and assert that nothing is armed across a quiet stretch
+(`useMissionScheduler.stop.test.tsx`). A scheduler should also remember what it *started*, not
+infer it from outcomes. Any exit that records no outcome (a stop) otherwise reads as "not yet run".
+Remember both edges of a run, not only the start: a start-only stamp missed a mission started before
+the window and stopped inside it, and the re-arm polled again while it ran. And a pending occurrence
+blocked by ANOTHER running mission is also nothing to wait for: aim past it and let the run ending
+re-arm the effect.
+Extending `timer-registry` to recursive timeouts is an open follow-up.
+
 ## 2026-09-23 — A random draw inside a replayable updater would cost a remount, not just a flicker
 
 A `setState` updater React runs twice (StrictMode in dev, a sync-lane update rebased over a pending
