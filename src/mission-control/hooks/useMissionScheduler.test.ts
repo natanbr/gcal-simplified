@@ -306,11 +306,11 @@ describe('useMissionScheduler hook execution', () => {
                         startsAt: '06:00',
                         endsAt: '06:30',
                         durationMins: 30,
-                        startedAt: null,
+                        active: false,
                         tasks: [],
                     }
                 ]
-            },
+            } satisfies MCState,
             dispatch: mockDispatch,
         };
 
@@ -352,10 +352,11 @@ describe('useMissionScheduler hook execution', () => {
                         endsAt: '06:30',
                         durationMins: 30,
                         startedAt: startedTime.toISOString(),
+                        active: true,
                         tasks: [],
                     }
                 ]
-            },
+            } satisfies MCState,
             dispatch: mockDispatch,
         };
 
@@ -390,11 +391,11 @@ describe('useMissionScheduler hook execution', () => {
                         startsAt: '06:00',
                         endsAt: '06:30',
                         durationMins: 30,
-                        startedAt: null,
+                        active: false,
                         tasks: [],
                     }
                 ]
-            },
+            } satisfies MCState,
             dispatch: mockDispatch,
         };
 

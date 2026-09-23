@@ -354,7 +354,7 @@ describe('MissionOverlay — color token isolation outside .mc-root', () => {
         const overlay = screen.getByTestId('mc-mission-overlay');
         // The overlay must carry --mc-text as an inline style property
         // so it resolves correctly regardless of ancestor DOM context.
-        expect(overlay).toHaveStyle({ '--mc-text': '#3a3560' } as React.CSSProperties);
+        expect(overlay).toHaveStyle({ '--mc-text': '#3a3560' });
     });
 
     it('overlay element defines --mc-text-muted inline so it resolves outside .mc-root', async () => {
@@ -362,6 +362,6 @@ describe('MissionOverlay — color token isolation outside .mc-root', () => {
         await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
 
         const overlay = screen.getByTestId('mc-mission-overlay');
-        expect(overlay).toHaveStyle({ '--mc-text-muted': '#8a87b8' } as React.CSSProperties);
+        expect(overlay).toHaveStyle({ '--mc-text-muted': '#8a87b8' });
     });
 });

@@ -30,7 +30,7 @@ import {
 import { candidatesFor } from './candidates';
 import { GRID_SIZE, GameShape, HELP_SHAPES, SHAPE_POOL } from './types';
 
-function emptyBoard(fill = CELL.EMPTY): number[][] {
+function emptyBoard(fill: number = CELL.EMPTY): number[][] {
     return Array.from({ length: GRID_SIZE }, () => Array<number>(GRID_SIZE).fill(fill));
 }
 

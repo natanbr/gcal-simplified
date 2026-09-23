@@ -12,15 +12,16 @@ vi.mock('../../../components/SideDrawer', () => ({
 }));
 
 import { WeatherDashboard } from './WeatherDashboard';
-import { AppTask } from '../../../types';
+import { AppTask, WeatherData } from '../../../types';
+
+const mockWeather: WeatherData = {
+    current: { temperature: 10, weatherCode: 0, windSpeed: 5, windDirection: 180, windGusts: 10 },
+    daily: { time: [], sunrise: [], sunset: [], weather_code: [], temperature_2m_max: [], temperature_2m_min: [] },
+    hourly: { time: [], temperature_2m: [], precipitation_probability: [], weather_code: [] }
+};
 
 describe('WeatherDashboard', () => {
     it('should render correct buttons for Weather and Tasks', async () => {
-        const mockWeather = {
-            current: { temperature: 10, weatherCode: 0, windSpeed: 5, windDirection: 180, windGusts: 10 },
-            daily: { sunrise: [], sunset: [], weather_code: [], temperature_2m_max: [], temperature_2m_min: [] },
-            hourly: { time: [], temperature_2m: [], precipitation_probability: [], weather_code: [] }
-        };
         const mockTasks: AppTask[] = [];
 
         render(<WeatherDashboard 
@@ -37,12 +38,7 @@ describe('WeatherDashboard', () => {
     });
 
     it('should render tasks list when Tasks button is clicked', () => {
-        const mockWeather = {
-            current: { temperature: 10, weatherCode: 0, windSpeed: 5, windDirection: 180, windGusts: 10 },
-            daily: { sunrise: [], sunset: [], weather_code: [], temperature_2m_max: [], temperature_2m_min: [] },
-            hourly: { time: [], temperature_2m: [], precipitation_probability: [], weather_code: [] }
-        };
-        const mockTasks = [
+        const mockTasks: AppTask[] = [
             { id: '1', title: 'Test Task 1', status: 'needsAction' },
             { id: '2', title: 'Test Task 2', status: 'completed' }
         ];
