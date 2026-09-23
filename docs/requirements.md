@@ -783,3 +783,34 @@ resolution moved to the pure `lineClear.ts`; `useBlocksGame.ts` came off the fil
   testable; the logic previously sat in hook `useCallback`s reachable only through a randomly chosen
   starting layout. The deal made at the drop itself still uses `Math.random`; seeding it is a separate
   follow-up. `useBlocksGame.ts` went from 295 to 214 lines.
+
+### 2026-09-21 `npm run tsc` type-checks the unit tests
+
+**Why**: the Definition of Done's type-check gate skipped every `src/**/*.test.ts(x)` and
+`__tests__` file. `tsconfig.json` excludes them, and `tsconfig.test.json` inherited that exclude
+through `extends`; vitest pointed at the test config, but only `vitest --typecheck` reads it, and
+no script runs that. 22 type errors had piled up in 9 test files.
+
+- `npm run tsc` is now `tsc && tsc -p tsconfig.test.json`: the app config first, which keeps
+  test globals such as `vi` out of the app's type space, then every test file. `npm run build`
+  and `npm run release` still type-check the app config only; test files don't ship.
+- The test config is as strict as the app's. Its relaxed unused-local settings only hid five
+  dead `import React` lines.
+- All 22 errors from the original probe are fixed with real types: 9 by PR 160, 13 here. Every
+  one was a fixture that had drifted from its type or a stale prop; no test was green only
+  because of the wrong shape.
+- 16 more were fixed here that the probe never counted: 5 dead `import React` lines (hidden by
+  the test config's relaxed unused-local settings), and 11 that landed on main *while this was
+  in review* — `e2e-mission-clock.test.ts` casting a six-member fake straight to Playwright's
+  `Page` (PR 164), and 10 in `dealer.test.ts` / `placement.test.ts`, where `fill = CELL.EMPTY`
+  infers the literal type `0` so every `emptyBoard(CELL.BLOCK)` call is an error (the
+  coherent-hand dealer). Roughly one new error every two days, which is the rate the gate stops.
+- Guards: `src/__tests__/typecheck-coverage.test.ts` reads the configs the script runs and fails
+  if any `.ts(x)` file under `src`, `electron` or `e2e` is outside them. PR 160's
+  `typescript-strict-config.test.ts` now pins the two-step script, holds `tsconfig.test.json` to
+  the same strict flags as the app config, and scans test files for `@ts-nocheck` too.
+- Still open: the root config files (`vite.config.ts`, `vitest.config.ts`, `playwright.config.ts`)
+  are type-checked by no gate.
+- Found along the way: the rule registry claimed the "refuse a locked drag before the coin
+  animates" half of the shield rule was covered by the GlobalBank/GoalPedestal tests. Neither
+  file drops a coin. The claim is corrected; the tests are still to be written.

@@ -74,7 +74,7 @@ Generic, pure functions used across multiple domains.
 ---
 
 ## 🛠️ Execution Commands
-* **Type Check**: `npx tsc --noEmit`
+* **Type Check**: `npm run tsc` (the app config, then `tsconfig.test.json` — bare `npx tsc` skips every test file)
 * **Linting**: `npm run lint`
 * **Unit Tests**: `npm run test:unit` (Vitest)
 * **E2E Tests**: `npm run test:run` (Playwright — requires built Electron app; runs sequentially because some specs share the real userData)
