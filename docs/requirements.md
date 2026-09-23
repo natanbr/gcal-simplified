@@ -826,13 +826,14 @@ consecutive committed frames could hold different shapes, and the child would wa
 were just dealt swap for another.
 
 **Honest status: nobody has seen this happen, and today nobody can.** The replay needs a
-lower-priority writer on this hook's state to be pending when the finger lifts; the app has none
-(there is no `startTransition` or `useTransition` anywhere in `src/`, and the one deferred writer —
-the rescue quiz resolving — runs while the quiz overlay covers the board and tray). StrictMode runs
+lower-priority update to be *pending on this hook's state when the finger lifts*. Two such writers
+exist — the rescue quiz resolving from a timer, and the game-over check — and neither can be in
+flight at that moment: the quiz resolve runs while the quiz overlay covers the board, the tray and
+the rescue slot, and the game-over update lands only when no valid drop can follow. StrictMode runs
 the updater twice but commits once, so development shows nothing either. This is a guard against a
-class of bug, not a repair of a reported one: one new deferred update on this hook is all it would
-take, and the reproduction in `useBlocksGame.deal-replay.test.tsx` has to construct that update
-itself.
+class of bug, not a repair of a reported one; it is a claim about timing, not about absence, so any
+new deferred write on this hook (a `.then`, a timer, a deferred score) makes it live. The
+reproduction in `useBlocksGame.deal-replay.test.tsx` has to construct that pending update itself.
 
 - **The hand a drop deals is fixed before the drop is applied.** One seed per call, rolled outside
   the updater next to the feedback id, exactly as the line clear rolls its meteor seed; every draw
@@ -847,9 +848,11 @@ itself.
   inside makes that impossible to express. `dealStandardTriple` and `dealRescueShape` lost their
   `= Math.random` default for the same reason — a forgotten argument is now a type error rather
   than a silent re-roll.
-- **A small saving on the drop path**, measured during review: the tray keys each slot on the
-  shape's id, whose suffix comes from the dealer's draw. Two frames that disagreed on every id made
-  React tear down and rebuild up to three slots and their cells; identical ids reconcile in place.
+- **A small saving on the drop path**, reasoned during review, not profiled — and by the paragraph
+  above it never happened in the running app: the tray keys each slot on the shape's id, whose
+  suffix comes from the dealer's draw, so two frames disagreeing on every id would have made React
+  tear down and rebuild up to three slots and their cells rather than reconcile them in place. What
+  *was* measured is the cost of the seeded generator itself: below the noise floor.
 - **Structure.** `seededRandom` and the `Rng` type moved out of `lineClear.ts` (a module about line
   clears) into `rng.ts`, since both the clear and the dealer draw from it.
 

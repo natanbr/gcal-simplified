@@ -17,9 +17,12 @@ interface HookState { game: BlocksGameState; pendingClear: PendingClear | null }
  * (only one of which commits), and in production a sync-lane update replayed on
  * top of a pending lower-priority one, where BOTH runs commit. A re-roll deals a
  * different hand on the second run, so the tray would change shapes under the
- * child's finger after a single drop. No lower-priority writer on this hook's
- * state exists today, which is why nobody has seen it; one new deferred update
- * is all it would take.
+ * child's finger after a single drop. Nobody has seen it, because no
+ * lower-priority update is pending on this hook's state at the moment a shape
+ * drops: the two that exist — the rescue quiz resolving from a timer, and the
+ * game-over check — land while the quiz overlay covers the tray, or when no
+ * drop can follow. That is a claim about timing, not about absence, and any new
+ * deferred write here (a `.then`, a timer, a deferred score) invalidates it.
  *
  * Only the number is rolled out here. The generator must be built INSIDE the
  * updater: a `seededRandom` closure captured outside is stateful, so the second

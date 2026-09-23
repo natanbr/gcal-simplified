@@ -162,14 +162,16 @@ constant's id (`orientationCache` in `candidates.ts`). If the cached value can r
 here, a dealt shape's `cells` — hand out copies, so no consumer can corrupt the cache for every
 later game.
 
-## 2026-09-23 — A random draw inside a replayable updater costs a remount, not just a flicker
+## 2026-09-23 — A random draw inside a replayable updater would cost a remount, not just a flicker
 
 A `setState` updater React runs twice (StrictMode in dev, a sync-lane update rebased over a pending
 lower-priority one in production) re-rolls any `Math.random()` inside it, so the two runs commit
 different values. When a drawn value feeds a React **key**, that is not a cosmetic difference: the
-dealer's id suffix feeds `StandardShapesTray`'s `key={shape.id}`, so the two frames disagreed on
-every key and React tore down and rebuilt up to three tray slots and their cells — on the drop path,
-exactly where the 2026-09-07 drag work cared about latency. Seeding the updater (roll the seed
+dealer's id suffix feeds `StandardShapesTray`'s `key={shape.id}`, so two frames would disagree on
+every key and React would tear down and rebuild up to three tray slots and their cells instead of
+reconciling them — on the drop path, exactly where the 2026-09-07 drag work cared about latency.
+(Reasoned from key semantics, not profiled — and on the deal path the replay is unreachable today,
+so it never actually cost anything. The lesson is the mechanism, not the bill.) Seeding the updater (roll the seed
 outside, build the generator inside — see `architecture-patterns.md`) is therefore the correctness
 fix *and* a small saving.
 
