@@ -23,7 +23,7 @@ import {
 import { GRID_SIZE, GameShape, Position } from './types';
 
 /** An 8x8 grid of `fill`, so tests only have to describe what differs. */
-function grid(fill = CELL.EMPTY): number[][] {
+function grid(fill: number = CELL.EMPTY): number[][] {
     return Array.from({ length: GRID_SIZE }, () => Array<number>(GRID_SIZE).fill(fill));
 }
 

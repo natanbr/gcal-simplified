@@ -50,6 +50,7 @@ describe('calculateThemeState', () => {
         const weather: WeatherData = {
             current: { temperature: 0, weatherCode: 0, windSpeed: 0 },
             daily: {
+                time: ['2023-01-01'],
                 sunrise: ['2023-01-01T06:00'],
                 sunset: ['2023-01-01T18:00'],
                 weather_code: [], temperature_2m_max: [], temperature_2m_min: []

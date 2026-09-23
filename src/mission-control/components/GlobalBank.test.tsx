@@ -34,7 +34,7 @@ vi.mock('framer-motion', async () => {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const EMPTY_CASES = [] as const;
-const EMPTY_RECTS = {} as Record<number, DOMRect | null>;
+const EMPTY_LAYOUT: { bank: DOMRect | null; cases: Record<number, DOMRect | null> } = { bank: null, cases: {} };
 
 async function openAdminPopup() {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -50,7 +50,7 @@ function renderBank() {
     return render(
         <DragLayer>
             <MCStoreProvider>
-                <GlobalBank cases={[...EMPTY_CASES]} caseRects={EMPTY_RECTS} />
+                <GlobalBank cases={[...EMPTY_CASES]} layoutRects={EMPTY_LAYOUT} />
             </MCStoreProvider>
         </DragLayer>,
     );
@@ -82,7 +82,7 @@ describe('GlobalBank — initial render', () => {
                 dispatch({ type: 'REMOVE_TOKEN' });
                 dispatch({ type: 'REMOVE_TOKEN' });
             }, [dispatch]);
-            return <GlobalBank cases={[...EMPTY_CASES]} caseRects={EMPTY_RECTS} />;
+            return <GlobalBank cases={[...EMPTY_CASES]} layoutRects={EMPTY_LAYOUT} />;
         }
         render(
             <DragLayer>
@@ -186,7 +186,7 @@ describe('GlobalBank — −1 button', () => {
                 setReady(true);
             }, [dispatch]);
             if (!ready) return null;
-            return <GlobalBank cases={[...EMPTY_CASES]} caseRects={EMPTY_RECTS} />;
+            return <GlobalBank cases={[...EMPTY_CASES]} layoutRects={EMPTY_LAYOUT} />;
         }
         render(
             <DragLayer>

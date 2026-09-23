@@ -55,7 +55,7 @@ function renderPedestal(case_: DisplayCase, bankCount = 3) {
     return render(
         <MCStoreProvider>
             <DragLayer>
-                <GoalPedestal case_={case_} bankCount={bankCount} />
+                <GoalPedestal case_={case_} cases={[case_]} bankCount={bankCount} layoutRects={{ bank: null, cases: {} }} />
             </DragLayer>
         </MCStoreProvider>
     );

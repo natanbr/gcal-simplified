@@ -76,11 +76,26 @@ describe('forgetMissionStartedSince', () => {
     });
 });
 
+/** The Page members missionClock calls on the paths these tests reach. Method
+ *  syntax keeps their parameters bivariant, so a real Page fits this shape and
+ *  `fake as Page` is a plain downcast: the fake needs the members, not
+ *  Playwright's generics. `locator` is deliberately absent — only
+ *  simulateFailingClock uses it, behind E2E_SIMULATE_MISSION_WINDOW, which no
+ *  unit test sets; a test that reaches it gets a loud TypeError, not a wrong pass. */
+interface FakedPage {
+    context(): object;
+    url(): string;
+    goto(url: string): Promise<unknown>;
+    waitForURL(...args: unknown[]): Promise<unknown>;
+    waitForFunction(...args: unknown[]): Promise<unknown>;
+    evaluate(...args: unknown[]): Promise<unknown>;
+}
+
 /** Just enough of a Playwright Page for missionClock: every call resolves, and is recorded. */
 function fakePage(): { page: Page; goto: ReturnType<typeof vi.fn> } {
     const context = {};
     const goto = vi.fn(async () => null);
-    const fake = {
+    const fake: FakedPage = {
         context: () => context,
         url: () => 'file:///C:/app/dist/index.html?mc=1',
         goto,
