@@ -22,24 +22,29 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import ts from 'typescript';
 import { configsRunBy } from './helpers/tscScript';
-import { repoRoot, toRepoPath } from './helpers/sourceFiles';
+import { entryResolves, repoRoot, toRepoPath } from './helpers/sourceFiles';
 
-/** Build output, tooling caches and the worktrees the agent sessions check out. */
+/** Build output, tooling caches and the worktrees the agent sessions check out.
+ *  A fixed list, deliberately: .gitignore is not consulted, because a gitignored
+ *  directory holding real TypeScript is precisely the hole this guard looks for —
+ *  the walk starts at the repo root for the same reason. The cost is that an
+ *  untracked stray (an IDE folder that ships .ts) is reported until it is added
+ *  here, which is a one-line reviewable edit and what the failure message asks for. */
 const IGNORED_DIRS = new Set([
     'node_modules', 'dist', 'dist-electron', 'release', '.git', '.claude',
     'coverage', 'test-results', 'playwright-report', '.vscode', 'patches',
 ]);
 
-/** Checked by no config the tsc script runs, knowingly. Each line is a hole.
- *  tsconfig.node.json holds the last two but `tsc` does not build project
- *  references, and playwright.config.ts is in no tsconfig at all — the rule
- *  registry's "TypeScript: strict — root config files included" entry owns
- *  this list, and the follow-up task that adds a third tsc step empties it. */
-const UNCHECKED_BY_DESIGN = ['playwright.config.ts', 'vite.config.ts', 'vitest.config.ts'];
+/** Checked by no config the tsc script runs, knowingly. Each line is a hole, and
+ *  the list is empty: playwright.config.ts, vite.config.ts and vitest.config.ts
+ *  were the last three, closed on 2026-09-23 by the tsconfig.node.json step. Adding a line
+ *  re-opens a hole and is a reviewable act; the case below keeps the list honest
+ *  by failing on a line that is in fact checked. */
+const UNCHECKED_BY_DESIGN: string[] = [];
 
 /** A declaration file is in a config's file list but `skipLibCheck: true` means
  *  tsc reports nothing from inside it, so counting one as covered would be a
@@ -47,17 +52,6 @@ const UNCHECKED_BY_DESIGN = ['playwright.config.ts', 'vite.config.ts', 'vitest.c
 const DECLARATION = /\.d\.[cm]?tsx?$/;
 
 const TEST_FILE = /\.(test|spec)\.tsx?$/;
-
-/** Whether a link points at anything. A dangling one names no file to check, and
- *  statSync would otherwise fail this guard with an ENOENT from the walk itself. */
-function resolves(path: string): boolean {
-    try {
-        statSync(path);
-        return true;
-    } catch {
-        return false;
-    }
-}
 
 function typeScriptFiles(): string[] {
     const out: string[] = [];
@@ -70,7 +64,7 @@ function typeScriptFiles(): string[] {
             const full = join(dir, entry.name);
             if (entry.isDirectory()) walk(full);
             else if (/\.[cm]?tsx?$/.test(entry.name) && !DECLARATION.test(entry.name)
-                && (!entry.isSymbolicLink() || resolves(full))) out.push(toRepoPath(full));
+                && entryResolves(entry, full)) out.push(toRepoPath(full));
         }
     };
     walk(repoRoot);
@@ -98,6 +92,13 @@ describe('npm run tsc covers every TypeScript file', () => {
         expect(configs, `scripts.tsc is "${tscScript}"`).toContain('tsconfig.test.json');
     });
 
+    it('runs the root-config project', () => {
+        // tsconfig.node.json holds vite.config.ts, vitest.config.ts and
+        // playwright.config.ts, and plain `tsc` does not build a referenced
+        // project, so they are checked only while the script runs it by name.
+        expect(configs, `scripts.tsc is "${tscScript}"`).toContain('tsconfig.node.json');
+    });
+
     it('reaches the unit tests', () => {
         // Guards the guard: a walk that found no test files would make the
         // coverage assertion below pass vacuously.
@@ -106,11 +107,22 @@ describe('npm run tsc covers every TypeScript file', () => {
         expect(tests.filter(file => file.includes('/__tests__/')).length).toBeGreaterThan(5);
     });
 
+    it('reaches the root config files', () => {
+        // The same vacuity trap one level up: a walk that never yielded the root
+        // configs would pass the coverage case without checking anything.
+        const found = typeScriptFiles().filter(file => /^[^/]+\.config\.ts$/.test(file));
+        expect(found).toEqual(expect.arrayContaining(['playwright.config.ts', 'vite.config.ts', 'vitest.config.ts']));
+    });
+
     it('names only files that are really unchecked in UNCHECKED_BY_DESIGN', () => {
         // The list may only shrink: a file that a config picked up must leave it,
         // or it reads as a standing hole that was quietly filled.
         const covered = UNCHECKED_BY_DESIGN.filter(file => checked.has(file));
         expect(covered, 'now type-checked — drop it from UNCHECKED_BY_DESIGN').toEqual([]);
+
+        // A line naming a file that no longer exists reads as a standing hole too.
+        const gone = UNCHECKED_BY_DESIGN.filter(file => !existsSync(join(repoRoot, file)));
+        expect(gone, 'no such file — drop it from UNCHECKED_BY_DESIGN').toEqual([]);
     });
 
     it('leaves no other TypeScript file unchecked', () => {
@@ -119,7 +131,9 @@ describe('npm run tsc covers every TypeScript file', () => {
             unchecked,
             `${unchecked.length} file(s) that no config run by \`npm run tsc\` ("${tscScript}") type-checks.\n` +
             `A tsconfig \`exclude\` is inherited through \`extends\` even when \`include\` is overridden —\n` +
-            `check with: npx tsc --listFilesOnly -p <config>`,
+            `check with: npx tsc --listFilesOnly -p <config>\n` +
+            `If this is an untracked stray rather than project code (an IDE folder that ships .ts),\n` +
+            `add its directory to IGNORED_DIRS above: .gitignore is deliberately not consulted.`,
         ).toEqual([]);
     });
 });
