@@ -159,6 +159,17 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - A stop covers only the occurrences its run overlapped. Moving that phase's start time to later makes a new occurrence, and it starts at the new time. A mission started by hand *before* its window and stopped before the window opens does not cancel the scheduled one (completing or failing it early still does: that is today's outcome). Moving it to a start at or before the run's stop (or, for a running mission, before now) makes an occurrence that run already covers: it is not started again (open decision for Nathan, PR 170; before this fix a running mission moved earlier restarted at once).
   - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load.
   - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
+
+- **Mood gauge and game tokens**:
+  - The mood gauge is the only generator of game tokens. It fills at the mood's rate (`MOOD_TOKENS_PER_DAY`) during the active window and drains at a negative mood. A full gauge (100 %) grants a game token, and a grant resets the mood to 0.
+  - **At the cap (5 game tokens) the gauge holds at full.** Nothing is earned, the mood is left alone, and the gauge stays at 100 % instead of wrapping to empty. The token it earned is waiting for room: after the child spends a game token, it arrives within about two heartbeats, logged, and the mood resets — during the active window and while the mood is not negative (a negative mood drains the gauge instead). A negative mood still drains a held gauge.
+  - **A Quick-Game goal holds its token against the cap.** Picking a Quick Game takes a game token out of the balance, and trashing the goal gives it back, so while the goal exists its token still counts toward the 5. A held gauge therefore stays held after a pick; it pays out once the game is played (or another token is spent), never into the gap a trash would need. The parent's manual grant obeys the same count: with 4 coins and a Quick-Game goal the child is at the cap, so the grant is refused (and writes no log line), and trashing the goal always gives its coin back. The trash writes "Game token returned from Quick Game", not "0 tokens refunded".
+  - **A parent removing a token does not empty a held gauge.** If the gauge is held full when the parent takes a token away (the phone's remove button, logged "Mood token removed") or resets tokens to zero, the held token then arrives within about two heartbeats, logged as `auto`. Whether a take-away should also empty the held gauge is an open decision for Nathan (PR 175).
+  - **Who pays how many tokens.** The heartbeat pays every whole token that fits. A mission bonus and a parent's gauge adjustment pay at most one token each, as before; progress beyond that leaves the gauge full, and the heartbeat pays the next token. Whining and a missed mission move the gauge but never pay a token themselves.
+  - One writer for every path: `moveGauge()` in `store/moodGauge.ts` is the only code that writes the gauge during a dispatch (guarded by `gauge-writer-boundary.test.ts`), so none of them can wrap at the cap or zero the mood without a grant.
+  - **A broken setting cannot mint tokens.** A mission time cleared in Settings stops accrual instead of producing a NaN rate; a non-finite adjustment is ignored; and at load a corrupt token count (NaN is saved as `null`) becomes 0, not a fresh 5, and a corrupt gauge becomes empty. At load the cap also counts a Quick-Game goal: a saved 5 coins plus a goal (possible before this change) loads as 4, so the trash brings it back to 5 rather than 6.
+  - A held gauge costs nothing while idle: every heartbeat returns the same state object until a token is spent (guarded in `idle-performance.test.tsx`).
+
 - **Mission Streak Shield (missed-mission lockout)**:
   - **One shared streak**: `missedMissionStreak` counts consecutive *failed* mission occurrences across morning and evening. Six in a row is roughly three days of earning nothing.
   - **Miss / reset**: only an expired mission with unfinished tasks counts as a miss. A parent-cancelled mission and a mission skipped because the machine was asleep leave the streak alone. Any completed mission routine resets it to 0.
@@ -1050,3 +1061,43 @@ ever stops forcing a replay, which was proven by mutation to make the older suit
 
 Tests: `store/__tests__/mcReducer.reward-cost.test.ts` (new), and a UI regression in
 `GoalPedestal.test.tsx` (the picker shows 2 ⭐ and the stored goal is 0 / 2).
+
+### 2026-09-23 At the 5-token cap, a full mood gauge holds instead of resetting
+
+- **Bug.** With 5 game tokens (the cap), mood +2 and the gauge at 99.95 %, the next heartbeat
+  correctly granted nothing and kept the mood, but dropped the gauge to about 0.1 % with no log
+  line. `applyBehaviorSync` wrapped the progress (`% PROGRESS_PER_TOKEN`) before the cap decided
+  whether a token was granted, so a full gauge was spent on a token that never arrived. The
+  2026-08-25 fix gated the mood reset on a real grant but left the wrap in place.
+- **Correct behaviour, checked against the spec.** The 2026-08-25 rule says that when the gauge
+  fills at the cap, nothing is earned and the mood is left alone. The gauge still fills, so it
+  **holds at full** (it does not stop accruing below full). The earned token waits for room: after
+  a game token is spent, the first heartbeat re-anchors and the second grants it, logged, and
+  resets the mood.
+- **Same bug in two sibling writers, fixed with the same function.** The mission no-whining bonus
+  and the parent's `ADJUST_BEHAVIOR_PROGRESS` each had their own copy of the crossing rule: at the
+  cap they subtracted a full gauge and zeroed the mood with no grant, which contradicted the
+  2026-08-25 rule. All of them, plus whining and the missed-mission penalty, now go through
+  `moveGauge()` in `store/moodGauge.ts`: the cap decides the grant first, and only granted tokens
+  are subtracted. A structural guard (`gauge-writer-boundary.test.ts`) fails on any other writer.
+  A parent adjustment still pays at most one token per adjustment, as before.
+- **Review fixes before merge.** Holding the gauge exposed two older gaps. A Quick-Game goal's token
+  did not count against the cap, so pick → wait → trash let the held gauge pay into the gap and the
+  refund was then clamped away (a coin lost, with a grant log for it); the goal's token now counts.
+  And a mission time cleared in Settings made the accrual rate NaN, which the new grant arithmetic
+  carried into the token count, which saved as `null` and loaded as 5 free tokens; the rate now
+  fails closed, the writer ignores a non-finite amount, and hydration loads a corrupt count as 0.
+  The parent's manual grant now counts the Quick-Game goal's token too (pick → grant → trash used
+  to lose the coin, on `main` as well), through the same `gameTokenRoom` check; the trash writes
+  "Game token returned from Quick Game", and the phone's take-away is logged "Mood token removed"
+  instead of "spent on a game". An empty gauge under a negative mood no longer writes a new state
+  every minute.
+  At load the cap counts a Quick-Game goal too, so an old save of 5 coins plus a goal loads as 4.
+- **No idle churn.** A held gauge returns the same state object on every heartbeat, including
+  past the 3-minute gap that would otherwise re-anchor, so a child who stops spending does not
+  cause a re-render, persist and remote broadcast every few minutes all day.
+
+Tests: `store/__tests__/mcReducer.mood-cap.test.ts` and `mcReducer.mood-cap-lifecycle.test.ts`
+(new), `src/__tests__/gauge-writer-boundary.test.ts` (new, structural), and a held-full case in
+`__tests__/idle-performance.test.tsx`.
+

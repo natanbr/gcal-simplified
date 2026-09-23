@@ -721,3 +721,28 @@ target, a limit), drop it from the action type and compute it in the reducer thr
 function the UI renders with (`rewardCost` / `canSelectReward` in `rewardCatalogue.ts`). tsc then
 flags every caller still sending it. Apply the refusal predicate in `activityLog.ts` too, so a
 refused selection writes no log line.
+
+## 2026-09-23 — A capped grant must decide the grant before it spends the progress
+
+**Learning:** At the 5-token cap the mood gauge wrapped from 99.95 % to about 0.1 % with no log
+line. `applyBehaviorSync` ran `progress % 100` first and applied `Math.min(MAX_GAME_TOKENS, …)`
+second, so the progress paid for a token the cap then refused. The 2026-08-25 review found the mood
+half of this (the reset is now gated on a real grant) and missed the progress half in the same
+block. Two sibling writers, the mission bonus and `ADJUST_BEHAVIOR_PROGRESS`, had their own copies
+of the rule, with the same wrap and an ungated mood reset.
+**Action:** A threshold rule with a cap lives in one function (`moveGauge` in `moodGauge.ts`). It
+computes `granted` against the cap first and subtracts only `granted × threshold`. Route *every*
+writer of the field through it, not just the ones that grant (the first pass missed whining and
+the missed-mission penalty), and pin it with a source-reading guard, since a new writer is never
+covered by an existing behavioural test. "Room under the cap" must count what can come back: a
+Quick-Game goal holds a token that a trash refunds, and ignoring it let a held gauge pay into that
+gap and the refund get clamped away. And a function that now does arithmetic on a value it used to
+only compare must refuse NaN: `NaN >= 100` is false, but `5 + NaN` is a corrupted balance. The same "room" must be the one check for *every* adder: the gauge got the Quick-Game
+reservation first and the parent's grant kept a raw `gameTokens >= 5`, so pick → grant → trash still
+lost the coin (`gameTokenRoom`, pinned by the same guard). And every "cannot move" state needs its
+own same-object early return ahead of the gap re-anchor: held full at the cap, and its mirror, empty
+under a negative mood, which had churned a new state every minute on `main`. A state that is "full and waiting" must also
+be an early return that keeps the anchor. If it isn't, the 3-minute gap re-anchor allocates a new
+state every few minutes, all day. Test that by ticking past that horizon and asserting the same
+reference.
+
