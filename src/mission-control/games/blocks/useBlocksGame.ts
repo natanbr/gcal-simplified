@@ -5,11 +5,26 @@ import { GameShape, BlocksGameState, INITIAL_LAYOUTS, altitudeLevel } from './ty
 import {
     CLEAR_DELAY_MS, PendingClear, clearFeedback, markCompletedLines, resolvePendingClear, seededRandom,
 } from './lineClear';
-import { Rng, dealStandardTriple, dealRescueShape, anyPoolShapeFits } from './dealer';
+import { dealStandardTriple, dealRescueShape, anyPoolShapeFits } from './dealer';
 
 /** The game the board renders, plus the clear still exploding on it — kept in
  *  state so its timer is scheduled from what React committed (see lineClear.ts). */
 interface HookState { game: BlocksGameState; pendingClear: PendingClear | null }
+
+/**
+ * The seed for one deal, rolled OUTSIDE the state updater that spends it.
+ *
+ * React may run an updater more than once — StrictMode twice in development, a
+ * sync-lane update replayed on top of a pending lower-priority one in
+ * production — and a re-roll deals a different hand on the second run, so the
+ * tray changes shapes under the child's finger after a single drop.
+ *
+ * Only the number is rolled out here. The generator must be built INSIDE the
+ * updater: a `seededRandom` closure captured outside is stateful, so the second
+ * run would continue its sequence rather than repeat it — which is why
+ * `refillBank` takes the seed rather than an `Rng`.
+ */
+const rollSeed = () => Math.random() * 2 ** 32;
 
 /** Lifts an updater of the game alone; a no-op stays the same reference. */
 const onGame = (update: (game: BlocksGameState) => BlocksGameState) => (prev: HookState): HookState => {
@@ -28,11 +43,15 @@ const onGame = (update: (game: BlocksGameState) => BlocksGameState) => (prev: Ho
  * painted board it plans around lines about to vanish; against a forecast
  * without them it hands the child a shape that can be refused everywhere until
  * the explosion ends, and whose space a meteor can then take.
+ *
+ * Every draw comes from `seed` (see `rollSeed`), so the hand is a pure function
+ * of the state and the seed, and a replayed updater deals it again unchanged.
  */
-function refillBank(game: BlocksGameState, rng: Rng): BlocksGameState {
+function refillBank(game: BlocksGameState, seed: number): BlocksGameState {
     const bankEmpty = game.standardShapes.every(s => s === null);
     const rescueEmpty = game.rescueShape === null;
     if (!bankEmpty && !rescueEmpty) return game;
+    const rng = seededRandom(seed);
     return {
         ...game,
         standardShapes: bankEmpty ? dealStandardTriple(game.grid, game.level, rng) : game.standardShapes,
@@ -68,7 +87,8 @@ export function useBlocksGame() {
     }, []);
 
     const startGame = useCallback(() => {
-        setState(onGame(prev => refillBank({ ...prev, phase: 'playing' as const }, Math.random)));
+        const dealSeed = rollSeed();
+        setState(onGame(prev => refillBank({ ...prev, phase: 'playing' as const }, dealSeed)));
     }, []);
 
     const triggerRescueQuiz = useCallback(() => {
@@ -90,9 +110,10 @@ export function useBlocksGame() {
     }, []);
 
     const refreshRescueShape = useCallback(() => {
+        const dealSeed = rollSeed();
         setState(onGame(prev => ({
             ...prev,
-            rescueShape: dealRescueShape(prev.grid),
+            rescueShape: dealRescueShape(prev.grid, seededRandom(dealSeed)),
             rescueShapeLocked: true,
         })));
     }, []);
@@ -105,6 +126,7 @@ export function useBlocksGame() {
         slotType: 'standard' | 'rescue', slotIndex: number
     ): void => {
         const feedbackId = Date.now().toString();
+        const dealSeed = rollSeed();
         setState(prevState => {
             const prev = prevState.game;
             if (prev.phase !== 'playing') return prevState;
@@ -160,7 +182,7 @@ export function useBlocksGame() {
                 clearedFeedback: linesCleared > 0 ? clearFeedback(linesCleared, feedbackId) : prev.clearedFeedback,
             };
             // A pending clear deals the slots this drop emptied, when it resolves.
-            return { game: pendingClear ? next : refillBank(next, Math.random), pendingClear };
+            return { game: pendingClear ? next : refillBank(next, dealSeed), pendingClear };
         });
     }, []);
 
@@ -172,8 +194,8 @@ export function useBlocksGame() {
         const timer = setTimeout(() => {
             // Both out here: a replayed updater must roll the same meteors, and
             // deal the same hand into the slots the clear left empty.
-            const seed = Math.random() * 2 ** 32;
-            const dealSeed = Math.random() * 2 ** 32;
+            const seed = rollSeed();
+            const dealSeed = rollSeed();
             // Sync, so the cleared board commits in this task: a lift landing first
             // would render on the old board, then be refused on the new one.
             flushSync(() => setState(prev => prev.pendingClear !== pendingClear ? prev : {
@@ -181,7 +203,7 @@ export function useBlocksGame() {
                     ...prev.game,
                     grid: resolvePendingClear(prev.game.grid, pendingClear, prev.game.level, seed),
                     clearedFeedback: null,
-                }, seededRandom(dealSeed)),
+                }, dealSeed),
                 pendingClear: null,
             }));
         }, CLEAR_DELAY_MS);
