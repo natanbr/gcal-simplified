@@ -1,15 +1,16 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["vitest/globals", "@testing-library/jest-dom", "node"],
-    "noUnusedLocals": false,
-    "noUnusedParameters": false
+    // This pass roots the app files too, and naming `types` opts out of the
+    // automatic @types inclusion the app config gets. Any ambient package
+    // production code leans on (a UMD global, say) must be listed here, or it
+    // resolves in pass 1 and fails in pass 2 from a file with no test in it.
+    "types": ["vitest/globals", "@testing-library/jest-dom", "node"]
   },
-  "include": [
-    "src",
-    "electron",
-    "src/test/**/*",
-    "src/**/*.test.ts",
-    "src/**/*.test.tsx"
-  ]
+  // `exclude` is inherited through `extends` even when `include` is overridden.
+  // Without this line the base config's test exclusions carry over and this
+  // config checks no src test file at all — which it silently did until
+  // 2026-09-21. Guarded by src/__tests__/typecheck-coverage.test.ts.
+  "include": ["src", "electron"],
+  "exclude": []
 }

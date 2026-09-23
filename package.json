@@ -11,7 +11,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "tsc": "tsc",
+    "tsc": "tsc && tsc -p tsconfig.test.json",
     "build": "tsc && vite build && electron-builder",
     "version-tag": "npm version patch && git push origin main --follow-tags",
     "release": "npm run version-tag && tsc && vite build && node -r dotenv/config node_modules/electron-builder/cli.js --publish always",

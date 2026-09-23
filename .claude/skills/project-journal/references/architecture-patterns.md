@@ -616,3 +616,33 @@ the board it leaves behind (`refillBank` in `useBlocksGame.ts`). The price is vi
 empty tray during the explosion); the forecast's price was invisible and felt like the game being
 wrong. If that code runs in a state updater, draw its randomness from a seed rolled outside it, the
 same way the meteors are.
+
+## 2026-09-21 — A gate is the configs a script *runs*, not the configs that exist
+
+**Learning:** Closing the 2026-09-13 hole took two changes, not one. `tsconfig.test.json` needed its
+own `"exclude": []`, and `npm run tsc` had to actually run it: `vitest.config.ts` had pointed its
+`typecheck.tsconfig` at that file all along, but only `vitest --typecheck` reads it, and no script
+does. A correct config nothing invokes guards nothing. The test config's relaxed
+`noUnusedLocals`/`noUnusedParameters` was not load-bearing either: switched back on, it caught five
+unused `import React` lines (dead under `jsx: react-jsx`; ESLint misses them because
+typescript-eslint counts `React` as used whenever the file has JSX).
+**Action:** Guard coverage from both ends: parse the npm script for the configs it runs, then
+resolve those configs through `ts.parseJsonConfigFileContent` (handles `extends` exactly as tsc
+does, in milliseconds) and assert every `.ts(x)` under the checked roots is in the union
+(`src/__tests__/typecheck-coverage.test.ts`). Make the guard fail loudly on a shape it doesn't
+model (`tsc -b`), and add a case that fails if the file walk comes back empty, so it can't pass
+vacuously. It shares the job with PR 160's `typescript-strict-config.test.ts`, one question each:
+that guard *pins* the script and owns strictness and `@ts-nocheck`; this one *parses* the script and
+owns coverage. A new tsc step therefore edits the pinned `TSC_SCRIPT` there and nothing here.
+The review of that split found the rest, and each one generalises. **Two constants that must agree,
+where only one is asserted, is a latent lie**: the pinned script and the hand-written config list
+were exactly that, so the list is now derived from the pin by a shared parser
+(`helpers/tscScript.ts`). **A coverage guard keyed on a list of source roots cannot see a new
+root** — walk the repo and keep an explicit list of what is knowingly unchecked, the way the
+ratchets do; a probe `shared/thing.ts` proved the old shape blind. **`skipLibCheck: true` means a
+.d.ts is compiled but never checked**, so counting one as covered overstates the gate. And a
+source scan must read files the way the compiler does: `readFileSync(f, 'utf8')` decodes neither
+a UTF-16 BOM nor strips a UTF-8 one, so a `// @ts-nocheck` in a UTF-16LE file — what Windows
+PowerShell 5.1 redirection writes — was honoured by tsc and invisible to the scan until it moved
+to `ts.sys.readFile`. Every other source-reading ratchet in `src/__tests__/` still has that blind
+spot.

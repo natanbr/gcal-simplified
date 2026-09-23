@@ -3,7 +3,7 @@
 // Not a test file — vitest only collects *.test.*
 // ============================================================
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, type Dirent } from 'node:fs';
 import { join, relative, sep, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,17 +27,21 @@ export function productionSources(roots: string[] = ['src', 'electron']): string
     const out: string[] = [];
 
     function walk(dir: string): void {
-        let entries: string[];
+        let entries: Dirent[];
         try {
-            entries = readdirSync(dir);
+            // withFileTypes reports a link as a link, so a dangling one costs no
+            // statSync (an ENOENT here fails four guards for the wrong reason) and
+            // a linked directory is never descended into, so a junction cannot loop.
+            entries = readdirSync(dir, { withFileTypes: true });
         } catch {
             return; // directory may not exist
         }
 
-        for (const entry of entries) {
+        for (const dirent of entries) {
+            const entry = dirent.name;
             if (IGNORED_DIRS.has(entry)) continue;
             const full = join(dir, entry);
-            if (statSync(full).isDirectory()) {
+            if (dirent.isDirectory()) {
                 walk(full);
             } else if (
                 /\.tsx?$/.test(entry) &&
