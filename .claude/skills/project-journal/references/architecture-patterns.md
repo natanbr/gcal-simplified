@@ -708,3 +708,16 @@ registry asserts exists, over a second file named only in `defence`, which nothi
 suite proves the DECISION given a drop, never that the drop is reachable — deleting `drag` from
 `Token.tsx` leaves all 28 green. Reachability of a gesture is E2E's job; say so in the guard's own
 `defence` rather than letting the next reader assume the mock covers it.
+
+## 2026-09-23 — A value the reducer can derive must not ride on the action
+
+**Learning:** The reward picker rendered `settings.rewardConfigs[id].targetCount` ("Game 2 ⭐")
+while `handleSelectReward` dispatched `REWARD_MAP[id].targetCount` (6), and `SELECT_CASE` stored
+whatever cost it was handed. Two reads of "the cost" in one component, and the reducer trusted the
+one the child never saw: every parent-set cost was displayed and never charged. The picker also
+hid disabled rewards, but the reducer never checked, so the refusal existed only in the UI.
+**Action:** When an action carries a number the reducer could compute from state (a cost, a
+target, a limit), drop it from the action type and compute it in the reducer through the same
+function the UI renders with (`rewardCost` / `canSelectReward` in `rewardCatalogue.ts`). tsc then
+flags every caller still sending it. Apply the refusal predicate in `activityLog.ts` too, so a
+refused selection writes no log line.
