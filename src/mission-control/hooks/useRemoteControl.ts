@@ -52,6 +52,11 @@ const PAYLOAD_VALIDATORS: Partial<Record<MCAction['type'], (a: MCAction) => bool
     // good on an idle Calendar.
     SET_ACTIVE_MISSION: a => a.type === 'SET_ACTIVE_MISSION'
         && ['none', 'morning', 'evening'].includes(a.phase),
+    // The phone's Stop is the only way to stop a mission (2026-09-24). The reducer
+    // sets activeMission 'none' but resets only the mission whose phase matches, so
+    // a missing or bad phase left that mission active with its timer running.
+    CANCEL_MISSION: a => a.type === 'CANCEL_MISSION'
+        && ['morning', 'evening'].includes(a.missionPhase),
     // `amount` is optional on this one (the reducer defaults it to 1), so the
     // validator must accept `undefined` or the remote's own button breaks.
     ADD_RESPONSIBILITY_POINT: a => a.type === 'ADD_RESPONSIBILITY_POINT'
