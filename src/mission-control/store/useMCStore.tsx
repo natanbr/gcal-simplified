@@ -104,9 +104,9 @@ export function loadPersistedState(): MCState {
                 return savedPriv ? { ...defaultPriv, ...savedPriv } : defaultPriv;
             }),
             activityLogs,
-            // Clamp to the cap (counting Quick-Game goals); never top tokens back up
-            // on restart (that would refund spent game tokens); a corrupt null is 0.
-            gameTokens: sanitizeGameTokens(parsed.gameTokens, initialState.gameTokens, cases),
+            // Never top tokens back up on restart (that would refund spent game
+            // tokens); a corrupt null is 0. Over the cap: useGameTokenCapSettle, logged.
+            gameTokens: sanitizeGameTokens(parsed.gameTokens, initialState.gameTokens),
             behaviorProgress: sanitizeBehaviorProgress(parsed.behaviorProgress, initialState.behaviorProgress),
             // A corrupt write (NaN serializes to null) must not propagate.
             bankCount: typeof parsed.bankCount === 'number' && Number.isFinite(parsed.bankCount)

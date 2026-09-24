@@ -201,9 +201,9 @@ describe('loadPersistedState — gameTokens clamp', () => {
         localStorage.removeItem(STORAGE_KEY);
     });
 
-    it('clamps corrupted values into the 0–5 range', () => {
+    it('clamps corrupted values into the 0–5 range (over the cap: the logged settle after load)', () => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ gameTokens: 99, _migrationVersion: 1 }));
-        expect(loadPersistedState().gameTokens).toBe(5);
+        expect(mcReducer(loadPersistedState(), { type: 'SETTLE_GAME_TOKEN_CAP', origin: 'system' }).gameTokens).toBe(5);
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ gameTokens: -3, _migrationVersion: 1 }));
         expect(loadPersistedState().gameTokens).toBe(0);
