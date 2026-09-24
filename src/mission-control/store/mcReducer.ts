@@ -22,7 +22,7 @@ import {
     getLocalDateString,
     MAX_ACTIVITY_LOGS,
 } from './behaviorSync';
-import { gameTokenRoom, moveGauge } from './moodGauge';
+import { gameTokenRoom, moveGauge, settleGameTokenCap } from './moodGauge';
 import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
 import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
@@ -638,6 +638,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             return { ...state, gameTokens: state.gameTokens + 1 };
         }
 
+        case 'SETTLE_GAME_TOKEN_CAP': return settleGameTokenCap(state); // logged; see useGameTokenCapSettle
         case 'CONSUME_GAME_TOKEN':
             if (state.gameTokens <= 0) return state;
             return { ...state, gameTokens: state.gameTokens - 1 };
@@ -791,7 +792,6 @@ function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: numb
 export function mcReducer(state: MCState, action: MCAction): MCState {
     // Any start or end stamps lastActiveAt, the scheduler's memory of a run (missionActivity.ts).
     const nextState = stampMissionActivity(state, _mcReducer(state, action), actionInstant(action));
-    
     const shouldSync = 
         action.type === 'SET_SETTINGS' ||
         action.type === 'COMPLETE_TASK' ||

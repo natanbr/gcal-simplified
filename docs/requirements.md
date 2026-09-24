@@ -167,7 +167,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **A parent removing a token does not empty a held gauge.** If the gauge is held full when the parent takes a token away (the phone's remove button, logged "Mood token removed") or resets tokens to zero, the held token then arrives within about two heartbeats, logged as `auto`. Whether a take-away should also empty the held gauge is an open decision for Nathan (PR 175).
   - **Who pays how many tokens.** The heartbeat pays every whole token that fits. A mission bonus and a parent's gauge adjustment pay at most one token each, as before; progress beyond that leaves the gauge full, and the heartbeat pays the next token. Whining and a missed mission move the gauge but never pay a token themselves.
   - One writer for every path: `moveGauge()` in `store/moodGauge.ts` is the only code that writes the gauge during a dispatch (guarded by `gauge-writer-boundary.test.ts`), so none of them can wrap at the cap or zero the mood without a grant.
-  - **A broken setting cannot mint tokens.** A mission time cleared in Settings stops accrual instead of producing a NaN rate; a non-finite adjustment is ignored; and at load a corrupt token count (NaN is saved as `null`) becomes 0, not a fresh 5, and a corrupt gauge becomes empty. At load the cap also counts a Quick-Game goal: a saved 5 coins plus a goal (possible before this change) loads as 4, so the trash brings it back to 5 rather than 6.
+  - **A broken setting cannot mint tokens.** A mission time cleared in Settings stops accrual instead of producing a NaN rate; a non-finite adjustment is ignored; and at load a corrupt token count (NaN is saved as `null`) becomes 0, not a fresh 5, and a corrupt gauge becomes empty. At load the cap also counts a Quick-Game goal: a saved 5 coins plus a goal (possible in v0.0.42) settles to 4, so the trash brings it back to 5 rather than 6. **The removal is logged (2026-09-24)**: one line, attributed to the system, with a negative delta ("1 game token removed at update: 5 game tokens plus 1 Quick-Game goal is over the 5-token cap"), which also reaches the audit trail. It happens once, on the launch that settles the balance; later launches load a balance already within the cap and write nothing. A corrupt count that loads as 0 writes no line: there is no real count to report.
   - A held gauge costs nothing while idle: every heartbeat returns the same state object until a token is spent (guarded in `idle-performance.test.tsx`).
 
 - **Mission Streak Shield (missed-mission lockout)**:
@@ -1150,3 +1150,24 @@ symlinks that point nowhere, which made four guard suites fail for the wrong rea
 
 Tests: six cases in `GoalPedestal.test.tsx` (locked, unlocked, the lock moved by `ADJUST_SHIELD` in
 both directions, and under an open picker both ways); registered in `rule-registry.test.ts`.
+
+### 2026-09-24 An update that removes a game token says so in the log
+
+- **Gap** (release QA review). v0.0.42 could save 5 game tokens beside an open Quick-Game goal.
+  The cap counts the goal's token, because the trash refunds it, so that balance must load as 4 or
+  the trash refunds to 6. Hydration did clamp it to 4, but silently: a token disappeared at launch
+  with no log line and no attribution, which the attribution rule calls a bug.
+- **Now.** Hydration no longer applies the cap. Right after load, before the first paint, the store
+  dispatches `SETTLE_GAME_TOKEN_CAP` (attributed `system`) when the saved balance is over the cap.
+  It removes what is over and logs one line, for example "1 game token removed at update: 5 game
+  tokens plus 1 Quick-Game goal is over the 5-token cap", with a negative delta. The line reaches the
+  audit trail like every other entry (a line written inside hydration would not: the audit bridge
+  treats the loaded log as already written). Later launches find the balance within the cap and
+  dispatch nothing. Same pattern as the suspension expiry of 2026-09-22.
+- **Unchanged.** A corrupt count (NaN saved as `null`) still loads as 0 without a line; the trash
+  of that goal still brings the balance to 5, never 6; `gameTokenRoom` stays the one cap check for
+  every adder.
+
+Tests: `store/useGameTokenCapSettle.test.tsx` (the real provider: happy, within-cap and corrupt
+loads, StrictMode, the audit trail, relaunch, trash); `src/__tests__/action-literal-boundary.test.ts`
+pins the settle's one dispatcher.

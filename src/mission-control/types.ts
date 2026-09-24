@@ -1,7 +1,6 @@
 // ============================================================
 // Mission Control — Shared Types
-// ⚠️  This file is isolated to src/mission-control/.
-//     Do NOT import from parent app src/ directories.
+// ⚠️  Internal to src/mission-control/ only: do NOT import from parent app src/.
 // ============================================================
 
 import type { QuizAnswerRecord, SkillProgress } from './skills/types';
@@ -282,6 +281,7 @@ export type MCAction = (
     | { type: 'CHEAT_ATTEMPT' }
     | { type: 'CLEAR_CHEAT_FLAG' }
     | { type: 'GRANT_GAME_TOKEN' }
+    | { type: 'SETTLE_GAME_TOKEN_CAP' } // once at load, only when over the cap (useGameTokenCapSettle)
     | { type: 'CONSUME_GAME_TOKEN' }
     | { type: 'RESET_GAME_TOKENS' }
     | { type: 'TRIGGER_ANIMATION'; animation: MCAnimationType }

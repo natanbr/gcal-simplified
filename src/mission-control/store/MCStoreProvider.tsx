@@ -5,10 +5,16 @@ import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
 import { useRemoteSync } from './useRemoteSync';
 import { useAuditTrail } from './useAuditTrail';
 import { useSuspensionExpiry } from './useSuspensionExpiry';
+import { useGameTokenCapSettle } from './useGameTokenCapSettle';
 
-/** Inside the provider: it dispatches through the logging interceptor. */
+/** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
     useSuspensionExpiry();
+    return null;
+}
+
+function GameTokenCapSettle(): null {
+    useGameTokenCapSettle();
     return null;
 }
 
@@ -63,6 +69,7 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     return (
         <MCContext.Provider value={contextValue}>
             <SuspensionExpiry />
+            <GameTokenCapSettle />
             {children}
         </MCContext.Provider>
     );

@@ -13,7 +13,7 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { productionSources, readSource, toRepoPath } from './helpers/sourceFiles';
+import { productionSources, readSource, stripComments, toRepoPath } from './helpers/sourceFiles';
 
 /**
  * A real `dispatch({ type: 'END_GAME' })`, in any formatting a developer might
@@ -22,58 +22,6 @@ import { productionSources, readSource, toRepoPath } from './helpers/sourceFiles
  * entirely.
  */
 const END_GAME_DISPATCH = /dispatch\(\s*\{\s*type:\s*['"]END_GAME['"]/;
-
-/**
- * Removes comments so a *mention* of a dispatch cannot be mistaken for one.
- * String and template literals are tracked, so a `//` inside a URL does not
- * swallow the rest of its line.
- *
- * The project journal records this exact trap for regex-parsing `preload.ts`:
- * a source-reading guard is only as good as its parsing, and the naive version
- * of this one was both false-positive (a comment made it RED) and
- * false-negative (a multi-line dispatch left it GREEN).
- */
-function stripComments(source: string): string {
-    type Mode = 'code' | 'line' | 'block' | "'" | '"' | '`';
-    let mode: Mode = 'code';
-    let out = '';
-    let i = 0;
-
-    while (i < source.length) {
-        const ch = source[i];
-        const next = source[i + 1];
-
-        if (mode === 'code') {
-            if (ch === '/' && next === '/') { mode = 'line'; i += 2; continue; }
-            if (ch === '/' && next === '*') { mode = 'block'; i += 2; continue; }
-            if (ch === "'" || ch === '"' || ch === '`') mode = ch;
-            out += ch;
-            i += 1;
-            continue;
-        }
-
-        if (mode === 'line') {
-            if (ch === '\n') { mode = 'code'; out += ch; }
-            i += 1;
-            continue;
-        }
-
-        if (mode === 'block') {
-            if (ch === '*' && next === '/') { mode = 'code'; i += 2; continue; }
-            if (ch === '\n') out += ch; // keep line numbering intact
-            i += 1;
-            continue;
-        }
-
-        // Inside a string/template literal.
-        if (ch === '\\') { out += ch + (next ?? ''); i += 2; continue; }
-        if (ch === mode) mode = 'code';
-        out += ch;
-        i += 1;
-    }
-
-    return out;
-}
 
 describe('END_GAME has exactly one dispatcher', () => {
     it('recognises a real dispatch in any formatting, and a mention in none', () => {
