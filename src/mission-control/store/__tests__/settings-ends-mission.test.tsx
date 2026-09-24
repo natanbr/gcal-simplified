@@ -78,6 +78,9 @@ describe('SET_SETTINGS that ends nothing writes no such line', () => {
         ['the running mission\'s duration', { eveningDurationMins: 45 }],
         ['the running mission\'s start time, unchanged', { eveningStartsAt: initialState.settings.eveningStartsAt }],
         ['the remote keys the provider syncs at startup', { remoteRoomId: 'room', remoteKey: 'key' }],
+        // The reducer keeps the stored time for these, so nothing was rescheduled.
+        ['the running mission\'s start time, cleared', { eveningStartsAt: '' }],
+        ['the running mission\'s start time, malformed', { eveningStartsAt: '999:00' }],
     ])('%s, while evening runs', (_label, settings) => {
         launchWithEveningRunning();
         save(settings);

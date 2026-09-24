@@ -107,6 +107,24 @@ describe('idle perf — mission scheduler arms nothing between fires', () => {
     it('outside every window', () => {
         expect(timersArmedOver10s({ ...initialState }, at(14, 0))).toBe(0);
     });
+
+    it('with an unparseable morning start (a cleared Settings time): no timer, no store write', () => {
+        // setTimeout(fn, NaN) fires at once, the NaN drift reads as "missed",
+        // and the chain re-armed every second with an ADD_LOG each time.
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        vi.setSystemTime(at(14, 0));
+        const { wrapper, dispatch } = makeWrapper({
+            ...initialState,
+            settings: { ...initialState.settings, morningStartsAt: '' },
+            missions: initialState.missions.map(m => (m.phase === 'morning' ? { ...m, startsAt: '', endsAt: 'NaN:NaN' } : m)),
+        });
+        renderHook(() => useMissionScheduler(), { wrapper });
+        const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+        for (let t = 0; t < 10_000; t += 100) vi.advanceTimersByTime(100);
+
+        expect(dispatch, 'actions dispatched in 10 s on an idle Calendar').not.toHaveBeenCalled();
+        expect(setTimeoutSpy.mock.calls.length, 'timers armed in 10 s').toBe(0);
+    });
 });
 
 // ── 2. Behavior heartbeat must not churn state while idle ─────────────────────

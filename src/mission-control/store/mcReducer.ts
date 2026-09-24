@@ -24,6 +24,7 @@ import { gameTokenRoom, moveGauge, settleGameTokenCap } from './moodGauge';
 import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
 import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
+import { minsToHhmm, parseHhmmToMins, withoutInvalidStartTimes } from './hhmm';
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
@@ -163,15 +164,6 @@ export const initialState: MCState = {
 };
 
 // ---- Time Helpers ----
-
-function parseHhmmToMins(hhmm: string): number {
-    const [h, m] = hhmm.split(':').map(Number);
-    return h * 60 + m;
-}
-
-function minsToHhmm(totalMins: number): string {
-    return `${String(Math.floor(totalMins / 60)).padStart(2, '0')}:${String(totalMins % 60).padStart(2, '0')}`;
-}
 
 /** Duration between two HH:MM times, wrapping past midnight when needed. */
 function computeMissionDurationMins(startsAt: string, endsAt: string): number {
@@ -524,24 +516,25 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'SET_SETTINGS': {
-            const nextSettings = { ...state.settings, ...action.settings };
+            const patch = withoutInvalidStartTimes(action.settings);
+            const nextSettings = { ...state.settings, ...patch };
             let nextDaysLeft = state.creamTaskDaysLeft;
             
-            if (action.settings.creamTaskEnabled && !state.settings.creamTaskEnabled) {
+            if (patch.creamTaskEnabled && !state.settings.creamTaskEnabled) {
                 // Just enabled — start fresh
                 nextDaysLeft = nextSettings.creamTaskDaysTarget;
-            } else if (action.settings.creamTaskDaysTarget !== undefined && action.settings.creamTaskDaysTarget !== state.settings.creamTaskDaysTarget) {
+            } else if (patch.creamTaskDaysTarget !== undefined && patch.creamTaskDaysTarget !== state.settings.creamTaskDaysTarget) {
                  // Target changed, reset current progress
-                 nextDaysLeft = action.settings.creamTaskDaysTarget;
+                 nextDaysLeft = patch.creamTaskDaysTarget;
             }
 
             // If the start time of the currently-active mission changes, we must also
             // deactivate it — otherwise durationMins is wiped but active stays true,
             // making the expiry check `durationMins != null` permanently false (hung mission).
             // Shared with activityLog.ts, which logs the ending (missionReschedule.ts).
-            const mornTimeChanged = startTimeChanged(state, action.settings, 'morning');
-            const evenTimeChanged = startTimeChanged(state, action.settings, 'evening');
-            const activeIsBeingRescheduled = reschedulesRunningMission(state, action.settings);
+            const mornTimeChanged = startTimeChanged(state, patch, 'morning');
+            const evenTimeChanged = startTimeChanged(state, patch, 'evening');
+            const activeIsBeingRescheduled = reschedulesRunningMission(state, patch);
 
             return {
                 ...state,
@@ -556,11 +549,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                     if (m.phase !== 'morning' && m.phase !== 'evening') return m;
                     const isMorning = m.phase === 'morning';
                     const dur = isMorning
-                        ? action.settings.morningDurationMins ?? state.settings.morningDurationMins
-                        : action.settings.eveningDurationMins ?? state.settings.eveningDurationMins;
+                        ? patch.morningDurationMins ?? state.settings.morningDurationMins
+                        : patch.eveningDurationMins ?? state.settings.eveningDurationMins;
                     const start = isMorning
-                        ? action.settings.morningStartsAt ?? state.settings.morningStartsAt
-                        : action.settings.eveningStartsAt ?? state.settings.eveningStartsAt;
+                        ? patch.morningStartsAt ?? state.settings.morningStartsAt
+                        : patch.eveningStartsAt ?? state.settings.eveningStartsAt;
                     const timeChanged = isMorning ? mornTimeChanged : evenTimeChanged;
                     return {
                         ...m,

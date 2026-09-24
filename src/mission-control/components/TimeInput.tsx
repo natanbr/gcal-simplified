@@ -1,0 +1,41 @@
+// ============================================================
+// Mission Control — TimeInput
+// Labelled HH:MM field for the Settings panel. Clearing it yields '', which
+// MCSettingsOverlay refuses to save (see store/hhmm.ts).
+// ⚠️  Internal to src/mission-control/ only.
+// ============================================================
+
+export function TimeInput({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
+                {label}
+            </span>
+            <input
+                type="time"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                style={{
+                    fontFamily: "'Nunito', sans-serif",
+                    fontSize: 18,
+                    fontWeight: 800,
+                    background: 'rgba(255,255,255,0.8)',
+                    border: '1.5px solid rgba(130,120,200,0.25)',
+                    borderRadius: 10,
+                    padding: '6px 10px',
+                    color: 'var(--mc-text)',
+                    outline: 'none',
+                    width: '100%',
+                }}
+            />
+        </div>
+    );
+}
