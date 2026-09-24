@@ -1181,8 +1181,9 @@ pins the settle's one dispatcher.
   2026-09-22 fix a stop sticks for the rest of the window and does not move the shield, so the child
   could end a mission by holding the button, with no miss recorded.
 - **Now.** "— Minimize" only minimizes: a short tap and a long hold both leave the pill, and neither
-  stops the mission. It minimizes on release, as before, so a long touch hold that fires no click
-  still minimizes; its size and touch behaviour are unchanged. The phone's Stop (`CANCEL_MISSION`,
+  stops the mission. It minimizes on the release of a press that began on the button, so a long
+  touch hold that fires no click still minimizes, while a press begun beside it, dragged off it or
+  cancelled does not (review fix); Enter and Space minimize too. Size and touch behaviour unchanged. The phone's Stop (`CANCEL_MISSION`,
   still on `REMOTE_ALLOWED_ACTIONS`) is the only way to stop a mission; the reducer is unchanged.
 - **Not changed.** "↺ Reset" keeps its tap (tasks) and 2 s hold (tasks and timer): not decided yet.
 - **Planned, phone side.** The phone is getting +1 / −1 shield buttons that send `ADJUST_SHIELD`,

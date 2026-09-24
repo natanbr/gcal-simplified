@@ -78,7 +78,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     'src/components/Dashboard.tsx': 504,
     // 493 → 481 on 2026-09-24 (the Minimize long-press that stopped a mission is
     // gone: only the phone stops one; the button now only minimizes).
-    'src/mission-control/components/MissionOverlay.tsx': 481,
+    // 481 → 482 the same day (review fix: Minimize fires only for a press that began
+    // on it; the logic lives in hooks/usePressRelease.ts, this is its import).
+    'src/mission-control/components/MissionOverlay.tsx': 482,
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
     // committing it optimistically made coins vanish from the pile).
     'src/mission-control/components/GlobalBank.tsx': 407,
