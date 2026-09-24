@@ -54,8 +54,8 @@ The real auto-update can only be checked after publishing (3.1.6).
 
 **Mind the clock.** A manual launch starts the mission whose window is open (defaults 06:00–06:30
 and 19:00–20:00), and its overlay covers both views. That includes a mission still running on the
-profile from an earlier launch: it runs its full duration past the window's end, and a stopped one
-restarts at once (bug 1). Plan the pass outside those windows unless an item needs a mission. The
+profile from an earlier launch: it runs its full duration past the window's end, and only the
+phone's Stop ends it early (the desktop has no stop gesture since 2026-09-24). Plan the pass outside those windows unless an item needs a mission. The
 E2E suite is immune (`launchApp`); a hand-driven or Claude-driven pass is not.
 
 **Claude driving the app.** A window that is never shown renders at about 2 fps, so animation and
@@ -227,7 +227,7 @@ pass, and update this table when it merges.
 
 | # | Bug | Status | Check |
 |---|---|---|---|
-| 1 | Stopping a scheduled mission inside its window restarts it at once (code path from 73080e7, v0.0.41) | fix in progress: `claude/fix-mission-stop-rearm` | 3.5.12 |
+| 1 | Stopping a scheduled mission inside its window restarts it at once (code path from 73080e7, v0.0.41) | fixed 2026-09-23, PR 170 (dce4ab0), on `main` | 3.5.12 |
 | 2 | A mission started while a game is open draws under the game; its timer runs out of sight | decision D1 | 3.10.14 |
 | 3 | The goal picker shows a custom reward cost but the goal needs the catalogue cost | fix in progress: `claude/fix-reward-cost` | 3.8.4 |
 | 4 | An expired privilege suspension never lifts | fix in progress: `claude/fix-privilege-expiry` | 3.9.3 |

@@ -66,7 +66,7 @@ today, and put the evening time back afterwards. "▶ Start" always works, even 
 A running mission's overlay covers ⚙️, "Logs" and "← Calendar", so minimise it first ("— Minimize").
 - [ ] **3.5.1** `[glance]` Overlay slides in, a task tap completes it, "— Minimize" leaves a pill — `mission-control.spec`.
 - [ ] **3.5.2** `[human]` MC ⚙️ → "🕒 Missions Time" → "▶ Start" (morning) → "It's time for your" / "Morning Mission"; log "☀️ morning mission started", Who "👤 HERE". The overlay also shows over the Calendar.
-- [ ] **3.5.3** `[human]` Pill shows done/total, a tap restores it; holding "— Minimize" 2 s stops the mission ("⏹️ Mission stopped").
+- [ ] **3.5.3** `[human]` Pill shows done/total, a tap restores it; holding "— Minimize" 5 s also only minimizes: the pill appears, the mission keeps running, no "⏹️ Mission stopped". Only the phone's Stop stops a mission. (why: requirements 2026-09-24, "Only the phone can stop a mission")
 - [ ] **3.5.4** `[human]` "↺ Reset" tap → tasks reset, timer keeps running; hold 2 s → tasks and timer reset ("🔄 Mission fully reset (tasks + timer)"). (why: requirements → Streak shield, "Reset re-arms the occurrence")
 - [ ] **3.5.5** `[human]` Hold 600 ms on the left / right half of the progress bar → −5 / +5 min ("⏱️ Mission time adjusted"); no press feedback, by design. (why: architecture-patterns → false positives)
 - [ ] **3.5.6** `[human]` All tasks done without whining → "Mission Complete!" → "Collect 2 Bonus Stars!" → bank +2, "🎉 Morning mission completed", shield full. After "😤 Whining?" → "😠 Whining!" the button reads "Collect 1 Bonus Star!" and pays 1.
@@ -75,7 +75,7 @@ A running mission's overlay covers ⚙️, "Logs" and "← Calendar", so minimis
 - [ ] **3.5.9** `[human]` Same with every task done → bonus collected automatically, Who "⚙️ AUTO". (why: requirements 2026-08-25)
 - [ ] **3.5.10** `[claude]` Seed streak 2 plus yesterday's `loggedTimeoutAt`, start and expire the morning → streak 3. (why: CLAUDE.md → "A mission re-trigger clears `loggedTimeoutAt`")
 - [ ] **3.5.11** `[human]` "Auto-trigger at" 2 min ahead, "Duration" 30 min, "✅ Save Settings", quit before it fires; relaunch once that time has passed → the mission starts at launch, for its full duration from launch. (Saving a start time that has already passed starts it at once, on Save; a relaunch then only continues it.) (why: requirements 2026-08-25, "an app started inside an open window")
-- [ ] **3.5.12** `[claude]` A scheduler-started mission inside its window (evening "Auto-trigger at" a few minutes ago, today's evening not yet recorded): hold "— Minimize" 2 s → "⏹️ Mission stopped" and it stays stopped; the phone's cancel takes the same path (currently fails: bug 1, fix in progress: it restarts at once with a fresh timer, Who "⏰ CLOCK").
+- [ ] **3.5.12** `[claude]` A scheduler-started mission inside its window (evening "Auto-trigger at" a few minutes ago, today's evening not yet recorded): the phone's Stop → "⏹️ Mission stopped" and it stays stopped (the desktop has no stop gesture). Bug 1, fixed 2026-09-23 in PR 170 (dce4ab0): it used to restart at once with a fresh timer, Who "⏰ CLOCK".
 
 ## 3.6 Shield (missed-mission lockout)
 - [ ] **3.6.1** `[claude]` Seed `missedMissionStreak` m = 0…6 → "Shield (6 − m) / 6" (the card counts the segments LEFT), green at 0–2 missed, amber 3–4, red 5; at 6 "💔" and "🔒 Bank locked — finish your next mission", no other caption. (why: requirements → Shield bar)
@@ -83,7 +83,7 @@ A running mission's overlay covers ⚙️, "Logs" and "← Calendar", so minimis
 - [ ] **3.6.3** `[human]` At 6 every frozen control also looks refused, including "The Bank", "+ Add goal" and the coins (currently fails: bug 5, they look live; how they should look is decision D3). (why: requirements → Streak shield, "Every frozen control also *looks* refused")
 - [ ] **3.6.4** `[human]` Reach 6 as in 3.6.2 (or have Claude seed it). At 6 these still work: "⚙️ Bank Admin" +1 / +2 / −1, phone "+1" / "-1", a phone mood-token grant, "🗑️" refund, completing a mission → "🛡️ Shield restored — bank and goals unlocked.", bar full. (why: CLAUDE.md → never-lock list)
 - [ ] **3.6.5** `[human]` Mood Gauge frozen while locked; after unlocking it does not jump by the frozen time. (why: CLAUDE.md → Mission streak shield)
-- [ ] **3.6.6** `[human]` A stopped mission (hold "— Minimize") leaves the shield unchanged. (why: requirements 2026-09-02, "What counts as a miss")
+- [ ] **3.6.6** `[human]` A stopped mission (the phone's Stop) leaves the shield unchanged. (why: requirements 2026-09-02, "What counts as a miss")
 
 ## 3.7 Mood gauge and mood tokens
 - [ ] **3.7.1** `[human]` Phone "Mood Wind" → "Mood Update" toast on the desktop (3 s); the gauge moves only inside the active window, never at night. (why: CLAUDE.md → Token economy)

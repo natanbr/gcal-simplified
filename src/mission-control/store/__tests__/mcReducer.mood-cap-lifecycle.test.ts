@@ -165,14 +165,17 @@ describe('hydration sanitizes a corrupt gauge and token count', () => {
         expect(restored.behaviorProgress).toBe(initialState.behaviorProgress);
     });
 
-    it('a saved balance over the cap counting a Quick-Game goal loads at the cap, so the trash stays lossless across restarts', () => {
-        // Reachable on main: pick a Quick Game at 5, then the gauge or a grant refills to 5.
+    it('a saved balance over the cap counting a Quick-Game goal settles to the cap, so the trash stays lossless across restarts', () => {
+        // Reachable in v0.0.42: pick a Quick Game at 5, then the gauge or a grant refills to 5.
+        // Hydration keeps it raw; the logged SETTLE_GAME_TOKEN_CAP after load clamps it
+        // (useGameTokenCapSettle.test.tsx drives that through the real provider).
+        const settle = (s: MCState) => mcReducer(s, { type: 'SETTLE_GAME_TOKEN_CAP', origin: 'system' });
         const goal = initialState.cases.map(c => c.id === 0 ? { ...c, status: 'active' as const, reward: 'quick-game' as const, tokenCount: 0 } : c);
-        const loaded = load({ gameTokens: MAX_GAME_TOKENS, cases: goal });
+        const loaded = settle(load({ gameTokens: MAX_GAME_TOKENS, cases: goal }));
         expect(loaded.gameTokens).toBe(MAX_GAME_TOKENS - 1);
         const trashed = mcReducer(loaded, { type: 'REFUND_CASE', caseId: 0 });
         expect(trashed.gameTokens).toBe(MAX_GAME_TOKENS);
-        expect(load({ ...trashed }).gameTokens).toBe(MAX_GAME_TOKENS);
+        expect(settle(load({ ...trashed })).gameTokens).toBe(MAX_GAME_TOKENS);
     });
 });
 

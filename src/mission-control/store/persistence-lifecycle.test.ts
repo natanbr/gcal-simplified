@@ -83,8 +83,9 @@ describe('restart lifecycle', () => {
             expect(state.bankCount).toBe(5);
         });
 
-        it('clamps a corrupted token count into range instead of trusting it', () => {
-            expect(restart({ ...initialState, gameTokens: 999 }).gameTokens).toBe(MAX_GAME_TOKENS);
+        it('clamps a corrupted token count into range instead of trusting it (over the cap: the logged settle after load)', () => {
+            const settle = (s: MCState) => mcReducer(s, { type: 'SETTLE_GAME_TOKEN_CAP', origin: 'system' });
+            expect(settle(restart({ ...initialState, gameTokens: 999 })).gameTokens).toBe(MAX_GAME_TOKENS);
             expect(restart({ ...initialState, gameTokens: -5 }).gameTokens).toBe(0);
         });
 

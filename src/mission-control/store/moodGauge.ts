@@ -25,6 +25,11 @@ function reservedGameTokens(cases: MCState['cases']): number {
     return cases.filter(c => c.reward === 'quick-game').length;
 }
 
+/** Room under the cap, negative when over it. The one piece of cap arithmetic. */
+function signedRoom(state: MCState): number {
+    return MAX_GAME_TOKENS - state.gameTokens - reservedGameTokens(state.cases);
+}
+
 /**
  * Game tokens that may still be added before the cap, counting a Quick-Game
  * goal's token. The one cap check for every adder (the gauge and the parent's
@@ -32,7 +37,37 @@ function reservedGameTokens(cases: MCState['cases']): number {
  */
 export function gameTokenRoom(state: MCState): number {
     if (!Number.isFinite(state.gameTokens)) return 0;
-    return Math.max(0, MAX_GAME_TOKENS - state.gameTokens - reservedGameTokens(state.cases));
+    return Math.max(0, signedRoom(state));
+}
+
+/**
+ * Game tokens over the cap, counting a Quick-Game goal's token. Only a saved
+ * balance can be over (v0.0.42 let 5 sit beside a goal): every adder checks
+ * gameTokenRoom first. A corrupt balance → none.
+ */
+export function gameTokensOverCap(state: MCState): number {
+    if (!Number.isFinite(state.gameTokens)) return 0;
+    return Math.min(state.gameTokens, Math.max(0, -signedRoom(state)));
+}
+
+/** SETTLE_GAME_TOKEN_CAP: drops what is over the cap. The same state when nothing is. */
+export function settleGameTokenCap(state: MCState): MCState {
+    const over = gameTokensOverCap(state);
+    return over === 0 ? state : { ...state, gameTokens: state.gameTokens - over };
+}
+
+/**
+ * The settle's log line, in words a parent reads. Null when nothing is over the cap.
+ * No `delta`: it is a BANK-token delta wherever it is read (the day's spent sum,
+ * the audit file's `d`), and no bank token moves. Like every game-token line.
+ */
+export function gameTokenCapNote(state: MCState): { message: string } | null {
+    const over = gameTokensOverCap(state);
+    if (over === 0) return null;
+    const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+    const goals = reservedGameTokens(state.cases);
+    const held = count(state.gameTokens, 'game token') + (goals > 0 ? ` plus ${count(goals, 'Quick-Game goal')}` : '');
+    return { message: `${count(over, 'game token')} removed at load: ${held} is over the ${MAX_GAME_TOKENS}-token cap` };
 }
 
 /** A gauge value made safe: finite, within [0, full]. */
@@ -80,11 +115,13 @@ export function sanitizeBehaviorProgress(raw: unknown, fallback: number): number
 
 /**
  * Hydration: a corrupt balance (NaN persists as null) loads as 0; the default
- * would hand out a fresh 5 tokens. The cap counts the loaded Quick-Game goals,
- * because the trash's refund does not clamp: a saved 5 plus a goal (reachable
- * before gameTokenRoom existed) would otherwise trash to 6.
+ * would hand out a fresh 5 tokens. The cap is NOT applied here: a balance over
+ * it is settled just after load by SETTLE_GAME_TOKEN_CAP (useGameTokenCapSettle),
+ * which logs the removal. Clamping here moved a token silently, and a line
+ * written at load never reaches the audit trail (useAuditTrail treats the
+ * loaded log as already written).
  */
-export function sanitizeGameTokens(raw: unknown, fallback: number, cases: MCState['cases']): number {
+export function sanitizeGameTokens(raw: unknown, fallback: number): number {
     const value = raw === undefined ? fallback : typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
-    return Math.max(0, Math.min(MAX_GAME_TOKENS - reservedGameTokens(cases), value));
+    return Math.max(0, value);
 }

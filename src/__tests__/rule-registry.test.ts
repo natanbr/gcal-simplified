@@ -218,6 +218,17 @@ const REGISTRY: Rule[] = [
         defence: 'The behavioural half is useMissionScheduler.stop.test.tsx and useMissionScheduler.early-start.test.tsx, which drive the real reducer through a stop in both windows, a mission started before its window and stopped inside it, a relaunch and a rollover. Their no-timer cases go red on their own if the arm-time checks in schedulePhase are dropped (20 timers in 10 s).',
     },
     {
+        rule: 'Only the phone stops a mission: no desktop control dispatches CANCEL_MISSION, and "— Minimize" only minimizes',
+        source: 'CLAUDE.md → Conventions → Only the phone stops a mission',
+        status: 'guarded',
+        guard: [
+            'src/__tests__/action-literal-boundary.test.ts',
+            'src/mission-control/components/MissionOverlay.test.tsx',
+        ],
+        verifiedRedBy: "run both against MissionOverlay.tsx as it stood at 777c53b (the Minimize long-press dispatching CANCEL_MISSION) — the boundary case names components/MissionOverlay.tsx and the 5 s hold case reads activeMission 'none'; add `export const STOP_TYPE = \"CANCEL_MISSION\"` to MissionTimerDisplay.tsx — the boundary case names it, while the same dispatch inside a comment stays green (all proven 2026-09-24).",
+        defence: 'The list is exact, so a file that stops naming the action must leave it too. The phone side (mc-remote MissionsSection.tsx) lives in another repo; this repo only pins that CANCEL_MISSION stays on REMOTE_ALLOWED_ACTIONS (useRemoteControl.allowlist.test.ts) and that the reducer still stops the mission (mcReducer.mission-stop.test.ts).',
+    },
+    {
         rule: 'ADJUST_SHIELD is the parent’s remote shield control, clamped and logged like any other streak move',
         source: 'CLAUDE.md → Conventions → Mission streak shield',
         status: 'guarded',

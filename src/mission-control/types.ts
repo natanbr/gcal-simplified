@@ -282,6 +282,8 @@ export type MCAction = (
     | { type: 'CHEAT_ATTEMPT' }
     | { type: 'CLEAR_CHEAT_FLAG' }
     | { type: 'GRANT_GAME_TOKEN' }
+    /** Dispatched once at load, only when a saved balance is over the cap (useGameTokenCapSettle). */
+    | { type: 'SETTLE_GAME_TOKEN_CAP' }
     | { type: 'CONSUME_GAME_TOKEN' }
     | { type: 'RESET_GAME_TOKENS' }
     | { type: 'TRIGGER_ANIMATION'; animation: MCAnimationType }

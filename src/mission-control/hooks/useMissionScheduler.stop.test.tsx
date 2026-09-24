@@ -25,10 +25,10 @@ describe('stopping a scheduled mission inside its window', () => {
     beforeEach(() => { vi.useFakeTimers(); });
     afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-    it.each<Phase>(['morning', 'evening'])('a %s mission stopped from the overlay stays stopped', (phase) => {
+    it.each<Phase>(['morning', 'evening'])('a %s mission stopped from the phone stays stopped', (phase) => {
         const { live, dispatch, unmount } = launchInsideWindow(phase);
 
-        dispatch({ type: 'CANCEL_MISSION', missionPhase: phase }); // the 2 s hold on "— Minimize"
+        dispatch({ type: 'CANCEL_MISSION', missionPhase: phase }); // the phone's Stop, the only stop since 2026-09-24
         step(5_000);
 
         expect(live.state.activeMission).toBe('none');

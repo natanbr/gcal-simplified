@@ -68,7 +68,9 @@ npm run release          # Bump + build + publish in one go; use /release, which
   gauge with no room holds at full) and ignores a non-finite amount. Every game-token cap check —
   the gauge and the parent's grant — goes through `gameTokenRoom`, which counts a Quick-Game goal's
   token (a trash refunds it; a raw `gameTokens >= 5` let a grant fill that room and the refund was
-  clamped away). Guarded by `src/__tests__/gauge-writer-boundary.test.ts`.
+  clamped away). `gameTokensOverCap` is not a second cap check: it is the load-time settle's read of
+  the same arithmetic (`signedRoom`), used only to remove what a saved balance holds over the cap.
+  Guarded by `src/__tests__/gauge-writer-boundary.test.ts`.
 - **Attribution**: every state-changing action carries `origin` (`local | remote | scheduler |
   auto | system`) and every log entry carries `source`. A token movement with no attribution is a
   bug — the whole point is that a parent can see who moved what.
@@ -101,6 +103,9 @@ npm run release          # Bump + build + publish in one go; use /release, which
   only writer) and **never** cleared, because the scheduler reads it to know the occurrence already
   ran. A stop records no outcome (not a miss, not a conclusion), so clearing it beside `startedAt`
   restarts a stopped mission instantly (2026-09-22). Guarded by `activity-stamp-boundary.test.ts`.
+- **Only the phone stops a mission**: no desktop control dispatches `CANCEL_MISSION` (a stop sticks for the
+  window and spares the shield, so a desktop gesture let the child end one); "— Minimize" only minimizes.
+  The phone's Stop reaches it through `REMOTE_ALLOWED_ACTIONS`. Guarded by `action-literal-boundary.test.ts`.
 - **Quick-game window**: games open only between the day's missions — `isQuickGameWindowOpen` in
   `gameWindow.ts`, enforced in the `START_GAME` **and** `CONSUME_CASE` reducer cases (they must
   agree, or redeeming at the boundary burns the goal for a game that is then refused), not only at

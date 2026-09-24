@@ -106,6 +106,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing.
   - **QR Code Pairing**: Displayed in Settings for easy mobile connection.
   - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
+  - **Only the phone can stop a mission (decided 2026-09-24)**: the phone's Stop sends `CANCEL_MISSION`, which stays on `REMOTE_ALLOWED_ACTIONS`. The desktop has no stop gesture: "— Minimize" only minimizes, a short tap and a long hold alike, because a stop sticks for the rest of the window without moving the shield, so a hold let the child end a mission. "↺ Reset" and its 2 s hold are unchanged (not decided yet).
+  - **Shield +1 / −1 buttons (planned, phone side)**: the phone is getting buttons to hand a shield back or take one away. They send `ADJUST_SHIELD`, which the desktop already accepts (allowlist, validator, reducer); the phone side is being built separately in the mc-remote repo.
   - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
   - **Global Listener**: The remote action listener is registered globally in the application shell. This guarantees that remote commands are processed continuously, even when viewing the calendar or when the mission overlay is active.
   - **Detailed Mission State Reflection**: The remote control displays individual card views for both Morning and Evening missions simultaneously. Each card reflects its current state (Active/Inactive), live countdown timers, adjustment buttons, task checklist progress (percentage bar and expandable/collapsible checkbox list), and whining status (highlighted pulsing indicator).
@@ -155,7 +157,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 - **Mission scheduling (morning / evening windows)**:
   - The scheduler starts each window's mission **once per occurrence**. It leaves an occurrence alone once it ended today (completed or failed), or once the mission **ran at any point since the window's start time**: it is running now, or it started or ended at or after that time, whoever started it (the scheduler, ▶ Start, or the phone).
-  - **A stopped mission stays stopped for the rest of its window (fixed 2026-09-22)**. A stop (hold "— Minimize" for 2 s, or the phone's Stop) is not a miss (the shield does not move) and not a conclusion (a stopped morning does not open the quick-game window). It still counts as the occurrence having run, so the scheduler does not start it again, including after a relaunch inside the same window. This holds for a mission started by hand *before* its window, still running when the window opens, and stopped inside it (closed 2026-09-23). ▶ Start and the phone's Start still start it by hand. The next day's occurrence starts as normal.
+  - **A stopped mission stays stopped for the rest of its window (fixed 2026-09-22)**. A stop (the phone's Stop, the only way to stop a mission since 2026-09-24) is not a miss (the shield does not move) and not a conclusion (a stopped morning does not open the quick-game window). It still counts as the occurrence having run, so the scheduler does not start it again, including after a relaunch inside the same window. This holds for a mission started by hand *before* its window, still running when the window opens, and stopped inside it (closed 2026-09-23). ▶ Start and the phone's Start still start it by hand. The next day's occurrence starts as normal.
   - A stop covers only the occurrences its run overlapped. Moving that phase's start time to later makes a new occurrence, and it starts at the new time. A mission started by hand *before* its window and stopped before the window opens does not cancel the scheduled one (completing or failing it early still does: that is today's outcome). Moving it to a start at or before the run's stop (or, for a running mission, before now) makes an occurrence that run already covers: it is not started again (open decision for Nathan, PR 170; before this fix a running mission moved earlier restarted at once).
   - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load.
   - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
@@ -167,7 +169,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **A parent removing a token does not empty a held gauge.** If the gauge is held full when the parent takes a token away (the phone's remove button, logged "Mood token removed") or resets tokens to zero, the held token then arrives within about two heartbeats, logged as `auto`. Whether a take-away should also empty the held gauge is an open decision for Nathan (PR 175).
   - **Who pays how many tokens.** The heartbeat pays every whole token that fits. A mission bonus and a parent's gauge adjustment pay at most one token each, as before; progress beyond that leaves the gauge full, and the heartbeat pays the next token. Whining and a missed mission move the gauge but never pay a token themselves.
   - One writer for every path: `moveGauge()` in `store/moodGauge.ts` is the only code that writes the gauge during a dispatch (guarded by `gauge-writer-boundary.test.ts`), so none of them can wrap at the cap or zero the mood without a grant.
-  - **A broken setting cannot mint tokens.** A mission time cleared in Settings stops accrual instead of producing a NaN rate; a non-finite adjustment is ignored; and at load a corrupt token count (NaN is saved as `null`) becomes 0, not a fresh 5, and a corrupt gauge becomes empty. At load the cap also counts a Quick-Game goal: a saved 5 coins plus a goal (possible before this change) loads as 4, so the trash brings it back to 5 rather than 6.
+  - **A broken setting cannot mint tokens.** A mission time cleared in Settings stops accrual instead of producing a NaN rate; a non-finite adjustment is ignored; and at load a corrupt token count (NaN is saved as `null`) becomes 0, not a fresh 5, and a corrupt gauge becomes empty. At load the cap also counts a Quick-Game goal: a saved 5 coins plus a goal (possible in v0.0.42) settles to 4, so the trash brings it back to 5 rather than 6. **The removal is logged (2026-09-24)**: one line, attributed to the system ("1 game token removed at load: 5 game tokens plus 1 Quick-Game goal is over the 5-token cap"), which also reaches the audit trail. It carries no bank delta, like every game-token line: the bank did not move, so the day's "spent" total and the audit file's `d` stay untouched. It happens once, on the launch that settles the balance; later launches load a balance already within the cap and write nothing. A corrupt count that loads as 0 writes no line: there is no real count to report.
   - A held gauge costs nothing while idle: every heartbeat returns the same state object until a token is spent (guarded in `idle-performance.test.tsx`).
 
 - **Mission Streak Shield (missed-mission lockout)**:
@@ -1150,3 +1152,45 @@ symlinks that point nowhere, which made four guard suites fail for the wrong rea
 
 Tests: six cases in `GoalPedestal.test.tsx` (locked, unlocked, the lock moved by `ADJUST_SHIELD` in
 both directions, and under an open picker both ways); registered in `rule-registry.test.ts`.
+
+### 2026-09-24 An update that removes a game token says so in the log
+
+- **Gap** (release QA review). v0.0.42 could save 5 game tokens beside an open Quick-Game goal.
+  The cap counts the goal's token, because the trash refunds it, so that balance must load as 4 or
+  the trash refunds to 6. Hydration did clamp it to 4, but silently: a token disappeared at launch
+  with no log line and no attribution, which the attribution rule calls a bug.
+- **Now.** Hydration no longer applies the cap. Right after load, before the first paint, the store
+  dispatches `SETTLE_GAME_TOKEN_CAP` (attributed `system`) when the saved balance is over the cap.
+  It removes what is over and logs one line, for example "1 game token removed at load: 5 game
+  tokens plus 1 Quick-Game goal is over the 5-token cap", with no bank delta (review fix: a −1 there
+  showed as "Spent today" and as a bank `d` in the audit file). The line reaches the
+  audit trail like every other entry (a line written inside hydration would not: the audit bridge
+  treats the loaded log as already written). Later launches find the balance within the cap and
+  dispatch nothing. Same pattern as the suspension expiry of 2026-09-22.
+- **Unchanged.** A corrupt count (NaN saved as `null`) still loads as 0 without a line; the trash
+  of that goal still brings the balance to 5, never 6; `gameTokenRoom` stays the one cap check for
+  every adder.
+
+Tests: `store/useGameTokenCapSettle.test.tsx` (the real provider: happy, within-cap and corrupt
+loads, StrictMode, the audit trail, relaunch, trash); `src/__tests__/action-literal-boundary.test.ts`
+pins the settle's one dispatcher.
+
+### 2026-09-24 Only the phone can stop a mission
+
+- **Why** (owner decision). Holding "— Minimize" for 2 s dispatched `CANCEL_MISSION`. Since the
+  2026-09-22 fix a stop sticks for the rest of the window and does not move the shield, so the child
+  could end a mission by holding the button, with no miss recorded.
+- **Now.** "— Minimize" only minimizes: a short tap and a long hold both leave the pill, and neither
+  stops the mission. It minimizes on the release of a press that began on the button, so a long
+  touch hold that fires no click still minimizes, while a press begun beside it, dragged off it or
+  cancelled does not (review fix); Enter and Space minimize too. Size and touch behaviour unchanged. The phone's Stop (`CANCEL_MISSION`,
+  still on `REMOTE_ALLOWED_ACTIONS`) is the only way to stop a mission; the reducer is unchanged.
+- **Not changed.** "↺ Reset" keeps its tap (tasks) and 2 s hold (tasks and timer): not decided yet.
+- **Planned, phone side.** The phone is getting +1 / −1 shield buttons that send `ADJUST_SHIELD`,
+  which the desktop already accepts.
+
+Tests: `MissionOverlay.test.tsx` (a 5 s hold only minimizes and logs no stop; the button keeps its
+size and `touch-action`; a remote `CANCEL_MISSION` still closes the overlay and the pill);
+`src/__tests__/action-literal-boundary.test.ts` fails if any production file other than the
+reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION`; registered in
+`rule-registry.test.ts`.

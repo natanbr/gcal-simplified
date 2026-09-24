@@ -52,7 +52,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 827 → 826 on 2026-09-23 (the privilege cases delegate to store/privileges.ts),
     // then 826 → 818 the same day (ADJUST_BEHAVIOR_PROGRESS and TOGGLE_WHINING delegate
     // to moodGauge's moveGauge, the one writer of the gauge).
-    'src/mission-control/store/mcReducer.ts': 818,
+    // 818 → 821 on 2026-09-24 (+3: the SETTLE_GAME_TOKEN_CAP case, which delegates
+    // to moodGauge's settleGameTokenCap, written out normally. Raised rather than
+    // paid for by deleting blank lines: a squeeze hides growth from the ratchet).
+    'src/mission-control/store/mcReducer.ts': 821,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
@@ -73,7 +76,11 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // rewardCatalogue.ts's rewardCost / isRewardEnabled, shared with the reducer).
     'src/mission-control/components/GoalPedestal.tsx': 640,
     'src/components/Dashboard.tsx': 504,
-    'src/mission-control/components/MissionOverlay.tsx': 493,
+    // 493 → 481 on 2026-09-24 (the Minimize long-press that stopped a mission is
+    // gone: only the phone stops one; the button now only minimizes).
+    // 481 → 482 the same day (review fix: Minimize fires only for a press that began
+    // on it; the logic lives in hooks/usePressRelease.ts, this is its import).
+    'src/mission-control/components/MissionOverlay.tsx': 482,
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
     // committing it optimistically made coins vanish from the pile).
     'src/mission-control/components/GlobalBank.tsx': 407,
@@ -90,6 +97,13 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // refused while the shield is broken — a refused action writes no log line,
     // so a live-looking button gives a dead tap with no trace on either side).
     'src/mission-control/components/ResponsibilityPanel.tsx': 324,
+    // NEW on 2026-09-24 at 304 (was 300): the SETTLE_GAME_TOKEN_CAP log case, 4
+    // lines that delegate the wording to moodGauge's gameTokenCapNote. Moving the
+    // game-token cases out was the cleaner fix, but not this close to a release.
+    'src/mission-control/store/activityLog.ts': 304,
+    // NEW on 2026-09-24 at 302 (was 300): the SETTLE_GAME_TOKEN_CAP union member
+    // and its one-line doc comment. Split candidate: MCAction into its own module.
+    'src/mission-control/types.ts': 302,
 };
 
 interface Measured {

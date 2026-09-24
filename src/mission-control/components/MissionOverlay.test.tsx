@@ -7,8 +7,9 @@ import React from 'react';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MCStoreProvider } from '../store/MCStoreProvider';
-import { useMCDispatch } from '../store/useMCStore.tsx';
+import { useMCDispatch, useMCState } from '../store/useMCStore.tsx';
 import { MissionOverlay } from './MissionOverlay';
+import type { MCState } from '../types';
 
 
 // ── Framer Motion is mocked so animations don't hang tests ───────────────────
@@ -45,6 +46,28 @@ function TriggerMission({ phase }: { phase: 'morning' | 'evening' }) {
             onClick={() => dispatch({ type: 'SET_ACTIVE_MISSION', phase })}
         >
             Trigger
+        </button>
+    );
+}
+
+/** Reports every committed store state to the test. */
+function StateProbe({ onState }: { onState: (s: MCState) => void }) {
+    onState(useMCState());
+    return null;
+}
+
+const morning = (s: MCState) => s.missions.find(m => m.phase === 'morning')!;
+const tshirt = (s: MCState) => morning(s).tasks.find(t => t.id === 'tshirt')!;
+
+/** What useRemoteControl dispatches when the phone's Stop arrives. */
+function RemoteStop() {
+    const dispatch = useMCDispatch();
+    return (
+        <button
+            data-testid="remote-stop-btn"
+            onClick={() => dispatch({ type: 'CANCEL_MISSION', missionPhase: 'morning', isRemote: true, origin: 'remote' })}
+        >
+            Remote stop
         </button>
     );
 }
@@ -128,23 +151,100 @@ describe('MissionOverlay', () => {
         expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
     });
 
-    it('long-pressing Minimize (2s) stops the mission — closes overlay and removes pill', async () => {
+    // Only the phone can stop a mission (2026-09-24): since a stop sticks for the
+    // rest of the window without moving the shield, a desktop hold let the child
+    // end a mission. The hold that used to stop it now only minimizes.
+    it('holding Minimize (5 s) only minimizes — the mission keeps running and nothing logs a stop', async () => {
         vi.useFakeTimers();
+        let live: MCState | null = null;
+        renderOverlay(<><TriggerMission phase="morning" /><StateProbe onState={s => { live = s; }} /></>);
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('trigger-btn'));
+        });
+        await act(async () => {
+            fireEvent.pointerDown(screen.getByTestId('mc-minimize-btn'));
+        });
+        await act(async () => {
+            vi.advanceTimersByTime(5000);
+        });
+        expect(live!.activeMission, 'the hold alone must not stop the mission').toBe('morning');
+        await act(async () => {
+            fireEvent.pointerUp(screen.getByTestId('mc-minimize-btn'));
+        });
+        expect(screen.queryByTestId('mc-mission-overlay')).not.toBeInTheDocument();
+        expect(screen.getByTestId('mc-mission-pill')).toBeInTheDocument();
+        expect(live!.activeMission).toBe('morning');
+        expect(live!.activityLogs.filter(l => /stopped/i.test(l.message))).toEqual([]);
+        vi.useRealTimers();
+    });
+
+    it('a release without a press on the button does not minimize', async () => {
         renderOverlay(<TriggerMission phase="morning" />);
         await act(async () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
-        // start long press
+        // A mouse pressed beside the button and released on it.
         await act(async () => {
-            fireEvent.pointerDown(screen.getByTestId('mc-minimize-btn'));
+            fireEvent.pointerUp(screen.getByTestId('mc-minimize-btn'));
         });
-        // advance 2s so the long-press fires
+        expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
+        expect(screen.queryByTestId('mc-mission-pill')).not.toBeInTheDocument();
+    });
+
+    it('a press dragged off the button, or cancelled by the browser, does not minimize', async () => {
+        renderOverlay(<TriggerMission phase="morning" />);
         await act(async () => {
-            vi.advanceTimersByTime(2000);
+            fireEvent.click(screen.getByTestId('trigger-btn'));
+        });
+        const button = () => screen.getByTestId('mc-minimize-btn');
+        await act(async () => {
+            fireEvent.pointerDown(button());
+            fireEvent.pointerLeave(button());
+            fireEvent.pointerUp(button());
+        });
+        await act(async () => {
+            fireEvent.pointerDown(button());
+            fireEvent.pointerCancel(button());
+            fireEvent.pointerUp(button());
+        });
+        expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
+    });
+
+    it('Enter or Space on the focused button minimizes too', async () => {
+        for (const key of ['Enter', ' ']) {
+            cleanup();
+            renderOverlay(<TriggerMission phase="morning" />);
+            await act(async () => {
+                fireEvent.click(screen.getByTestId('trigger-btn'));
+            });
+            await act(async () => {
+                fireEvent.keyUp(screen.getByTestId('mc-minimize-btn'), { key });
+            });
+            expect(screen.getByTestId('mc-mission-pill'), `key ${JSON.stringify(key)}`).toBeInTheDocument();
+        }
+    });
+
+    it('keeps the Minimize button finger-sized and free of browser touch gestures', async () => {
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('trigger-btn'));
+        });
+        const button = screen.getByTestId('mc-minimize-btn');
+        expect(button.style.touchAction).toBe('manipulation');
+        expect(button.style.minHeight).toBe('44px');
+        expect(button.style.minWidth).toBe('52px');
+    });
+
+    it("the phone's Stop still stops it: overlay and pill both go", async () => {
+        renderOverlay(<><TriggerMission phase="morning" /><RemoteStop /></>);
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('trigger-btn'));
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('remote-stop-btn'));
         });
         expect(screen.queryByTestId('mc-mission-overlay')).not.toBeInTheDocument();
         expect(screen.queryByTestId('mc-mission-pill')).not.toBeInTheDocument();
-        vi.useRealTimers();
     });
 
     it('completing all tasks reveals the Mission Complete section', async () => {
@@ -269,27 +369,26 @@ describe('MissionOverlay — reset tasks button', () => {
         expect(screen.getByTestId('mc-reset-btn')).toBeInTheDocument();
     });
 
-    it('short-pressing reset tasks clears completed task markers', async () => {
-        renderOverlay(<TriggerMission phase="morning" />);
+    it('short-pressing reset tasks clears completed task markers and keeps the timer', async () => {
+        vi.useFakeTimers();
+        let live: MCState | null = null;
+        renderOverlay(<><TriggerMission phase="morning" /><StateProbe onState={s => { live = s; }} /></>);
         await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+        const startedAt = morning(live!).startedAt;
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-task-card-tshirt')); });
+        expect(tshirt(live!).completed, 'the task tap must complete it first').toBe(true);
+        await act(async () => { vi.advanceTimersByTime(60_000); });
 
-        // Complete the first morning task
-        const firstTask = screen.queryByTestId('mc-task-card-tshirt');
-        if (firstTask && !(firstTask as HTMLButtonElement).disabled) {
-            await act(async () => { fireEvent.click(firstTask); });
-        }
-
-        // Reset tasks (short press)
         await act(async () => {
             fireEvent.pointerDown(screen.getByTestId('mc-reset-btn'));
             fireEvent.pointerUp(screen.getByTestId('mc-reset-btn'));
         });
 
-        // The task card should no longer be disabled (completed tasks are disabled)
-        const resetTask = screen.queryByTestId('mc-task-card-tshirt');
-        if (resetTask) {
-            expect((resetTask as HTMLButtonElement).disabled).toBe(false);
-        }
+        expect(tshirt(live!).completed).toBe(false);
+        expect((screen.getByTestId('mc-task-card-tshirt') as HTMLButtonElement).disabled).toBe(false);
+        expect(morning(live!).startedAt, 'a short press resets the tasks only').toBe(startedAt);
+        expect(live!.activityLogs.some(l => /fully reset/.test(l.message))).toBe(false);
+        vi.useRealTimers();
     });
 
     it('resetting tasks does NOT close the overlay', async () => {
@@ -304,35 +403,27 @@ describe('MissionOverlay — reset tasks button', () => {
         expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
     });
 
-    it('long-pressing Reset (2s) triggers RESET_MISSION_WITH_TIMER — overlay stays open', async () => {
+    it('long-pressing Reset (2s) triggers RESET_MISSION_WITH_TIMER — tasks and timer restart, overlay stays open', async () => {
         vi.useFakeTimers();
-        renderOverlay(<TriggerMission phase="morning" />);
+        let live: MCState | null = null;
+        renderOverlay(<><TriggerMission phase="morning" /><StateProbe onState={s => { live = s; }} /></>);
         await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+        const startedAt = morning(live!).startedAt;
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-task-card-tshirt')); });
+        expect(tshirt(live!).completed, 'the task tap must complete it first').toBe(true);
+        await act(async () => { vi.advanceTimersByTime(60_000); });
 
-        // Complete the first morning task
-        const firstTask = screen.queryByTestId('mc-task-card-tshirt');
-        if (firstTask && !(firstTask as HTMLButtonElement).disabled) {
-            await act(async () => { fireEvent.click(firstTask); });
-        }
-
-        // start long press on reset
         await act(async () => {
             fireEvent.pointerDown(screen.getByTestId('mc-reset-btn'));
         });
-        // advance 2s so the long-press fires
         await act(async () => {
             vi.advanceTimersByTime(2000);
         });
 
-        // Mission overlay should still be open (full reset keeps mission active)
         expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
-
-        // Task should be uncompleted (reset)
-        const resetTask = screen.queryByTestId('mc-task-card-tshirt');
-        if (resetTask) {
-            expect((resetTask as HTMLButtonElement).disabled).toBe(false);
-        }
-
+        expect(tshirt(live!).completed).toBe(false);
+        expect(live!.activityLogs.filter(l => l.message === 'Mission fully reset (tasks + timer)')).toHaveLength(1);
+        expect(Date.parse(morning(live!).startedAt!), 'the timer restarted').toBeGreaterThan(Date.parse(startedAt!));
         vi.useRealTimers();
     });
 });

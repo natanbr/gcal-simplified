@@ -12,7 +12,7 @@ import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
-import { gameTokenRoom } from './moodGauge';
+import { gameTokenCapNote, gameTokenRoom } from './moodGauge';
 import { REWARD_MAP, canSelectReward } from '../rewardCatalogue';
 
 export type LogSource = NonNullable<ActivityLogEntry['source']>;
@@ -246,6 +246,10 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: '🎮', message: 'Mood token removed', type: 'reward', colorKey: 'system', ...snap() };
         case 'RESET_GAME_TOKENS':
             return { id, timestamp: now, icon: '🧹', message: 'Mood tokens reset to zero', type: 'system', colorKey: 'system', ...snap() };
+        case 'SETTLE_GAME_TOKEN_CAP': {
+            const note = gameTokenCapNote(state);
+            return note && { id, timestamp: now, icon: '🔧', ...note, type: 'system', colorKey: 'system', ...snap() };
+        }
         case 'SET_MOOD_WIND': {
             const clamped = Math.max(-2, Math.min(2, action.level));
             if (clamped === state.moodWind) return null; // no-op, nothing happened
