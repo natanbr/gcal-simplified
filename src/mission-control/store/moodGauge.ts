@@ -56,14 +56,18 @@ export function settleGameTokenCap(state: MCState): MCState {
     return over === 0 ? state : { ...state, gameTokens: state.gameTokens - over };
 }
 
-/** The settle's log line, in words a parent reads. Null when nothing is over the cap. */
-export function gameTokenCapNote(state: MCState): { message: string; delta: number } | null {
+/**
+ * The settle's log line, in words a parent reads. Null when nothing is over the cap.
+ * No `delta`: it is a BANK-token delta wherever it is read (the day's spent sum,
+ * the audit file's `d`), and no bank token moves. Like every game-token line.
+ */
+export function gameTokenCapNote(state: MCState): { message: string } | null {
     const over = gameTokensOverCap(state);
     if (over === 0) return null;
     const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
     const goals = reservedGameTokens(state.cases);
     const held = count(state.gameTokens, 'game token') + (goals > 0 ? ` plus ${count(goals, 'Quick-Game goal')}` : '');
-    return { message: `${count(over, 'game token')} removed at update: ${held} is over the ${MAX_GAME_TOKENS}-token cap`, delta: -over };
+    return { message: `${count(over, 'game token')} removed at load: ${held} is over the ${MAX_GAME_TOKENS}-token cap` };
 }
 
 /** A gauge value made safe: finite, within [0, full]. */
