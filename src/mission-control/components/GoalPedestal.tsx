@@ -193,7 +193,6 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
 
   const handleTokenDrop = useCallback((tokenId: string, x: number, y: number): boolean => {
     if (economyLocked) return false; // refuse before animating, or the token vanishes
-    
     // Check if dropped on Bank
     if (layoutRects.bank && x >= layoutRects.bank.left && x <= layoutRects.bank.right && y >= layoutRects.bank.top && y <= layoutRects.bank.bottom) {
       setExitingIds(prev => new Set(prev).add(tokenId));
@@ -301,8 +300,10 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
   ];
   const accent = pastelAccents[case_.id % pastelAccents.length];
 
-  const isEmptyIdle = case_.status === 'empty' && !isSelecting;
+  // The lock closes an open picker for good: a shield handed back must not reopen it untapped.
+  if (economyLocked && isSelecting) setIsSelecting(false);
   const isEmptySelecting = case_.status === 'empty' && isSelecting;
+  const isEmptyIdle = case_.status === 'empty' && !isSelecting;
 
   return (
     <div
@@ -357,24 +358,25 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
             alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%',
           }}
         >
-          <motion.button
-            whileHover={{ scale: 1.1, y: -2 }}
-            whileTap={{ scale: 0.92 }}
+          <motion.button // frozen exactly like Button3D's `disabled`
+            whileHover={economyLocked ? {} : { scale: 1.1, y: -2 }}
+            whileTap={economyLocked ? {} : { scale: 0.92 }}
             onClick={economyLocked ? undefined : () => setIsSelecting(true)}
-            aria-label="Add a new goal"
+            aria-label={economyLocked ? 'Bank locked — finish your next mission' : 'Add a new goal'}
+            aria-disabled={economyLocked}
             style={{
-              width: 54, height: 54, borderRadius: '50%',
+              width: 54, height: 54, borderRadius: '50%', fontSize: 28, color: 'var(--mc-text-muted)',
               background: 'rgba(255,255,255,0.7)',
               border: '2px dashed rgba(160,150,230,0.5)',
-              fontSize: 28, cursor: 'pointer', color: 'var(--mc-text-muted)',
+              cursor: economyLocked ? 'not-allowed' : 'pointer', opacity: economyLocked ? 0.45 : 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 2px 8px rgba(130,120,200,0.1)',
               fontFamily: "'Nunito', sans-serif",
             }}
           >
-            +
+            {economyLocked ? '🔒' : '+'}
           </motion.button>
-          <span style={{ fontSize: 10, color: 'var(--mc-text-dim)', fontWeight: 700 }}>Add goal</span>
+          <span style={{ fontSize: 10, color: 'var(--mc-text-dim)', fontWeight: 700 }}>{economyLocked ? 'Locked' : 'Add goal'}</span>
         </motion.div>
       )}
 
@@ -448,8 +450,6 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                 </motion.button>
               );})}
             </div>
-
-
           </motion.div>
         )}
       </AnimatePresence>

@@ -25,10 +25,12 @@ vi.mock('framer-motion', async () => {
         motion: new Proxy({}, {
             get: (_target, prop: string) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                return React.forwardRef(({ children: c, onDragEnd, ...props }: any, ref: any) =>
+                return React.forwardRef(({ children: c, onDragEnd, whileTap, ...props }: any, ref: any) =>
                     React.createElement(prop, {
                         ...props,
                         ref,
+                        // Readable press animation: `{}` means the control does not squish.
+                        'data-while-tap': whileTap === undefined ? undefined : JSON.stringify(whileTap),
                         // Framer calls onDragEnd(event, info); a DOM dragend carries only the
                         // event, so rebuild info.point from it (see releaseCoin). PAGE
                         // coordinates, because that is what Framer's extractEventInfo reports.
@@ -385,5 +387,126 @@ describe.each([
         expect(coins()).toHaveLength(1);
         expect(sprangBack()).toBe(false);
         expect(screen.getByTestId('store')).toHaveTextContent(afterMove);
+    });
+});
+
+// ── The "+ Add goal" button while the shield is broken ───────────────────────
+// SELECT_CASE is refused silently while locked, so an inert "+" that still
+// looks live leaves the child tapping a dead button with no trace. It must look
+// frozen the way Button3D's `disabled` does for the other spend controls.
+
+const LOCKED_LABEL = 'Bank locked — finish your next mission';
+const EMPTY_GOAL_ID = 0;
+
+function EmptyPedestalWithShield() {
+    const state = useMCState();
+    const dispatch = useMCDispatch();
+    const goal = state.cases.find(c => c.id === EMPTY_GOAL_ID);
+    if (!goal) throw new Error(`seeded case ${EMPTY_GOAL_ID} is missing`);
+    return (
+        <>
+            <GoalPedestal case_={goal} cases={state.cases} bankCount={state.bankCount} layoutRects={{ bank: null, cases: {} }} />
+            <button data-testid="lose-shield" onClick={() => dispatch({ type: 'ADJUST_SHIELD', delta: -1 })} />
+            <button data-testid="gain-shield" onClick={() => dispatch({ type: 'ADJUST_SHIELD', delta: 1 })} />
+        </>
+    );
+}
+
+describe('GoalPedestal — the "+ Add goal" button and the shield lock', () => {
+    afterEach(() => { localStorage.clear(); });
+
+    function renderEmptyGoal(missedMissionStreak: number) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            missedMissionStreak,
+            cases: [{ id: EMPTY_GOAL_ID, status: 'empty', reward: null, tokenCount: 0, targetCount: 5 }],
+        }));
+        render(
+            <MCStoreProvider>
+                <DragLayer><EmptyPedestalWithShield /></DragLayer>
+            </MCStoreProvider>
+        );
+    }
+
+    function expectFrozen() {
+        const plus = screen.getByLabelText(LOCKED_LABEL);
+        expect(plus.style.cursor).toBe('not-allowed');
+        expect(plus.style.opacity).toBe('0.45'); // Button3D's disabled dimming
+        expect(plus).toHaveAttribute('aria-disabled', 'true');
+        expect(plus).toHaveAttribute('data-while-tap', '{}');
+        expect(plus).toHaveTextContent('🔒');
+        expect(screen.getByText('Locked')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Add a new goal')).not.toBeInTheDocument();
+        expect(screen.queryByText('Add goal')).not.toBeInTheDocument();
+        // Tapping it opens nothing: the refused action has no screen to open.
+        act(() => { fireEvent.click(plus); });
+        expect(screen.queryByText(/Pick a Goal/i)).not.toBeInTheDocument();
+    }
+
+    function expectLive() {
+        const plus = screen.getByLabelText('Add a new goal');
+        expect(plus.style.cursor).toBe('pointer');
+        expect(plus.style.opacity === '' || parseFloat(plus.style.opacity) === 1).toBe(true);
+        expect(plus).not.toHaveAttribute('aria-disabled', 'true');
+        expect(plus.getAttribute('data-while-tap')).toContain('scale');
+        expect(plus).toHaveTextContent('+');
+        expect(screen.getByText('Add goal')).toBeInTheDocument();
+        expect(screen.queryByLabelText(LOCKED_LABEL)).not.toBeInTheDocument();
+    }
+
+    it('looks frozen while the shield is broken, and tapping it opens nothing', () => {
+        renderEmptyGoal(MISSED_LOCK_THRESHOLD);
+        expectFrozen();
+    });
+
+    it('looks live while the shield holds, and tapping it opens the picker', () => {
+        renderEmptyGoal(0);
+        expectLive();
+        act(() => { fireEvent.click(screen.getByLabelText('Add a new goal')); });
+        expect(screen.getByText(/Pick a Goal/i)).toBeInTheDocument();
+    });
+
+    // The lock moves while the child stands at the screen: a mission times out,
+    // or the parent hands a shield back — neither remounts the pedestal.
+    it('freezes when the last shield is lost while the screen stays open', () => {
+        renderEmptyGoal(MISSED_LOCK_THRESHOLD - 1);
+        expectLive();
+        act(() => { fireEvent.click(screen.getByTestId('lose-shield')); });
+        expectFrozen();
+    });
+
+    it('comes back to life when a shield is handed back while the screen stays open', () => {
+        renderEmptyGoal(MISSED_LOCK_THRESHOLD);
+        expectFrozen();
+        act(() => { fireEvent.click(screen.getByTestId('gain-shield')); });
+        expectLive();
+        act(() => { fireEvent.click(screen.getByLabelText('Add a new goal')); });
+        expect(screen.getByText(/Pick a Goal/i)).toBeInTheDocument();
+    });
+
+    // An open picker would otherwise keep live-looking reward buttons whose
+    // SELECT_CASE the reducer now refuses without a trace.
+    it('closes an open picker when the shield breaks, leaving the frozen "+"', () => {
+        renderEmptyGoal(MISSED_LOCK_THRESHOLD - 1);
+        act(() => { fireEvent.click(screen.getByLabelText('Add a new goal')); });
+        expect(screen.getByText(/Pick a Goal/i)).toBeInTheDocument();
+
+        act(() => { fireEvent.click(screen.getByTestId('lose-shield')); });
+
+        expect(screen.queryByText(/Pick a Goal/i)).not.toBeInTheDocument();
+        expectFrozen();
+    });
+
+    // A parent handing a shield back (often remotely, hours later) must not pop
+    // open a picker nobody tapped for.
+    it('does not reopen that picker by itself when a shield is handed back', () => {
+        renderEmptyGoal(MISSED_LOCK_THRESHOLD - 1);
+        act(() => { fireEvent.click(screen.getByLabelText('Add a new goal')); });
+        expect(screen.getByText(/Pick a Goal/i)).toBeInTheDocument();
+        act(() => { fireEvent.click(screen.getByTestId('lose-shield')); });
+
+        act(() => { fireEvent.click(screen.getByTestId('gain-shield')); });
+
+        expect(screen.queryByText(/Pick a Goal/i)).not.toBeInTheDocument();
+        expectLive();
     });
 });
