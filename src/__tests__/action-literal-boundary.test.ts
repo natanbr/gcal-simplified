@@ -50,7 +50,7 @@ describe('action literal boundaries', () => {
     it('SETTLE_GAME_TOKEN_CAP is dispatched only by the settle at load', () => {
         // The removal is logged because it is dispatched through the interceptor
         // at load, once. A second way in (a remote button, a timer) would remove
-        // tokens under a message that says "at update".
+        // tokens under a message that says "at load".
         expect(filesNaming('SETTLE_GAME_TOKEN_CAP')).toEqual([
             `${MC}store/activityLog.ts`, // its log line
             `${MC}store/mcReducer.ts`, // the case
