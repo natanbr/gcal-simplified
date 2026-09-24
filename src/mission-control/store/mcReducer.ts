@@ -638,7 +638,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             return { ...state, gameTokens: state.gameTokens + 1 };
         }
 
-        case 'SETTLE_GAME_TOKEN_CAP': return settleGameTokenCap(state); // logged; see useGameTokenCapSettle
+        case 'SETTLE_GAME_TOKEN_CAP': // logged; see useGameTokenCapSettle
+            return settleGameTokenCap(state);
+
         case 'CONSUME_GAME_TOKEN':
             if (state.gameTokens <= 0) return state;
             return { ...state, gameTokens: state.gameTokens - 1 };
@@ -792,6 +794,7 @@ function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: numb
 export function mcReducer(state: MCState, action: MCAction): MCState {
     // Any start or end stamps lastActiveAt, the scheduler's memory of a run (missionActivity.ts).
     const nextState = stampMissionActivity(state, _mcReducer(state, action), actionInstant(action));
+    
     const shouldSync = 
         action.type === 'SET_SETTINGS' ||
         action.type === 'COMPLETE_TASK' ||
