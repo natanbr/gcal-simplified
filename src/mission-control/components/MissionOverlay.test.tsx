@@ -175,6 +175,52 @@ describe('MissionOverlay', () => {
         vi.useRealTimers();
     });
 
+    it('a release without a press on the button does not minimize', async () => {
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('trigger-btn'));
+        });
+        // A mouse pressed beside the button and released on it.
+        await act(async () => {
+            fireEvent.pointerUp(screen.getByTestId('mc-minimize-btn'));
+        });
+        expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
+        expect(screen.queryByTestId('mc-mission-pill')).not.toBeInTheDocument();
+    });
+
+    it('a press dragged off the button, or cancelled by the browser, does not minimize', async () => {
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('trigger-btn'));
+        });
+        const button = () => screen.getByTestId('mc-minimize-btn');
+        await act(async () => {
+            fireEvent.pointerDown(button());
+            fireEvent.pointerLeave(button());
+            fireEvent.pointerUp(button());
+        });
+        await act(async () => {
+            fireEvent.pointerDown(button());
+            fireEvent.pointerCancel(button());
+            fireEvent.pointerUp(button());
+        });
+        expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
+    });
+
+    it('Enter or Space on the focused button minimizes too', async () => {
+        for (const key of ['Enter', ' ']) {
+            cleanup();
+            renderOverlay(<TriggerMission phase="morning" />);
+            await act(async () => {
+                fireEvent.click(screen.getByTestId('trigger-btn'));
+            });
+            await act(async () => {
+                fireEvent.keyUp(screen.getByTestId('mc-minimize-btn'), { key });
+            });
+            expect(screen.getByTestId('mc-mission-pill'), `key ${JSON.stringify(key)}`).toBeInTheDocument();
+        }
+    });
+
     it('keeps the Minimize button finger-sized and free of browser touch gestures', async () => {
         renderOverlay(<TriggerMission phase="morning" />);
         await act(async () => {

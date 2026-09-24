@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch, useMission } from '../store/useMCStore.tsx';
 import { MissionTimerDisplay, MissionDepletingBar } from './MissionTimerDisplay';
 import { useLongPress } from '../hooks/useLongPress';
+import { usePressRelease } from '../hooks/usePressRelease';
 import type { MissionPhase } from '../types';
 import { TaskCard } from './TaskCard';
 
@@ -37,6 +38,7 @@ export function MissionOverlay() {
     const state    = useMCState();
     const dispatch = useMCDispatch();
     const [minimized,       setMinimized]      = useState(false);
+    const minimizePress = usePressRelease(useCallback(() => setMinimized(true), []));
 
     const BONUS_BASE = 2;
 
@@ -229,12 +231,11 @@ export function MissionOverlay() {
 
                             {/* RIGHT — Minimize + Reset (Reset has a long-press) */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
-                                {/* Minimize only minimizes: only the phone stops a mission (2026-09-24).
-                                    On release, not click: a long touch hold may fire no click. */}
+                                {/* Minimize only minimizes: only the phone stops a mission (2026-09-24). */}
                                 <motion.button
                                     data-testid="mc-minimize-btn"
                                     whileHover={{ scale: 1.06 }}
-                                    onPointerUp={() => setMinimized(true)}
+                                    {...minimizePress}
                                     style={{
                                         background: 'rgba(255,255,255,0.6)',
                                         border: `2px solid ${meta.accent}`,
