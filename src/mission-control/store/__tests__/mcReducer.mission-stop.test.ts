@@ -1,7 +1,7 @@
 // ============================================================
 // Mission Control — what a stop is, and what it is not
 // ------------------------------------------------------------
-// A stop (CANCEL_MISSION: the overlay's 2 s hold, or the phone's Stop) ends a
+// A stop (CANCEL_MISSION: the phone's Stop, the only one since 2026-09-24) ends a
 // mission without an outcome. It is not a miss, so the shield does not move,
 // and it is not a conclusion, so a stopped morning does not open the
 // quick-game window. What it must still leave behind is the fact that today's
