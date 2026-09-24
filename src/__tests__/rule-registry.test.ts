@@ -194,6 +194,14 @@ const REGISTRY: Rule[] = [
         defence: "Both files assert the RENDERED pile — on the release frame as well as after the exit window — never only the store: the reducer refuses MOVE_TOKEN too, so a store count stays green over the bug that shipped (the coin animated away and the count kept its old total). Each locked case is paired with an unlocked drop at the same point, so a refusal cannot pass by missing the target, and the lock is moved by ADJUST_SHIELD mid-test so a lock read once at mount cannot pass. KNOWN BLIND SPOT: these tests call the drop handler through a mocked Framer gesture, so they prove the DECISION, not that the gesture is reachable — deleting `drag` from Token.tsx leaves them all green, and no E2E covers the coin (see docs/test-coverage-plan.md).",
     },
     {
+        rule: 'The "+ Add goal" button LOOKS frozen while the shield is locked, and an open goal picker closes for good when the lock breaks',
+        source: 'CLAUDE.md → Conventions → Refusals must be silent in the log and visible on screen',
+        status: 'guarded',
+        guard: 'src/mission-control/components/GoalPedestal.test.tsx',
+        verifiedRedBy: "run the '+ Add goal' cases against GoalPedestal from main — five of the six go red, only the unlocked case stays green; delete the render-time `if (economyLocked && isSelecting) setIsSelecting(false)` — both open-picker cases go red; ungate `whileTap`, leave the opacity at 1 or the face at '+' — the four locked cases go red (proven 2026-09-23 on an isolated copy).",
+        defence: 'Behavioural only: the three Button3D spend controls get the same frozen look from `disabled`, but nothing structural stops a NEW raw button gated on economyLocked from shipping live-looking (see the PR proposing a source-reading guard).',
+    },
+    {
         rule: 'A mission re-trigger clears loggedTimeoutAt, so consecutive misses actually accumulate',
         source: 'CLAUDE.md → Conventions → Mission streak shield',
         status: 'guarded',
