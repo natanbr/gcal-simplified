@@ -103,6 +103,21 @@ describe('remote action allowlist', () => {
             expect(mockDispatch).not.toHaveBeenCalled();
         });
 
+        it("rejects a phone Stop whose phase is missing or not a real mission", () => {
+            // Stop is phone-only since 2026-09-24. CANCEL_MISSION always sets
+            // activeMission 'none' but only resets the mission whose phase matches,
+            // so a bad phase left that mission's active/startedAt behind.
+            const listener = mountAndGetListener();
+            listener({ type: 'CANCEL_MISSION' });
+            listener({ type: 'CANCEL_MISSION', missionPhase: 'none' });
+            listener({ type: 'CANCEL_MISSION', missionPhase: 'noon' });
+            listener({ type: 'CANCEL_MISSION', missionPhase: 1 });
+            expect(mockDispatch).not.toHaveBeenCalled();
+            listener({ type: 'CANCEL_MISSION', missionPhase: 'morning' });
+            listener({ type: 'CANCEL_MISSION', missionPhase: 'evening' });
+            expect(mockDispatch).toHaveBeenCalledTimes(2);
+        });
+
         it('rejects a privilege change the reducer would store as garbage', () => {
             // The reducer stores status and suspendedUntil as they arrive. A number
             // end time is a year to one parser and a 1970 timestamp to another; an
@@ -144,6 +159,7 @@ describe('remote action allowlist', () => {
             const payloads: Record<string, Record<string, unknown>> = {
                 ADD_TOKENS: { amount: 1 },
                 SET_ACTIVE_MISSION: { phase: 'morning' },
+                CANCEL_MISSION: { missionPhase: 'morning' },
                 ADJUST_SHIELD: { delta: 1 },
                 COMPLETE_MISSION_ROUTINE: { missionPhase: 'morning', bonusTokens: 2 },
                 ADJUST_BEHAVIOR_PROGRESS: { amount: 1, reason: 'test' },
