@@ -68,7 +68,9 @@ npm run release          # Bump + build + publish in one go; use /release, which
   gauge with no room holds at full) and ignores a non-finite amount. Every game-token cap check —
   the gauge and the parent's grant — goes through `gameTokenRoom`, which counts a Quick-Game goal's
   token (a trash refunds it; a raw `gameTokens >= 5` let a grant fill that room and the refund was
-  clamped away). Guarded by `src/__tests__/gauge-writer-boundary.test.ts`.
+  clamped away). `gameTokensOverCap` is not a second cap check: it is the load-time settle's read of
+  the same arithmetic (`signedRoom`), used only to remove what a saved balance holds over the cap.
+  Guarded by `src/__tests__/gauge-writer-boundary.test.ts`.
 - **Attribution**: every state-changing action carries `origin` (`local | remote | scheduler |
   auto | system`) and every log entry carries `source`. A token movement with no attribution is a
   bug — the whole point is that a parent can see who moved what.
