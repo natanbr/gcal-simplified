@@ -162,7 +162,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - A stop covers only the occurrences its run overlapped. Moving that phase's start time to later makes a new occurrence, and it starts at the new time. A mission started by hand *before* its window and stopped before the window opens does not cancel the scheduled one (completing or failing it early still does: that is today's outcome). Moving it to a start at or before the run's stop (or, for a running mission, before now) makes an occurrence that run already covers: it is not started again (open decision for Nathan, PR 170; before this fix a running mission moved earlier restarted at once).
   - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load.
   - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
-  - **A mission start time must be a real time (fixed 2026-09-24).** Settings → "Auto-trigger at" cannot be saved empty: Save is disabled and the footer says "Set both auto-trigger times to save" until both times are filled in. `SET_SETTINGS` also ignores a start time that is not `HH:MM` (it keeps the stored one and does not stop a running mission), a profile saved empty by an older version loads with the default time (06:00 / 19:00) and a window re-derived from its duration, and the scheduler arms nothing for a time it cannot parse.
+  - **A mission start time must be a real time (fixed 2026-09-24).** Settings → "Auto-trigger at" cannot be saved empty: Save is disabled, the empty field is outlined, and the footer names the empty time and its tab ("Set the Morning auto-trigger time (🕒 Missions Time tab) to save.") until both times are filled in. `SET_SETTINGS` also ignores a start time that is not `HH:MM` (it keeps the stored one and does not stop a running mission), a profile saved empty by an older version loads with the default time (06:00 / 19:00) and a window re-derived from its duration, and the scheduler arms nothing for a time that is not a real `HH:MM`.
 
 - **School Bag task — school days only (added 2026-09-27)**:
   - Owner's rule: organizing the bag for school is a task in both routines, only on school days — not on holidays or Pro-D days. Read from the calendar when one is connected; otherwise Monday to Friday.
@@ -1230,13 +1230,19 @@ reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION
   61 lines in 61 s.
 - **Root cause**: no layer checked the time. Save sent the draft as typed, `SET_SETTINGS` stored it,
   and the scheduler did not treat an unparseable date as "nothing to schedule".
-- **Now**: Save is disabled with a visible reason while a time is empty. `SET_SETTINGS` keeps the
+- **Now**: Save is disabled while a time is empty, the empty field is outlined, and the footer
+  names which time is missing and on which tab. `SET_SETTINGS` keeps the
   stored start time for a value that is not `HH:MM`, and that refused value is not a time change, so
   a running mission keeps running. At load, an invalid saved time becomes the default and the
-  mission window is rebuilt from it. The scheduler does not arm a timer for a time it cannot parse
-  (mission or task lock) and warns once in the console. The other mission keeps its schedule.
+  mission window is rebuilt from it. The scheduler does not arm a timer for a time that is not a
+  real `HH:MM` (mission or task lock) and warns once in the console. It checks the text, not the
+  parsed date: `'999:00'` parses, but its delay is over `setTimeout`'s 2^31-1 ms limit and fires at
+  once too. The other mission keeps its schedule.
 - **Shared helper**: `store/hhmm.ts` (`isValidHhmm`, plus the HH:MM helpers moved out of the reducer).
-  `behaviorSync.ts` and `gameWindow.ts` already failed closed on a cleared time; they were left alone.
+  `gameWindow.ts` already failed closed on a cleared time. `behaviorSync.ts` did so only for the mood
+  rate; its other readers got through a NaN only because every comparison with NaN is false. Both are
+  now covered by the upstream checks (Save, reducer, load) and were left alone; moving them onto
+  `hhmm.ts` is a separate follow-up.
 
 Tests: `useMissionScheduler.invalid-time.test.tsx`, `store/__tests__/mcReducer.settings-time.test.ts`,
 `MCSettingsOverlay.time-validation.test.tsx`, `store/persistence-time.test.ts`, and one case in

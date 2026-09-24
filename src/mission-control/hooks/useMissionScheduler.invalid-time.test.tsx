@@ -116,7 +116,9 @@ describe('scheduler — an unparseable task lock time', () => {
 
     // '' is not listed: `if (t.locksAt)` already skips it. A non-empty value
     // that is not HH:MM (hand-edited or corrupted storage) reaches the chain.
-    it.each(['NaN:NaN', 'garbage'])('locksAt %j arms no NaN timer and no 1 s chain, and locks nothing', (locksAt) => {
+    // '999:00' parses, but its delay overflows setTimeout's 2^31-1 ms limit,
+    // which fires at once like NaN: the guard must check the text, not the Date.
+    it.each(['NaN:NaN', 'garbage', '999:00'])('locksAt %j arms no NaN timer and no 1 s chain, and locks nothing', (locksAt) => {
         vi.setSystemTime(at(12, 0));
         const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
         const { live, unmount } = renderLiveScheduler(withEveningTaskLock(locksAt));

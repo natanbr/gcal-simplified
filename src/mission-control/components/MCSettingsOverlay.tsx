@@ -15,8 +15,8 @@ import { useRemoteStatus } from '../contexts/RemoteStatusContext';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
 import { LearningProgressPanel } from './progress/LearningProgressPanel';
 import { useLongPress } from '../hooks/useLongPress';
-import { isValidHhmm } from '../store/hhmm';
 import { TimeInput } from './TimeInput';
+import { missingTimesHint } from './missingTimesHint';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -225,12 +225,12 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
     const set = <K extends keyof MCSettings>(key: K, value: MCSettings[K]) =>
         setDraft(prev => ({ ...prev, [key]: value }));
 
-    // A cleared time field is ''. Refused here so the parent sees why; the
-    // reducer also ignores it (SET_SETTINGS keeps the stored time).
-    const timesValid = isValidHhmm(draft.morningStartsAt) && isValidHhmm(draft.eveningStartsAt);
+    // A cleared time field is ''. Save is disabled so the parent sees why; the
+    // reducer is the real guard (SET_SETTINGS keeps the stored time).
+    const timeHint = missingTimesHint(draft.morningStartsAt, draft.eveningStartsAt);
+    const timesValid = timeHint === null;
 
     const save = () => {
-        if (!timesValid) return;
         dispatch({ type: 'SET_SETTINGS', settings: draft });
         onClose();
     };
@@ -699,7 +699,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                         <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(160,150,230,0.2)', background: 'rgba(255,255,255,0.4)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
                             {!timesValid && (
                                 <span data-testid="mc-settings-time-invalid" role="alert" style={{ fontSize: 13, fontWeight: 800, color: 'var(--mc-text)' }}>
-                                    ⚠️ Set both auto-trigger times to save.
+                                    ⚠️ {timeHint}
                                 </span>
                             )}
                             <motion.button
@@ -717,8 +717,8 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                     fontWeight: 900,
                                     color: '#fff',
                                     cursor: timesValid ? 'pointer' : 'not-allowed',
-                                    opacity: timesValid ? 1 : 0.5,
-                                    boxShadow: '0 4px 0 #7040cc, 0 6px 12px rgba(120,80,255,0.3)',
+                                    opacity: timesValid ? 1 : 0.45,
+                                    boxShadow: timesValid ? '0 4px 0 #7040cc, 0 6px 12px rgba(120,80,255,0.3)' : 'none',
                                     fontFamily: "'Nunito', sans-serif",
                                     display: 'flex', alignItems: 'center', gap: 6,
                                 }}

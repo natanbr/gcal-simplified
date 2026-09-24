@@ -211,8 +211,10 @@ but only for a *valid* time. A mission start the parent cleared in Settings was 
 comparison with NaN is false, so `firedTooLate` read it as "missed" and `occurrenceHandled` as "not
 run": one `ADD_LOG` a second, forever, on both views (store write + localStorage + audit + broadcast).
 Nothing in the registry could see it, for the same reason as before: a recursive `setTimeout`.
-**Action:** any `Date` built from user-entered text is checked with `Number.isNaN(d.getTime())`
-before it becomes a delay. `Math.max(0, x)` is not a guard: it passes NaN through. Refuse the bad
+**Action:** validate the *text* (`isValidHhmm`) before it becomes a delay, not only the `Date`
+built from it. `Number.isNaN(d.getTime())` is necessary but not sufficient: `'999:00'` parses to a
+real date ~41 days out, and a delay over 2^31-1 ms fires at once in Chromium, exactly like NaN (found
+by the perf lens in review). `Math.max(0, x)` is not a guard either: it passes NaN through. Refuse the bad
 value at every layer it crosses: the form (Save disabled, with the reason on screen), the reducer
 (`withoutInvalidStartTimes` keeps the stored time), hydration (`sanitizeStartTimes` repairs a
 profile that already holds it) and the consumer (the scheduler arms nothing). This was the third

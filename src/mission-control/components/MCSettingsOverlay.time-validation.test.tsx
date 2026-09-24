@@ -73,15 +73,30 @@ beforeEach(() => { localStorage.clear(); stored.settings = null; });
 afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe('MCSettingsOverlay — an invalid auto-trigger time cannot be saved', () => {
-    it.each<[string, string]>([
-        ['morning', DEFAULT_SETTINGS.morningStartsAt],
-        ['evening', DEFAULT_SETTINGS.eveningStartsAt],
-    ])('clearing the %s time disables Save and shows why', async (_phase, current) => {
+    it.each<[string, string, string]>([
+        ['morning', DEFAULT_SETTINGS.morningStartsAt, 'Evening'],
+        ['evening', DEFAULT_SETTINGS.eveningStartsAt, 'Morning'],
+    ])('clearing the %s time disables Save and shows why', async (phase, current, other) => {
         await renderAndOpen();
         await typeTime(current, '');
 
         expect(screen.getByTestId('mc-settings-save')).toBeDisabled();
-        expect(screen.getByTestId('mc-settings-time-invalid')).toBeVisible();
+        const hint = screen.getByTestId('mc-settings-time-invalid');
+        expect(hint).toBeVisible();
+        // Names the empty field and its tab: the footer is visible from every tab.
+        expect(hint).toHaveTextContent(new RegExp(`${phase} auto-trigger time`, 'i'));
+        expect(hint).toHaveTextContent('Missions Time');
+        expect(hint).not.toHaveTextContent(other);
+        const empty = screen.getAllByDisplayValue('').find(el => el.getAttribute('type') === 'time');
+        expect(empty).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('clearing both times names both', async () => {
+        await renderAndOpen();
+        await typeTime(DEFAULT_SETTINGS.morningStartsAt, '');
+        await typeTime(DEFAULT_SETTINGS.eveningStartsAt, '');
+
+        expect(screen.getByTestId('mc-settings-time-invalid')).toHaveTextContent('Morning and Evening auto-trigger times');
     });
 
     it('clicking Save with a cleared time stores nothing and keeps the panel open', async () => {
