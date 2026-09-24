@@ -1131,3 +1131,22 @@ emits or leaves a build-info file. The rule-registry entry moved from `manual` t
 unguarded tripwire dropped from 7 to 6. Also fixed on the way: the shared source walk listed
 symlinks that point nowhere, which made four guard suites fail for the wrong reason
 (`helpers/sourceFiles.test.ts`).
+
+### 2026-09-23 The "+ Add goal" button looks frozen while the shield is broken
+
+- **Bug** (found in the product review of the locked-drop tests). With the shield broken, the empty
+  goal slot's `+` did nothing when tapped (correct: `SELECT_CASE` is refused) but still looked live:
+  pointer cursor, full opacity, a hover lift and a press squish. The other three frozen spend
+  controls (Use!, Quick-Game Use!, vacuum All) are `Button3D`s whose `disabled` already dims them,
+  so only this hand-built button broke the rule "every frozen control also looks refused".
+- **Now.** While locked the button shows `🔒` instead of `+`, is dimmed to the same 0.45 opacity with
+  a not-allowed cursor, has no hover or press animation, carries `aria-disabled` and the siblings'
+  label "Bank locked — finish your next mission", and its caption reads "Locked" instead of "Add
+  goal". It comes back to life the moment a shield is returned, without a remount.
+- **Same gap, one step further.** A goal picker the child had already opened stayed open with
+  live-looking reward buttons when the shield broke underneath it; it now closes, leaving the frozen
+  button. It stays closed when a shield is handed back — a parent returning a shield remotely, hours
+  later, must not pop open a picker nobody tapped for.
+
+Tests: six cases in `GoalPedestal.test.tsx` (locked, unlocked, the lock moved by `ADJUST_SHIELD` in
+both directions, and under an open picker both ways); registered in `rule-registry.test.ts`.
