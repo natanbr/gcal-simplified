@@ -73,7 +73,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // rewardCatalogue.ts's rewardCost / isRewardEnabled, shared with the reducer).
     'src/mission-control/components/GoalPedestal.tsx': 640,
     'src/components/Dashboard.tsx': 504,
-    'src/mission-control/components/MissionOverlay.tsx': 493,
+    // 493 → 481 on 2026-09-24 (the Minimize long-press that stopped a mission is
+    // gone: only the phone stops one; the button now only minimizes).
+    'src/mission-control/components/MissionOverlay.tsx': 481,
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
     // committing it optimistically made coins vanish from the pile).
     'src/mission-control/components/GlobalBank.tsx': 407,
