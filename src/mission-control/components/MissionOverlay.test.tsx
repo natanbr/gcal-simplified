@@ -56,6 +56,9 @@ function StateProbe({ onState }: { onState: (s: MCState) => void }) {
     return null;
 }
 
+const morning = (s: MCState) => s.missions.find(m => m.phase === 'morning')!;
+const tshirt = (s: MCState) => morning(s).tasks.find(t => t.id === 'tshirt')!;
+
 /** What useRemoteControl dispatches when the phone's Stop arrives. */
 function RemoteStop() {
     const dispatch = useMCDispatch();
@@ -366,27 +369,26 @@ describe('MissionOverlay — reset tasks button', () => {
         expect(screen.getByTestId('mc-reset-btn')).toBeInTheDocument();
     });
 
-    it('short-pressing reset tasks clears completed task markers', async () => {
-        renderOverlay(<TriggerMission phase="morning" />);
+    it('short-pressing reset tasks clears completed task markers and keeps the timer', async () => {
+        vi.useFakeTimers();
+        let live: MCState | null = null;
+        renderOverlay(<><TriggerMission phase="morning" /><StateProbe onState={s => { live = s; }} /></>);
         await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+        const startedAt = morning(live!).startedAt;
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-task-card-tshirt')); });
+        expect(tshirt(live!).completed, 'the task tap must complete it first').toBe(true);
+        await act(async () => { vi.advanceTimersByTime(60_000); });
 
-        // Complete the first morning task
-        const firstTask = screen.queryByTestId('mc-task-card-tshirt');
-        if (firstTask && !(firstTask as HTMLButtonElement).disabled) {
-            await act(async () => { fireEvent.click(firstTask); });
-        }
-
-        // Reset tasks (short press)
         await act(async () => {
             fireEvent.pointerDown(screen.getByTestId('mc-reset-btn'));
             fireEvent.pointerUp(screen.getByTestId('mc-reset-btn'));
         });
 
-        // The task card should no longer be disabled (completed tasks are disabled)
-        const resetTask = screen.queryByTestId('mc-task-card-tshirt');
-        if (resetTask) {
-            expect((resetTask as HTMLButtonElement).disabled).toBe(false);
-        }
+        expect(tshirt(live!).completed).toBe(false);
+        expect((screen.getByTestId('mc-task-card-tshirt') as HTMLButtonElement).disabled).toBe(false);
+        expect(morning(live!).startedAt, 'a short press resets the tasks only').toBe(startedAt);
+        expect(live!.activityLogs.some(l => /fully reset/.test(l.message))).toBe(false);
+        vi.useRealTimers();
     });
 
     it('resetting tasks does NOT close the overlay', async () => {
@@ -401,35 +403,27 @@ describe('MissionOverlay — reset tasks button', () => {
         expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
     });
 
-    it('long-pressing Reset (2s) triggers RESET_MISSION_WITH_TIMER — overlay stays open', async () => {
+    it('long-pressing Reset (2s) triggers RESET_MISSION_WITH_TIMER — tasks and timer restart, overlay stays open', async () => {
         vi.useFakeTimers();
-        renderOverlay(<TriggerMission phase="morning" />);
+        let live: MCState | null = null;
+        renderOverlay(<><TriggerMission phase="morning" /><StateProbe onState={s => { live = s; }} /></>);
         await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+        const startedAt = morning(live!).startedAt;
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-task-card-tshirt')); });
+        expect(tshirt(live!).completed, 'the task tap must complete it first').toBe(true);
+        await act(async () => { vi.advanceTimersByTime(60_000); });
 
-        // Complete the first morning task
-        const firstTask = screen.queryByTestId('mc-task-card-tshirt');
-        if (firstTask && !(firstTask as HTMLButtonElement).disabled) {
-            await act(async () => { fireEvent.click(firstTask); });
-        }
-
-        // start long press on reset
         await act(async () => {
             fireEvent.pointerDown(screen.getByTestId('mc-reset-btn'));
         });
-        // advance 2s so the long-press fires
         await act(async () => {
             vi.advanceTimersByTime(2000);
         });
 
-        // Mission overlay should still be open (full reset keeps mission active)
         expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
-
-        // Task should be uncompleted (reset)
-        const resetTask = screen.queryByTestId('mc-task-card-tshirt');
-        if (resetTask) {
-            expect((resetTask as HTMLButtonElement).disabled).toBe(false);
-        }
-
+        expect(tshirt(live!).completed).toBe(false);
+        expect(live!.activityLogs.filter(l => l.message === 'Mission fully reset (tasks + timer)')).toHaveLength(1);
+        expect(Date.parse(morning(live!).startedAt!), 'the timer restarted').toBeGreaterThan(Date.parse(startedAt!));
         vi.useRealTimers();
     });
 });
