@@ -15,43 +15,10 @@ import { useRemoteStatus } from '../contexts/RemoteStatusContext';
 import { PrivilegeCardButton } from './PrivilegeCardButton';
 import { LearningProgressPanel } from './progress/LearningProgressPanel';
 import { useLongPress } from '../hooks/useLongPress';
+import { isValidHhmm } from '../store/hhmm';
+import { TimeInput } from './TimeInput';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function TimeInput({
-    label,
-    value,
-    onChange,
-}: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-}) {
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
-                {label}
-            </span>
-            <input
-                type="time"
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                style={{
-                    fontFamily: "'Nunito', sans-serif",
-                    fontSize: 18,
-                    fontWeight: 800,
-                    background: 'rgba(255,255,255,0.8)',
-                    border: '1.5px solid rgba(130,120,200,0.25)',
-                    borderRadius: 10,
-                    padding: '6px 10px',
-                    color: 'var(--mc-text)',
-                    outline: 'none',
-                    width: '100%',
-                }}
-            />
-        </div>
-    );
-}
 
 function DurationStepper({
     label,
@@ -258,7 +225,12 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
     const set = <K extends keyof MCSettings>(key: K, value: MCSettings[K]) =>
         setDraft(prev => ({ ...prev, [key]: value }));
 
+    // A cleared time field is ''. Refused here so the parent sees why; the
+    // reducer also ignores it (SET_SETTINGS keeps the stored time).
+    const timesValid = isValidHhmm(draft.morningStartsAt) && isValidHhmm(draft.eveningStartsAt);
+
     const save = () => {
+        if (!timesValid) return;
         dispatch({ type: 'SET_SETTINGS', settings: draft });
         onClose();
     };
@@ -724,11 +696,17 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                         </div>
 
                         {/* Footer / Save */}
-                        <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(160,150,230,0.2)', background: 'rgba(255,255,255,0.4)', display: 'flex', justifyContent: 'flex-end' }}>
+                        <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(160,150,230,0.2)', background: 'rgba(255,255,255,0.4)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
+                            {!timesValid && (
+                                <span data-testid="mc-settings-time-invalid" role="alert" style={{ fontSize: 13, fontWeight: 800, color: 'var(--mc-text)' }}>
+                                    ⚠️ Set both auto-trigger times to save.
+                                </span>
+                            )}
                             <motion.button
                                 data-testid="mc-settings-save"
-                                whileTap={{ scale: 0.95, y: 2 }}
-                                whileHover={{ scale: 1.02 }}
+                                disabled={!timesValid}
+                                whileTap={timesValid ? { scale: 0.95, y: 2 } : undefined}
+                                whileHover={timesValid ? { scale: 1.02 } : undefined}
                                 onClick={save}
                                 style={{
                                     background: 'linear-gradient(180deg,#b8a0ff,#9370ff)',
@@ -738,7 +716,8 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                     fontSize: 15,
                                     fontWeight: 900,
                                     color: '#fff',
-                                    cursor: 'pointer',
+                                    cursor: timesValid ? 'pointer' : 'not-allowed',
+                                    opacity: timesValid ? 1 : 0.5,
                                     boxShadow: '0 4px 0 #7040cc, 0 6px 12px rgba(120,80,255,0.3)',
                                     fontFamily: "'Nunito', sans-serif",
                                     display: 'flex', alignItems: 'center', gap: 6,

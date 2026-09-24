@@ -19,6 +19,7 @@ import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
+import { repairMissionWindow, sanitizeStartTimes } from './hhmm';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export { selectTotalWealth };
@@ -69,16 +70,17 @@ export function loadPersistedState(): MCState {
             };
         });
 
+        const settings = sanitizeStartTimes({ ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) });
         return {
             ...initialState,
             ...parsed,
             // Merge saved settings over defaults (so new settings fields always have values)
-            settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+            settings,
             cases,
             missions: initialState.missions.map(defaultM => {
                 const savedM = parsed.missions?.find(m => m.phase === defaultM.phase);
                 if (!savedM) return defaultM;
-                return {
+                return repairMissionWindow({
                     ...defaultM,
                     ...savedM,
                     // Must survive a restart: a relaunch inside the window after a
@@ -87,7 +89,7 @@ export function loadPersistedState(): MCState {
                     // Icon + label come from the code; a Cream or School Bag task
                     // the saved run carried is kept, ticked or not (routineTasks.ts).
                     tasks: hydrateMissionTasks(defaultM.tasks, savedM.tasks),
-                };
+                }, settings);
             }),
             // Merge responsibilities from defaults so new tasks always appear
             responsibilities: initialState.responsibilities.map(defaultR => {

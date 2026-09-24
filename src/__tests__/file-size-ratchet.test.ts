@@ -61,11 +61,15 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // shared with the log).
     // 820 → 777 on 2026-09-28 (PR 179, rebased: syncCreamTask moved to store/routineTasks.ts
     // beside the school-bag placement; net of the new SET_SCHOOL_CALENDAR case and the fresh-start line).
-    'src/mission-control/store/mcReducer.ts': 777,
+    // 777 → 770 on 2026-09-28 (the HH:MM helpers moved to store/hhmm.ts, which
+    // paid for SET_SETTINGS refusing a cleared mission start time).
+    'src/mission-control/store/mcReducer.ts': 770,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
-    'src/mission-control/components/MCSettingsOverlay.tsx': 755,
+    // 755 → 734 on 2026-09-24 (TimeInput moved to its own file, which paid for
+    // Save refusing a cleared auto-trigger time).
+    'src/mission-control/components/MCSettingsOverlay.tsx': 734,
     // 648 → 649 on 2026-09-03 (+1: dropping the mcReducer barrel splits one
     // import line into two, since the lock and the window now come from their
     // own modules),

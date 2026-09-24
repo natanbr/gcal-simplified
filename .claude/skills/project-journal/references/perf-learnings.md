@@ -203,6 +203,24 @@ call and its closure is scalar-replaced away by TurboFan, so the swap is below t
 open board, ~31 at 60% fill — the deal is *cheaper* on a crowded board, because fewer candidates
 fit and there are fewer anchor pairs to walk.
 
+## 2026-09-24 — A second road into the scheduler's 1 Hz re-arm: a time that does not parse
+
+**Learning:** the 2026-09-22 fix made `schedulePhase` decide at arm time whether anything is due,
+but only for a *valid* time. A mission start the parent cleared in Settings was stored as `''`, so
+`occurrenceToday('')` is an Invalid Date and `setTimeout(fn, Math.max(0, NaN))` fires at 0 ms. Every
+comparison with NaN is false, so `firedTooLate` read it as "missed" and `occurrenceHandled` as "not
+run": one `ADD_LOG` a second, forever, on both views (store write + localStorage + audit + broadcast).
+Nothing in the registry could see it, for the same reason as before: a recursive `setTimeout`.
+**Action:** any `Date` built from user-entered text is checked with `Number.isNaN(d.getTime())`
+before it becomes a delay. `Math.max(0, x)` is not a guard: it passes NaN through. Refuse the bad
+value at every layer it crosses: the form (Save disabled, with the reason on screen), the reducer
+(`withoutInvalidStartTimes` keeps the stored time), hydration (`sanitizeStartTimes` repairs a
+profile that already holds it) and the consumer (the scheduler arms nothing). This was the third
+reader to trip on a cleared Settings time, after `behaviorSync` (a NaN mood rate) and `gameWindow`.
+They now share `store/hhmm.ts`, so a new reader can use `isValidHhmm`. The proof is behavioural:
+the invalid-time case in `idle-performance.test.tsx` counts dispatches and `setTimeout` calls over
+10 s. Extending `timer-registry` to recursive timeouts is still open.
+
 ## 2026-09-27 — Event-triggered network work in the always-mounted tree
 
 `useSchoolCalendarSync` (inside `MCStoreProvider`, so also on the Calendar view) calls `auth:check` +

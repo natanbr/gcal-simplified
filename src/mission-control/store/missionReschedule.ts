@@ -10,10 +10,13 @@
 // ============================================================
 
 import type { MCSettings, MCState } from '../types';
+import { isValidHhmm } from './hhmm';
 
+/** A time the reducer refuses (not HH:MM, e.g. a cleared field) is kept, so it is no change. */
 export function startTimeChanged(state: MCState, settings: Partial<MCSettings>, phase: 'morning' | 'evening'): boolean {
     const key = phase === 'morning' ? 'morningStartsAt' : 'eveningStartsAt';
-    return (settings[key] ?? state.settings[key]) !== state.settings[key];
+    const next = settings[key];
+    return isValidHhmm(next) && next !== state.settings[key];
 }
 
 /** Whether this save ends the running mission. */
