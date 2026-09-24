@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMCStore, useMCDispatch } from '../store/useMCStore.tsx';
 import { getLocalDateString } from '../store/behaviorSync';
+import { isValidHhmm } from '../store/hhmm';
 import type { MissionPhase, MCState } from '../types';
 
 /**
@@ -108,19 +109,21 @@ export function useMissionScheduler(): void {
             return true;
         }
 
-        /** Fail closed on a time that does not parse (a cleared Settings field
-         *  once stored ''): setTimeout(fn, NaN) fires at once, the NaN drift read
-         *  as "missed", and the 1 s re-arm logged a skipped mission every second. */
-        function armable(target: Date, label: string, hhmm: string): boolean {
-            if (!Number.isNaN(target.getTime())) return true;
+        /** Fail closed on anything that is not a real HH:MM (a cleared Settings
+         *  field once stored ''): setTimeout(fn, NaN) fires at once, the NaN drift
+         *  read as "missed", and the 1 s re-arm logged a skipped mission every
+         *  second. Checked on the text, not the Date: '999:00' parses, but its
+         *  delay overflows setTimeout's 2^31-1 ms and fires at once too. */
+        function armable(hhmm: string, label: string): boolean {
+            if (isValidHhmm(hhmm)) return true;
             console.warn(`[MissionScheduler] Not scheduling ${label}: "${hhmm}" is not a time.`);
             return false;
         }
 
         function schedulePhase(phase: MissionPhase, hhmm: string, endsAt?: string) {
             if (phase === 'none') return;
+            if (!armable(hhmm, `${phase} mission`)) return;
             let target = nextOccurrence(hhmm);
-            if (!armable(target, `${phase} mission`, hhmm)) return;
             // A re-arm (mount or system:resume) while today's window is still
             // open must aim at today's occurrence — nextOccurrence alone rolls
             // to tomorrow the second the start time has passed, which is how a
@@ -172,8 +175,8 @@ export function useMissionScheduler(): void {
         }
 
         function scheduleTaskLock(missionPhase: MissionPhase, taskId: string, locksAtHhmm: string) {
+            if (!armable(locksAtHhmm, `task lock ${taskId}`)) return;
             const target = nextOccurrence(locksAtHhmm);
-            if (!armable(target, `task lock ${taskId}`, locksAtHhmm)) return;
             const id = setTimeout(() => {
                 timeouts.delete(id); // Clean up self first
 
