@@ -54,8 +54,8 @@ The real auto-update can only be checked after publishing (3.1.6).
 
 **Mind the clock.** A manual launch starts the mission whose window is open (defaults 06:00–06:30
 and 19:00–20:00), and its overlay covers both views. That includes a mission still running on the
-profile from an earlier launch: it runs its full duration past the window's end, and a stopped one
-restarts at once (bug 1). Plan the pass outside those windows unless an item needs a mission. The
+profile from an earlier launch: it runs its full duration past the window's end, and only the
+phone's Stop ends it early (the desktop has no stop gesture since 2026-09-24). Plan the pass outside those windows unless an item needs a mission. The
 E2E suite is immune (`launchApp`); a hand-driven or Claude-driven pass is not.
 
 **Claude driving the app.** A window that is never shown renders at about 2 fps, so animation and

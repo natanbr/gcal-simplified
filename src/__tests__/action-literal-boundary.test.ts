@@ -12,6 +12,10 @@
 // verifiedRedBy (proven 2026-09-24 in this worktree):
 //   - SETTLE_GAME_TOKEN_CAP: add `dispatch({ type: 'SETTLE_GAME_TOKEN_CAP' })`
 //     to useSuspensionExpiry.ts → the case names store/useSuspensionExpiry.ts.
+//   - CANCEL_MISSION: the Minimize long-press dispatch as it stood at 777c53b →
+//     names components/MissionOverlay.tsx; `export const STOP_TYPE =
+//     "CANCEL_MISSION"` in MissionTimerDisplay.tsx → names that file, while
+//     the same dispatch inside a comment alone stays green.
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
@@ -51,6 +55,18 @@ describe('action literal boundaries', () => {
             `${MC}store/activityLog.ts`, // its log line
             `${MC}store/mcReducer.ts`, // the case
             `${MC}store/useGameTokenCapSettle.ts`, // the one dispatcher
+            `${MC}types.ts`, // the union member
+        ]);
+    });
+
+    it('CANCEL_MISSION reaches the store only from the phone: no desktop control stops a mission', () => {
+        // A stop sticks for the rest of the window and does not move the shield,
+        // so a desktop gesture let the child end a mission (decision 2026-09-24).
+        // The phone's Stop arrives through useRemoteControl's allowlist.
+        expect(filesNaming('CANCEL_MISSION')).toEqual([
+            `${MC}hooks/useRemoteControl.ts`, // REMOTE_ALLOWED_ACTIONS: the phone's Stop
+            `${MC}store/activityLog.ts`, // its log line
+            `${MC}store/mcReducer.ts`, // the case, and the cream-task resync list
             `${MC}types.ts`, // the union member
         ]);
     });

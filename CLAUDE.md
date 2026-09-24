@@ -101,6 +101,9 @@ npm run release          # Bump + build + publish in one go; use /release, which
   only writer) and **never** cleared, because the scheduler reads it to know the occurrence already
   ran. A stop records no outcome (not a miss, not a conclusion), so clearing it beside `startedAt`
   restarts a stopped mission instantly (2026-09-22). Guarded by `activity-stamp-boundary.test.ts`.
+- **Only the phone stops a mission**: no desktop control dispatches `CANCEL_MISSION` (a stop sticks for the
+  window and spares the shield, so a desktop gesture let the child end one); "— Minimize" only minimizes.
+  The phone's Stop reaches it through `REMOTE_ALLOWED_ACTIONS`. Guarded by `action-literal-boundary.test.ts`.
 - **Quick-game window**: games open only between the day's missions — `isQuickGameWindowOpen` in
   `gameWindow.ts`, enforced in the `START_GAME` **and** `CONSUME_CASE` reducer cases (they must
   agree, or redeeming at the boundary burns the goal for a game that is then refused), not only at

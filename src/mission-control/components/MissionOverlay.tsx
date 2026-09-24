@@ -44,17 +44,6 @@ export function MissionOverlay() {
     const mission = useMission(phase !== 'none' ? phase : 'morning');
     const whiningDetected = mission?.whiningDetected ?? false;
 
-    // ── Long-press: Minimize (short = minimize, long = stop mission) ────────
-    const minimizeHandlers = useLongPress(
-        () => setMinimized(true),
-        () => {
-            if (phase !== 'none') {
-                dispatch({ type: 'CANCEL_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> });
-            }
-        },
-        LONG_PRESS_MS,
-    );
-
     // ── Long-press: Reset (short = reset tasks, long = reset tasks + timer) ──
     const resetHandlers = useLongPress(
         () => {
@@ -238,15 +227,14 @@ export function MissionOverlay() {
                                 onTimerExpiredInfo={handleTimerExpiredInfo}
                             />
 
-                            {/* RIGHT — Minimize + Reset (long-press for extended actions) */}
+                            {/* RIGHT — Minimize + Reset (Reset has a long-press) */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
-                                {/* Minimize — looks like a simple minimize button */}
+                                {/* Minimize only minimizes: only the phone stops a mission (2026-09-24).
+                                    On release, not click: a long touch hold may fire no click. */}
                                 <motion.button
                                     data-testid="mc-minimize-btn"
                                     whileHover={{ scale: 1.06 }}
-                                    onPointerDown={minimizeHandlers.onPointerDown}
-                                    onPointerUp={minimizeHandlers.onPointerUp}
-                                    onPointerLeave={minimizeHandlers.onPointerLeave}
+                                    onPointerUp={() => setMinimized(true)}
                                     style={{
                                         background: 'rgba(255,255,255,0.6)',
                                         border: `2px solid ${meta.accent}`,

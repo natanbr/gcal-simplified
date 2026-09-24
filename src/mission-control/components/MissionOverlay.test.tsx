@@ -7,8 +7,9 @@ import React from 'react';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MCStoreProvider } from '../store/MCStoreProvider';
-import { useMCDispatch } from '../store/useMCStore.tsx';
+import { useMCDispatch, useMCState } from '../store/useMCStore.tsx';
 import { MissionOverlay } from './MissionOverlay';
+import type { MCState } from '../types';
 
 
 // ── Framer Motion is mocked so animations don't hang tests ───────────────────
@@ -45,6 +46,25 @@ function TriggerMission({ phase }: { phase: 'morning' | 'evening' }) {
             onClick={() => dispatch({ type: 'SET_ACTIVE_MISSION', phase })}
         >
             Trigger
+        </button>
+    );
+}
+
+/** Reports every committed store state to the test. */
+function StateProbe({ onState }: { onState: (s: MCState) => void }) {
+    onState(useMCState());
+    return null;
+}
+
+/** What useRemoteControl dispatches when the phone's Stop arrives. */
+function RemoteStop() {
+    const dispatch = useMCDispatch();
+    return (
+        <button
+            data-testid="remote-stop-btn"
+            onClick={() => dispatch({ type: 'CANCEL_MISSION', missionPhase: 'morning', isRemote: true, origin: 'remote' })}
+        >
+            Remote stop
         </button>
     );
 }
@@ -128,23 +148,54 @@ describe('MissionOverlay', () => {
         expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
     });
 
-    it('long-pressing Minimize (2s) stops the mission — closes overlay and removes pill', async () => {
+    // Only the phone can stop a mission (2026-09-24): since a stop sticks for the
+    // rest of the window without moving the shield, a desktop hold let the child
+    // end a mission. The hold that used to stop it now only minimizes.
+    it('holding Minimize (5 s) only minimizes — the mission keeps running and nothing logs a stop', async () => {
         vi.useFakeTimers();
+        let live: MCState | null = null;
+        renderOverlay(<><TriggerMission phase="morning" /><StateProbe onState={s => { live = s; }} /></>);
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('trigger-btn'));
+        });
+        await act(async () => {
+            fireEvent.pointerDown(screen.getByTestId('mc-minimize-btn'));
+        });
+        await act(async () => {
+            vi.advanceTimersByTime(5000);
+        });
+        expect(live!.activeMission, 'the hold alone must not stop the mission').toBe('morning');
+        await act(async () => {
+            fireEvent.pointerUp(screen.getByTestId('mc-minimize-btn'));
+        });
+        expect(screen.queryByTestId('mc-mission-overlay')).not.toBeInTheDocument();
+        expect(screen.getByTestId('mc-mission-pill')).toBeInTheDocument();
+        expect(live!.activeMission).toBe('morning');
+        expect(live!.activityLogs.filter(l => /stopped/i.test(l.message))).toEqual([]);
+        vi.useRealTimers();
+    });
+
+    it('keeps the Minimize button finger-sized and free of browser touch gestures', async () => {
         renderOverlay(<TriggerMission phase="morning" />);
         await act(async () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
-        // start long press
+        const button = screen.getByTestId('mc-minimize-btn');
+        expect(button.style.touchAction).toBe('manipulation');
+        expect(button.style.minHeight).toBe('44px');
+        expect(button.style.minWidth).toBe('52px');
+    });
+
+    it("the phone's Stop still stops it: overlay and pill both go", async () => {
+        renderOverlay(<><TriggerMission phase="morning" /><RemoteStop /></>);
         await act(async () => {
-            fireEvent.pointerDown(screen.getByTestId('mc-minimize-btn'));
+            fireEvent.click(screen.getByTestId('trigger-btn'));
         });
-        // advance 2s so the long-press fires
         await act(async () => {
-            vi.advanceTimersByTime(2000);
+            fireEvent.click(screen.getByTestId('remote-stop-btn'));
         });
         expect(screen.queryByTestId('mc-mission-overlay')).not.toBeInTheDocument();
         expect(screen.queryByTestId('mc-mission-pill')).not.toBeInTheDocument();
-        vi.useRealTimers();
     });
 
     it('completing all tasks reveals the Mission Complete section', async () => {

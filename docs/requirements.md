@@ -106,6 +106,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing.
   - **QR Code Pairing**: Displayed in Settings for easy mobile connection.
   - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
+  - **Only the phone can stop a mission (decided 2026-09-24)**: the phone's Stop sends `CANCEL_MISSION`, which stays on `REMOTE_ALLOWED_ACTIONS`. The desktop has no stop gesture: "— Minimize" only minimizes, a short tap and a long hold alike, because a stop sticks for the rest of the window without moving the shield, so a hold let the child end a mission. "↺ Reset" and its 2 s hold are unchanged (not decided yet).
+  - **Shield +1 / −1 buttons (planned, phone side)**: the phone is getting buttons to hand a shield back or take one away. They send `ADJUST_SHIELD`, which the desktop already accepts (allowlist, validator, reducer); the phone side is being built separately in the mc-remote repo.
   - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
   - **Global Listener**: The remote action listener is registered globally in the application shell. This guarantees that remote commands are processed continuously, even when viewing the calendar or when the mission overlay is active.
   - **Detailed Mission State Reflection**: The remote control displays individual card views for both Morning and Evening missions simultaneously. Each card reflects its current state (Active/Inactive), live countdown timers, adjustment buttons, task checklist progress (percentage bar and expandable/collapsible checkbox list), and whining status (highlighted pulsing indicator).
@@ -155,7 +157,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 - **Mission scheduling (morning / evening windows)**:
   - The scheduler starts each window's mission **once per occurrence**. It leaves an occurrence alone once it ended today (completed or failed), or once the mission **ran at any point since the window's start time**: it is running now, or it started or ended at or after that time, whoever started it (the scheduler, ▶ Start, or the phone).
-  - **A stopped mission stays stopped for the rest of its window (fixed 2026-09-22)**. A stop (hold "— Minimize" for 2 s, or the phone's Stop) is not a miss (the shield does not move) and not a conclusion (a stopped morning does not open the quick-game window). It still counts as the occurrence having run, so the scheduler does not start it again, including after a relaunch inside the same window. This holds for a mission started by hand *before* its window, still running when the window opens, and stopped inside it (closed 2026-09-23). ▶ Start and the phone's Start still start it by hand. The next day's occurrence starts as normal.
+  - **A stopped mission stays stopped for the rest of its window (fixed 2026-09-22)**. A stop (the phone's Stop, the only way to stop a mission since 2026-09-24) is not a miss (the shield does not move) and not a conclusion (a stopped morning does not open the quick-game window). It still counts as the occurrence having run, so the scheduler does not start it again, including after a relaunch inside the same window. This holds for a mission started by hand *before* its window, still running when the window opens, and stopped inside it (closed 2026-09-23). ▶ Start and the phone's Start still start it by hand. The next day's occurrence starts as normal.
   - A stop covers only the occurrences its run overlapped. Moving that phase's start time to later makes a new occurrence, and it starts at the new time. A mission started by hand *before* its window and stopped before the window opens does not cancel the scheduled one (completing or failing it early still does: that is today's outcome). Moving it to a start at or before the run's stop (or, for a running mission, before now) makes an occurrence that run already covers: it is not started again (open decision for Nathan, PR 170; before this fix a running mission moved earlier restarted at once).
   - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load.
   - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
@@ -1171,3 +1173,22 @@ both directions, and under an open picker both ways); registered in `rule-regist
 Tests: `store/useGameTokenCapSettle.test.tsx` (the real provider: happy, within-cap and corrupt
 loads, StrictMode, the audit trail, relaunch, trash); `src/__tests__/action-literal-boundary.test.ts`
 pins the settle's one dispatcher.
+
+### 2026-09-24 Only the phone can stop a mission
+
+- **Why** (owner decision). Holding "— Minimize" for 2 s dispatched `CANCEL_MISSION`. Since the
+  2026-09-22 fix a stop sticks for the rest of the window and does not move the shield, so the child
+  could end a mission by holding the button, with no miss recorded.
+- **Now.** "— Minimize" only minimizes: a short tap and a long hold both leave the pill, and neither
+  stops the mission. It minimizes on release, as before, so a long touch hold that fires no click
+  still minimizes; its size and touch behaviour are unchanged. The phone's Stop (`CANCEL_MISSION`,
+  still on `REMOTE_ALLOWED_ACTIONS`) is the only way to stop a mission; the reducer is unchanged.
+- **Not changed.** "↺ Reset" keeps its tap (tasks) and 2 s hold (tasks and timer): not decided yet.
+- **Planned, phone side.** The phone is getting +1 / −1 shield buttons that send `ADJUST_SHIELD`,
+  which the desktop already accepts.
+
+Tests: `MissionOverlay.test.tsx` (a 5 s hold only minimizes and logs no stop; the button keeps its
+size and `touch-action`; a remote `CANCEL_MISSION` still closes the overlay and the pill);
+`src/__tests__/action-literal-boundary.test.ts` fails if any production file other than the
+reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION`; registered in
+`rule-registry.test.ts`.
