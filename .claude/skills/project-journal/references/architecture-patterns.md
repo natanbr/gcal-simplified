@@ -7,6 +7,7 @@ Settled decisions from past reviews of `gcal-simplified`. The **false positives*
 ## Confirmed false positives — do NOT flag these
 
 - **Missing `whileTap` visual feedback on long-press buttons in Mission Control.** Intentional. The user explicitly asked for no visual feedback so long-press features stay hidden from the child.
+- **Two HH:MM parsers in `store/hhmm.ts` ("the rule says one").** Deliberate (2026-09-26). `hhmmToMins` is the one rule for an *entered* time. `windowEndToMins` reads a mission's `endsAt`, which is start + duration, not a wall-clock time: it passes midnight unwrapped (`'24:30'`, hence `h < 48`) and carries the 10-second test duration's fraction of a minute. Checking `endsAt` with the strict rule loses every overnight window (proven by mutation against `useMissionScheduler.overnight.test.tsx`). The real simplification is to stop storing `endsAt` at all — an open decision for Nathan, not a review finding.
 
 *(Add to this list whenever a review finding is investigated and turns out to be deliberate. Recording it is what stops the next reviewer from spending a cycle on it.)*
 
