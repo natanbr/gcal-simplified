@@ -19,7 +19,7 @@ import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
-import { repairMissionWindow, sanitizeStartTimes } from './hhmm';
+import { repairMissionWindow, sanitizeMissionTimes } from './hhmm';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export { selectTotalWealth };
@@ -70,7 +70,7 @@ export function loadPersistedState(): MCState {
             };
         });
 
-        const settings = sanitizeStartTimes({ ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) });
+        const settings = sanitizeMissionTimes({ ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) });
         return {
             ...initialState,
             ...parsed,

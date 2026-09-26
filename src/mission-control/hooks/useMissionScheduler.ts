@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMCStore, useMCDispatch } from '../store/useMCStore.tsx';
 import { getLocalDateString } from '../store/behaviorSync';
-import { isValidHhmm } from '../store/hhmm';
+import { hhmmToMins, windowEndToMins } from '../store/hhmm';
 import type { MissionPhase, MCState } from '../types';
 
 /**
@@ -22,17 +22,21 @@ import type { MissionPhase, MCState } from '../types';
  */
 const LATE_FIRE_TOLERANCE_MS = 5 * 60 * 1000;
 
-/** Today's wall-clock Date matching HH:MM (regardless of whether it passed). */
-function occurrenceToday(hhmm: string): Date {
-    const [h, m] = hhmm.split(':').map(Number);
-    const target = new Date();
-    target.setHours(h, m, 0, 0);
+/** `mins` minutes after `day`'s local midnight; 1470 is 00:30 the next day. */
+function atMinutesOf(day: Date, mins: number): Date {
+    const target = new Date(day);
+    target.setHours(0, mins, 0, 0);
     return target;
 }
 
-/** The next wall-clock Date matching HH:MM — today if still ahead, else tomorrow. */
-function nextOccurrence(hhmm: string): Date {
-    const target = occurrenceToday(hhmm);
+/** Today's Date at `mins` minutes after midnight (regardless of whether it passed). */
+function occurrenceToday(mins: number): Date {
+    return atMinutesOf(new Date(), mins);
+}
+
+/** The next Date at `mins` minutes after midnight — today if still ahead, else tomorrow. */
+function nextOccurrence(mins: number): Date {
+    const target = occurrenceToday(mins);
     if (target.getTime() <= Date.now()) {
         target.setDate(target.getDate() + 1);
     }
@@ -93,15 +97,10 @@ export function useMissionScheduler(): void {
          *  A fire while the mission's own window (startsAt → endsAt) is still open
          *  counts as ON TIME: waking the machine at 06:10 must start the
          *  06:00–06:30 mission, not silently lose the day. */
-        function firedTooLate(target: Date, label: string, windowEndHhmm?: string): boolean {
+        function firedTooLate(target: Date, label: string, windowEndMins: number | null = null): boolean {
             const driftMs = Date.now() - target.getTime();
             if (driftMs <= LATE_FIRE_TOLERANCE_MS) return false;
-            if (windowEndHhmm) {
-                const windowEnd = new Date(target);
-                const [h, m] = windowEndHhmm.split(':').map(Number);
-                windowEnd.setHours(h, m, 0, 0);
-                if (Date.now() < windowEnd.getTime()) return false;
-            }
+            if (windowEndMins !== null && Date.now() < atMinutesOf(target, windowEndMins).getTime()) return false;
             console.warn(
                 `[MissionScheduler] Skipping ${label}: timer fired ${Math.round(driftMs / 60000)} min late ` +
                 `(target ${target.toLocaleTimeString()}). The machine was most likely asleep.`
@@ -114,16 +113,20 @@ export function useMissionScheduler(): void {
          *  read as "missed", and the 1 s re-arm logged a skipped mission every
          *  second. Checked on the text, not the Date: '999:00' parses, but its
          *  delay overflows setTimeout's 2^31-1 ms and fires at once too. */
-        function armable(hhmm: string, label: string): boolean {
-            if (isValidHhmm(hhmm)) return true;
-            console.warn(`[MissionScheduler] Not scheduling ${label}: "${hhmm}" is not a time.`);
-            return false;
+        function armableMins(hhmm: string, label: string): number | null {
+            const mins = hhmmToMins(hhmm);
+            if (mins === null) console.warn(`[MissionScheduler] Not scheduling ${label}: "${hhmm}" is not a time.`);
+            return mins;
         }
 
         function schedulePhase(phase: MissionPhase, hhmm: string, endsAt?: string) {
             if (phase === 'none') return;
-            if (!armable(hhmm, `${phase} mission`)) return;
-            let target = nextOccurrence(hhmm);
+            const startMins = armableMins(hhmm, `${phase} mission`);
+            if (startMins === null) return;
+            // Unreadable = no window: the fire then counts as on time only
+            // within LATE_FIRE_TOLERANCE_MS, as a task lock does.
+            const endMins = endsAt === undefined ? null : windowEndToMins(endsAt);
+            let target = nextOccurrence(startMins);
             // A re-arm (mount or system:resume) while today's window is still
             // open must aim at today's occurrence — nextOccurrence alone rolls
             // to tomorrow the second the start time has passed, which is how a
@@ -132,9 +135,9 @@ export function useMissionScheduler(): void {
             // either way the fire does nothing, and the re-schedule below brought
             // it back every second until the window closed. A mission ending
             // changes `missions`, which re-arms this effect in time to start it.
-            if (endsAt) {
-                const todayStart = occurrenceToday(hhmm);
-                const windowOpen = todayStart.getTime() <= Date.now() && Date.now() < occurrenceToday(endsAt).getTime();
+            if (endMins !== null) {
+                const todayStart = occurrenceToday(startMins);
+                const windowOpen = todayStart.getTime() <= Date.now() && Date.now() < occurrenceToday(endMins).getTime();
                 // stateRef, not the effect's `state`: the 1 s re-schedule re-enters
                 // here without a render.
                 const s = stateRef.current;
@@ -148,7 +151,7 @@ export function useMissionScheduler(): void {
                 const s = stateRef.current;
                 const alreadyRun = occurrenceHandled(s, phase, target);
 
-                if (!firedTooLate(target, `${phase} mission`, endsAt)) {
+                if (!firedTooLate(target, `${phase} mission`, endMins)) {
                     // Only trigger if no mission is currently running AND it hasn't run today yet
                     if (s.activeMission === 'none' && !alreadyRun) {
                         dispatch({ type: 'SET_ACTIVE_MISSION', phase, origin: 'scheduler' });
@@ -175,8 +178,9 @@ export function useMissionScheduler(): void {
         }
 
         function scheduleTaskLock(missionPhase: MissionPhase, taskId: string, locksAtHhmm: string) {
-            if (!armable(locksAtHhmm, `task lock ${taskId}`)) return;
-            const target = nextOccurrence(locksAtHhmm);
+            const locksAtMins = armableMins(locksAtHhmm, `task lock ${taskId}`);
+            if (locksAtMins === null) return;
+            const target = nextOccurrence(locksAtMins);
             const id = setTimeout(() => {
                 timeouts.delete(id); // Clean up self first
 

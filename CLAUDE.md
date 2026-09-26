@@ -117,6 +117,14 @@ npm run release          # Bump + build + publish in one go; use /release, which
   agree, or redeeming at the boundary burns the goal for a game that is then refused), not only at
   the pedestal. It fails **closed** on a time it cannot parse. Keep it separate from `isWakingHour`,
   which is the divisor of the mood-token accrual rate.
+- **HH:MM times**: `store/hhmm.ts` is the only place a time is parsed. An entered time (mission
+  start, task lock) has one rule, `hhmmToMins` — strict `HH:MM`, 00:00–23:59, `null` otherwise —
+  and every reader fails closed on `null` (a cleared time used to get past the others only
+  because every comparison with NaN is false). A mission's `endsAt` is **not** such a time: it is
+  start + duration, may pass midnight (`'24:30'`) and carry a fraction of a minute (the 10-second
+  test duration), so it has its own parser, `windowEndToMins`. A duration is real when
+  `isValidDurationMins` says so (finite, > 0, < 1440); `SET_SETTINGS` and hydration both refuse
+  anything else. Guarded by `src/__tests__/hhmm-parse-boundary.test.ts`.
 - **Remote actions**: `REMOTE_ALLOWED_ACTIONS` in `useRemoteControl.ts` is an allowlist. Adding a
   remote button means adding its action type there too.
 - **Skill progress**: `RECORD_QUIZ_ANSWER` is the only writer of `skillProgress` (bounded per-skill
