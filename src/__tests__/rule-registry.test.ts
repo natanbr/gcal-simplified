@@ -278,6 +278,18 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: 'replace the body of isQuickGameWindowOpen with the old isWakingHour span (morning start → evening end): 5 cases in gameWindow.test.ts and 2 reducer cases in mcReducer.streak-lock.test.ts go red — a game opens at 06:10 and at 19:30 (proven 2026-09-02).',
     },
     {
+        rule: 'Every HH:MM time is parsed in store/hhmm.ts: one strict rule for an entered time, a separate parser for the derived endsAt, and a duration check in SET_SETTINGS and at load',
+        source: 'CLAUDE.md → Conventions → HH:MM times',
+        status: 'guarded',
+        guard: [
+            'src/__tests__/hhmm-parse-boundary.test.ts',
+            'src/mission-control/store/hhmm.test.ts',
+            'src/mission-control/store/persistence-time.test.ts',
+        ],
+        verifiedRedBy: "append `t.split(':')` to behaviorSync.ts — the boundary case names store/behaviorSync.ts:251; append a `/^(\\d{1,2}):(\\d{2})$/` regex to gameWindow.ts — it names gameWindow.ts:53 (both proven 2026-09-26). Before the change the same case listed all 8 hand parses (scheduler 2, mood gauge 4, quick-game window 2), hhmm.test.ts's \"every reader follows the same rule\" went red for '6:00', '24:00', '06:00:00' and others in the mood gauge and for '9:00' in the quick-game window, and persistence-time.test.ts's 7 duration cases went red with the saved null/0/1440 duration kept.",
+        defence: 'The boundary test catches a new hand parser; hhmm.test.ts proves the existing readers agree on the rule behaviourally.',
+    },
+    {
         rule: 'REMOTE_ALLOWED_ACTIONS is an allowlist; remote buttons must be added to it',
         source: 'CLAUDE.md → Conventions → Remote actions',
         status: 'guarded',

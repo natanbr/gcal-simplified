@@ -9,7 +9,9 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
+import { DEFAULT_SETTINGS } from '../types';
 import type { MCState, MCSettings, ActivityLogEntry } from '../types';
+import { hhmmToMins, isValidDurationMins } from './hhmm';
 import { isGaugeHeldFull, moveGauge, PROGRESS_PER_TOKEN } from './moodGauge';
 
 /** Ring-buffer size for the in-app activity log. The durable, uncapped record
@@ -57,10 +59,11 @@ export function moodHourlyRate(moodWind: number, settings: MCSettings): number {
     const perDay = MOOD_TOKENS_PER_DAY[moodWind] ?? 0;
     if (perDay === 0) return 0;
 
-    const { startMins, endMins } = getWakingBounds(settings);
-    // A time cleared in Settings ('' has no minutes) makes the bounds NaN. Fail
-    // closed: a NaN rate used to flow through the grant into the token count.
-    if (!Number.isFinite(startMins) || !Number.isFinite(endMins)) return 0;
+    const bounds = getWakingBounds(settings);
+    // Fail closed on a time it cannot read: a NaN rate once flowed through the
+    // grant into the token count.
+    if (!bounds) return 0;
+    const { startMins, endMins } = bounds;
     // Guard against a degenerate/inverted window producing an infinite rate.
     const activeHours = Math.max(0.5, (endMins - startMins) / 60);
 
@@ -76,27 +79,23 @@ export function moodHourlyRate(moodWind: number, settings: MCSettings): number {
 const MAX_ACTIVE_GAP_MS = 3 * 60 * 1000;
 
 export function isWakingHour(isoString: string, settings: MCSettings): boolean {
+    const bounds = getWakingBounds(settings);
+    if (!bounds) return false;
     const d = new Date(isoString);
-    const hour = d.getHours();
-    const min = d.getMinutes();
-    const totalMins = hour * 60 + min;
-
-    const [startH, startM] = settings.morningStartsAt.split(':').map(Number);
-    const morningStart = startH * 60 + startM;
-
-    const [endH, endM] = settings.eveningStartsAt.split(':').map(Number);
-    const wakingEnd = endH * 60 + endM + (settings.eveningDurationMins || 60);
-
-    return totalMins >= morningStart && totalMins <= wakingEnd;
+    const totalMins = d.getHours() * 60 + d.getMinutes();
+    return totalMins >= bounds.startMins && totalMins <= bounds.endMins;
 }
 
-function getWakingBounds(settings: MCSettings): { startMins: number; endMins: number } {
-    const [startH, startM] = settings.morningStartsAt.split(':').map(Number);
-    const [endH, endM] = settings.eveningStartsAt.split(':').map(Number);
-    return {
-        startMins: startH * 60 + startM,
-        endMins: endH * 60 + endM + (settings.eveningDurationMins || 60),
-    };
+/** Morning start → end of the evening mission, in minutes since midnight; null
+ *  when either start time is unreadable (every caller then does nothing). */
+function getWakingBounds(settings: MCSettings): { startMins: number; endMins: number } | null {
+    const startMins = hhmmToMins(settings.morningStartsAt);
+    const eveningMins = hhmmToMins(settings.eveningStartsAt);
+    if (startMins === null || eveningMins === null) return null;
+    const evening = isValidDurationMins(settings.eveningDurationMins)
+        ? settings.eveningDurationMins
+        : DEFAULT_SETTINGS.eveningDurationMins;
+    return { startMins, endMins: eveningMins + evening };
 }
 
 function shouldResetMood(state: MCState, nowIso: string): boolean {
@@ -107,8 +106,10 @@ function shouldResetMood(state: MCState, nowIso: string): boolean {
 
     if (state.moodLastResetDate === todayDate) return false;
 
-    const { startMins } = getWakingBounds(state.settings);
-    const resetMins = startMins - 60;
+    // An unreadable morning time skips the reset rather than guessing an hour.
+    const bounds = getWakingBounds(state.settings);
+    if (!bounds) return false;
+    const resetMins = bounds.startMins - 60;
     const nowMins = now.getHours() * 60 + now.getMinutes();
 
     return nowMins >= resetMins;
@@ -121,7 +122,9 @@ function shouldResetMood(state: MCState, nowIso: string): boolean {
  * no multi-day back-fill (that would count time the app was closed).
  */
 function activeWindowOverlapMs(from: Date, to: Date, settings: MCSettings): number {
-    const { startMins, endMins } = getWakingBounds(settings);
+    const bounds = getWakingBounds(settings);
+    if (!bounds) return 0;
+    const { startMins, endMins } = bounds;
     const midnight = new Date(to);
     midnight.setHours(0, 0, 0, 0);
     const midnightMs = midnight.getTime();

@@ -24,7 +24,7 @@ import { gameTokenRoom, moveGauge, settleGameTokenCap } from './moodGauge';
 import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
 import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
-import { minsToHhmm, parseHhmmToMins, withoutInvalidStartTimes } from './hhmm';
+import { missionDurationMins, missionWindowEnd, withoutInvalidMissionTimes } from './hhmm';
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
@@ -162,15 +162,6 @@ export const initialState: MCState = {
     behaviorDelta: 0,
     skillProgress: createDefaultSkillProgress(),
 };
-
-// ---- Time Helpers ----
-
-/** Duration between two HH:MM times, wrapping past midnight when needed. */
-function computeMissionDurationMins(startsAt: string, endsAt: string): number {
-    let durationMins = parseHhmmToMins(endsAt) - parseHhmmToMins(startsAt);
-    if (durationMins < 0) durationMins += 24 * 60; // overnight wrap
-    return durationMins;
-}
 
 // ---- Reducer ----
 
@@ -389,7 +380,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         ...m,
                         active: true,
                         startedAt: now,
-                        durationMins: computeMissionDurationMins(m.startsAt, m.endsAt), // no minimum — allows sub-minute test durations
+                        durationMins: missionDurationMins(m, state.settings), // no minimum — allows sub-minute test durations
                         loggedTimeoutAt: undefined, // fresh occurrence — a stale stamp capped the streak at 2
                         whiningDetected: false,
                         whiningLocked: false,
@@ -433,7 +424,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         ...m,
                         active: true,
                         startedAt: now,
-                        durationMins: computeMissionDurationMins(m.startsAt, m.endsAt),
+                        durationMins: missionDurationMins(m, state.settings),
                         loggedTimeoutAt: undefined,
                         whiningDetected: false,
                         whiningLocked: false,
@@ -516,7 +507,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'SET_SETTINGS': {
-            const patch = withoutInvalidStartTimes(action.settings);
+            const patch = withoutInvalidMissionTimes(action.settings);
             const nextSettings = { ...state.settings, ...patch };
             let nextDaysLeft = state.creamTaskDaysLeft;
             
@@ -558,7 +549,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                     return {
                         ...m,
                         startsAt: start,
-                        endsAt: minsToHhmm(parseHhmmToMins(start) + dur),
+                        endsAt: missionWindowEnd(start, dur) ?? m.endsAt,
                         ...(timeChanged ? { startedAt: undefined, durationMins: undefined, active: false } : {}),
                     };
                 }),

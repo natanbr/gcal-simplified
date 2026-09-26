@@ -163,6 +163,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load.
   - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
   - **A mission start time must be a real time (fixed 2026-09-24).** Settings → "Auto-trigger at" cannot be saved empty: Save is disabled, the empty field is outlined, and the footer names the empty time and its tab ("Set the Morning auto-trigger time (🕒 Missions Time tab) to save.") until both times are filled in. `SET_SETTINGS` also ignores a start time that is not `HH:MM` (it keeps the stored one and does not stop a running mission), a profile saved empty by an older version loads with the default time (06:00 / 19:00) and a window re-derived from its duration, and the scheduler arms nothing for a time that is not a real `HH:MM`.
+  - **A mission duration must be a real length (2026-09-26).** Finite, more than 0 and less than 24 h (the 10-second test step counts). `SET_SETTINGS` keeps the stored duration for anything else, and a profile holding one (JSON saves NaN as `null`) loads with the default (30 / 60 min). At load the mission window is always re-derived from the settings, never trusted from the saved copy. Every reader of an entered time (scheduler, mood gauge, quick-game window) uses the same strict `HH:MM` rule and does nothing with a time it cannot read; a mission end past midnight (`24:30`) is still read as the next day.
 
 - **School Bag task — school days only (added 2026-09-27)**:
   - Owner's rule: organizing the bag for school is a task in both routines, only on school days — not on holidays or Pro-D days. Read from the calendar when one is connected; otherwise Monday to Friday.
@@ -1248,6 +1249,35 @@ reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION
 Tests: `useMissionScheduler.invalid-time.test.tsx`, `store/__tests__/mcReducer.settings-time.test.ts`,
 `MCSettingsOverlay.time-validation.test.tsx`, `store/persistence-time.test.ts`, and one case in
 `idle-performance.test.tsx` (no timer and no store write in 10 s with a cleared time).
+
+### 2026-09-26 One rule for a mission time, a real length for a mission duration, a visible focus ring
+
+Follow-up to the 2026-09-24 fix; the three open items its review left out.
+
+- **One rule for a time.** Four HH:MM parsers followed three rules: Save wanted two-digit hours, the
+  quick-game window accepted one, and the mood gauge and the scheduler split on `:` with no check
+  (a cleared time got past them only because every comparison with NaN is false). All of them now call
+  `store/hhmm.ts`: `hhmmToMins` (strict `HH:MM`, 00:00–23:59, `null` otherwise) for an entered time,
+  and `windowEndToMins` for a mission's derived `endsAt`, which may pass midnight (`24:30`) and carry
+  a fraction of a minute (the 10-second test duration), so the strict rule would break both. Visible
+  difference: only a hand-edited profile can hold `9:00`, and load already resets it; the mood gauge
+  and the quick-game window now treat it as unreadable too instead of reading it.
+- **Durations.** A non-finite duration in a saved profile gave `endsAt: 'NaN:NaN'`; the load repair
+  rebuilt it from the same bad duration, and a started mission got `durationMins: NaN`, so
+  `elapsedMins >= NaN` never ended it and its 15 s expiry check ran on both views. Now `SET_SETTINGS`
+  and load both refuse a duration that is not finite, > 0 and < 1440 min; load re-derives the window
+  from the settings every time (a 0-minute duration left a readable `06:00`–`06:00` window); and
+  `missionDurationMins` falls back to the phase's duration setting instead of returning NaN.
+- **Focus ring.** The Settings time field had `outline: none` with nothing in its place. It now shows
+  a 2 px `--mc-focus-ring` outline on `:focus-visible` (the rule lives in `mc.css`; an inline style
+  cannot express `:focus-visible`).
+- **Guard.** New CLAUDE.md rule "HH:MM times", registered in `rule-registry.test.ts`;
+  `hhmm-parse-boundary.test.ts` fails on a `.split(':')` or a digits-colon-digits regex anywhere in
+  `src/mission-control/` outside `hhmm.ts`.
+
+Tests: `store/hhmm.test.ts` (the parsers, and a table proving every reader refuses the same values),
+`store/persistence-time.test.ts` and `store/__tests__/mcReducer.settings-time.test.ts` (durations),
+`components/TimeInput.test.tsx`, `src/__tests__/hhmm-parse-boundary.test.ts`.
 
 ### 2026-09-27 A completed mission gives back one shield instead of refilling the bar
 

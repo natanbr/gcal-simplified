@@ -85,3 +85,23 @@ describe('SET_SETTINGS — valid start times still apply (guard)', () => {
         expect(mission(next, 'morning').durationMins).toBeUndefined();
     });
 });
+
+// The stepper cannot produce these, but SET_SETTINGS is the gate for anything
+// that reaches it: a non-finite duration derived `endsAt: 'NaN:NaN'`.
+describe('SET_SETTINGS — a duration that is not a real length is ignored', () => {
+    it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -5, 1440])('morningDurationMins %j keeps 30 and the 06:00–06:30 window', bad => {
+        const next = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: bad } });
+
+        expect(next.settings.morningDurationMins).toBe(30);
+        expect(mission(next, 'morning').endsAt).toBe('06:30');
+    });
+
+    it('guard: 45 and the 10-second test duration still apply', () => {
+        const next = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 45 } });
+        expect(next.settings.eveningDurationMins).toBe(45);
+        expect(mission(next, 'evening').endsAt).toBe('19:45');
+
+        const test = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 10 / 60 } });
+        expect(test.settings.morningDurationMins).toBe(10 / 60);
+    });
+});

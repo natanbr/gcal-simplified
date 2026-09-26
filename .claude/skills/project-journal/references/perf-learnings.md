@@ -216,10 +216,10 @@ built from it. `Number.isNaN(d.getTime())` is necessary but not sufficient: `'99
 real date ~41 days out, and a delay over 2^31-1 ms fires at once in Chromium, exactly like NaN (found
 by the perf lens in review). `Math.max(0, x)` is not a guard either: it passes NaN through. Refuse the bad
 value at every layer it crosses: the form (Save disabled, with the reason on screen), the reducer
-(`withoutInvalidStartTimes` keeps the stored time), hydration (`sanitizeStartTimes` repairs a
+(`withoutInvalidMissionTimes`, then `withoutInvalidStartTimes`, keeps the stored time), hydration (`sanitizeMissionTimes`, then `sanitizeStartTimes`, repairs a
 profile that already holds it) and the consumer (the scheduler arms nothing). This was the third
 reader to trip on a cleared Settings time, after `behaviorSync` (a NaN mood rate) and `gameWindow`.
-They now share `store/hhmm.ts`, so a new reader can use `isValidHhmm`. The proof is behavioural:
+They now share `store/hhmm.ts` (since 2026-09-26 the only parser, `hhmmToMins`, guarded by `hhmm-parse-boundary.test.ts`; the derived `endsAt` has its own `windowEndToMins` because it passes midnight and carries the 10-second test duration's fraction). The proof is behavioural:
 the invalid-time case in `idle-performance.test.tsx` counts dispatches and `setTimeout` calls over
 10 s. Extending `timer-registry` to recursive timeouts is still open.
 

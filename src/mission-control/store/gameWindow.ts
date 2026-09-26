@@ -12,19 +12,7 @@
 
 import type { MCState } from '../types';
 import { getLocalDateString } from './behaviorSync';
-
-/** Minutes since midnight, or NaN when the string is not HH:MM. Callers must
- *  treat NaN as "shut": clearing the settings time field yields '', and
- *  `nowMins >= NaN` is false, which silently removed the evening gate and left
- *  games open all night. */
-function hhmmToMins(hhmm: string): number {
-    if (!/^\d{1,2}:\d{2}$/.test(hhmm ?? '')) return Number.NaN;
-    const [h, m] = hhmm.split(':').map(Number);
-    // Shape alone is not enough: '25:00' parses to 1500, a minute no wall clock
-    // reaches, so `nowMins >= 1500` is never true and the gate disappears again.
-    if (h > 23 || m > 59) return Number.NaN;
-    return h * 60 + m;
-}
+import { hhmmToMins } from './hhmm';
 
 /**
  * True when a quick game may be started at `nowIso`.
@@ -52,9 +40,12 @@ export function isQuickGameWindowOpen(state: MCState, nowIso: string): boolean {
     const nowMins = now.getHours() * 60 + now.getMinutes();
 
     const eveningStartMins = hhmmToMins(state.settings.eveningStartsAt);
-    // Unreadable config = shut, never open. Also covers an inverted overnight
-    // window, where the evening start precedes the morning routine.
-    if (!Number.isFinite(eveningStartMins)) return false;
+    // Unreadable config = shut, never open: a cleared time ('') compared as NaN,
+    // `nowMins >= NaN` is false, and games stayed open all night; '25:00' is a
+    // minute no wall clock reaches, which removed the gate the same way.
+    if (eveningStartMins === null) return false;
+    // Also covers an inverted overnight config, where the evening start
+    // precedes the morning routine.
     if (nowMins >= eveningStartMins) return false;
 
     return state.lastCompletedOrFailedMorningDate === getLocalDateString(now);
