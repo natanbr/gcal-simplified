@@ -285,9 +285,10 @@ const REGISTRY: Rule[] = [
             'src/__tests__/hhmm-parse-boundary.test.ts',
             'src/mission-control/store/hhmm.test.ts',
             'src/mission-control/store/persistence-time.test.ts',
+            'src/mission-control/hooks/useMissionScheduler.overnight.test.tsx',
         ],
-        verifiedRedBy: "append `t.split(':')` to behaviorSync.ts — the boundary case names store/behaviorSync.ts:251; append a `/^(\\d{1,2}):(\\d{2})$/` regex to gameWindow.ts — it names gameWindow.ts:53 (both proven 2026-09-26). Before the change the same case listed all 8 hand parses (scheduler 2, mood gauge 4, quick-game window 2), hhmm.test.ts's \"every reader follows the same rule\" went red for '6:00', '24:00', '06:00:00' and others in the mood gauge and for '9:00' in the quick-game window, and persistence-time.test.ts's 7 duration cases went red with the saved null/0/1440 duration kept.",
-        defence: 'The boundary test catches a new hand parser; hhmm.test.ts proves the existing readers agree on the rule behaviourally.',
+        verifiedRedBy: "append `t.split(':')` to behaviorSync.ts — the boundary case names store/behaviorSync.ts:251; append a `/^(\\d{1,2}):(\\d{2})$/` regex to gameWindow.ts — it names gameWindow.ts:53 (both proven 2026-09-26). Before the change the same case listed all 8 hand parses (scheduler 2, mood gauge 4, quick-game window 2), hhmm.test.ts's \"every reader follows the same rule\" went red for '6:00', '24:00', '06:00:00' and others in the mood gauge and for '9:00' in the quick-game window, and persistence-time.test.ts's 7 duration cases went red with the saved null/0/1440 duration kept. Review round 1 (2026-09-26): reading endsAt with hhmmToMins, or wrapping atMinutesOf at 1440, left all 7 older scheduler suites green; both now fail useMissionScheduler.overnight.test.tsx (2 cases each). `split(':', 2)` and a `[0-9]{2}:` regex got past the guard; both are now in its recognition case, which went red before the pattern was widened.",
+        defence: 'The boundary test catches a new hand parser by its two usual shapes (a heuristic: slice/indexOf parsing gets past it, none exists today); hhmm.test.ts proves the existing readers agree on the rule behaviourally.',
     },
     {
         rule: 'REMOTE_ALLOWED_ACTIONS is an allowlist; remote buttons must be added to it',

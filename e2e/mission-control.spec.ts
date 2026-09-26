@@ -26,8 +26,9 @@ import {
 
 /**
  * Helper: Inject a morning mission active state into localStorage.
- * Sets the mission time window to surround the current real time so
- * useMissionScheduler confirms it active on its first tick.
+ * What keeps it running is `startedAt` + `durationMins`. The ±1 h window it
+ * also writes is discarded on reload: since 2026-09-26 hydration re-derives
+ * every mission window from the settings (store/hhmm.ts deriveMissionWindow).
  */
 async function injectActiveMission(page: Page, phase: 'morning' | 'evening' = 'morning'): Promise<void> {
     await page.evaluate(

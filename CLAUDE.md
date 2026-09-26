@@ -123,7 +123,7 @@ npm run release          # Bump + build + publish in one go; use /release, which
   because every comparison with NaN is false). A mission's `endsAt` is **not** such a time: it is
   start + duration, may pass midnight (`'24:30'`) and carry a fraction of a minute (the 10-second
   test duration), so it has its own parser, `windowEndToMins`. A duration is real when
-  `isValidDurationMins` says so (finite, > 0, < 1440); `SET_SETTINGS` and hydration both refuse
+  `isValidDurationMins` says so (one second up to, not including, 1440 min); `SET_SETTINGS` and hydration both refuse
   anything else. Guarded by `src/__tests__/hhmm-parse-boundary.test.ts`.
 - **Remote actions**: `REMOTE_ALLOWED_ACTIONS` in `useRemoteControl.ts` is an allowlist. Adding a
   remote button means adding its action type there too.

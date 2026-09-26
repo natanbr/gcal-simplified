@@ -97,7 +97,7 @@ function DurationStepper({
             {/* Slider */}
             <input
                 type="range"
-                min={0}
+                min={5}
                 max={120}
                 step={5}
                 value={Math.round(value)}

@@ -124,3 +124,16 @@ describe('MCSettingsOverlay — an invalid auto-trigger time cannot be saved', (
         expect(stored.settings?.morningStartsAt).toBe('06:30');
     });
 });
+
+// The duration slider went down to 0 while the smallest chip is 5 min. A 0 is
+// refused by SET_SETTINGS (a 0-minute mission times out the moment it starts),
+// so Save would close the panel and silently keep the old duration.
+describe('MCSettingsOverlay — the duration slider cannot reach 0', () => {
+    it('every duration slider starts at 5 minutes', async () => {
+        await renderAndOpen();
+        const sliders = screen.getAllByRole('slider').filter(el => el.getAttribute('max') === '120');
+
+        expect(sliders.length, 'precondition: the morning and evening duration sliders').toBe(2);
+        for (const slider of sliders) expect(slider).toHaveAttribute('min', '5');
+    });
+});

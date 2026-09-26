@@ -89,7 +89,7 @@ describe('SET_SETTINGS — valid start times still apply (guard)', () => {
 // The stepper cannot produce these, but SET_SETTINGS is the gate for anything
 // that reaches it: a non-finite duration derived `endsAt: 'NaN:NaN'`.
 describe('SET_SETTINGS — a duration that is not a real length is ignored', () => {
-    it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -5, 1440])('morningDurationMins %j keeps 30 and the 06:00–06:30 window', bad => {
+    it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -5, 1440])('morningDurationMins %s keeps 30 and the 06:00–06:30 window', bad => {
         const next = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: bad } });
 
         expect(next.settings.morningDurationMins).toBe(30);
