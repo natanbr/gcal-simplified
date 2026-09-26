@@ -82,7 +82,9 @@ describe('isValidDurationMins — a real mission length', () => {
 
     // 0 ends a mission the moment it starts; 1440 wraps the window back to its
     // own start, which reads as 0 too. JSON writes NaN and Infinity as null.
-    it.each([0, -5, 1440, 1e9, Number.NaN, Number.POSITIVE_INFINITY, null, undefined, '30'])('refuses %j', bad => {
+    // Under a second: 5e-324 vanishes in start + duration (360 + 5e-324 === 360)
+    // and 1e-7 is written in exponent form no parser reads back.
+    it.each([0, -5, 1440, 1e9, 1e-7, 5e-324, Number.NaN, Number.POSITIVE_INFINITY, null, undefined, '30'])('refuses %s', bad => {
         expect(isValidDurationMins(bad)).toBe(false);
     });
 });
@@ -131,6 +133,14 @@ describe('every reader of an entered time follows the same rule', () => {
         const settings = { ...DEFAULT_SETTINGS, eveningStartsAt: bad };
         expect(isWakingHour(at('12:00'), settings)).toBe(false);
         expect(moodHourlyRate(2, settings)).toBe(0);
+    });
+
+    it('an unreal evening duration falls back to the default for the mood gauge, never NaN', () => {
+        // The window end is evening start + duration; NaN there made the rate NaN.
+        for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, 0]) {
+            const settings = { ...DEFAULT_SETTINGS, eveningDurationMins: bad };
+            expect(moodHourlyRate(2, settings)).toBe(moodHourlyRate(2, DEFAULT_SETTINGS));
+        }
     });
 
     it('guard: readable defaults open the window and accrue', () => {

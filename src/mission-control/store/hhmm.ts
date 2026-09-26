@@ -29,7 +29,8 @@ export function isValidHhmm(value: unknown): value is string {
  * A mission's `endsAt` is NOT an entered time: it is start + duration, written
  * by `missionWindowEnd`, so it passes midnight unwrapped ('24:30' is 00:30 the
  * next day, which `setHours(24, 30)` understands) and keeps a fraction of a
- * minute (Settings' 10-second test duration). Minutes after the start day's
+ * minute (Settings' 10-second test duration), which `missionDurationMins` reads
+ * back — the scheduler's `setHours` drops it. Minutes after the start day's
  * midnight, or null.
  */
 export function windowEndToMins(value: unknown): number | null {
@@ -50,12 +51,14 @@ export function missionWindowEnd(startsAt: string, durationMins: number): string
 }
 
 /**
- * A real mission length. 0 ends a mission the moment it starts, and 1440 wraps
- * the window back onto its own start, which reads as 0 too. Fractions are fine:
- * that is the 10-second test duration.
+ * A real mission length: one second up to (not including) a day. 0 ends a
+ * mission the moment it starts, and 1440 wraps the window back onto its own
+ * start, which reads as 0 too. Below a second is 0 in disguise: 5e-324 vanishes
+ * in start + duration, and 1e-7 is written in exponent form no parser reads.
+ * Fractions are fine: that is the 10-second test duration.
  */
 export function isValidDurationMins(value: unknown): value is number {
-    return typeof value === 'number' && Number.isFinite(value) && value > 0 && value < 24 * 60;
+    return typeof value === 'number' && Number.isFinite(value) && value >= 1 / 60 && value < 24 * 60;
 }
 
 /**
@@ -108,16 +111,28 @@ export function sanitizeMissionTimes(settings: MCSettings): MCSettings {
 }
 
 /**
- * A mission's window is derived state — SET_SETTINGS is its only writer and
- * always derives it from the settings — so hydration re-derives it from the
- * (sanitized) settings rather than trusting the saved copy. Repairing only an
- * unreadable copy kept a readable but wrong one: a 0-minute duration's
- * '06:00'–'06:00' ends the mission the moment it starts.
+ * A mission's window is derived state: this is its one derivation, used by
+ * SET_SETTINGS and by hydration, which re-derives it from the (sanitized)
+ * settings rather than trusting the saved copy. Repairing only an unreadable
+ * copy kept a readable but wrong one: a 0-minute duration's '06:00'–'06:00'
+ * ends the mission the moment it starts.
  */
-export function repairMissionWindow(m: Mission, settings: MCSettings): Mission {
+export function deriveMissionWindow(m: Mission, settings: MCSettings): Mission {
     if (m.phase !== 'morning' && m.phase !== 'evening') return m;
     const isMorning = m.phase === 'morning';
     const startsAt = isMorning ? settings.morningStartsAt : settings.eveningStartsAt;
     const endsAt = missionWindowEnd(startsAt, isMorning ? settings.morningDurationMins : settings.eveningDurationMins);
     return endsAt === null ? m : { ...m, startsAt, endsAt };
+}
+
+/**
+ * Hydration for one mission: its window re-derived, and a mission saved running
+ * with no readable duration (JSON writes NaN as null) given one. The expiry
+ * check skips a null duration, so that mission never ended, ADJUST_MISSION_END
+ * ignored it, and no other mission could start.
+ */
+export function hydrateMissionTimes(m: Mission, settings: MCSettings): Mission {
+    const derived = deriveMissionWindow(m, settings);
+    if (!derived.startedAt || Number.isFinite(derived.durationMins)) return derived;
+    return { ...derived, durationMins: missionDurationMins(derived, settings) };
 }

@@ -24,7 +24,7 @@ import { gameTokenRoom, moveGauge, settleGameTokenCap } from './moodGauge';
 import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
 import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
-import { missionDurationMins, missionWindowEnd, withoutInvalidMissionTimes } from './hhmm';
+import { deriveMissionWindow, missionDurationMins, withoutInvalidMissionTimes } from './hhmm';
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
@@ -537,19 +537,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 // If the start time changes, clear startedAt, durationMins, and active
                 // so nothing hangs. The scheduler restarts it only at a start this run did not reach (lastActiveAt).
                 missions: state.missions.map(m => {
-                    if (m.phase !== 'morning' && m.phase !== 'evening') return m;
-                    const isMorning = m.phase === 'morning';
-                    const dur = isMorning
-                        ? patch.morningDurationMins ?? state.settings.morningDurationMins
-                        : patch.eveningDurationMins ?? state.settings.eveningDurationMins;
-                    const start = isMorning
-                        ? patch.morningStartsAt ?? state.settings.morningStartsAt
-                        : patch.eveningStartsAt ?? state.settings.eveningStartsAt;
-                    const timeChanged = isMorning ? mornTimeChanged : evenTimeChanged;
+                    const timeChanged = (m.phase === 'morning' && mornTimeChanged) || (m.phase === 'evening' && evenTimeChanged);
                     return {
-                        ...m,
-                        startsAt: start,
-                        endsAt: missionWindowEnd(start, dur) ?? m.endsAt,
+                        ...deriveMissionWindow(m, nextSettings),
                         ...(timeChanged ? { startedAt: undefined, durationMins: undefined, active: false } : {}),
                     };
                 }),

@@ -19,7 +19,7 @@ import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
-import { repairMissionWindow, sanitizeMissionTimes } from './hhmm';
+import { hydrateMissionTimes, sanitizeMissionTimes } from './hhmm';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export { selectTotalWealth };
@@ -80,7 +80,7 @@ export function loadPersistedState(): MCState {
             missions: initialState.missions.map(defaultM => {
                 const savedM = parsed.missions?.find(m => m.phase === defaultM.phase);
                 if (!savedM) return defaultM;
-                return repairMissionWindow({
+                return hydrateMissionTimes({
                     ...defaultM,
                     ...savedM,
                     // Must survive a restart: a relaunch inside the window after a

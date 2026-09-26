@@ -123,6 +123,23 @@ describe('hydration — a mission duration that is not a real length', () => {
         expect(mission(reloaded, 'morning').endsAt).toBe('06:30');
     });
 
+    it('a mission saved running with no readable duration gets one, so it can end', () => {
+        // JSON saved its NaN durationMins as null; the expiry check skips a null
+        // duration, so it never ended, the +/- buttons ignored it, no other
+        // mission could start, and the 15 s expiry check ran on both views.
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            ...initialState,
+            activeMission: 'evening',
+            missions: initialState.missions.map(m => (m.phase === 'evening'
+                ? { ...m, active: true, startedAt: new Date(Date.now() - 3_600_000).toISOString(), durationMins: null, endsAt: 'NaN:NaN' }
+                : m)),
+        }));
+        const reloaded = loadPersistedState();
+
+        expect(reloaded.activeMission).toBe('evening');
+        expect(mission(reloaded, 'evening').durationMins).toBe(60);
+    });
+
     it('guard: the 10-second test duration survives a restart', () => {
         const endsAt = missionWindowEnd('06:00', 10 / 60) ?? '';
         const reloaded = restart({
