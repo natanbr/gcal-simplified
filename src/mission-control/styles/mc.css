@@ -91,6 +91,10 @@
   --mc-chart-teal: #0a9d83;
   --mc-chart-rust: #c25a35;
 
+  /* Keyboard focus ring. The pastel accents are ~2:1 on white, under the 3:1
+     a focus indicator needs; this is the chart violet (5.6:1 on white). */
+  --mc-focus-ring: #6d54c8;
+
   /* Mission Streak Shield — TEXT only. --mc-red is ~2.3:1 on this card's
      near-white ground (#fcfdff): fine for an 18px segment block, unreadable as
      11px type. Same hue, darkened until it clears 4.5:1 on both that ground
@@ -420,4 +424,14 @@
 .mc-anim-cell-explode {
   animation: mc-cell-explode 0.8s ease-in-out 1;
   animation-fill-mode: forwards;
+}
+
+/* Settings time fields. An inline style cannot say :focus-visible, so the ring
+   lives here (and the field must carry no inline outline, which would win). */
+.mc-time-input:focus {
+  outline: none;
+}
+.mc-time-input:focus-visible {
+  outline: 2px solid var(--mc-focus-ring);
+  outline-offset: 2px;
 }

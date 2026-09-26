@@ -1,7 +1,8 @@
 // ============================================================
 // Mission Control — TimeInput
 // Labelled HH:MM field for the Settings panel. Clearing it yields '', which
-// MCSettingsOverlay refuses to save (see store/hhmm.ts).
+// MCSettingsOverlay refuses to save (see store/hhmm.ts). Keyboard focus ring:
+// .mc-time-input in styles/mc.css — never add an inline outline here.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
@@ -24,6 +25,7 @@ export function TimeInput({
             </span>
             <input
                 type="time"
+                className="mc-time-input"
                 value={value}
                 aria-invalid={invalid}
                 onChange={e => onChange(e.target.value)}
@@ -36,7 +38,6 @@ export function TimeInput({
                     borderRadius: 10,
                     padding: '6px 10px',
                     color: 'var(--mc-text)',
-                    outline: 'none',
                     width: '100%',
                 }}
             />
