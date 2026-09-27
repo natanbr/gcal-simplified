@@ -1,11 +1,12 @@
 // ============================================================
 // Mission Control — Mission Streak Shield
-// The consecutive-missed-missions counter, the lock derived from
-// it, and the two mission outcomes that move it.
+// The missed-missions counter, the lock derived from it, and the
+// two mission outcomes that move it.
 //
-// One counter shared by morning and evening: six misses in a row
-// is ~three days of earning nothing, which is the rule as the
-// parent stated it.
+// One counter shared by morning and evening. A miss costs one
+// shield and a completion gives one back (2026-09-27; before that a
+// completion cleared the counter, so it counted misses in a row).
+// Six net misses is ~three days of earning nothing.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
@@ -126,7 +127,7 @@ export type StreakCause = 'missed' | 'completed' | 'adjusted';
  * pure-reducer contract. Same reasoning as `auto-mood-token-*` in behaviorSync.
  *
  * `cause` keeps the sentence honest: a parent taking the last shield is NOT
- * "6 missions missed in a row", and it is not `source: auto`.
+ * "lost to missed missions", and it is not `source: auto`.
  */
 function shieldLog(
     broken: boolean,
@@ -142,7 +143,7 @@ function shieldLog(
         message: broken
             ? (byParent
                 ? 'Last shield taken away — bank and goals locked.'
-                : `Shield broken — ${MISSED_LOCK_THRESHOLD} missions missed in a row. Bank and goals locked.`)
+                : `Shield broken — all ${SHIELD_SEGMENTS} shields lost to missed missions. Bank and goals locked.`)
             : (byParent
                 ? 'Shield given back — bank and goals unlocked.'
                 : 'Shield restored — bank and goals unlocked.'),
@@ -211,11 +212,13 @@ export function applyMissionTimeout(
 }
 
 /**
- * A mission routine was finished: pay the bonus and refill the shield.
+ * A mission routine was finished: pay the bonus and give one shield back.
  *
- * One completed mission clears the whole streak — deliberately generous,
- * because a punishment a child cannot see the end of stops working as an
- * incentive. This action is never in the locked set, so it is the way out.
+ * One completed mission earns back exactly one segment, mirroring the one a
+ * miss costs (decided 2026-09-27; it used to clear the whole streak, so one
+ * good morning wiped any number of misses). The end stays visible: at six
+ * misses the next completion is 6 → 5, which unlocks. This action is never
+ * in the locked set, so it is the way out.
  */
 export function applyMissionRoutineComplete(
     state: MCState,
@@ -235,7 +238,7 @@ export function applyMissionRoutineComplete(
         activeMission: 'none',
         bankCount: state.bankCount + bonusTokens,
         ...moveGauge(state, whining ? 0 : COMPLETION_BEHAVIOR_BONUS, 1).patch, // earning a token resets mood
-        ...applyStreakChange(state, 0, nowIso, 'completed'),
+        ...applyStreakChange(state, sanitizeMissedStreak(state.missedMissionStreak) - 1, nowIso, 'completed'),
         ...outcomeDatePatch(missionPhase, nowIso),
         missions: state.missions.map(m =>
             m.phase === missionPhase

@@ -74,7 +74,8 @@ npm run release          # Bump + build + publish in one go; use /release, which
 - **Attribution**: every state-changing action carries `origin` (`local | remote | scheduler |
   auto | system`) and every log entry carries `source`. A token movement with no attribution is a
   bug — the whole point is that a parent can see who moved what.
-- **Mission streak shield**: `missedMissionStreak` counts consecutive timed-out missions; at
+- **Mission streak shield**: `missedMissionStreak` counts timed-out missions, and each completed
+  mission gives one back (−1, never below 0 — not a reset); at
   `MISSED_LOCK_THRESHOLD` (6) the child's whole economy freezes. The locked flag is
   **derived** (`isEconomyLocked`), never stored, and `applyStreakChange` is the only writer of the
   counter *during a dispatch* — timeout, completion and the parent's `ADJUST_SHIELD` all go through

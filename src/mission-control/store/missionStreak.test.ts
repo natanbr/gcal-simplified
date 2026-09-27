@@ -32,7 +32,7 @@ function runningMorning(streak: number): MCState {
 }
 
 describe('missionStreak — thresholds', () => {
-    it('locks at six consecutive misses, which is the three days the rule is written in', () => {
+    it('locks at six net misses, which is the three days the rule is written in', () => {
         expect(MISSED_LOCK_THRESHOLD).toBe(6);
         expect(SHIELD_SEGMENTS).toBe(6);
     });
@@ -105,12 +105,33 @@ describe('missionStreak — mission outcomes', () => {
         expect(next.lastCompletedOrFailedMorningDate).toBe('2026-09-02');
     });
 
-    it('resets the whole streak when a single mission is completed', () => {
+    // Decided 2026-09-27: a completion gives back ONE shield, mirroring the one a
+    // miss costs. It used to clear the whole streak.
+    it.each([
+        [3, 2],
+        [1, 0],
+        [0, 0], // never below zero
+    ])('gives back exactly one shield when a mission is completed (streak %i → %i)', (before, after) => {
+        const next = applyMissionRoutineComplete(runningMorning(before), 'morning', 2, AT);
+        expect(next.missedMissionStreak).toBe(after);
+    });
+
+    it('unlocks a broken shield with a single completion — 6 → 5, not back to full', () => {
         const locked = runningMorning(MISSED_LOCK_THRESHOLD);
         expect(isEconomyLocked(locked)).toBe(true);
         const next = applyMissionRoutineComplete(locked, 'morning', 2, AT);
-        expect(next.missedMissionStreak).toBe(0);
+        expect(next.missedMissionStreak).toBe(MISSED_LOCK_THRESHOLD - 1);
         expect(isEconomyLocked(next)).toBe(false);
+    });
+
+    it('gives the shield back even when the mission was completed with whining', () => {
+        const whined: MCState = {
+            ...runningMorning(4),
+            missions: runningMorning(4).missions.map(m =>
+                m.phase === 'morning' ? { ...m, whiningDetected: true } : m,
+            ),
+        };
+        expect(applyMissionRoutineComplete(whined, 'morning', 2, AT).missedMissionStreak).toBe(3);
     });
 
     it('still pays the completion bonus while the shield was broken — collecting is the way out', () => {

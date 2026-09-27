@@ -150,10 +150,13 @@ describe('shield lock — engaging and releasing', () => {
         };
     }
 
-    it('locks on the sixth consecutive miss and logs why', () => {
+    it('locks on the sixth net miss and logs why', () => {
         const after = mcReducer(aboutToBreak(5), stamp({ type: 'MARK_MISSION_TIMEOUT', missionPhase: 'morning' }));
         expect(isEconomyLocked(after)).toBe(true);
         expect(after.activityLogs[0].message).toMatch(/Shield broken/);
+        // A completion gives back only one shield, so the six were not
+        // necessarily in a row — the line must not claim they were.
+        expect(after.activityLogs[0].message).not.toMatch(/in a row/);
         expect(after.activityLogs[0].source).toBe('auto');
     });
 
@@ -168,14 +171,21 @@ describe('shield lock — engaging and releasing', () => {
         expect(after.activityLogs.filter(l => /Shield broken/.test(l.message))).toHaveLength(0);
     });
 
-    it('unlocks on one completed mission and logs the release', () => {
+    it('unlocks on one completed mission — one shield back, not all six — and logs the release', () => {
         const after = mcReducer(
             aboutToBreak(MISSED_LOCK_THRESHOLD),
             stamp({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'morning', bonusTokens: 2 }),
         );
         expect(isEconomyLocked(after)).toBe(false);
-        expect(after.missedMissionStreak).toBe(0);
+        expect(after.missedMissionStreak).toBe(MISSED_LOCK_THRESHOLD - 1);
         expect(after.activityLogs[0].message).toMatch(/Shield restored/);
+    });
+
+    it('moves the shield once when the same completion is dispatched twice', () => {
+        const action = stamp({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'morning', bonusTokens: 2 });
+        const once = mcReducer(aboutToBreak(4), action);
+        expect(once.missedMissionStreak).toBe(3);
+        expect(mcReducer(once, action).missedMissionStreak).toBe(3);
     });
 
     it('does not log a release when the shield was never broken', () => {
