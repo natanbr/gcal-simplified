@@ -34,7 +34,7 @@ function runAndComplete(state: MCState, phase: Exclude<MissionPhase, 'none'>, da
 }
 
 describe('mission streak — replayed through real occurrences', () => {
-    it('counts every consecutive miss and locks on the sixth', () => {
+    it('counts every miss and locks on the sixth', () => {
         let s: MCState = { ...initialState };
         const trace: number[] = [];
         for (let d = 1; d <= 3; d++) {
@@ -70,7 +70,7 @@ describe('mission streak — replayed through real occurrences', () => {
         expect(s.behaviorProgress).toBe(60); // 100 - 20 - 20
     });
 
-    it('one completed mission clears a full streak and unlocks the bank', () => {
+    it('one completed mission gives one shield back and unlocks the bank', () => {
         let s: MCState = { ...initialState };
         for (let d = 1; d <= 3; d++) {
             s = runAndMiss(s, 'morning', d);
@@ -78,19 +78,19 @@ describe('mission streak — replayed through real occurrences', () => {
         }
         expect(isEconomyLocked(s)).toBe(true);
         s = runAndComplete(s, 'morning', 4);
-        expect(s.missedMissionStreak).toBe(0);
+        expect(s.missedMissionStreak).toBe(5);
         expect(isEconomyLocked(s)).toBe(false);
     });
 
-    it('is a CONSECUTIVE streak — a completion in the middle resets it', () => {
+    it('is a NET count — a completion in the middle gives back one shield, not all of them', () => {
         let s: MCState = { ...initialState };
         s = runAndMiss(s, 'morning', 1);
         s = runAndMiss(s, 'evening', 1);
         expect(s.missedMissionStreak).toBe(2);
         s = runAndComplete(s, 'morning', 2);
-        expect(s.missedMissionStreak).toBe(0);
-        s = runAndMiss(s, 'evening', 2);
         expect(s.missedMissionStreak).toBe(1);
+        s = runAndMiss(s, 'evening', 2);
+        expect(s.missedMissionStreak).toBe(2);
     });
 
     it('never counts the same occurrence twice however many times the timeout fires', () => {

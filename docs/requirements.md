@@ -174,8 +174,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - A held gauge costs nothing while idle: every heartbeat returns the same state object until a token is spent (guarded in `idle-performance.test.tsx`).
 
 - **Mission Streak Shield (missed-mission lockout)**:
-  - **One shared streak**: `missedMissionStreak` counts consecutive *failed* mission occurrences across morning and evening. Six in a row is roughly three days of earning nothing.
-  - **Miss / reset**: only an expired mission with unfinished tasks counts as a miss. A parent-cancelled mission and a mission skipped because the machine was asleep leave the streak alone. Any completed mission routine resets it to 0.
+  - **One shared counter**: `missedMissionStreak` counts *failed* mission occurrences across morning and evening, minus completions — each miss takes one shield, each completion gives one back. Six net misses is roughly three days of earning nothing.
+  - **Miss / give back (changed 2026-09-27)**: only an expired mission with unfinished tasks counts as a miss. A parent-cancelled mission and a mission skipped because the machine was asleep leave the counter alone. Each completed mission routine gives back **one** shield (counter − 1, never below 0), with or without whining. Until 2026-09-27 a completion reset the counter to 0, so one good morning wiped any number of misses.
   - **Reset re-arms the occurrence (decided 2026-09-03)**: a mission the parent resets *can* be counted as a miss again the same day. Reset means "do it again", and a second failure of a second attempt is a second miss. This applies to **`RESET_MISSION_WITH_TIMER`** (long-press), which restarts the clock and so genuinely grants that second attempt. Plain **`RESET_MISSION`** (short-press) resets only the checklist and leaves the timer running, so on an already-expired mission it grants no time at all — it therefore does **not** re-arm the miss, or one press would cost a segment for an attempt zero seconds long. Both are remote-reachable. Pinned by tests so neither half is "fixed" later.
   - **Lock at 6 — the child's whole economy freezes (decided 2026-09-03)**, not just spending. Refused: deposit, vacuum, move, select a new goal, consume a completed reward, starting a quick game, **tapping an activity for a point, and claiming a finished responsibility**. The mood gauge also stops accruing, and because accrual is *skipped* rather than zeroed, unlocking cannot dump the frozen days back as progress. An earlier version froze spending only, on the reasoning that collecting was the way out; the stronger rule is what the owner wants and is simpler for a child to hold — while the shield is broken nothing moves, and a completed mission starts it again.
   - **What never freezes**: completing a mission (the exit), and the parent's tools — granting tokens, granting a game token, handing a shield back, removing a token, refunding a goal. Locking any of those would make the lock inescapable or take the adult's override away.
@@ -1195,6 +1195,24 @@ size and `touch-action`; a remote `CANCEL_MISSION` still closes the overlay and 
 `src/__tests__/action-literal-boundary.test.ts` fails if any production file other than the
 reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION`; registered in
 `rule-registry.test.ts`.
+
+### 2026-09-27 A completed mission gives back one shield instead of refilling the bar
+
+- **Changed (owner's decision).** Completing a mission routine used to reset `missedMissionStreak`
+  to 0: one good morning wiped any number of misses. It now gives back exactly one shield
+  (counter − 1, floored at 0), the mirror of the one shield a miss costs. Whining does not change
+  that; it still only withholds the mood-gauge bonus.
+- **Still the way out.** At 6 (broken) the next completion is 6 → 5, which unlocks the bank and
+  writes "Shield restored — bank and goals unlocked." as before; the bar then shows 1 / 6, not 6 / 6.
+  `COMPLETE_MISSION_ROUTINE` stays out of the locked set.
+- **Consequence.** The counter is now a net count, not a run of misses in a row. A child who misses
+  two missions out of every three now drifts toward the lock (before, every completion wiped the
+  drift). The lock line therefore no longer says "6 missions missed in a row"; it reads
+  "Shield broken — all 6 shields lost to missed missions. Bank and goals locked."
+- Tests: `missionStreak.test.ts` (3 → 2, 1 → 0, 0 stays 0, 6 → 5 unlocks, a whining completion),
+  `mcReducer.streak-lock.test.ts` (release logged at 6 → 5; a double dispatch moves it once; the lock
+  line does not claim "in a row"), `mcReducer.streak-lifecycle.test.ts` (replayed occurrences). All
+  seven new or changed cases fail against the old reset-to-0 rule.
 
 ### 2026-09-28 Review fixes: stale mission actions refused, a settings save that ends a mission logged
 

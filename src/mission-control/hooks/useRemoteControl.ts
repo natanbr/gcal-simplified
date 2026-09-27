@@ -62,7 +62,7 @@ const PAYLOAD_VALIDATORS: Partial<Record<MCAction['type'], (a: MCAction) => bool
     // validator must accept `undefined` or the remote's own button breaks.
     ADD_RESPONSIBILITY_POINT: a => a.type === 'ADD_RESPONSIBILITY_POINT'
         && (a.amount === undefined || Number.isFinite(a.amount)),
-    // This action also resets the streak, so an unvalidated payload would
+    // This action also gives a shield back, so an unvalidated payload would
     // unlock the bank as well as NaN-poison the balance.
     COMPLETE_MISSION_ROUTINE: a => a.type === 'COMPLETE_MISSION_ROUTINE' && Number.isFinite(a.bonusTokens),
     ADJUST_BEHAVIOR_PROGRESS: a => a.type === 'ADJUST_BEHAVIOR_PROGRESS' && Number.isFinite(a.amount),
