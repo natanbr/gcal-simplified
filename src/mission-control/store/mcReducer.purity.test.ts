@@ -77,6 +77,7 @@ const SAMPLE_ACTIONS: MCAction[] = [
     { type: 'SET_MOOD_WIND', level: 1 },
     { type: 'SYNC_BEHAVIOR' },
     { type: 'ADJUST_SHIELD', delta: 1 },
+    { type: 'SET_SCHOOL_CALENDAR', calendar: { from: '2026-08-19', to: '2026-09-03', noSchool: [{ date: '2026-08-21', reason: 'Pro-D day' }] }, origin: 'system' },
 ];
 
 /** A populated state, so actions have something real to act on. */
@@ -190,5 +191,26 @@ describe('mcReducer purity', () => {
                 `purity check. Add a representative action for each:\n  ${missing.join('\n  ')}`
             ).toEqual([]);
         });
+    });
+});
+
+describe('mcReducer purity — the SET_ACTIVE_MISSION fresh start', () => {
+    // richState() already runs a mission, so every SAMPLE_ACTIONS start above
+    // takes the one-at-a-time early return and never reaches the fresh start
+    // (school-bag decision, checklist reset). An idle state is the only way in.
+    function idleState(): MCState {
+        return {
+            ...richState(),
+            activeMission: 'none',
+            missions: structuredClone(initialState.missions),
+            schoolCalendar: { from: '2026-08-17', to: '2026-09-01', noSchool: [{ date: '2026-08-20', reason: 'Pro-D day' }] },
+        };
+    }
+
+    it.each(['morning', 'evening'] as const)('starting the %s mission from idle is pure and deterministic, and really starts it', (phase) => {
+        const action = deepFreeze<MCAction>({ type: 'SET_ACTIVE_MISSION', phase, timestamp: TIMESTAMP });
+        const started = mcReducer(deepFreeze(idleState()), action);
+        expect(started.activeMission).toBe(phase);
+        expect(started).toEqual(mcReducer(idleState(), action));
     });
 });

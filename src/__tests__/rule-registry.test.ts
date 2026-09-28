@@ -175,6 +175,17 @@ const REGISTRY: Rule[] = [
         defence: 'Source-reading, because a NEW reducer case that assigns the field is by definition not covered by any existing behavioural test.',
     },
     {
+        rule: 'Each completed mission gives back ONE shield (−1, never below 0) — not a reset to 0',
+        source: 'CLAUDE.md → Conventions → Mission streak shield',
+        status: 'guarded',
+        guard: [
+            'src/mission-control/store/missionStreak.test.ts',
+            'src/mission-control/store/__tests__/mcReducer.streak-lock.test.ts',
+            'src/mission-control/store/__tests__/mcReducer.streak-lifecycle.test.ts',
+        ],
+        verifiedRedBy: "restore `applyStreakChange(state, 0, nowIso, 'completed')` in applyMissionRoutineComplete — 7 cases red across missionStreak.test.ts, mcReducer.streak-lock.test.ts and mcReducer.streak-lifecycle.test.ts (proven 2026-09-27).",
+    },
+    {
         rule: 'A refusal writes no log line, and is refused before any optimistic UI commits',
         source: 'CLAUDE.md → Conventions → Refusals must be silent in the log and visible on screen',
         status: 'guarded',

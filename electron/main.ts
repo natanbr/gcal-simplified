@@ -106,6 +106,14 @@ function createWindow() {
   }
 }
 
+/** Only a plain object with its OWN `strict: true` opts in; anything else from the renderer is the forgiving call. */
+function isStrictRequest(options: unknown): boolean {
+  if (typeof options !== 'object' || options === null) return false;
+  const proto = Object.getPrototypeOf(options);
+  if (proto !== Object.prototype && proto !== null) return false;
+  return Object.hasOwn(options, 'strict') && 'strict' in options && options.strict === true;
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle('auth:login', async () => {
     if (win) {
@@ -126,7 +134,7 @@ function registerIpcHandlers(): void {
   });
 
   // Data Handlers
-  ipcMain.handle('data:events', async (_, timeMin?: string, timeMax?: string) => {
+  ipcMain.handle('data:events', async (_, timeMin?: string, timeMax?: string, options?: unknown) => {
     let start: Date;
     let end: Date;
 
@@ -153,7 +161,7 @@ function registerIpcHandlers(): void {
       end.setDate(start.getDate() + 10);
     }
 
-    return await apiService.getEvents(start, end);
+    return await apiService.getEvents(start, end, { strict: isStrictRequest(options) });
   });
 
   ipcMain.handle('data:tasks', async () => apiService.getTasks());

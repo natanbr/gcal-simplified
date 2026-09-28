@@ -59,7 +59,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // reducer calls on the shield-lock line, so the refusal itself costs nothing).
     // 822 → 820 on 2026-09-28 (the start-time checks moved to missionReschedule.ts,
     // shared with the log).
-    'src/mission-control/store/mcReducer.ts': 820,
+    // 820 → 777 on 2026-09-28 (PR 179, rebased: syncCreamTask moved to store/routineTasks.ts
+    // beside the school-bag placement; net of the new SET_SCHOOL_CALENDAR case and the fresh-start line).
+    'src/mission-control/store/mcReducer.ts': 777,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.

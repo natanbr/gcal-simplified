@@ -23,7 +23,13 @@ A strictly isolated application module — the kid-facing reward/mission app.
 * **State**: React Context + `useReducer` — no Zustand, no external state library. Persisted to `localStorage` key `mc-state-v5` with a debounced 500ms sync. `useMCDispatch` is a command interceptor: it injects `timestamp`, derives an activity-log entry, then dispatches the action followed by `ADD_LOG`.
 * **`store/`**: `mcReducer.ts` (pure reducer + the `MOOD_TOKENS_PER_DAY` token economy),
   `useMCStore.tsx` (context, persistence, the logging dispatch interceptor),
-  `MCStoreProvider.tsx` (mounts the heartbeat, remote sync and audit bridge),
+  `MCStoreProvider.tsx` (mounts the heartbeat, remote sync, audit bridge, suspension expiry and
+  the school-calendar sync),
+  `routineTasks.ts` (the add-on tasks — Cream, School Bag — and hydration that keeps them across a restart),
+  `schoolDays.ts` (school day = Mon–Fri minus calendar no-school dates; `NO_SCHOOL_KEYWORDS`),
+  `useSchoolCalendarSync.ts` (reads the family calendar for school days — **MC now invokes
+  `auth:check` and `data:events` in its strict mode**, the calendar view's own channels, on launch, mission end,
+  `system:resume` and `auth:success`; no timer),
   `activityLog.ts` (action → human-readable log entry, with attribution),
   `useBehaviorHeartbeat.ts` (60s mood accrual — the ONLY token generator),
   `behaviorSync.ts` (the accrual engine), `moodGauge.ts` (`moveGauge`, the one writer of the gauge),
@@ -50,6 +56,9 @@ reaches the main process only through the preload bridge.
 * `preload.ts`: exposes only `window.ipcRenderer.{invoke,on}` behind the two channel whitelists
   (`ALLOWED_INVOKE_CHANNELS`, `ALLOWED_ON_CHANNELS`). A non-whitelisted channel throws.
 * `auth.ts` / `api.ts`: Google OAuth2 via local HTTP server redirect flow + Calendar/Tasks.
+  `data:events` forgives failures for the Calendar view (a failing calendar or holiday feed just
+  shrinks the list); with a plain `{ strict: true }` third argument (the school-bag reader) every
+  such failure throws instead.
   Tokens are encrypted with `electron.safeStorage` when available (plaintext fallback) and stored
   in electron-store (`auth-store`).
 * `remote-bridge.ts`: Supabase Realtime pairing and action relay. Cryptographic pairing: UUID room

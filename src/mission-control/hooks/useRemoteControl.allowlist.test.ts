@@ -51,6 +51,7 @@ const FORBIDDEN: Array<{ type: string; why: string }> = [
     { type: 'START_GAME', why: 'strands snakeGameActive when no overlay is mounted to close it' },
     { type: 'CLEAR_CHEAT_FLAG', why: 'would let the remote silently dismiss a cheat alert' },
     { type: 'RECORD_QUIZ_ANSWER', why: 'would let a tampered remote pump the invisible reading level and forge practice stats' },
+    { type: 'SET_SCHOOL_CALENDAR', why: 'only this machine reads the family calendar; a forged one would add or drop the school-bag task' },
 ];
 
 describe('remote action allowlist', () => {

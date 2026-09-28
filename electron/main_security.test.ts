@@ -223,3 +223,67 @@ describe('Main Process Security Configuration', () => {
   });
 });
 
+
+// ── data:events: only a plain { strict: true } opts in to strict mode ─────────
+// The third argument crosses the IPC boundary from the renderer. Strict mode
+// turns every swallowed failure into a thrown one, so anything that is not
+// exactly a plain object with its OWN `strict: true` must leave the calendar
+// view's forgiving behaviour in place.
+describe('data:events — the strict flag at the IPC boundary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  async function dataEventsHandler() {
+    await import('./main');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const { apiService } = await import('./api');
+    const call = mocks.mockIpcMain.handle.mock.calls.find(([channel]) => channel === 'data:events');
+    if (!call) throw new Error('data:events was never registered');
+    const handler = call[1] as (event: unknown, ...args: unknown[]) => Promise<unknown>;
+    return { handler, getEvents: vi.mocked(apiService.getEvents) };
+  }
+
+  const MIN = new Date(2026, 8, 27).toISOString();
+  const MAX = new Date(2026, 9, 13).toISOString();
+
+  it('a plain { strict: true } asks the API for strict mode', async () => {
+    const { handler, getEvents } = await dataEventsHandler();
+    await handler({}, MIN, MAX, { strict: true });
+    expect(getEvents).toHaveBeenCalledWith(new Date(MIN), new Date(MAX), { strict: true });
+  });
+
+  it('no third argument keeps the calendar view\'s forgiving call', async () => {
+    const { handler, getEvents } = await dataEventsHandler();
+    await handler({}, MIN, MAX);
+    expect(getEvents).toHaveBeenCalledWith(new Date(MIN), new Date(MAX), { strict: false });
+  });
+
+  it.each<[string, unknown]>([
+    ['true', true],
+    ['the string "strict"', 'strict'],
+    ['{ strict: "true" }', { strict: 'true' }],
+    ['{ strict: 1 }', { strict: 1 }],
+    ['[true]', [true]],
+    ['null', null],
+  ])('garbage from the renderer (%s) is NOT strict', async (_label, options) => {
+    const { handler, getEvents } = await dataEventsHandler();
+    await handler({}, MIN, MAX, options);
+    expect(getEvents).toHaveBeenCalledWith(new Date(MIN), new Date(MAX), { strict: false });
+  });
+
+  // Cannot arrive over real IPC: the structured clone drops prototypes, so the
+  // renderer can only ever send a plain object. These pin the handler's own
+  // check (defence in depth), in case it is ever called from inside the main
+  // process or the transport changes.
+  const inherited: unknown = Object.create({ strict: true });
+  it.each<[string, unknown]>([
+    ['a strict flag inherited from the prototype', inherited],
+    ['a class instance', new (class { strict = true })()],
+  ])('defence in depth, handler level: %s is NOT strict', async (_label, options) => {
+    const { handler, getEvents } = await dataEventsHandler();
+    await handler({}, MIN, MAX, options);
+    expect(getEvents).toHaveBeenCalledWith(new Date(MIN), new Date(MAX), { strict: false });
+  });
+});

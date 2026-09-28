@@ -5,6 +5,7 @@
 // ============================================================
 
 import type { QuizAnswerRecord, SkillProgress } from './skills/types';
+import type { SchoolCalendar } from './store/schoolDays';
 
 export type TokenId = string;
 
@@ -218,13 +219,11 @@ export interface MCState {
     moodLastResetDate?: string;
     /** Per-skill practice history + the invisible adaptive reading level. */
     skillProgress: SkillProgress;
-    /**
-     * Consecutive mission occurrences that expired unfinished, shared by
-     * morning and evening. Reset to 0 by any completed routine. At
-     * MISSED_LOCK_THRESHOLD (6 ≈ three days) the bank and goal pedestals lock;
-     * that locked flag is derived from this number, never stored beside it.
-     */
+    /** Net missed missions, morning and evening shared: +1 per miss, −1 per completed routine, 0…6.
+     *  At MISSED_LOCK_THRESHOLD (6) the economy locks — a flag derived from this number, never stored. */
     missedMissionStreak: number;
+    /** No-school dates read from the family calendar; absent = plain Mon–Fri (store/schoolDays.ts). */
+    schoolCalendar?: SchoolCalendar;
 }
 
 export type MCAnimationType =
@@ -299,4 +298,5 @@ export type MCAction = (
      *  in SEGMENTS. Positive is always the kind direction, so the remote's
      *  "+ shield" button is `delta: 1` and needs no sign gymnastics. */
     | { type: 'ADJUST_SHIELD'; delta: number }
+    | { type: 'SET_SCHOOL_CALENDAR'; calendar: SchoolCalendar | null } // null = no calendar connected
 ) & { isRemote?: boolean; timestamp?: string; origin?: ActionOrigin };

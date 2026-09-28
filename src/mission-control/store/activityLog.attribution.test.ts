@@ -71,12 +71,38 @@ const LOGGABLE_ACTIONS: MCAction[] = [
     { type: 'END_GAME' },
 ];
 
+/**
+ * richState() runs a mission, so a start dispatched against it is refused and
+ * (since 2026-09-27) writes no line — the loops would skip the start line
+ * entirely. Starts are therefore sampled against an idle machine as well.
+ */
+function idleState(): MCState {
+    return { ...richState(), activeMission: 'none', missions: initialState.missions };
+}
+
+const IDLE_ACTIONS: MCAction[] = [
+    { type: 'SET_ACTIVE_MISSION', phase: 'morning' },
+    { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'scheduler' },
+];
+
+const SAMPLES: Array<[MCAction, () => MCState]> = [
+    ...LOGGABLE_ACTIONS.map((a): [MCAction, () => MCState] => [a, richState]),
+    ...IDLE_ACTIONS.map((a): [MCAction, () => MCState] => [a, idleState]),
+];
+
 describe('activity log attribution', () => {
+    it('reaches the mission-start line (sampled from an idle state)', () => {
+        for (const action of IDLE_ACTIONS) {
+            const entry = createLogEntry({ ...action, timestamp: TIMESTAMP }, idleState());
+            expect(entry?.message, action.type).toMatch(/^(morning|evening) mission started/);
+        }
+    });
+
     it('stamps a source on every entry it produces', () => {
         const unattributed: string[] = [];
 
-        for (const action of LOGGABLE_ACTIONS) {
-            const entry = createLogEntry({ ...action, timestamp: TIMESTAMP }, richState());
+        for (const [action, state] of SAMPLES) {
+            const entry = createLogEntry({ ...action, timestamp: TIMESTAMP }, state());
             if (!entry) continue; // deliberately unlogged actions are fine
             if (!entry.source) unattributed.push(`${action.type} — "${entry.message}"`);
         }
@@ -89,8 +115,8 @@ describe('activity log attribution', () => {
     });
 
     it('only ever uses a known source value', () => {
-        for (const action of LOGGABLE_ACTIONS) {
-            const entry = createLogEntry({ ...action, timestamp: TIMESTAMP }, richState());
+        for (const [action, state] of SAMPLES) {
+            const entry = createLogEntry({ ...action, timestamp: TIMESTAMP }, state());
             if (!entry?.source) continue;
             expect(VALID_SOURCES, `${action.type} used an unknown source "${entry.source}"`)
                 .toContain(entry.source);
@@ -100,8 +126,8 @@ describe('activity log attribution', () => {
     it('records the balances after the event, so the log reconciles', () => {
         const missingBalances: string[] = [];
 
-        for (const action of LOGGABLE_ACTIONS) {
-            const entry = createLogEntry({ ...action, timestamp: TIMESTAMP }, richState());
+        for (const [action, state] of SAMPLES) {
+            const entry = createLogEntry({ ...action, timestamp: TIMESTAMP }, state());
             if (!entry) continue;
             if (entry.bankTokens === undefined || entry.totalTokens === undefined || entry.gameTokens === undefined) {
                 missingBalances.push(`${action.type} — "${entry.message}"`);

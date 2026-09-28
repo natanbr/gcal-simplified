@@ -150,7 +150,13 @@ Default costs; the source of truth is `REWARDS` in `src/mission-control/rewardCa
 | Book     | BookOpen 📖      | 19:50                             |
 | Bed      | BedDouble 🛏️     | —                                 |
 
-**Morning tasks:** T-Shirt (👕), Teeth (🦷)
+**Morning tasks:** T-Shirt (👕), Teeth (🪥), Feed Dog (🐕), Vitamin D (💊), Wash Hands (🙏🧼)
+
+**Routine add-ons** — not in the default lists; placed by `store/routineTasks.ts`:
+
+- **Cream** (💧) — parent-enabled for N days (morning, evening or both); before Bed in the evening, last in the morning.
+- **School Bag** (🎒, added 2026-09-27) — school days only: last in the morning when *today* is a school day, immediately before Bed in the evening when *tomorrow* is one (packed the night before). School days come from the family calendar through `store/useSchoolCalendarSync.ts` → `store/schoolDays.ts`: Monday to Friday minus BC statutory holidays and all-day events whose title matches `NO_SCHOOL_KEYWORDS` (Pro-D, no school, a break…). No calendar, or a date past the 16 days read → Monday to Friday. Read all-or-nothing (`data:events` strict mode): a failed read keeps the saved days. Decided once, in `SET_ACTIVE_MISSION`'s fresh start; it never changes mid-run. The mission-start log line says why ("· no School Bag (Pro-D day)"), using a fixed label or a statutory holiday's name, never an event title.
+- A restart mid-mission keeps either add-on with its tick and position (`hydrateMissionTasks`); it never adds one the run did not have.
 
 #### H. Parent Controls
 
@@ -178,7 +184,7 @@ Default costs; the source of truth is `REWARDS` in `src/mission-control/rewardCa
 - Configurable options:
   - **Morning mission:** scheduled trigger time (default 7:30 AM) + duration (default 30 min)
   - **Evening mission:** scheduled trigger time (default 7:00 PM) + duration (default 60 min)
-  - **Routine Add-ons:** Toggle for "Put on cream" (evening task), with configurable days required logic.
+  - **Routine Add-ons:** Toggle for "Put on cream" (evening task), with configurable days required logic. The School Bag add-on has no toggle: it follows the calendar (see G above).
   - **Privilege management** (see #5)
 
 ### 3. Mission Trigger & Timer Logic (Full Spec)
