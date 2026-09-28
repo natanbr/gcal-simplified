@@ -72,6 +72,16 @@ function RemoteStop() {
     );
 }
 
+/** What the scheduler dispatches when the mission's window ends. */
+function ExpireMission() {
+    const dispatch = useMCDispatch();
+    return (
+        <button data-testid="expire-btn" onClick={() => dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler' })}>
+            Expire
+        </button>
+    );
+}
+
 function renderOverlay(extra?: React.ReactNode) {
     return render(
         <Wrapper>
@@ -426,6 +436,28 @@ describe('MissionOverlay — reset tasks button', () => {
         expect(Date.parse(morning(live!).startedAt!), 'the timer restarted').toBeGreaterThan(Date.parse(startedAt!));
         vi.useRealTimers();
     });
+
+    // The hold's timer used to outlive the mission it began on: a hold still in
+    // progress when the mission ended fired RESET_MISSION_WITH_TIMER for it, which
+    // set it active again with nothing running — hidden, never expiring, and saved.
+    for (const [ending, button] of [['the phone stops it', 'remote-stop-btn'], ['it expires', 'expire-btn']] as const) {
+        it(`a Reset hold in progress when ${ending} does nothing once the mission is over`, async () => {
+            vi.useFakeTimers();
+            let live: MCState | null = null;
+            renderOverlay(<><TriggerMission phase="morning" /><RemoteStop /><ExpireMission /><StateProbe onState={s => { live = s; }} /></>);
+            await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+            await act(async () => { fireEvent.pointerDown(screen.getByTestId('mc-reset-btn')); });
+            await act(async () => { vi.advanceTimersByTime(1000); });
+            await act(async () => { fireEvent.click(screen.getByTestId(button)); });
+            expect(live!.activeMission).toBe('none');
+            expect(morning(live!).active, 'the ending itself deactivates it').toBe(false);
+            await act(async () => { vi.advanceTimersByTime(2000); });
+
+            expect(morning(live!).active, 'no mission may be active with nothing running').toBe(false);
+            expect(live!.activityLogs.filter(l => /fully reset/.test(l.message))).toEqual([]);
+            vi.useRealTimers();
+        });
+    }
 });
 
 // ── Color token regression — overlay outside .mc-root ─────────────────────────

@@ -15,6 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { mcReducer, initialState } from '../mcReducer';
 import { createLogEntry } from '../activityLog';
+import { isStaleMissionAction } from '../staleMissionAction';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,6 +61,47 @@ describe('a Stop for a mission that is not running', () => {
         expect(mission(after, 'evening').active).toBe(false);
         expect(mission(after, 'evening').startedAt).toBeUndefined();
         expect(createLogEntry(stop('evening'), eveningRunning)).toMatchObject({ message: 'Mission stopped', colorKey: 'evening', source: 'remote' });
+    });
+});
+
+// The overlay's 2 s Reset hold used to fire for the mission it began on even
+// after that mission had ended (expired, or stopped from the phone). The reducer
+// then set it active again with nothing running: hidden, never expiring, saved.
+// The overlay now drops the hold on a phase change; this is the reducer's half.
+describe('a full Reset (tasks + timer) for a mission that is not running', () => {
+    const resetWithTimer = (missionPhase: 'morning' | 'evening'): MCAction =>
+        ({ type: 'RESET_MISSION_WITH_TIMER', missionPhase, timestamp: T });
+
+    it('with nothing running it changes nothing, and logs nothing', () => {
+        const after = mcReducer(initialState, resetWithTimer('morning'));
+
+        expect(mission(after, 'morning').active).toBe(false);
+        expect(after.missions).toBe(initialState.missions);
+        expect(createLogEntry(resetWithTimer('morning'), initialState)).toBeNull();
+    });
+
+    it('while the other mission runs it leaves both alone, and logs nothing', () => {
+        const after = mcReducer(eveningRunning, resetWithTimer('morning'));
+
+        expect(mission(after, 'morning').active).toBe(false);
+        expect(after.missions).toBe(eveningRunning.missions);
+        expect(createLogEntry(resetWithTimer('morning'), eveningRunning)).toBeNull();
+    });
+
+    it('for the running mission it still restarts the timer, and logs it', () => {
+        const later = { ...resetWithTimer('evening'), timestamp: '2026-09-28T19:20:00.000Z' };
+        const after = mcReducer(eveningRunning, later);
+
+        expect(mission(after, 'evening').active).toBe(true);
+        expect(mission(after, 'evening').startedAt).toBe('2026-09-28T19:20:00.000Z');
+        expect(createLogEntry(later, eveningRunning)).toMatchObject({ message: 'Mission fully reset (tasks + timer)' });
+    });
+
+    // The phone's own Reset is plain RESET_MISSION (mc-remote MissionsSection.tsx);
+    // it is not part of this refusal and keeps its semantics.
+    it('does not cover the plain RESET_MISSION', () => {
+        const plain: MCAction = { type: 'RESET_MISSION', missionPhase: 'morning', timestamp: T };
+        expect(isStaleMissionAction(initialState, plain)).toBe(false);
     });
 });
 
