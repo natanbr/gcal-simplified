@@ -220,7 +220,7 @@ export class RemoteBridge {
         const content = openRemoteMessage(this.pairing?.remoteKey, 'action', raw);
         if (!content) {
             console.warn(isRecord(raw) && 'key' in raw
-                ? '[RemoteBridge] ❌ Rejected unsigned action (protocol v1). A phone still in legacy mode sends one per connect; if its buttons do nothing, reload the phone app.'
+                ? '[RemoteBridge] ❌ Rejected unsigned action (protocol v1): the phone was paired from an old QR code. Scan the current one (MC settings → Remote).'
                 : '[RemoteBridge] ❌ Rejected action: missing or invalid signature.');
             return;
         }
