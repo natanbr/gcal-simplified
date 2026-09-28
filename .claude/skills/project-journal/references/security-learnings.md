@@ -68,7 +68,7 @@ Vulnerabilities actually found and fixed in `gcal-simplified`. This app holds a 
 - Inputs validated at the handler, not assumed from types.
 - Outbound URLs via `URL`/`URLSearchParams`.
 - `contextIsolation: true`, `nodeIntegration` off, window-open denied, permissions denied.
-- Remote-control payloads treated as untrusted: timestamp window (60s), replay de-dup (2-min TTL), and no blind cast to a typed interface.
+- Remote-control payloads treated as untrusted: signature verified FIRST (`openRemoteMessage` in `electron/remote-auth.ts`, before any field is read or any msgId recorded), then required msgId + timestamp, timestamp window (60s), replay de-dup (2-min TTL), and no blind cast to a typed interface. The pairing key never goes on the channel, in either direction.
 - No secret in code, logs, error strings, or anything reaching the renderer. A parse error counts: Node's `JSON.parse` message quotes the text around the bad token, so log the errno code or a fixed phrase for a file that holds a secret.
 - A secret compared against a value that may come from a fallback needs an explicit "present and non-empty" check first. While config.json could not be read the stored remote key was `undefined`, and `receivedKey === storedKey` accepted an action sent without a key (2026-09-28).
 - Check a remote message against the pairing the bridge joined with, not a per-message re-read of the file: a read that fails mid-session otherwise rejects every genuine action (or, with a fallback, accepts a key-less one) while the status still says connected (2026-09-28).
@@ -136,3 +136,22 @@ entry let a key holder complete a running mission with no task ticked and collec
 **Action:** Removed both (PR 183). An exemption in the drift guard needs a reason that names a
 remote sender or a spec line that makes the type remote-reachable; "the desktop does it itself" is
 an argument for removal, not for an exemption.
+
+## 2026-09-28 — The pairing key was broadcast on the channel it protected
+
+**Learning:** `remote-control:{roomId}` is a public Supabase broadcast channel, and v1 authenticated
+it with a shared secret that travelled on it: `broadcastState` sent `{ key, state, timestamp }`, and
+an action was trusted if its payload repeated the key. The security review saw only the
+desktop→phone leak (state-update). The phone also sent the key in plain text in every action and
+in the `SYNC_REQUEST` it sends on every reconnect, so a fix on one side alone would have been
+theater. A shared secret must never travel on the channel it authenticates; check BOTH directions.
+With the key off the wire, the room id is the only secret a listener needs, so it is now logged as
+an 8-character prefix. Sign a string body, never an object: Realtime decodes and re-encodes JSON,
+so key order is not preserved and a re-serialized object stops verifying. Timestamps and msgIds
+must be inside the signed body and required: v1 skipped the staleness check when the timestamp
+was absent, and a msgId recorded before verification lets forged traffic pre-burn a genuine one.
+**Action:** Both events are `{ v: 2, body, sig }` (HMAC-SHA256 of `event + "\n" + body`, keyed with
+`remoteKey`; `electron/remote-auth.ts`); the key is never sent, logged, or put in a URL query (the
+pairing QR carries it in the fragment). The shared test vector is pinned in both repos
+(`electron/remote-auth.test.ts` here, the same constants in mc-remote). After deploying, rotate the
+pairing (Remote tab → "🔄 Regenerate Keys") and re-scan: the old key was on the wire for months.

@@ -121,6 +121,17 @@ const REGISTRY: Rule[] = [
         defence: 'Enforced by Electron/the OS, not by a code path a unit test can call. Presence is checked structurally in electron/preload_contract.test.ts; real behaviour is proven by launching the built app twice: node scripts/verify-single-instance.mjs',
     },
     {
+        rule: 'The remote pairing key is never on the wire: both remote events travel as a signed { v: 2, body, sig } envelope, verified before anything else is read; the key is never sent, logged, or put in a URL query',
+        source: 'CLAUDE.md → Architecture → Remote pairing key never on the wire',
+        status: 'guarded',
+        guard: [
+            'electron/remote-bridge.protocol.test.ts',
+            'electron/remote-auth.test.ts',
+            'src/mission-control/utils/pairingUrl.test.ts',
+        ],
+        verifiedRedBy: 'proven 2026-09-28. remote-bridge.protocol.test.ts run against the v1 bridge: 14 of 15 red — the state-update payload contained "key":"<remoteKey>", a v1 { key, action } payload with the correct key was dispatched, signed actions were not, and the init log held the full room id. Its join-error case went red while the subscribe callback still handed the supabase-js Error (message and cause quoting the topic) to console.log. remote-auth.test.ts: drop the event name and "\\n" from the MAC input — 6 red, including both pinned shared-vector cases and the domain-separation case; delete the length check before timingSafeEqual — the wrong-length case goes red (it throws). pairingUrl.test.ts: set url.search instead of url.hash — all 3 red.',
+    },
+    {
         rule: 'mcReducer.ts is a pure reducer — no side effects, no wall-clock reads',
         source: 'CLAUDE.md → Conventions',
         status: 'guarded',

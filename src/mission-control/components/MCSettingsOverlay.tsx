@@ -18,6 +18,7 @@ import { useLongPress } from '../hooks/useLongPress';
 import { TimeInput } from './TimeInput';
 import { missingTimesHint } from './missingTimesHint';
 import { regeneratePairing } from '../utils/regeneratePairing';
+import { buildPairingUrl } from '../utils/pairingUrl';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -575,7 +576,6 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                             <span style={{ fontSize: 18 }}>📱</span>
                                             <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Remote Control Pairing</span>
                                         </div>
-                                        
                                         <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
                                             <div style={{ 
                                                 background: 'white', 
@@ -587,7 +587,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                 {draft.remoteRoomId && draft.remoteKey ? (
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                                                         <QRCodeCanvas 
-                                                            value={`https://mc-remote.vercel.app/?room=${draft.remoteRoomId}&key=${draft.remoteKey}`}
+                                                            value={buildPairingUrl(draft.remoteRoomId, draft.remoteKey)}
                                                             size={180}
                                                             level="H"
                                                             includeMargin={false}
@@ -595,7 +595,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                         <input 
                                                             type="text" 
                                                             readOnly 
-                                                            value={`https://mc-remote.vercel.app/?room=${draft.remoteRoomId}&key=${draft.remoteKey}`}
+                                                            value={buildPairingUrl(draft.remoteRoomId, draft.remoteKey)}
                                                             onClick={(e) => {
                                                                 (e.target as HTMLInputElement).select();
                                                                 navigator.clipboard.writeText((e.target as HTMLInputElement).value);
