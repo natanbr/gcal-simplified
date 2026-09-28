@@ -18,7 +18,9 @@ interface LogSummaryStripProps {
     totalTokens: number;
 }
 
-const SOURCE_ORDER: LogSource[] = ['local', 'remote', 'scheduler', 'auto'];
+// Every source gets a chip: a 'system' line (the game-token settle at load) was
+// counted by summariseDay and shown nowhere.
+const SOURCE_ORDER: LogSource[] = ['local', 'remote', 'scheduler', 'auto', 'system'];
 
 function Stat({ label, value, tone = 'neutral', title }: {
     label: string;
