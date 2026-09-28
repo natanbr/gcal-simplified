@@ -15,7 +15,7 @@
 import type { Mission, MissionPhase, MissionTask, MCSettings } from '../types';
 
 export const SCHOOL_BAG_TASK_ID = 'school-bag';
-const CREAM_TASK_ID = 'cream';
+export const CREAM_TASK_ID = 'cream';
 
 const SCHOOL_BAG_TASK: MissionTask = {
     id: SCHOOL_BAG_TASK_ID,
@@ -27,17 +27,18 @@ const SCHOOL_BAG_TASK: MissionTask = {
 };
 
 /**
- * The school bag goes last in the morning and immediately before Bed in the
- * evening (at the end if there is no Bed). Not due: removed. Returns the same
- * list when nothing changes.
+ * Order, in both phases: Cream, then the School Bag. The bag goes last in the
+ * morning and immediately before Bed in the evening (at the end if there is no
+ * Bed); `syncCreamTask` puts Cream before it. Re-placed at every fresh start,
+ * so a bag carried from an earlier run cannot keep an old spot. Not due: removed.
  */
 export function withSchoolBag(tasks: MissionTask[], phase: MissionPhase, due: boolean): MissionTask[] {
-    const present = tasks.some(t => t.id === SCHOOL_BAG_TASK_ID);
-    if (!due) return present ? tasks.filter(t => t.id !== SCHOOL_BAG_TASK_ID) : tasks;
-    if (present) return tasks;
-    const bedIndex = phase === 'evening' ? tasks.findIndex(t => t.id === 'bed') : -1;
-    const at = bedIndex === -1 ? tasks.length : bedIndex;
-    return [...tasks.slice(0, at), { ...SCHOOL_BAG_TASK }, ...tasks.slice(at)];
+    const carried = tasks.find(t => t.id === SCHOOL_BAG_TASK_ID);
+    if (!due) return carried ? tasks.filter(t => t.id !== SCHOOL_BAG_TASK_ID) : tasks;
+    const others = carried ? tasks.filter(t => t.id !== SCHOOL_BAG_TASK_ID) : tasks;
+    const bedIndex = phase === 'evening' ? others.findIndex(t => t.id === 'bed') : -1;
+    const at = bedIndex === -1 ? others.length : bedIndex;
+    return [...others.slice(0, at), carried ?? { ...SCHOOL_BAG_TASK }, ...others.slice(at)];
 }
 
 // Safely adds/removes/updates the Cream routine in the active missions arrays.
@@ -58,8 +59,9 @@ export function syncCreamTask(missions: Mission[], settings: MCSettings, daysLef
         const expectedLabel = `Cream (${Math.ceil(daysLeft)}d left)`;
 
         if (shouldHaveCreamInPhase && !hasCream) {
-            // Inject before bed for evening, or at the end for morning
-            const bedIndex = m.tasks.findIndex(t => t.id === 'bed');
+            // Before the School Bag, else before Bed, else last (Cream, bag, Bed)
+            const bagIndex = m.tasks.findIndex(t => t.id === SCHOOL_BAG_TASK_ID);
+            const bedIndex = bagIndex !== -1 ? bagIndex : m.tasks.findIndex(t => t.id === 'bed');
             const newTasks = [...m.tasks];
             const creamTask: MissionTask = {
                 id: CREAM_TASK_ID,

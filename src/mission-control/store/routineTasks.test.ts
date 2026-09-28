@@ -8,9 +8,9 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { SCHOOL_BAG_TASK_ID, hydrateMissionTasks, withSchoolBag } from './routineTasks';
+import { SCHOOL_BAG_TASK_ID, hydrateMissionTasks, syncCreamTask, withSchoolBag } from './routineTasks';
 import { initialState } from './mcReducer';
-import type { MissionTask } from '../types';
+import type { Mission, MissionTask } from '../types';
 
 const defaults = (phase: 'morning' | 'evening') => initialState.missions.find(m => m.phase === phase)!.tasks;
 const ids = (tasks: MissionTask[]) => tasks.map(t => t.id);
@@ -37,9 +37,20 @@ describe('withSchoolBag — where the task goes', () => {
         expect(ids(withSchoolBag(noBed, 'evening', true)).at(-1)).toBe('school-bag');
     });
 
-    it('is never added twice, and an existing one keeps its place', () => {
+    it('is never added twice', () => {
         const once = withSchoolBag(defaults('morning'), 'morning', true);
-        expect(withSchoolBag(once, 'morning', true)).toBe(once);
+        expect(ids(withSchoolBag(once, 'morning', true))).toEqual(ids(once));
+    });
+
+    // One rule for both phases: Cream first, then the School Bag; the bag is
+    // last in the morning and immediately before Bed in the evening.
+    it('moves a bag carried from an earlier run back to its place (Cream was enabled since)', () => {
+        const [a, b, c, d, e] = defaults('morning');
+        expect(ids(withSchoolBag([a, b, c, d, e, bag(), cream()], 'morning', true)))
+            .toEqual(['tshirt', 'toothbrush', 'feed-dog', 'vitamin', 'wash-hands', 'cream', 'school-bag']);
+        const [shower, pjs, cleanup, teeth2, bed] = defaults('evening');
+        expect(ids(withSchoolBag([shower, pjs, cleanup, teeth2, bag(), cream(), bed], 'evening', true)))
+            .toEqual(['shower', 'pjs', 'cleanup', 'teeth2', 'cream', 'school-bag', 'bed']);
     });
 
     it('not due: removes a school bag left over from the last run', () => {
@@ -110,5 +121,23 @@ describe('hydrateMissionTasks — a tampered saved id', () => {
             { ...bag(), id: 'toString' },
         ];
         expect(ids(hydrateMissionTasks(defaults('morning'), saved))).toEqual(ids(defaults('morning')));
+    });
+});
+
+describe('syncCreamTask — Cream goes before the School Bag', () => {
+    const settings = (schedule: 'morning' | 'evening') =>
+        ({ ...initialState.settings, creamTaskEnabled: true, creamTaskDaysTarget: 3, creamTaskSchedule: schedule });
+    const mission = (phase: 'morning' | 'evening', tasks: MissionTask[]): Mission =>
+        ({ ...initialState.missions.find(m => m.phase === phase)!, tasks });
+
+    it('morning: Cream lands before a bag that is already last', () => {
+        const [synced] = syncCreamTask([mission('morning', [...defaults('morning'), bag()])], settings('morning'), 3);
+        expect(ids(synced.tasks).slice(-2)).toEqual(['cream', 'school-bag']);
+    });
+
+    it('evening: Cream lands before the bag, which stays immediately before Bed', () => {
+        const withBag = withSchoolBag(defaults('evening'), 'evening', true);
+        const [synced] = syncCreamTask([mission('evening', withBag)], settings('evening'), 3);
+        expect(ids(synced.tasks).slice(-3)).toEqual(['cream', 'school-bag', 'bed']);
     });
 });

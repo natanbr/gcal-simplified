@@ -160,6 +160,13 @@ describe('shield lock — engaging and releasing', () => {
         expect(after.activityLogs[0].source).toBe('auto');
     });
 
+    it('names no cause for the lost shields: a parent may have taken some of them away (ADJUST_SHIELD)', () => {
+        const parentTookThree = mcReducer(aboutToBreak(2), stamp({ type: 'ADJUST_SHIELD', delta: -3 }));
+        const after = mcReducer(parentTookThree, stamp({ type: 'MARK_MISSION_TIMEOUT', missionPhase: 'morning' }));
+        expect(isEconomyLocked(after)).toBe(true);
+        expect(after.activityLogs[0].message).toBe('Shield broken — all 6 shields gone. Bank and goals locked.');
+    });
+
     it('does not re-log the lock on a seventh miss', () => {
         const brokenAlready = {
             ...aboutToBreak(MISSED_LOCK_THRESHOLD),

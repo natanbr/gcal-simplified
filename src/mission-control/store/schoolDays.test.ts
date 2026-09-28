@@ -16,6 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     NO_SCHOOL_KEYWORDS,
+    NOT_A_CLOSURE,
     classifySchoolCalendar,
     isSchoolDay,
     sameSchoolCalendar,
@@ -52,7 +53,9 @@ function stat(date: string, name: string) {
 
 const classify = (events: unknown[]) => classifySchoolCalendar(events, FROM, TO).noSchool;
 const noSchool = (events: unknown[]) => classify(events).map(d => d.date);
-const due = (phase: 'morning' | 'evening' | 'none', instant: string, cal?: SchoolCalendar) => schoolBagDecision(phase, instant, cal).due;
+/** The default morning start (06:00): an evening started before it, after midnight, is still "tonight". */
+const MORNING = '06:00';
+const due = (phase: 'morning' | 'evening' | 'none', instant: string, cal?: SchoolCalendar) => schoolBagDecision(phase, instant, cal, MORNING).due;
 
 describe('classifySchoolCalendar — which days an event covers', () => {
     it('a 3-day all-day break (Mon–Wed, Google end = Thu 00:00) covers Mon, Tue and Wed, not Thu', () => {
@@ -129,6 +132,43 @@ describe('classifySchoolCalendar — which events mean no school, and the reason
         expect(classify([allDay(title, 2026, 9, 29)])).toEqual([{ date: '2026-09-29', reason }]);
     });
 
+    // PR 179 review: real family-calendar titles, both directions.
+    it.each([
+        ['Pro–D Day', 'Pro-D day'], // en dash U+2013
+        ['Pro‑D Day', 'Pro-D day'], // non-breaking hyphen U+2011
+        ['Pro—D Day', 'Pro-D day'], // em dash U+2014
+        ['Pro D', 'Pro-D day'],
+        ['School Closure', 'school closed'],
+        ['Schools Closed', 'school closed'],
+        ['Winter  Break', 'school break'], // two spaces
+        ['Winter Vacation', 'school break'],
+        ['Summer Holidays', 'school break'],
+    ])('also a no-school day: "%s" → "%s"', (title, reason) => {
+        expect(classify([allDay(title, 2026, 9, 29)])).toEqual([{ date: '2026-09-29', reason }]);
+    });
+
+    it.each([
+        // "prod" is not Pro-D: a separator or a following "day" is required.
+        'Prod release',
+        'Deploy to prod',
+        'School prod',
+        // Announcements ABOUT a break or a closure, on a day that has school.
+        'Schools reopen after Spring Break',
+        'Classes resume after Spring Break',
+        'Last day of classes before Winter Break',
+        'Last Day of Classes before Winter Vacation',
+        'Winter Break starts after school',
+        'Spring Break camp registration due',
+        'Summer holidays begin at noon',
+        'Christmas Holiday Concert',
+        'Christmas holidays craft fair',
+        'No school bus today',
+        'Early dismissal - no school in the afternoon',
+        'Report cards go home (no school Friday)',
+    ])('an all-day "%s" is NOT a no-school day', (title) => {
+        expect(noSchool([allDay(title, 2026, 9, 29)])).toEqual([]);
+    });
+
     it('the reason is the canonical label, never the event\'s own title (the log reaches the phone)', () => {
         const [day] = classify([allDay("Pro-D Day — Mrs Smith's class, bring lunch", 2026, 9, 29)]);
         expect(day.reason).toBe('Pro-D day');
@@ -181,7 +221,7 @@ describe('classifySchoolCalendar — which events mean no school, and the reason
 describe('NO_SCHOOL_KEYWORDS (structural)', () => {
     it('every pattern is case-insensitive and stateless (no g/y flag, which makes .test() skip matches)', () => {
         expect(NO_SCHOOL_KEYWORDS.length).toBeGreaterThan(0);
-        for (const { pattern } of NO_SCHOOL_KEYWORDS) {
+        for (const pattern of [...NO_SCHOOL_KEYWORDS.map(k => k.pattern), NOT_A_CLOSURE]) {
             expect(pattern.flags, String(pattern)).toContain('i');
             expect(pattern.flags, String(pattern)).not.toMatch(/[gy]/);
         }
@@ -239,10 +279,29 @@ describe('schoolBagDecision — whether the bag is on the list', () => {
         expect(due('evening', iso(2026, 9, 29, 19), cal)).toBe(true);
     });
 
-    it('evening across local midnight: the date is the action instant\'s, plus one calendar day', () => {
+    it('an evening started before midnight packs for the next calendar day', () => {
         expect(due('evening', iso(2026, 9, 27, 23, 59))).toBe(true); // Sun 23:59 → Monday
-        expect(due('evening', iso(2026, 10, 3, 0, 30))).toBe(false); // Sat 00:30 → Sunday
-        expect(due('evening', iso(2026, 10, 2, 0, 30))).toBe(false); // Fri 00:30 → Saturday
+        expect(due('evening', iso(2026, 10, 2, 23, 59))).toBe(false); // Fri 23:59 → Saturday
+    });
+
+    it('an evening started after midnight but before the morning start packs for THAT day — the night before it', () => {
+        // Owner's rule: the bag is packed the night before. Fri 00:20 is still
+        // Thursday night, so it packs for Friday, not for Saturday.
+        expect(due('evening', iso(2026, 10, 2, 0, 20))).toBe(true); // Fri 00:20 → Friday
+        expect(due('evening', iso(2026, 10, 3, 0, 20))).toBe(false); // Sat 00:20 → Saturday
+        expect(due('evening', iso(2026, 9, 28, 0, 20))).toBe(true); // Mon 00:20 → Monday
+    });
+
+    it('the boundary is the morning mission\'s start time: just before it is still "tonight", at it is tomorrow', () => {
+        expect(due('evening', iso(2026, 10, 2, 5, 59))).toBe(true); // Fri 05:59 → Friday
+        expect(due('evening', iso(2026, 10, 2, 6, 0))).toBe(false); // Fri 06:00 → Saturday
+        // It is the configured time, not a fixed 06:00.
+        expect(schoolBagDecision('evening', iso(2026, 10, 2, 6, 30), undefined, '07:00').due).toBe(true);
+        expect(schoolBagDecision('evening', iso(2026, 10, 2, 5, 30), undefined, '05:00').due).toBe(false);
+    });
+
+    it.each(['', '25:99', 'soon', '6'])('a morning start it cannot read (%j) keeps the plain rule: the next calendar day', (morningStartsAt) => {
+        expect(schoolBagDecision('evening', iso(2026, 10, 2, 0, 20), undefined, morningStartsAt).due).toBe(false); // Fri → Saturday
     });
 
     // 2026-03-08 is the spring-forward Sunday in North America, so Saturday
@@ -262,7 +321,7 @@ describe('schoolBagDecision — whether the bag is on the list', () => {
 
 describe('schoolBagDecision + schoolBagLogNote — the reason the log shows', () => {
     const note = (phase: 'morning' | 'evening', instant: string, cal?: SchoolCalendar) =>
-        schoolBagLogNote(schoolBagDecision(phase, instant, cal));
+        schoolBagLogNote(schoolBagDecision(phase, instant, cal, MORNING));
     const read = classifySchoolCalendar(
         [allDay('Pro-D Day', 2026, 9, 29), stat('2026-10-12', 'Thanksgiving')],
         FROM,
@@ -281,6 +340,7 @@ describe('schoolBagDecision + schoolBagLogNote — the reason the log shows', ()
     it('the weekend names the day it is about', () => {
         expect(note('evening', iso(2026, 10, 2, 19), read)).toBe(' · no School Bag (tomorrow is Saturday)');
         expect(note('morning', iso(2026, 9, 27, 6), read)).toBe(' · no School Bag (today is Sunday)');
+        expect(note('evening', iso(2026, 10, 3, 0, 20), read)).toBe(' · no School Bag (today is Saturday)'); // after midnight
     });
 
     it('a no-school date gives its reason', () => {

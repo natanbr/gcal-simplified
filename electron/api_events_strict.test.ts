@@ -132,10 +132,24 @@ describe('getEvents — strict (school-bag reader): a failure is a failure', () 
         expect(titles(await api.getEvents(FROM, TO, strict))).toEqual(['Pro-D Day', 'Thanksgiving']);
     });
 
-    it('throws when a calendar answer is paginated (a later page could hold the Pro-D day)', async () => {
+    it('follows the pages: Google may answer an EMPTY page with a token, and the Pro-D day is on page 2', async () => {
+        // "Incomplete pages can be detected by a non-empty nextPageToken" — a
+        // page can hold fewer than maxResults, even zero, and still not be the end.
+        mocks.eventsList.mockImplementation(async ({ calendarId, pageToken }: { calendarId: string; pageToken?: string }) => {
+            if (calendarId !== 'school') return { data: { items: [] } };
+            return pageToken === 'page-2' ? { data: { items: [PRO_D] } } : { data: { items: [], nextPageToken: 'page-2' } };
+        });
+        expect(titles(await new ApiService().getEvents(FROM, TO, strict))).toEqual(['Pro-D Day', 'Thanksgiving']);
+        expect(mocks.eventsList.mock.calls.filter(([p]) => p.calendarId === 'school').map(([p]) => p.pageToken))
+            .toEqual([undefined, 'page-2']);
+    });
+
+    it('throws when a calendar keeps paginating past the page cap, instead of looping', async () => {
+        let n = 0;
         mocks.eventsList.mockImplementation(async ({ calendarId }: { calendarId: string }) =>
-            ({ data: { items: calendarId === 'school' ? [PRO_D] : [], nextPageToken: calendarId === 'school' ? 'page-2' : undefined } }));
-        await expect(new ApiService().getEvents(FROM, TO, strict)).rejects.toThrow(/paginated/);
+            (calendarId === 'school' ? { data: { items: [], nextPageToken: `page-${++n}` } } : { data: { items: [] } }));
+        await expect(new ApiService().getEvents(FROM, TO, strict)).rejects.toThrow(/page/);
+        expect(n).toBe(10);
     });
 
     it('still answers when only the calendar COLOURS fail (cosmetic, not school days)', async () => {

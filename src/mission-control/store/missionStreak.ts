@@ -127,7 +127,8 @@ export type StreakCause = 'missed' | 'completed' | 'adjusted';
  * pure-reducer contract. Same reasoning as `auto-mood-token-*` in behaviorSync.
  *
  * `cause` keeps the sentence honest: a parent taking the last shield is NOT
- * "lost to missed missions", and it is not `source: auto`.
+ * a miss, and it is not `source: auto`. A miss that takes the last one names
+ * no cause either ("all 6 shields gone"): the parent may have taken some.
  */
 function shieldLog(
     broken: boolean,
@@ -143,7 +144,7 @@ function shieldLog(
         message: broken
             ? (byParent
                 ? 'Last shield taken away — bank and goals locked.'
-                : `Shield broken — all ${SHIELD_SEGMENTS} shields lost to missed missions. Bank and goals locked.`)
+                : `Shield broken — all ${SHIELD_SEGMENTS} shields gone. Bank and goals locked.`)
             : (byParent
                 ? 'Shield given back — bank and goals unlocked.'
                 : 'Shield restored — bank and goals unlocked.'),

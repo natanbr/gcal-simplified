@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google, type calendar_v3 } from 'googleapis';
 import crypto from 'node:crypto';
 import { authService } from './auth';
 import { store, UserConfig } from './store';
@@ -119,17 +119,9 @@ export class ApiService {
 
         const allEventsPromises = calendarIds.map(async (calId) => {
             try {
-                const res = await calendar.events.list({
-                    calendarId: calId,
-                    timeMin: timeMin.toISOString(),
-                    timeMax: timeMax.toISOString(),
-                    singleEvents: true,
-                    orderBy: 'startTime',
-                });
-                // Only the first page is read; for a strict reader a later page could hold the Pro-D day.
-                if (strict && res.data.nextPageToken) throw new Error('Calendar answer was paginated');
+                const items = await this.listCalendarEvents(calendar, calId, timeMin, timeMax, strict);
 
-                return (res.data.items || []).map(event => {
+                return items.map(event => {
                     const allDay = !!event.start?.date;
                     const startRaw = event.start?.dateTime || event.start?.date;
                     const endRaw = event.end?.dateTime || event.end?.date;
@@ -182,6 +174,35 @@ export class ApiService {
 
         // Sort by start time
         return combinedEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
+    }
+
+    /** Google may answer fewer items than a page holds, even none, with a nextPageToken. */
+    private static readonly MAX_STRICT_PAGES = 10;
+
+    /**
+     * One calendar's events. The forgiving read takes the first page, as it
+     * always has; a strict read follows nextPageToken to the end, because a
+     * later page — even after an empty one — could hold the Pro-D day.
+     */
+    private async listCalendarEvents(
+        calendar: calendar_v3.Calendar, calendarId: string, timeMin: Date, timeMax: Date, strict: boolean,
+    ): Promise<calendar_v3.Schema$Event[]> {
+        const items: calendar_v3.Schema$Event[] = [];
+        let pageToken: string | undefined;
+        for (let page = 0; page < ApiService.MAX_STRICT_PAGES; page++) {
+            const res = await calendar.events.list({
+                calendarId,
+                timeMin: timeMin.toISOString(),
+                timeMax: timeMax.toISOString(),
+                singleEvents: true,
+                orderBy: 'startTime',
+                ...(pageToken ? { pageToken } : {}),
+            });
+            items.push(...(res.data.items || []));
+            pageToken = res.data.nextPageToken || undefined;
+            if (!strict || !pageToken) return items;
+        }
+        throw new Error(`Calendar ${calendarId} answered more than ${ApiService.MAX_STRICT_PAGES} pages`);
     }
 
     /** A failure is never cached, so the next call asks again. */

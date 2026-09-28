@@ -217,6 +217,22 @@ describe('useSchoolCalendarSync — when it refreshes (lifecycle)', () => {
         expect(eventFetches(invoke)).toBe(2);
     });
 
+    it('stores a read that lands after a mission started (it serves the NEXT mission), without starting a new one', async () => {
+        // Launch or wake at 05:59:58, the morning starts at 06:00, the answer
+        // lands at 06:00:01. Dropping it left the evening deciding on old data.
+        let pending: Deferred | undefined;
+        const { invoke, emit } = installIpc(ch => (ch === 'auth:check' ? true : new Promise((resolve, reject) => { pending = { resolve, reject }; })));
+        const { calendars, setState } = mount();
+        await settle();
+        setState({ ...initialState, activeMission: 'morning' });
+        emit('system:resume'); // a wake during the mission starts nothing either
+        await settle();
+        pending!.resolve([PRO_D_TUESDAY]);
+        await settle();
+        expect(calendars().map(a => a.calendar)).toEqual([EXPECTED]);
+        expect(eventFetches(invoke)).toBe(1);
+    });
+
     it('ignores a late result that arrives after unmount', async () => {
         let pending: Deferred | undefined;
         installIpc(ch => (ch === 'auth:check' ? true : new Promise((resolve, reject) => { pending = { resolve, reject }; })));

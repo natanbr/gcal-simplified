@@ -165,16 +165,22 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 - **School Bag task — school days only (added 2026-09-27)**:
   - Owner's rule: organizing the bag for school is a task in both routines, only on school days — not on holidays or Pro-D days. Read from the calendar when one is connected; otherwise Monday to Friday.
-  - **Morning**: the last task, when *today* is a school day. **Evening**: immediately before Bed, when *tomorrow* is a school day — the bag is packed the night before (Sunday evening yes, Friday evening no, the evening before a Pro-D day no).
-  - **School day** = Monday to Friday and not a no-school date. A date has no school when the calendar has a BC statutory holiday on it (the holiday feed the calendar view already shows), or an **all-day** event whose title matches `NO_SCHOOL_KEYWORDS` in `store/schoolDays.ts` (Pro-D, professional development, no school, school(s) closed, non-instructional, spring/winter/summer/Christmas/mid-winter break, vacation or holiday(s); case-insensitive, editable). Timed events never count; a birthday or an observance such as Halloween does not count either (the calendar's own "holiday" flag is ignored — it is set on birthdays too).
+  - **Morning**: the last task, when *today* is a school day. **Evening**: immediately before Bed, when *tomorrow* is a school day — the bag is packed the night before (Sunday evening yes, Friday evening no, the evening before a Pro-D day no). An evening mission started after midnight but before the morning mission's start time (by ▶ Start or the phone, e.g. Fri 00:20) is still that night, so it packs for the same day (Friday); a start time that cannot be read keeps the plain next-day rule.
+  - **Order with Cream (one rule, both phases)**: Cream first, then the School Bag — morning: …, Cream, School Bag; evening: …, Cream, School Bag, Bed. A bag carried over from an earlier run is put back in that place at every mission start, and Cream enabled mid-run goes in before the bag.
+  - **School day** = Monday to Friday and not a no-school date. A date has no school when the calendar has a BC statutory holiday on it (the holiday feed the calendar view already shows), or an **all-day** event whose title matches `NO_SCHOOL_KEYWORDS` in `store/schoolDays.ts` (Pro-D with a dash of any kind or a space, or "ProD Day" — "prod" on its own is not; professional development; no school; school closed or closure; non-instructional; spring/winter/summer/Christmas/mid-winter break, vacation or holiday(s); case-insensitive, editable). A title that announces something about a break or a closure never counts — one containing before, after, reopen(s), resume(s), start(s), begin(s), camp, concert, registration, bus, fair, dismissal or report card(s) (`NOT_A_CLOSURE`), e.g. "Classes resume after Spring Break" or "No school bus today". Timed events never count; a birthday or an observance such as Halloween does not count either (the calendar's own "holiday" flag is ignored — it is set on birthdays too).
   - **Which calendars**: only the calendars ticked in Settings — the same selection the Calendar view shows. Unticking the school's calendar there also stops Pro-D detection. Known risk: an all-day event from anyone, in a calendar that is read (an invite, a shared calendar), titled with one of the keywords removes the bag that day.
   - **Fallback**: no calendar connected, or a date outside the 16 days last read → plain Monday to Friday.
   - **Decided once, when the mission starts** — by the scheduler, ▶ Start or the phone alike — and never changed mid-run. A restart mid-mission keeps the task and its tick.
-  - **Refreshed** on launch, when a mission ends, when the computer wakes, and when a calendar is connected; no timer, and not while a mission runs. The last answer is saved, so a morning with no network still knows a Pro-D day.
+  - **Refreshed** on launch, when a mission ends, when the computer wakes, and when a calendar is connected; no timer, and no new read starts while a mission runs (a read already under way when a mission starts is still saved; it serves the next mission). The last answer is saved, so a morning with no network still knows a Pro-D day.
   - **All or nothing (changed 2026-09-27, review)**: the school days are read in the calendar feed's *strict* mode. Offline, a sign-in that has expired, any one ticked calendar failing, or the holiday feed failing makes the whole read fail, and the saved days are kept unchanged until a later read succeeds. A read that succeeds replaces them — even when it finds no closures at all. (The first version kept an empty answer as "no news", but offline the feed answered holidays only, which is not empty, and overwrote the saved Pro-D days.) The Calendar view keeps its forgiving read: it still shows whatever did load.
   - **The log says why**: the mission-start line ends with the decision — "morning mission started · 🎒 School Bag", "… · 🎒 School Bag (weekday; calendar not read)", "… · no School Bag (tomorrow is Saturday)", "… · no School Bag (Pro-D day)", "… · no School Bag (Thanksgiving)". The reason is a fixed label per keyword (Pro-D day, no school, school closed, non-instructional day, school break) or a statutory holiday's public name — never the title of someone's event, because the log is also sent to the phone. A statutory holiday's name is stripped of control and invisible formatting characters and cut to 40 characters. A start refused because another mission is running writes no line.
   - **Room on screen**: the mission's task cards shrink from 180 to 120 px wide when needed, so 7 task cards (the routine plus Cream and the bag) and the "Whining?" card stay visible at 1366 and 1280 px wide; at 1920 they are unchanged. (Found because the bag pushed "Whining?" off-screen at 1366.)
-  - **Known limits**: a calendar newly ticked in Settings is read only at the next refresh (a mission ending, a restart, a wake, a sign-in). A ticked calendar that fails for good (for example, deleted) makes every strict read fail, so Pro-D detection stops; once the saved 16 days run out the log shows "(weekday; calendar not read)" and the bag follows Monday to Friday. A calendar with more events in the 16 days than one page of Google's answer (250 by default) also fails the strict read.
+  - **Known limits**:
+    - A calendar newly ticked in Settings is read only at the next refresh (a mission ending, a restart, a wake, a sign-in).
+    - A Pro-D day added to the calendar between the morning and the evening mission, while the computer stays awake, is not seen by the evening mission: the last read was when the morning mission ended. Reading just before the evening window would need a new idle timer, and all 4 idle-timer slots are taken.
+    - **A ticked calendar that fails for good — deleted, or no longer shared with this account (Google answers 403 or 404) — makes every strict read fail, with no sign on screen or in the log.** Pro-D detection stops; once the saved 16 days run out the log shows "(weekday; calendar not read)" and the bag follows Monday to Friday. Unticking that calendar in Settings restores reading. A parent-visible signal is a follow-up.
+    - A strict read follows every page of a calendar's answer (Google may send fewer events than a page holds, even none, with a "more" token); a calendar still sending pages after 10 fails the read.
+    - A **timed** event titled "Pro-D day" is ignored — only all-day events count — and the phone's Calendar app creates timed events by default.
 
 - **Mood gauge and game tokens**:
   - The mood gauge is the only generator of game tokens. It fills at the mood's rate (`MOOD_TOKENS_PER_DAY`) during the active window and drains at a negative mood. A full gauge (100 %) grants a game token, and a grant resets the mood to 0.
@@ -1221,7 +1227,7 @@ reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION
 - **Consequence.** The counter is now a net count, not a run of misses in a row. A child who misses
   two missions out of every three now drifts toward the lock (before, every completion wiped the
   drift). The lock line therefore no longer says "6 missions missed in a row"; it reads
-  "Shield broken — all 6 shields lost to missed missions. Bank and goals locked."
+  "Shield broken — all 6 shields gone. Bank and goals locked." (it names no cause: a parent may have taken some of the shields)
 - Tests: `missionStreak.test.ts` (3 → 2, 1 → 0, 0 stays 0, 6 → 5 unlocks, a whining completion),
   `mcReducer.streak-lock.test.ts` (release logged at 6 → 5; a double dispatch moves it once; the lock
   line does not claim "in a row"), `mcReducer.streak-lifecycle.test.ts` (replayed occurrences). All
@@ -1266,8 +1272,8 @@ reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION
   end shape in `electron/api.ts` fails it.
 - **Final polish (same day).** The mission task row now shrinks its cards from 180 to 120 px to
   fit (7 task cards + "Whining?" visible at 1366 and 1280 px wide, unchanged at 1920) — the
-  bag had pushed "Whining?" off-screen at 1366. A strict read also fails when a calendar's answer
-  is paginated, since a later page could hold the Pro-D day. Holiday names in the log are stripped
+  bag had pushed "Whining?" off-screen at 1366. A strict read no longer stops at a calendar's first
+  page (a later page could hold the Pro-D day; see 2026-09-28). Holiday names in the log are stripped
   of control and invisible formatting characters. Known limits: a calendar ticked in Settings is
   read at the next refresh (mission end, restart, wake, sign-in); a ticked calendar that fails for
   good stops Pro-D detection, and once the saved 16 days run out the log shows "(weekday; calendar
@@ -1314,3 +1320,27 @@ Tests: `store/__tests__/mcReducer.stale-mission-action.test.ts`,
 `components/MissionOverlay.settle-launch.test.tsx`, `components/ActivityLogView.settle.test.tsx`,
 new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
 `mcReducer.mood-cap-lifecycle.test.ts` and `action-literal-boundary.test.ts`.
+
+### 2026-09-28 School bag: PR 179 review fixes
+
+- **Pages.** Google may answer a calendar with fewer events than a page holds — even none — plus
+  a "more" token. The strict read threw on any such token, so one calendar doing that would stop
+  every school-day read for good. It now follows the pages to the end (at most 10, then fails);
+  the Calendar view still reads the first page only, as before.
+- **Keywords.** "Prod release", "Deploy to prod" and "School prod" no longer read as Pro-D (a dash,
+  a space or a following "day" is required), and announcements ("Classes resume after Spring
+  Break", "No school bus today", "Christmas Holiday Concert", …) no longer count (`NOT_A_CLOSURE`).
+  Newly matched: "Pro–D Day" with an en dash or a non-breaking hyphen, "School Closure", and double
+  spaces ("Winter  Break").
+- **After midnight.** An evening mission started after midnight but before the morning start
+  (Fri 00:20) packs for that day, not the day after: it is still the night before. The reducer and
+  the log line share the one decision, which now also reads the morning start time.
+- **Order.** Cream first, then the School Bag, in both phases; a bag carried from an earlier run is
+  put back in its place at every mission start, and Cream enabled mid-run goes in before the bag.
+- **A read in flight when a mission starts is kept** (it serves the next mission); no new read
+  starts during a mission, an older read still never overwrites a newer one, and nothing is stored
+  after unmount.
+- **Lock line.** "Shield broken — all 6 shields gone. Bank and goals locked." It named missed
+  missions as the cause even when the parent had taken some of the shields away.
+- The structural guard that the bag is placed only at a fresh start now also reads
+  `routineTasks.ts` (a call hidden in `syncCreamTask` stayed green before; proven red since).
