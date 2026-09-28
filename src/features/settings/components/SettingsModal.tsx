@@ -264,7 +264,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
                     </button>
                     <button
                         onClick={handleSave}
-                        className="px-8 py-3 rounded-xl font-bold bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                        className="px-8 py-3 rounded-xl font-bold bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2 whitespace-nowrap"
                         data-testid="save-settings-button"
                     >
                         <Save size={18} />
