@@ -82,6 +82,22 @@ function ExpireMission() {
     );
 }
 
+/**
+ * Clicks every task card the overlay rendered, once each (a click toggles).
+ * Reads the list from the screen, never a fixed id list: the School Bag task
+ * is there only on school days, so a hard-coded list passed on Saturday and
+ * failed on Monday. Re-queried before each click, since cards re-render.
+ */
+async function completeEveryRenderedTask() {
+    const ids = screen.getAllByTestId(/^mc-task-card-/).map(el => el.getAttribute('data-testid'));
+    for (const id of ids) {
+        const btn = id ? screen.queryByTestId(id) : null;
+        if (btn && !(btn as HTMLButtonElement).disabled) {
+            await act(async () => { fireEvent.click(btn); });
+        }
+    }
+}
+
 function renderOverlay(extra?: React.ReactNode) {
     return render(
         <Wrapper>
@@ -286,16 +302,7 @@ describe('MissionOverlay', () => {
         await act(async () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
-        // Complete every morning task by clicking each active (non-disabled) task button.
-        // Morning mission currently has 4 tasks: tshirt, toothbrush, feed-dog, vitamin.
-        // Re-query before each click to get fresh references after re-renders.
-        const taskIds = ['tshirt', 'toothbrush', 'feed-dog', 'vitamin', 'wash-hands'];
-        for (const id of taskIds) {
-            const btn = screen.queryByTestId(`mc-task-card-${id}`);
-            if (btn && !(btn as HTMLButtonElement).disabled) {
-                await act(async () => { fireEvent.click(btn); });
-            }
-        }
+        await completeEveryRenderedTask();
         expect(screen.getByTestId('mc-all-done')).toBeInTheDocument();
     });
 
@@ -304,13 +311,7 @@ describe('MissionOverlay', () => {
         await act(async () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
-        const taskIds = ['tshirt', 'toothbrush', 'feed-dog', 'vitamin', 'wash-hands'];
-        for (const id of taskIds) {
-            const btn = screen.queryByTestId(`mc-task-card-${id}`);
-            if (btn && !(btn as HTMLButtonElement).disabled) {
-                await act(async () => { fireEvent.click(btn); });
-            }
-        }
+        await completeEveryRenderedTask();
         await act(async () => {
             fireEvent.click(screen.getByTestId('mc-bonus-coin-btn'));
         });
@@ -319,6 +320,44 @@ describe('MissionOverlay', () => {
 });
 
 // ── Whining toggle ────────────────────────────────────────────────────────────
+
+describe('MissionOverlay — the School Bag card', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        vi.useFakeTimers({ toFake: ['Date'] });
+    });
+    afterEach(() => {
+        cleanup();
+        vi.useRealTimers();
+        localStorage.clear();
+    });
+
+    async function startMorningAt(when: Date) {
+        vi.setSystemTime(when);
+        renderOverlay(<TriggerMission phase="morning" />);
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+    }
+
+    it('shows on a school-day morning, with its 🎒 icon and label', async () => {
+        await startMorningAt(new Date(2026, 8, 28, 6, 5)); // Monday
+        const card = screen.getByTestId('mc-task-card-school-bag');
+        expect(card).toHaveTextContent('🎒');
+        expect(card).toHaveTextContent('School Bag');
+    });
+
+    it('is not on a Saturday morning', async () => {
+        await startMorningAt(new Date(2026, 9, 3, 6, 5)); // Saturday
+        expect(screen.queryByTestId('mc-task-card-school-bag')).not.toBeInTheDocument();
+    });
+
+    it('must be done too: the mission is not complete until the bag is packed', async () => {
+        await startMorningAt(new Date(2026, 8, 28, 6, 5)); // Monday
+        await completeEveryRenderedTask();
+        expect(screen.getByTestId('mc-all-done')).toBeInTheDocument();
+        await act(async () => { fireEvent.click(screen.getByTestId('mc-task-card-school-bag')); }); // untick it
+        expect(screen.queryByTestId('mc-all-done')).not.toBeInTheDocument();
+    });
+});
 
 describe('MissionOverlay — whining toggle', () => {
     beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });

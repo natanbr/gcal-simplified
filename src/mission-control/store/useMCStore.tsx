@@ -17,6 +17,8 @@ import { sanitizeMissedStreak } from './missionStreak';
 import { createLogEntry } from './activityLog';
 import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
+import { hydrateMissionTasks } from './routineTasks';
+import { sanitizeSchoolCalendar } from './schoolDays';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export { selectTotalWealth };
@@ -82,13 +84,9 @@ export function loadPersistedState(): MCState {
                     // Must survive a restart: a relaunch inside the window after a
                     // stop would otherwise start the mission again.
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
-                    tasks: defaultM.tasks.map(dt => {
-                        const st = savedM.tasks?.find(t => t.id === dt.id);
-                        // Always take icon + label from default (they're UI display values,
-                        // not user data), so code changes are always reflected even if
-                        // localStorage has a stale value.
-                        return st ? { ...dt, ...st, icon: dt.icon, label: dt.label } : dt;
-                    }),
+                    // Icon + label come from the code; a Cream or School Bag task
+                    // the saved run carried is kept, ticked or not (routineTasks.ts).
+                    tasks: hydrateMissionTasks(defaultM.tasks, savedM.tasks),
                 };
             }),
             // Merge responsibilities from defaults so new tasks always appear
@@ -126,6 +124,9 @@ export function loadPersistedState(): MCState {
             // Rebuilt field-by-field like settings/cases/missions above — the
             // bare spread would restore a partial or corrupt slice wholesale.
             skillProgress: sanitizeSkillProgress(parsed.skillProgress),
+            // Kept across a restart so a morning with no network still knows a
+            // Pro-D day; anything malformed loads as "no data" (plain Mon–Fri).
+            schoolCalendar: sanitizeSchoolCalendar(parsed.schoolCalendar),
             _migrationVersion: MIGRATION_VERSION,
         };
     } catch {

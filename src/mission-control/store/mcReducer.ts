@@ -12,9 +12,7 @@ import type {
     DisplayCase,
     PrivilegeCard,
     Mission,
-    MissionTask,
     ResponsibilityTask,
-    MCSettings,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import {
@@ -30,6 +28,8 @@ import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
 import { reschedulesRunningMission, startTimeChanged } from './missionReschedule';
+import { syncCreamTask, withSchoolBag } from './routineTasks';
+import { sameSchoolCalendar, sanitizeSchoolCalendar, schoolBagDecision } from './schoolDays';
 import { createDefaultSkillProgress } from '../skills/types';
 import { canSelectReward, rewardCost } from '../rewardCatalogue';
 
@@ -385,6 +385,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             if (state.activeMission !== 'none') return state;
 
             const now = actionInstant(action);
+            // Decided only here (never mid-run); activityLog.ts's start line shares schoolBagDecision.
+            const bagDue = schoolBagDecision(action.phase, now, state.schoolCalendar).due;
             return {
                 ...state,
                 activeMission: action.phase,
@@ -399,10 +401,15 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                         loggedTimeoutAt: undefined, // fresh occurrence — a stale stamp capped the streak at 2
                         whiningDetected: false,
                         whiningLocked: false,
-                        tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
+                        tasks: withSchoolBag(m.tasks, m.phase, bagDue).map(t => ({ ...t, completed: false, locked: false })),
                     };
                 }),
             };
+        }
+
+        case 'SET_SCHOOL_CALENDAR': {
+            const schoolCalendar = sanitizeSchoolCalendar(action.calendar);
+            return sameSchoolCalendar(state.schoolCalendar, schoolCalendar) ? state : { ...state, schoolCalendar };
         }
 
         // Reset task progress only — mission stays active, timer keeps running.
@@ -737,56 +744,6 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         default:
             return state;
     }
-}
-
-// ---- Task Injection Sync ----
-// Safely adds/removes/updates the Cream routine in the active missions arrays.
-function syncCreamTask(missions: Mission[], settings: MCSettings, daysLeft: number): Mission[] {
-    return missions.map(m => {
-        const isEvening = m.phase === 'evening';
-        const isMorning = m.phase === 'morning';
-        const schedule = settings.creamTaskSchedule ?? 'evening';
-        
-        let shouldHaveCreamInPhase = false;
-        if (settings.creamTaskEnabled && daysLeft > 0) {
-             if (schedule === 'both' && (isMorning || isEvening)) shouldHaveCreamInPhase = true;
-             else if (schedule === 'morning' && isMorning) shouldHaveCreamInPhase = true;
-             else if (schedule === 'evening' && isEvening) shouldHaveCreamInPhase = true;
-        }
-        
-        const hasCream = m.tasks.some(t => t.id === 'cream');
-        const expectedLabel = `Cream (${Math.ceil(daysLeft)}d left)`;
-        
-        if (shouldHaveCreamInPhase && !hasCream) {
-            // Inject before bed for evening, or at the end for morning
-            const bedIndex = m.tasks.findIndex(t => t.id === 'bed');
-            const newTasks = [...m.tasks];
-            const creamTask: MissionTask = {
-                id: 'cream',
-                label: expectedLabel,
-                icon: 'Droplet',
-                completed: false,
-                locksAt: null,
-                locked: false
-            };
-            if (bedIndex !== -1) newTasks.splice(bedIndex, 0, creamTask);
-            else newTasks.push(creamTask);
-            return { ...m, tasks: newTasks };
-        } else if (!shouldHaveCreamInPhase && hasCream) {
-            // Remove it
-            return { ...m, tasks: m.tasks.filter(t => t.id !== 'cream') };
-        } else if (hasCream && shouldHaveCreamInPhase) {
-            // Ensure label is updated
-            const needUpdate = m.tasks.some(t => t.id === 'cream' && t.label !== expectedLabel);
-            if (needUpdate) {
-                return {
-                    ...m,
-                    tasks: m.tasks.map(t => t.id === 'cream' ? { ...t, label: expectedLabel } : t)
-                };
-            }
-        }
-        return m;
-    });
 }
 
 // Wrapper ensures invariants are always synced after *any* dispatch

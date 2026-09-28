@@ -15,6 +15,7 @@ import { reschedulesRunningMission } from './missionReschedule';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
 import { gameTokenCapNote, gameTokenRoom } from './moodGauge';
+import { schoolBagDecision, schoolBagLogNote } from './schoolDays';
 import { REWARD_MAP, canSelectReward } from '../rewardCatalogue';
 
 export type LogSource = NonNullable<ActivityLogEntry['source']>;
@@ -195,14 +196,15 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
 
         case 'SET_ACTIVE_MISSION':
             if (action.phase === 'none') {
-                // Scheduler-driven expiry — record which phase just timed out so
-                // parents can see it in the activity log.
+                // Scheduler-driven expiry — record which phase just timed out.
                 const timedOutPhase = state.activeMission;
                 if (timedOutPhase === 'none') return null; // already inactive, nothing to log
                 const phaseLabel = timedOutPhase === 'morning' ? 'Morning' : 'Evening';
                 return { id, timestamp: now, icon: '🕐', message: `${phaseLabel} mission expired`, type: 'mission', colorKey: timedOutPhase, ...snap() };
             }
-            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started`, type: 'mission', colorKey: action.phase, ...snap() };
+            if (state.activeMission !== 'none') return null; // mirrors the reducer: one mission at a time
+            // Same decision the reducer's fresh start takes, so the line cannot disagree with the list.
+            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started${schoolBagLogNote(schoolBagDecision(action.phase, now, state.schoolCalendar))}`, type: 'mission', colorKey: action.phase, ...snap() };
         case 'CANCEL_MISSION':
             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'SET_SETTINGS': {
@@ -214,9 +216,7 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: '⏹️', message: `${label} mission ended: its start time was changed in Settings`, type: 'mission', colorKey: phase, ...snap() };
         }
         case 'MARK_MISSION_TIMEOUT':
-            // Suppressed: SET_ACTIVE_MISSION phase:'none' now logs the expiry event with full
-            // phase context. Logging here too would produce a duplicate entry.
-            return null;
+            return null; // SET_ACTIVE_MISSION phase 'none' logs the expiry with its phase; this would duplicate it
         case 'COMPLETE_MISSION_ROUTINE': {
             // Mirror the reducer's idempotency guard — a second completion
             // dispatch is a no-op and must not produce a duplicate log entry.

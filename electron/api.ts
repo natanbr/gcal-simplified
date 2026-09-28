@@ -18,6 +18,16 @@ interface AppEvent {
     color?: string; // Hex color for calendar color inheritance
 }
 
+/**
+ * `strict` is for a reader that must not mistake a failure for an answer (the
+ * school-bag decision): every failure the calendar view forgives — signed out,
+ * a calendar that errors, the holiday feed down — throws instead of shrinking
+ * the list. Off by default, so the calendar view's behaviour is unchanged.
+ */
+export interface EventFetchOptions {
+    strict?: boolean;
+}
+
 interface AppTask {
     id: string;
     title: string;
@@ -68,8 +78,11 @@ export class ApiService {
         }));
     }
 
-    async getEvents(timeMin: Date, timeMax: Date): Promise<AppEvent[]> {
-        if (!authService.isAuthenticated()) return [];
+    async getEvents(timeMin: Date, timeMax: Date, { strict = false }: EventFetchOptions = {}): Promise<AppEvent[]> {
+        if (!authService.isAuthenticated()) {
+            if (strict) throw new Error('Not signed in to Google Calendar');
+            return [];
+        }
         const auth = authService.getAuthClient();
         const calendar = google.calendar({ version: 'v3', auth });
 
@@ -113,6 +126,8 @@ export class ApiService {
                     singleEvents: true,
                     orderBy: 'startTime',
                 });
+                // Only the first page is read; for a strict reader a later page could hold the Pro-D day.
+                if (strict && res.data.nextPageToken) throw new Error('Calendar answer was paginated');
 
                 return (res.data.items || []).map(event => {
                     const allDay = !!event.start?.date;
@@ -148,6 +163,7 @@ export class ApiService {
                     } as AppEvent;
                 });
             } catch (error) {
+                if (strict) throw error; // its Pro-D days would silently vanish
                 console.warn(`Failed to fetch events for calendar ${calId}`, error);
                 return [];
             }
@@ -158,7 +174,7 @@ export class ApiService {
 
         // Fetch Public Holidays (Statutory BC)
         const years = Array.from(new Set([timeMin.getFullYear(), timeMax.getFullYear()]));
-        const holidayPromises = years.map(year => this.getPublicHolidays(year));
+        const holidayPromises = years.map(year => this.getPublicHolidays(year, { strict }));
         const holidayResults = await Promise.all(holidayPromises);
         const holidays = holidayResults.flat().filter(h => h.start >= timeMin && h.start <= timeMax);
 
@@ -168,13 +184,14 @@ export class ApiService {
         return combinedEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
     }
 
-    async getPublicHolidays(year: number): Promise<AppEvent[]> {
+    /** A failure is never cached, so the next call asks again. */
+    async getPublicHolidays(year: number, { strict = false }: EventFetchOptions = {}): Promise<AppEvent[]> {
         const cached = this.holidayCache.get(year);
         if (cached) return cached;
 
         try {
             const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CA`);
-            if (!response.ok) return [];
+            if (!response.ok) throw new Error(`Public holidays answered ${response.status}`);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const data = await response.json() as any[];
 
@@ -191,6 +208,7 @@ export class ApiService {
             this.holidayCache.set(year, holidays);
             return holidays;
         } catch (error) {
+            if (strict) throw error;
             console.warn("Failed to fetch public holidays", error);
             return [];
         }

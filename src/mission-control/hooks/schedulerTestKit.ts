@@ -74,8 +74,9 @@ export function jumpTo(when: Date) {
     act(() => { vi.advanceTimersByTime(when.getTime() - Date.now()); });
 }
 
+/** A prefix match: the start line goes on to say whether the school bag is on the list. */
 export function startLogs(state: MCState, phase: Phase): number {
-    return state.activityLogs.filter(l => l.message === `${phase} mission started`).length;
+    return state.activityLogs.filter(l => l.message.startsWith(`${phase} mission started`)).length;
 }
 
 /** Launches inside `phase`'s window and lets the scheduler start it. */

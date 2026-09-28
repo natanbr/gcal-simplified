@@ -296,7 +296,7 @@ export function MissionOverlay() {
                             onAdjust={handleBarAdjust}
                         />
 
-                        {/* ── Tasks — horizontal scroll row ── */}
+                        {/* ── Tasks — cards shrink to fit (180 → 120px) so a 1280–1366px-wide touchscreen shows every card and Whining?; scrolls only below that ── */}
                         <div style={{
                             display: 'flex',
                             flexDirection: 'row',
@@ -311,7 +311,7 @@ export function MissionOverlay() {
                                     initial={{ opacity: 0, y: 16 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.06 }}
-                                    style={{ flex: '0 0 auto', width: 180,  maxWidth: '20%' }}
+                                    style={{ flex: '1 1 0', minWidth: 120, maxWidth: 180 }}
                                 >
                                     <TaskCard task={task} phase={mission.phase} accent={meta.accent} />
                                 </motion.div>
@@ -322,7 +322,7 @@ export function MissionOverlay() {
                                 initial={{ opacity: 0, y: 16 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: mission.tasks.length * 0.06 }}
-                                style={{ marginLeft: 'auto', flex: '0 0 auto', width: 180, maxWidth: '20%' }}
+                                style={{ marginLeft: 'auto', flex: '1 1 0', minWidth: 120, maxWidth: 180 }}
                             >
                                 <motion.button
                                     data-testid="mc-whining-btn"

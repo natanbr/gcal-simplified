@@ -15,6 +15,8 @@ Renderer timers that are allowed to fire on an idle Calendar (kept intentionally
 
 Everything else (mission expiry poll, live clock, game loops, privilege countdown) is gated to an active mission / open game / the Mission Control view and does **not** run on an idle Calendar.
 
+Event-triggered network work from the always-mounted MC tree (no timer): `useSchoolCalendarSync` (mounted in `MCStoreProvider`) invokes `auth:check` then `data:events` in strict mode — one Google Calendar read plus the (cached) holiday feed — on launch, when a mission ends, on `system:resume` and on `auth:success`; never while a mission runs and never on ordinary state changes (pinned by `useSchoolCalendarSync.test.tsx`). A changed answer is one store write; an unchanged one returns the same state.
+
 Main process (always-on by design, independent of view — `electron/`): the Supabase Realtime WebSocket (remote control), a 60 s power-policy check (`main.ts`, can spawn a screen-off command when idle in the sleep window), a 60 s de-dup cleanup, and a 4 h auto-update check.
 
 ## Fixes applied (2026-07)

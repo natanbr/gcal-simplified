@@ -328,3 +328,74 @@ describe('privilege suspensions across a restart', () => {
         expect(isPhoneGamesSuspended(reloaded.privileges)).toBe(true);
     });
 });
+
+// ============================================================
+// Routine tasks that come and go (Cream, School Bag) across a restart. The
+// loader used to rebuild every checklist from the DEFAULT task list, so a task
+// injected into the running mission was dropped by a relaunch mid-mission: the
+// child finished without packing the bag, and a ticked Cream came back unticked
+// at the next tap (and was then charged a second day). The loader now keeps the
+// saved run's own membership for those tasks, and never adds one it lacked.
+// ============================================================
+
+describe('routine tasks across a restart', () => {
+    const at = (h: number, m = 0) => new Date(2026, 8, 28, h, m).toISOString(); // Monday 28 Sep 2026
+    const tasksOf = (s: MCState, phase: 'morning' | 'evening') => s.missions.find(m => m.phase === phase)!.tasks;
+    const taskIds = (s: MCState, phase: 'morning' | 'evening') => tasksOf(s, phase).map(t => t.id);
+
+    beforeEach(() => {
+        localStorage.removeItem(STORAGE_KEY);
+    });
+
+    it('a restart mid-mission keeps the school bag, where it was, ticked', () => {
+        let state = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning', timestamp: at(6) });
+        state = mcReducer(state, { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: 'school-bag', timestamp: at(6, 5) });
+        const reloaded = restart(state);
+
+        expect(taskIds(reloaded, 'morning')).toEqual(taskIds(state, 'morning'));
+        expect(tasksOf(reloaded, 'morning').find(t => t.id === 'school-bag')?.completed).toBe(true);
+    });
+
+    it('a restart mid-mission keeps a ticked Cream task ticked (it was dropped before)', () => {
+        let state = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { creamTaskEnabled: true, creamTaskDaysTarget: 3 } });
+        state = mcReducer(state, { type: 'SET_ACTIVE_MISSION', phase: 'evening', timestamp: at(19) });
+        state = mcReducer(state, { type: 'COMPLETE_TASK', missionPhase: 'evening', taskId: 'cream', timestamp: at(19, 5) });
+        const reloaded = restart(state);
+
+        expect(taskIds(reloaded, 'evening')).toEqual(taskIds(state, 'evening'));
+        expect(tasksOf(reloaded, 'evening').find(t => t.id === 'cream')?.completed).toBe(true);
+        expect(reloaded.creamTaskDaysLeft).toBe(2);
+    });
+
+    it('a restart on a day the bag was absent does not add it', () => {
+        const saturday = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning', timestamp: new Date(2026, 9, 3, 6).toISOString() });
+        expect(taskIds(saturday, 'morning')).not.toContain('school-bag');
+        expect(taskIds(restart(saturday), 'morning')).not.toContain('school-bag');
+    });
+
+    it('keeps the stored school calendar, so a restart with no network still knows the Pro-D day', () => {
+        const schoolCalendar = { from: '2026-09-27', to: '2026-10-12', noSchool: [{ date: '2026-09-29', reason: 'Pro-D day' }] };
+        expect(restart({ ...initialState, schoolCalendar }).schoolCalendar).toEqual(schoolCalendar);
+    });
+
+    it('cleans a stored reason on load: no control characters, at most 40 characters', () => {
+        const noSchool = [{ date: '2026-09-29', reason: `Pro-D\u0007 ${'z'.repeat(80)}` }];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schoolCalendar: { from: '2026-09-27', to: '2026-10-12', noSchool } }));
+        const reason = loadPersistedState().schoolCalendar?.noSchool[0]?.reason ?? '';
+        expect(reason.startsWith('Pro-D z')).toBe(true);
+        expect(reason.length).toBeLessThanOrEqual(40);
+        expect(reason).not.toMatch(/\p{Cc}/u);
+    });
+
+    it.each([
+        ['a string', '"2026-09-29"'],
+        ['a number', '7'],
+        ['a missing range', '{"noSchool":[{"date":"2026-09-29","reason":"Pro-D day"}]}'],
+        ['a backwards range', '{"from":"2026-10-12","to":"2026-09-27","noSchool":[]}'],
+        ['days that are not a list', '{"from":"2026-09-27","to":"2026-10-12","noSchool":"2026-09-29"}'],
+        ['the old string-list shape', '{"from":"2026-09-27","to":"2026-10-12","noSchoolDates":["2026-09-29"]}'],
+    ])('loads a corrupt school calendar (%s) as "no calendar data"', (_label, raw) => {
+        localStorage.setItem(STORAGE_KEY, `{"bankCount":4,"schoolCalendar":${raw}}`);
+        expect(loadPersistedState().schoolCalendar).toBeUndefined();
+    });
+});

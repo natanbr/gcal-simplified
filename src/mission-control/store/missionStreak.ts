@@ -17,7 +17,7 @@ type LogSource = NonNullable<ActivityLogEntry['source']>;
 import { getLocalDateString, MAX_ACTIVITY_LOGS } from './behaviorSync';
 import { moveGauge } from './moodGauge';
 
-/** Consecutive misses that break the shield and freeze the child's economy. */
+/** Net misses (each completion gives one back) that break the shield and freeze the child's economy. */
 export const MISSED_LOCK_THRESHOLD = 6;
 
 /** Segments drawn in the shield bar — one per miss the child can still afford. */

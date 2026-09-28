@@ -8,6 +8,7 @@ import { useSuspensionExpiry } from './useSuspensionExpiry';
 import { useGameTokenCapSettle } from './useGameTokenCapSettle';
 import { gameTokensOverCap } from './moodGauge';
 import { pendingFrom } from './pendingState';
+import { useSchoolCalendarSync } from './useSchoolCalendarSync';
 
 /** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
@@ -17,6 +18,12 @@ function SuspensionExpiry(): null {
 
 function GameTokenCapSettle(): null {
     useGameTokenCapSettle();
+    return null;
+}
+
+/** Inside the provider, beside SuspensionExpiry: feeds the school-bag decision. */
+function SchoolCalendarSync(): null {
+    useSchoolCalendarSync();
     return null;
 }
 
@@ -78,6 +85,7 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
         <MCContext.Provider value={contextValue}>
             <SuspensionExpiry />
             {needsSettle && <GameTokenCapSettle />}
+            <SchoolCalendarSync />
             {children}
         </MCContext.Provider>
     );
