@@ -20,6 +20,7 @@ import { initialState, mcReducer } from './mcReducer';
 import { summariseDay } from '../components/activity-log/logSources';
 import { createLogEntry } from './activityLog';
 import { MAX_GAME_TOKENS } from './moodGauge';
+import { useGameTokenCapSettle } from './useGameTokenCapSettle';
 import type { MCAction, MCState } from '../types';
 
 // The real reducer, wrapped so a test can see which actions reached it.
@@ -28,6 +29,13 @@ vi.mock('./mcReducer', async importOriginal => {
     return { ...actual, mcReducer: vi.fn(actual.mcReducer) };
 });
 const reducerSpy = vi.mocked(mcReducer);
+
+// The real hook, wrapped so a test can see whether (and how often) it runs.
+vi.mock('./useGameTokenCapSettle', async importOriginal => {
+    const actual = await importOriginal<typeof import('./useGameTokenCapSettle')>();
+    return { ...actual, useGameTokenCapSettle: vi.fn(actual.useGameTokenCapSettle) };
+});
+const settleHook = vi.mocked(useGameTokenCapSettle);
 const settleDispatches = () => reducerSpy.mock.calls.filter(([, a]) => a.type === 'SETTLE_GAME_TOKEN_CAP');
 
 const SETTLE = /removed at load/;
@@ -79,6 +87,7 @@ beforeEach(() => {
     vi.setSystemTime(new Date('2026-09-24T10:00:00.000Z'));
     invoke.mockClear();
     reducerSpy.mockClear();
+    settleHook.mockClear();
     seen = [];
     window.ipcRenderer = { invoke, on: vi.fn(() => vi.fn()) };
 });
@@ -164,6 +173,17 @@ describe('loading within the cap — negative', () => {
 
         expect(settleDispatches()).toHaveLength(0);
         expect(seen, 'no new state object after the load').toHaveLength(1);
+    });
+
+    it('a launch within the cap never mounts the settle, so store changes do not re-render it', async () => {
+        // It subscribes to the whole store; mounted for the app's lifetime it re-rendered
+        // on every change of the always-mounted provider for a job done once at load.
+        seed({ gameTokens: 4, cases: goal() });
+        await launch();
+        act(() => { dispatch({ type: 'ADD_TOKEN' }); });
+        act(() => { dispatch({ type: 'ADD_TOKEN' }); });
+
+        expect(settleHook).not.toHaveBeenCalled();
     });
 
     it('the settle is a no-op on a state within the cap: same reference, no log entry', () => {
