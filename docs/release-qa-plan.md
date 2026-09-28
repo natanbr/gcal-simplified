@@ -229,15 +229,15 @@ pass, and update this table when it merges.
 |---|---|---|---|
 | 1 | Stopping a scheduled mission inside its window restarts it at once (code path from 73080e7, v0.0.41) | fixed 2026-09-23, PR 170 (dce4ab0), on `main` | 3.5.12 |
 | 2 | A mission started while a game is open draws under the game; its timer runs out of sight | decision D1 | 3.10.14 |
-| 3 | The goal picker shows a custom reward cost but the goal needs the catalogue cost | fix in progress: `claude/fix-reward-cost` | 3.8.4 |
-| 4 | An expired privilege suspension never lifts | fix in progress: `claude/fix-privilege-expiry` | 3.9.3 |
+| 3 | The goal picker shows a custom reward cost but the goal needs the catalogue cost | fixed 2026-09-23, PR 172 (8c9d7b3), on `main` | 3.8.4 |
+| 4 | An expired privilege suspension never lifts | fixed 2026-09-23, PR 169 (275eea9), on `main` | 3.9.3 |
 | 5 | "The Bank", "+ Add goal" and the coins look live while the shield is broken | decision D3 | 3.6.3 |
-| 6 | At 5 mood tokens a full gauge silently drops to ~0 % | fix in progress: `claude/fix-mood-cap-reset` | 3.7.2 |
+| 6 | At 5 mood tokens a full gauge silently drops to ~0 % | fixed 2026-09-23, PR 175 (9cf3b14), on `main` | 3.7.2 |
 | 7 | "🎁 Use!" stays live up to ~60 s after the evening start when no mission fires | open | 3.8.8 |
 | 8 | The production CSP blocks Google Fonts, so Nunito, Inter and Space Grotesk never load | decision D2 | 3.1.3 |
 | 9 | The lifted shape hides an exactly aligned red (or green) ghost | open, confirm on glass | 3.10.2 |
 | 10 | Quitting the app mid-game never writes "🏁 Quick Game ended" | open | 3.12.2 |
-| 11 | Privilege suspend and reinstate write no activity-log line | open | 3.9.2 |
+| 11 | Privilege suspend and reinstate write no activity-log line | fixed 2026-09-23, PR 169 (275eea9), on `main` | 3.9.2 |
 | 12 | The "Solve Math" rescue slot also asks reading questions | open, cosmetic | 3.10.7 |
 | 13 | Refusal labels are light grey on light grey | open, cosmetic | 3.6.2 |
 | 14 | A Quick Game refund's log line says 0 tokens | open, cosmetic | 3.8.9 |

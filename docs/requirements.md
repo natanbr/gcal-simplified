@@ -170,7 +170,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **A parent removing a token does not empty a held gauge.** If the gauge is held full when the parent takes a token away (the phone's remove button, logged "Mood token removed") or resets tokens to zero, the held token then arrives within about two heartbeats, logged as `auto`. Whether a take-away should also empty the held gauge is an open decision for Nathan (PR 175).
   - **Who pays how many tokens.** The heartbeat pays every whole token that fits. A mission bonus and a parent's gauge adjustment pay at most one token each, as before; progress beyond that leaves the gauge full, and the heartbeat pays the next token. Whining and a missed mission move the gauge but never pay a token themselves.
   - One writer for every path: `moveGauge()` in `store/moodGauge.ts` is the only code that writes the gauge during a dispatch (guarded by `gauge-writer-boundary.test.ts`), so none of them can wrap at the cap or zero the mood without a grant.
-  - **A broken setting cannot mint tokens.** A mission time cleared in Settings stops accrual instead of producing a NaN rate; a non-finite adjustment is ignored; and at load a corrupt token count (NaN is saved as `null`) becomes 0, not a fresh 5, and a corrupt gauge becomes empty. At load the cap also counts a Quick-Game goal: a saved 5 coins plus a goal (possible in v0.0.42) settles to 4, so the trash brings it back to 5 rather than 6. **The removal is logged (2026-09-24)**: one line, attributed to the system ("1 game token removed at load: 5 game tokens plus 1 Quick-Game goal is over the 5-token cap"), which also reaches the audit trail. It carries no bank delta, like every game-token line: the bank did not move, so the day's "spent" total and the audit file's `d` stay untouched. It happens once, on the launch that settles the balance; later launches load a balance already within the cap and write nothing. A corrupt count that loads as 0 writes no line: there is no real count to report.
+  - **A broken setting cannot mint tokens.** A mission time cleared in Settings stops accrual instead of producing a NaN rate; a non-finite adjustment is ignored; and at load a corrupt token count (NaN is saved as `null`) becomes 0, not a fresh 5, and a corrupt gauge becomes empty. At load the cap also counts a Quick-Game goal: a saved 5 coins plus a goal (possible in v0.0.42) settles to 4, so the trash brings it back to 5 rather than 6. **The removal is logged (2026-09-24)**: one line, attributed to the system ("1 game token removed at load: 5 game tokens plus 1 Quick-Game goal is over the 5-token cap"), which also reaches the audit trail and shows under the log's default "💰 Tokens" filter, counted under 💻 System in the Who row (2026-09-28). It carries no bank delta, like every game-token line: the bank did not move, so the day's "spent" total and the audit file's `d` stay untouched. It happens once, on the launch that settles the balance; later launches load a balance already within the cap and write nothing. A corrupt count that loads as 0 writes no line: there is no real count to report.
   - A held gauge costs nothing while idle: every heartbeat returns the same state object until a token is spent (guarded in `idle-performance.test.tsx`).
 
 - **Mission Streak Shield (missed-mission lockout)**:
@@ -1195,3 +1195,38 @@ size and `touch-action`; a remote `CANCEL_MISSION` still closes the overlay and 
 `src/__tests__/action-literal-boundary.test.ts` fails if any production file other than the
 reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION`; registered in
 `rule-registry.test.ts`.
+
+### 2026-09-28 Review fixes: stale mission actions refused, a settings save that ends a mission logged
+
+From an independent review of PR 178 at 985592f.
+
+- **A Stop or a full Reset for a mission that is not running is refused.** `CANCEL_MISSION` ends
+  whatever runs but resets only the mission it names, so a stale phone Stop for morning while
+  evening ran hid evening's overlay and left it active with its timer, never expiring, no miss, and
+  a "Mission stopped" line. And "↺ Reset"'s 2 s hold, still in progress when its mission expired or
+  was stopped, fired `RESET_MISSION_WITH_TIMER`, which set the ended mission active again, hidden
+  and saved. Now `isStaleMissionAction` (store/staleMissionAction.ts) refuses both when the named
+  mission is not the running one, in the reducer and the log alike (the shield-lock pattern), and the
+  hold is dropped when the mission changes. The phone's plain Reset is unchanged.
+- **A settings save that ends the running mission is logged.** Saving a new start time for the
+  running mission in MC Settings ends it (kept; open decision, PR 170). It used to be silent; it now
+  writes "⏹️ Evening mission ended: its start time was changed in Settings", attributed 👤. The rule
+  "only the phone stops a mission" now reads "no desktop *gesture* stops a mission" and names this
+  path (CLAUDE.md, the guard, this spec, QA 3.5.12).
+- **The game-token settle line is visible by default.** It is typed as a token movement, so the
+  "💰 Tokens" filter shows it, and the summary strip's Who row has a 💻 System chip.
+- **A relaunch that settles no longer logs a third completion.** On that launch an expired, all-done
+  mission wrote "Morning mission completed +2" three times (the base writes two, a pre-existing
+  double that remains, with the pre-settle 🎮 balance on both). The bank was always paid once.
+- **Minimize**: `touch-action: none`, so a finger drifting during a hold no longer cancels it; and a
+  press still down when its mission ended no longer minimizes the next one.
+- **Smaller**: the settle computes its target directly (a corrupt 1e17 balance settled to 0); the
+  settle is mounted only on a launch that is over the cap; the action-literal guard reads string
+  literals with the TypeScript parser, since the comment stripper mistook the apostrophe in JSX text
+  for a string.
+
+Tests: `store/__tests__/mcReducer.stale-mission-action.test.ts`,
+`store/__tests__/settings-ends-mission.test.tsx`, `hooks/useLongPress.test.ts`,
+`components/MissionOverlay.settle-launch.test.tsx`, `components/ActivityLogView.settle.test.tsx`,
+new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
+`mcReducer.mood-cap-lifecycle.test.ts` and `action-literal-boundary.test.ts`.
