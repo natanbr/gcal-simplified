@@ -2,11 +2,27 @@ import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabas
 import { BrowserWindow } from 'electron';
 import crypto from 'node:crypto';
 import { store, type StoreFailure } from './store';
+import { isRecord, openRemoteMessage, sealRemoteMessage } from './remote-auth';
 
 interface Pairing { roomId: string; remoteKey: string }
 
 /** What remote:regenerate resolves to: the new pairing, or why the old one was kept. */
 export type RegenerateKeysResult = ({ ok: true } & Pairing) | StoreFailure;
+
+/** Actions older or newer than this are refused (clock drift allowance). */
+const MAX_ACTION_AGE_MS = 60_000;
+
+/** The verified content of an action message: every field required. */
+function parseActionContent(content: Record<string, unknown>):
+    { action: Record<string, unknown> & { type: string }; msgId: string; timestamp: number } | null {
+    const { action, msgId, timestamp } = content;
+    if (!isRecord(action)) return null;
+    const { type } = action;
+    if (typeof type !== 'string' || type === '') return null;
+    if (typeof msgId !== 'string' || msgId === '') return null;
+    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return null;
+    return { action: { ...action, type }, msgId, timestamp };
+}
 
 /** Cryptographically random pairing credentials for the remote channel. */
 function generatePairingKeys(): Pairing {
@@ -118,61 +134,23 @@ export class RemoteBridge {
 
         const currentChannel = this.supabase.channel(`remote-control:${pairing.roomId}`);
         this.channel = currentChannel;
-        
-        console.log(`[RemoteBridge] Initializing. Room ID: ${pairing.roomId}`);
+
+        // The room id is now the one thing a listener needs: logs carry a prefix only.
+        const fullRoomId = pairing.roomId;
+        const shortRoomId = `${fullRoomId.slice(0, 8)}…`;
+        console.log(`[RemoteBridge] Initializing. Room ID: ${shortRoomId}`);
 
         currentChannel
-            .on('broadcast', { event: 'action' }, (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => {
-                const { key: receivedKey, action, msgId, timestamp } = payload.payload || {};
-                // Log the action only — the payload also carries the pairing key.
-                console.log(`[RemoteBridge] Broadcast received: ${action?.type ?? 'unknown'} (msgId: ${msgId ?? 'n/a'})`);
-                
-                if (!action) {
-                    console.error('[RemoteBridge] No action found in payload');
-                    return;
-                }
-
-                // 1. Validate msgId for double-dispatch protection
-                if (msgId && this.seenIds.has(msgId)) {
-                    console.log(`[RemoteBridge] Ignoring duplicate msgId: ${msgId}`);
-                    return;
-                }
-
-                // 2. Ignore extremely old messages (older than 60 seconds)
-                // Loosened from 15 seconds to 60 seconds to prevent pairing failures from clock drifts
-                if (timestamp && Math.abs(Date.now() - timestamp) > 60000) {
-                    console.warn(`[RemoteBridge] Ignoring stale message. Remote time: ${new Date(timestamp).toLocaleTimeString()}, Local time: ${new Date().toLocaleTimeString()}`);
-                    return;
-                }
-
-                // The joined pairing, never a fresh read: a read that fails has no key, and
-                // undefined must never match a payload that sent none.
-                const expectedKey = this.pairing?.remoteKey;
-                if (typeof expectedKey === 'string' && expectedKey !== '' && receivedKey === expectedKey) {
-                    // Special case: Sync Request
-                    if (action.type === 'SYNC_REQUEST') {
-                        console.log('[RemoteBridge] 🔄 Sync request received. Asking renderer to broadcast state.');
-                        this.sendToRenderer('remote:request-sync', null);
-                        return;
-                    }
-
-                    console.log(`[RemoteBridge] ✅ Key matched! Dispatching action: ${action.type}`);
-                    
-                    // Track seenId to prevent double-dispatch
-                    if (msgId) {
-                        this.seenIds.set(msgId, Date.now());
-                    }
-
-                    this.sendToRenderer('remote-control:action', action);
-                } else {
-                    // Never log the expected key — it's the pairing secret.
-                    console.warn('[RemoteBridge] ❌ Rejected action: pairing key mismatch.');
-                }
+            .on('broadcast', { event: 'action' }, (message: { payload?: unknown }) => {
+                this.handleAction(message?.payload);
             })
             .subscribe((status, err) => {
                 if (this.channel !== currentChannel) return;
-                
-                console.log(`[RemoteBridge] Supabase Realtime status: ${status}`, err || '');
+
+                // The message only: a join error can quote the topic, and its
+                // cause (the raw server reply) would print in full.
+                const detail = err ? err.message.split(fullRoomId).join(shortRoomId) : '';
+                console.log(`[RemoteBridge] Supabase Realtime status: ${status}`, detail);
                 if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
                     console.error(`[RemoteBridge] Channel disconnected (Status: ${status}). Scheduling reconnect...`);
                     this.isOnline = false;
@@ -213,6 +191,51 @@ export class RemoteBridge {
         this.initRetryTimeout = setTimeout(() => this.init(), delay);
     }
 
+    /** Protocol v2 (remote-auth.ts): verify the signature before reading
+     *  anything, then require every field, then the age window, then de-dup.
+     *  Never logs the key, the body or the signature. */
+    private handleAction(raw: unknown) {
+        // The joined pairing, never a fresh read: a read that fails has no key.
+        const remoteKey = this.pairing?.remoteKey;
+        const content = remoteKey ? openRemoteMessage(remoteKey, 'action', raw) : null;
+        if (!content) {
+            console.warn(isRecord(raw) && 'key' in raw
+                ? '[RemoteBridge] ❌ Rejected unsigned action — the phone app is outdated (protocol v1); reload it.'
+                : '[RemoteBridge] ❌ Rejected action: missing or invalid signature.');
+            return;
+        }
+
+        const parsed = parseActionContent(content);
+        if (!parsed) {
+            console.warn('[RemoteBridge] ❌ Rejected signed action: malformed body.');
+            return;
+        }
+        const { action, msgId, timestamp } = parsed;
+
+        if (Math.abs(Date.now() - timestamp) > MAX_ACTION_AGE_MS) {
+            console.warn(`[RemoteBridge] Ignoring stale ${action.type}. Remote time: ${new Date(timestamp).toLocaleTimeString()}, Local time: ${new Date().toLocaleTimeString()}`);
+            return;
+        }
+
+        if (this.seenIds.has(msgId)) {
+            console.log(`[RemoteBridge] Ignoring duplicate msgId: ${msgId}`);
+            return;
+        }
+        // Recorded only now, after the signature verified, so unauthenticated
+        // traffic can neither grow the map nor pre-burn a genuine msgId.
+        this.seenIds.set(msgId, Date.now());
+
+        if (action.type === 'SYNC_REQUEST') {
+            console.log('[RemoteBridge] 🔄 Sync request received. Asking renderer to broadcast state.');
+            this.sendToRenderer('remote:request-sync', null);
+            return;
+        }
+
+        // Authorisation stays in the renderer's REMOTE_ALLOWED_ACTIONS.
+        console.log(`[RemoteBridge] ✅ Verified action: ${action.type} (msgId: ${msgId})`);
+        this.sendToRenderer('remote-control:action', action);
+    }
+
     private sendToRenderer(channel: string, data: unknown) {
         const wins = BrowserWindow.getAllWindows();
         wins.forEach(win => {
@@ -225,14 +248,11 @@ export class RemoteBridge {
 
         try {
             console.log('[RemoteBridge] Broadcasting state update...');
+            // Signed with the joined key, never carrying it: the channel is public (remote-auth.ts).
             await this.channel.send({
                 type: 'broadcast',
                 event: 'state-update',
-                payload: {
-                    key: this.pairing.remoteKey,
-                    state,
-                    timestamp: Date.now()
-                }
+                payload: sealRemoteMessage(this.pairing.remoteKey, 'state-update', { state, timestamp: Date.now() }),
             });
         } catch (e) {
             console.error('[RemoteBridge] Broadcast state failed:', e);

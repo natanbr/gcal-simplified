@@ -9,7 +9,7 @@
 // broadcast without a key matched. The main process is the pairing's only owner
 // (settings:save never writes it), so the bridge keeps what it joined with:
 //   - a lock or a deletion mid-session changes nothing on the wire;
-//   - a key-less or wrong-key action is rejected;
+//   - an unsigned or wrong-key action is rejected (protocol v2, remote-auth.ts);
 //   - after regenerateKeys() the old key is rejected at once, with no disk read.
 // Harness: real store on one temp dir; a read fault for config.json only; the
 // Supabase channel captures the action handler and every send().
@@ -20,14 +20,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { RemoteBridge } from './remote-bridge';
+import { openRemoteMessage, sealRemoteMessage } from './remote-auth';
 
-interface Broadcast { payload: { key?: string; action?: Record<string, unknown>; msgId?: string; timestamp?: number } }
+interface Broadcast { payload?: unknown }
 type SubscribeStatus = 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR';
 
 const h = vi.hoisted(() => ({
     userData: '',
     actionHandler: null as ((message: Broadcast) => void) | null,
-    sent: [] as Array<{ event: string; payload: { key?: string } }>,
+    sent: [] as Array<{ event: string; payload: unknown }>,
     send: vi.fn<(channel: string, data: unknown) => void>(),
 }));
 
@@ -37,7 +38,7 @@ vi.mock('@supabase/supabase-js', () => ({
             const channel = {
                 on: (_type: string, _filter: unknown, cb: (message: Broadcast) => void) => { h.actionHandler = cb; return channel; },
                 subscribe: (cb: (status: SubscribeStatus) => void) => { cb('SUBSCRIBED'); return channel; },
-                send: async (message: { event: string; payload: { key?: string } }) => { h.sent.push(message); return 'ok'; },
+                send: async (message: { event: string; payload: unknown }) => { h.sent.push(message); return 'ok'; },
             };
             return channel;
         },
@@ -63,8 +64,14 @@ const fire = (payload: Broadcast['payload']) => {
     h.actionHandler?.({ payload });
 };
 let msg = 0;
-const action = (key?: string): Broadcast['payload'] => ({ key, action: { type: 'ADD_TOKEN' }, msgId: `m${++msg}`, timestamp: Date.now() });
+/** Signed with `key` (protocol v2); no key â†’ an unsigned v1-style payload. */
+const action = (key?: string): Broadcast['payload'] => {
+    const content = { action: { type: 'ADD_TOKEN' }, msgId: `m${++msg}`, timestamp: Date.now() };
+    return key === undefined ? content : sealRemoteMessage(key, 'action', content);
+};
 const dispatched = () => h.send.mock.calls.filter(([channel]) => channel === 'remote-control:action').length;
+/** Which of `keys` signed each state-update sent, in order. */
+const signedWith = (...keys: string[]) => h.sent.map(m => keys.find(k => openRemoteMessage(k, 'state-update', m.payload) !== null));
 
 let bridge: RemoteBridge;
 
@@ -96,7 +103,7 @@ afterEach(() => {
 });
 
 describe('RemoteBridge — the key gate uses the pairing it joined with', () => {
-    it('dispatches an action carrying the joined key, and rejects a key-less or wrong one', () => {
+    it('dispatches an action signed with the joined key, and rejects an unsigned or wrong-key one', () => {
         fire(action('key-orig'));
         fire(action());
         fire(action('key-other'));
@@ -104,15 +111,15 @@ describe('RemoteBridge — the key gate uses the pairing it joined with', () => 
         expect(dispatched()).toBe(1);
     });
 
-    it('keeps working while config.json is locked mid-session: the valid key still passes, a key-less action still fails', async () => {
+    it('keeps working while config.json is locked mid-session: the valid key still passes, an unsigned action still fails', async () => {
         fault.readLocked = true;
 
         fire(action('key-orig'));
         fire(action());
         await bridge.broadcastState({ tokens: 3 });
 
-        expect(dispatched(), 'a lock mid-session cut the phone off, or let a key-less action in').toBe(1);
-        expect(h.sent.map(m => m.payload.key)).toEqual(['key-orig']);
+        expect(dispatched(), 'a lock mid-session cut the phone off, or let an unsigned action in').toBe(1);
+        expect(signedWith('key-orig')).toEqual(['key-orig']);
         expect(bridge.getStatus()).toBe(true);
     });
 

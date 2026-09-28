@@ -65,6 +65,11 @@ reaches the main process only through the preload bridge.
   ID + 15-byte random key; broadcasts on channel `remote-control:{roomId}`; state sync debounced at
   1s; remote actions are dispatched with `isRemote: true`. The companion web app lives in a
   **separate repo**: `C:\Users\brnat\Documents\Projects\mc-remote` (`npm run dev`, usually port 5174).
+* `remote-auth.ts`: remote protocol v2, pure. Both events (`action`, `state-update`) travel as
+  `{ v: 2, body, sig }` — HMAC-SHA256 of `event + "\n" + body` keyed with the pairing key, which is
+  never sent. `remote-bridge.ts` opens every incoming action with it (signature first, then required
+  `msgId`/`timestamp`, 60s window, 2-min de-dup) and seals every state-update. The pairing QR URL is
+  built by `src/mission-control/utils/pairingUrl.ts`: room, key and `v=2` in the fragment.
 * `audit-log.ts`: append-only NDJSON audit trail (no clear channel by design).
 * `power-policy.ts`: night-time screen blanking.
 * `store.ts`: `config.json` (calendar selection, settings, remote pairing). `read()` says loaded /

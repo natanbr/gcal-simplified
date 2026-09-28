@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RemoteBridge } from './remote-bridge';
+import { sealRemoteMessage } from './remote-auth';
 import type { store } from './store';
 
 /** The store mocks take its real signatures, so a config that drifts from
@@ -8,6 +9,14 @@ import type { store } from './store';
  *  call removeChannel, which no test does. */
 interface ClientSlice { channel: (name: string) => unknown }
 interface WindowSlice { webContents: { send: (channel: string, ...args: unknown[]) => void } }
+type BroadcastHandler = (message: { payload?: unknown }) => void;
+
+/** A protocol v2 action as the phone sends it: signed with the pairing key,
+ *  never carrying it (remote-auth.ts). Fresh and unique unless overridden. */
+let msgSeq = 0;
+const signed = (content: Record<string, unknown>, key = 'secret-key') => ({
+    payload: sealRemoteMessage(key, 'action', { msgId: `m-${++msgSeq}`, timestamp: Date.now(), ...content }),
+});
 
 const mocks = vi.hoisted(() => ({
     createClient: vi.fn<(url: string, key: string) => ClientSlice>().mockReturnValue({
@@ -91,19 +100,13 @@ describe('RemoteBridge (Main Process)', () => {
         expect(mockChannel.subscribe).toHaveBeenCalled();
     });
 
-    it('validates key and sends to renderer via IPC on message', () => {
+    it('verifies the signature and sends the action to the renderer via IPC', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         mocks.getAllWindows.mockReturnValue([mockWin]);
 
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, callback) => {
-                // Simulate message
-                callback({
-                    payload: {
-                        key: 'secret-key',
-                        action: { type: 'ADD_TOKEN' }
-                    }
-                });
+                callback(signed({ action: { type: 'ADD_TOKEN' } }));
                 return mockChannel;
             }), 
             subscribe: vi.fn() 
@@ -115,19 +118,13 @@ describe('RemoteBridge (Main Process)', () => {
         expect(mockWin.webContents.send).toHaveBeenCalledWith('remote-control:action', { type: 'ADD_TOKEN' });
     });
 
-    it('ignores message if key is invalid', () => {
+    it('ignores an action signed with the wrong key', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         mocks.getAllWindows.mockReturnValue([mockWin]);
 
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, callback) => {
-                // Simulate invalid message
-                callback({
-                    payload: {
-                        key: 'wrong-key',
-                        action: { type: 'ADD_TOKEN' }
-                    }
-                });
+                callback(signed({ action: { type: 'ADD_TOKEN' } }, 'wrong-key'));
                 return mockChannel;
             }), 
             subscribe: vi.fn() 
@@ -139,13 +136,11 @@ describe('RemoteBridge (Main Process)', () => {
         expect(mockWin.webContents.send).not.toHaveBeenCalled();
     });
 
-
-
     it('ignores duplicate messages with same msgId', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         mocks.getAllWindows.mockReturnValue([mockWin]);
 
-        let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
+        let callback!: BroadcastHandler;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
@@ -157,24 +152,11 @@ describe('RemoteBridge (Main Process)', () => {
 
         bridge.init();
 
-        // Send first message
-        callback({
-            payload: {
-                key: 'secret-key',
-                action: { type: 'ADD_TOKEN' },
-                msgId: 'unique-123'
-            }
-        });
+        callback(signed({ action: { type: 'ADD_TOKEN' }, msgId: 'unique-123' }));
         expect(mockWin.webContents.send).toHaveBeenCalledTimes(1);
 
-        // Send same message again
-        callback({
-            payload: {
-                key: 'secret-key',
-                action: { type: 'ADD_TOKEN' },
-                msgId: 'unique-123'
-            }
-        });
+        // Same msgId again
+        callback(signed({ action: { type: 'ADD_TOKEN' }, msgId: 'unique-123' }));
         expect(mockWin.webContents.send).toHaveBeenCalledTimes(1); // Still 1
     });
 
@@ -182,7 +164,7 @@ describe('RemoteBridge (Main Process)', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         mocks.getAllWindows.mockReturnValue([mockWin]);
 
-        let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
+        let callback!: BroadcastHandler;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
@@ -194,14 +176,8 @@ describe('RemoteBridge (Main Process)', () => {
 
         bridge.init();
 
-        // Simulate message from 70 seconds ago
-        callback({
-            payload: {
-                key: 'secret-key',
-                action: { type: 'ADD_TOKEN' },
-                timestamp: Date.now() - 70000 
-            }
-        });
+        // Signed 70 seconds ago
+        callback(signed({ action: { type: 'ADD_TOKEN' }, timestamp: Date.now() - 70000 }));
         expect(mockWin.webContents.send).not.toHaveBeenCalled();
     });
 
@@ -209,7 +185,7 @@ describe('RemoteBridge (Main Process)', () => {
         const mockWin = { webContents: { send: vi.fn() } };
         mocks.getAllWindows.mockReturnValue([mockWin]);
 
-        let callback!: (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => void;
+        let callback!: BroadcastHandler;
         const mockChannel = { 
             on: vi.fn().mockImplementation((_type, _config, cb) => {
                 callback = cb;
@@ -221,12 +197,7 @@ describe('RemoteBridge (Main Process)', () => {
 
         bridge.init();
 
-        callback({
-            payload: {
-                key: 'secret-key',
-                action: { type: 'SYNC_REQUEST' }
-            }
-        });
+        callback(signed({ action: { type: 'SYNC_REQUEST' } }));
         
         expect(mockWin.webContents.send).toHaveBeenCalledWith('remote:request-sync', null);
     });

@@ -1,5 +1,10 @@
 # Remote Control Implementation Plan
 
+> **Historical plan (2026-05).** The wire format below (the key in the pairing URL's query string
+> and in every message) was replaced on 2026-09-28 by remote protocol v2: signed `{ v: 2, body, sig }`
+> envelopes, the key never on the wire, pairing data in the URL fragment. See CLAUDE.md → Architecture
+> and `electron/remote-auth.ts`.
+
 ## Overview
 Add a "Remote Control" feature allowing a phone (via a web-app) to control the Mission Control state in the Electron app.
 
