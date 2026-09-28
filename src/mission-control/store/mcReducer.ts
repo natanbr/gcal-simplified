@@ -28,6 +28,7 @@ import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, is
 import { isQuickGameWindowOpen } from './gameWindow';
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
+import { isStaleMissionAction } from './staleMissionAction';
 import { createDefaultSkillProgress } from '../skills/types';
 import { canSelectReward, rewardCost } from '../rewardCatalogue';
 
@@ -191,9 +192,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
     // The shield freezes the child's own economy: spending, plus the
     // responsibility earning loop. Mission completion, parent grants and
     // ADJUST_SHIELD stay open — they are the ways out, and locking them would
-    // make the lock inescapable. `activityLog.ts` calls the same predicate, so a
+    // make the lock inescapable. `activityLog.ts` calls the same predicates, so a
     // refused action can never still log a movement that did not happen.
-    if (isRefusedByShieldLock(state, action)) return state;
+    if (isRefusedByShieldLock(state, action) || isStaleMissionAction(state, action)) return state;
     switch (action.type) {
         case 'ADD_TOKEN':
             return { ...state, bankCount: state.bankCount + 1 };

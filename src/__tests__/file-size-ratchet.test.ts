@@ -55,7 +55,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 818 → 821 on 2026-09-24 (+3: the SETTLE_GAME_TOKEN_CAP case, which delegates
     // to moodGauge's settleGameTokenCap, written out normally. Raised rather than
     // paid for by deleting blank lines: a squeeze hides growth from the ratchet).
-    'src/mission-control/store/mcReducer.ts': 821,
+    // 821 → 822 on 2026-09-28 (+1: the import of isStaleMissionAction, which the
+    // reducer calls on the shield-lock line, so the refusal itself costs nothing).
+    'src/mission-control/store/mcReducer.ts': 822,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
@@ -102,7 +104,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // NEW on 2026-09-24 at 304 (was 300): the SETTLE_GAME_TOKEN_CAP log case, 4
     // lines that delegate the wording to moodGauge's gameTokenCapNote. Moving the
     // game-token cases out was the cleaner fix, but not this close to a release.
-    'src/mission-control/store/activityLog.ts': 304,
+    // 304 → 305 on 2026-09-28 (+1: the import of isStaleMissionAction; the mirror
+    // shares the shield-lock line).
+    'src/mission-control/store/activityLog.ts': 305,
     // NEW on 2026-09-24 at 302 (was 300): the SETTLE_GAME_TOKEN_CAP union member
     // and its one-line doc comment. Split candidate: MCAction into its own module.
     'src/mission-control/types.ts': 302,
