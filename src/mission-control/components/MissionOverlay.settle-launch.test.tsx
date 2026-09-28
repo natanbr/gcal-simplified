@@ -9,9 +9,11 @@
 // append-only audit file, two of them with the pre-settle balance (review of
 // 985592f, 2026-09-28). The bank was paid once; only the record was wrong.
 //
-// Two lines is the PRE-EXISTING double (777c53b writes two as well: the overlay's
-// own expiry effect and MissionTimerDisplay's both fire before either commits).
-// It is pinned here so a fix for it shows up as a deliberate edit. Its own file
+// The base 777c53b wrote TWO lines on any such launch: the overlay's own expiry
+// effect and MissionTimerDisplay's both fired before either committed, and each
+// logged from the render-time state, where the mission was still active. Since the
+// interceptor reads the pending state (store/pendingState.ts, 2026-09-28) the
+// second sees the first's completion and writes nothing: one line. Its own file
 // because it needs its own framer mock (see below): the usual one remounts the
 // overlay on every render, which writes the third line with or without the fix.
 // ============================================================
@@ -79,26 +81,31 @@ afterEach(() => {
 });
 
 describe('MissionOverlay — relaunch with an expired, all-done mission', () => {
-    it('the settling launch writes no more completion lines than a launch within the cap', async () => {
+    it('the settling launch writes one completion line, after the removal, at the settled balance', async () => {
         seedExpiredAllDoneMorning(MAX_GAME_TOKENS); // one over: the goal holds a token too
         render(<MCStoreProvider><Probe /><MissionOverlay /></MCStoreProvider>);
         await act(async () => { await vi.advanceTimersByTimeAsync(10); });
 
         expect(live.gameTokens, 'the settle ran').toBe(MAX_GAME_TOKENS - 1);
         expect(live.bankCount, 'the bonus is paid once').toBe(2);
-        expect(completions(), 'the pre-existing double, and no third line').toHaveLength(2);
-        // Not asserted, and still wrong: both lines carry the pre-settle 🎮 5. They
-        // are dispatched from the first commit's passive effects, and the logging
-        // interceptor reads the state of the last RENDER, which the queued settle
-        // has not reached yet. A follow-up, not this fix.
+        expect(completions(), 'one line: no third, and no longer the old double').toHaveLength(1);
+        // The completions are dispatched from the first commit's passive effects,
+        // before the settle's re-render. The interceptor used to read the state of
+        // the last RENDER, so they showed the pre-settle 🎮 5 right after the line
+        // removing that token, and the audit file read as the token coming back.
+        expect(completions().map(l => l.gameTokens), 'every completion after the settle shows its balance')
+            .toEqual(completions().map(() => MAX_GAME_TOKENS - 1));
+        const order = live.activityLogs.map(l => l.message); // newest first
+        const removal = order.findIndex(m => /removed at load/.test(m));
+        expect(removal, 'the removal line is written before any completion').toBeGreaterThan(order.lastIndexOf('Morning mission completed'));
     });
 
-    it('control: the same launch within the cap writes the same two lines', async () => {
+    it('control: the same launch within the cap writes one line too', async () => {
         seedExpiredAllDoneMorning(MAX_GAME_TOKENS - 1);
         render(<MCStoreProvider><Probe /><MissionOverlay /></MCStoreProvider>);
         await act(async () => { await vi.advanceTimersByTimeAsync(10); });
 
         expect(live.bankCount).toBe(2);
-        expect(completions()).toHaveLength(2);
+        expect(completions()).toHaveLength(1);
     });
 });

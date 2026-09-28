@@ -7,6 +7,7 @@ import { useAuditTrail } from './useAuditTrail';
 import { useSuspensionExpiry } from './useSuspensionExpiry';
 import { useGameTokenCapSettle } from './useGameTokenCapSettle';
 import { gameTokensOverCap } from './moodGauge';
+import { pendingFrom } from './pendingState';
 
 /** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
@@ -21,7 +22,10 @@ function GameTokenCapSettle(): null {
 
 export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
     const [state, dispatch] = useReducer(mcReducer, undefined, loadPersistedState);
-    const contextValue = useMemo(() => ({ state, dispatch }), [state]);
+    // Every render starts the interceptor's pending state from this render's state.
+    const pending = useRef(pendingFrom(state));
+    pending.current = pendingFrom(state);
+    const contextValue = useMemo(() => ({ state, dispatch, pending }), [state]);
     // Read once, at load. Mounted on every launch, the settle re-rendered on every
     // store change for the app's lifetime, for a job only an over-cap load has.
     const [needsSettle] = useState(() => gameTokensOverCap(state) > 0);

@@ -1218,9 +1218,13 @@ From an independent review of PR 178 at 985592f.
   path (CLAUDE.md, the guard, this spec, QA 3.5.12).
 - **The game-token settle line is visible by default.** It is typed as a token movement, so the
   "💰 Tokens" filter shows it, and the summary strip's Who row has a 💻 System chip.
-- **A relaunch that settles no longer logs a third completion.** On that launch an expired, all-done
-  mission wrote "Morning mission completed +2" three times (the base writes two, a pre-existing
-  double that remains, with the pre-settle 🎮 balance on both). The bank was always paid once.
+- **A relaunch with an expired, all-done mission logs one completion.** On the launch that settles
+  the cap it wrote "Morning mission completed +2" three times, two of them with the pre-settle 🎮 5
+  right after the line removing that token; any such launch wrote two (the base). The bank was
+  always paid once. The logging interceptor now builds each line from the state the action applies
+  to (the last render's plus every logged dispatch since, `store/pendingState.ts`), not from the
+  last render, so a second completion sees the first and writes nothing, and every line shows the
+  settled balance.
 - **Minimize**: `touch-action: none`, so a finger drifting during a hold no longer cancels it; and a
   press still down when its mission ended no longer minimizes the next one.
 - **Smaller**: the settle computes its target directly (a corrupt 1e17 balance settled to 0); the
