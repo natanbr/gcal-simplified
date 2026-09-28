@@ -11,6 +11,7 @@ import { mcReducer, selectTotalWealth } from './mcReducer';
 import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { isStaleMissionAction } from './staleMissionAction';
+import { reschedulesRunningMission } from './missionReschedule';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
 import { gameTokenCapNote, gameTokenRoom } from './moodGauge';
@@ -206,9 +207,9 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'SET_SETTINGS': {
             // A new start time for the RUNNING mission ends it (kept; open decision,
-            // PR 170). Read off the reducer's result, so it cannot drift from it.
+            // PR 170). The reducer's own check, so no speculative pass and no drift.
             const phase = state.activeMission;
-            if (phase === 'none' || mcReducer(state, action).activeMission !== 'none') return null;
+            if (phase === 'none' || !reschedulesRunningMission(state, action.settings)) return null;
             const label = phase === 'morning' ? 'Morning' : 'Evening';
             return { id, timestamp: now, icon: '⏹️', message: `${label} mission ended: its start time was changed in Settings`, type: 'mission', colorKey: phase, ...snap() };
         }

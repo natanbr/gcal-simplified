@@ -57,7 +57,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // paid for by deleting blank lines: a squeeze hides growth from the ratchet).
     // 821 → 822 on 2026-09-28 (+1: the import of isStaleMissionAction, which the
     // reducer calls on the shield-lock line, so the refusal itself costs nothing).
-    'src/mission-control/store/mcReducer.ts': 822,
+    // 822 → 820 on 2026-09-28 (the start-time checks moved to missionReschedule.ts,
+    // shared with the log).
+    'src/mission-control/store/mcReducer.ts': 820,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
@@ -108,8 +110,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 304 → 305 on 2026-09-28 (+1: the import of isStaleMissionAction; the mirror
     // shares the shield-lock line), then 305 → 313 the same day (+8: the SET_SETTINGS
     // case that logs a settings save ending the running mission, which was silent).
-    // Moving the mission cases out is the split this file needs next.
-    'src/mission-control/store/activityLog.ts': 313,
+    // Moving the mission cases out is the split this file needs next. 313 → 314 the
+    // same day (+1: the import of the reducer's reschedule check, which replaced a
+    // second reducer pass on every settings save while a mission runs).
+    'src/mission-control/store/activityLog.ts': 314,
     // NEW on 2026-09-24 at 302 (was 300): the SETTLE_GAME_TOKEN_CAP union member
     // and its one-line doc comment. Split candidate: MCAction into its own module.
     'src/mission-control/types.ts': 302,

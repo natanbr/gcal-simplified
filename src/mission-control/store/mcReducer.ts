@@ -29,6 +29,7 @@ import { isQuickGameWindowOpen } from './gameWindow';
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
+import { reschedulesRunningMission, startTimeChanged } from './missionReschedule';
 import { createDefaultSkillProgress } from '../skills/types';
 import { canSelectReward, rewardCost } from '../rewardCatalogue';
 
@@ -530,13 +531,10 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             // If the start time of the currently-active mission changes, we must also
             // deactivate it — otherwise durationMins is wiped but active stays true,
             // making the expiry check `durationMins != null` permanently false (hung mission).
-            const mornTimeChanged =
-                (action.settings.morningStartsAt ?? state.settings.morningStartsAt) !== state.settings.morningStartsAt;
-            const evenTimeChanged =
-                (action.settings.eveningStartsAt ?? state.settings.eveningStartsAt) !== state.settings.eveningStartsAt;
-            const activeIsBeingRescheduled =
-                (state.activeMission === 'morning' && mornTimeChanged) ||
-                (state.activeMission === 'evening' && evenTimeChanged);
+            // Shared with activityLog.ts, which logs the ending (missionReschedule.ts).
+            const mornTimeChanged = startTimeChanged(state, action.settings, 'morning');
+            const evenTimeChanged = startTimeChanged(state, action.settings, 'evening');
+            const activeIsBeingRescheduled = reschedulesRunningMission(state, action.settings);
 
             return {
                 ...state,
