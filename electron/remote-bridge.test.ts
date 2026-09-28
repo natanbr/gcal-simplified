@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     }),
     getAllWindows: vi.fn<() => WindowSlice[]>().mockReturnValue([{ webContents: { send: vi.fn() } }]),
     storeGet: vi.fn<typeof store.get>(),
-    storeSet: vi.fn<typeof store.set>(),
+    storeUpdate: vi.fn<typeof store.update>().mockReturnValue(true),
 }));
 
 // Mock Supabase
@@ -39,7 +39,9 @@ vi.mock('electron', () => ({
 vi.mock('./store', () => ({
     store: {
         get: mocks.storeGet,
-        set: mocks.storeSet,
+        // A readable file: the unreadable paths are covered on real disk in remote-bridge.config-read.test.ts.
+        read: () => ({ kind: 'loaded', config: mocks.storeGet() }),
+        update: mocks.storeUpdate,
     },
 }));
 

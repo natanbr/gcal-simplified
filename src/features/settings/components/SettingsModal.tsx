@@ -17,6 +17,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     const [appVersion, setAppVersion] = useState<string>('');
     const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [saveError, setSaveError] = useState<string | null>(null);
     const [calendars, setCalendars] = useState<CalendarSource[]>([]);
     const [taskLists, setTaskLists] = useState<TaskListSource[]>([]);
     const [config, setConfig] = useState<UserConfig>({ calendarIds: [], taskListIds: [] });
@@ -55,12 +56,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
 
     const handleSave = async () => {
         if (!window.ipcRenderer) return;
+        setSaveError(null);
         try {
             await window.ipcRenderer.invoke('settings:save', config);
             onSave();
             onClose();
         } catch (e) {
             console.error("Failed to save settings", e);
+            // The main process refuses to write over a settings file it cannot read.
+            setSaveError('Settings not saved: the settings file could not be read. Close any program that may be using it (antivirus, backup) and try again.');
         }
     };
 
@@ -252,6 +256,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
 
                 {/* Footer */}
                 <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/50 flex justify-end gap-4 transition-colors duration-300">
+                    {saveError && (
+                        <p role="alert" className="mr-auto self-center text-red-400 text-sm font-medium" data-testid="settings-save-error">{saveError}</p>
+                    )}
                     <button onClick={onClose} className="px-6 py-3 rounded-xl font-bold text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                         Cancel
                     </button>

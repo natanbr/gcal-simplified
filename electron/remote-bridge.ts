@@ -11,12 +11,32 @@ function generatePairingKeys(): { roomId: string; remoteKey: string } {
     };
 }
 
+/** Retry schedule while config.json cannot be read: 5 s, doubling, capped at 5 min. */
+const INIT_RETRY_FIRST_MS = 5_000;
+const INIT_RETRY_MAX_MS = 5 * 60_000;
+
+/**
+ * The room to join, generating and saving a pairing on first run. Null when
+ * config.json cannot be read, or the new pairing cannot be saved: joining a
+ * room that was never saved leaves the phone on a room nobody can reach.
+ */
+function pairedRoomId(): string | null {
+    const current = store.read();
+    if (current.kind === 'unreadable') return null;
+    const { remoteRoomId, remoteKey } = current.config;
+    if (remoteRoomId && remoteKey) return remoteRoomId;
+
+    const pairing = generatePairingKeys();
+    return store.update({ remoteRoomId: pairing.roomId, remoteKey: pairing.remoteKey }) ? pairing.roomId : null;
+}
+
 export class RemoteBridge {
     private supabase: SupabaseClient | null = null;
     private channel: RealtimeChannel | null = null;
     private seenIds = new Map<string, number>();
     private cleanupInterval: NodeJS.Timeout | null = null;
-    private reconnectTimeout: NodeJS.Timeout | null = null;
+    private initRetryTimeout: NodeJS.Timeout | null = null;
+    private initRetryDelayMs = INIT_RETRY_FIRST_MS;
     private isOnline = false;
 
     getStatus(): boolean {
@@ -28,9 +48,9 @@ export class RemoteBridge {
             clearInterval(this.cleanupInterval);
             this.cleanupInterval = null;
         }
-        if (this.reconnectTimeout) {
-            clearTimeout(this.reconnectTimeout);
-            this.reconnectTimeout = null;
+        if (this.initRetryTimeout) {
+            clearTimeout(this.initRetryTimeout);
+            this.initRetryTimeout = null;
         }
     }
 
@@ -58,24 +78,21 @@ export class RemoteBridge {
             }, 60000);
         }
 
-        if (this.reconnectTimeout) {
-            clearTimeout(this.reconnectTimeout);
-            this.reconnectTimeout = null;
+        if (this.initRetryTimeout) {
+            clearTimeout(this.initRetryTimeout);
+            this.initRetryTimeout = null;
         }
 
         if (!this.supabase) {
             this.supabase = createClient(url, key);
         }
 
-        const config = store.get();
-        let roomId = config.remoteRoomId;
-        let remoteKey = config.remoteKey;
-
-        // Auto-generate if missing
-        if (!roomId || !remoteKey) {
-            ({ roomId, remoteKey } = generatePairingKeys());
-            store.set({ ...config, remoteRoomId: roomId, remoteKey });
+        const roomId = pairedRoomId();
+        if (!roomId) {
+            this.scheduleInitRetry();
+            return;
         }
+        this.initRetryDelayMs = INIT_RETRY_FIRST_MS;
 
         if (this.channel) {
             this.supabase.removeChannel(this.channel);
@@ -111,9 +128,10 @@ export class RemoteBridge {
                 }
 
                 // Re-fetch config to ensure we have latest key
-                const currentConfig = store.get();
-                
-                if (receivedKey === currentConfig.remoteKey) {
+                const expectedKey = store.get().remoteKey;
+
+                // A failed read has no key: undefined must never match a payload that sent none.
+                if (typeof expectedKey === 'string' && expectedKey !== '' && receivedKey === expectedKey) {
                     // Special case: Sync Request
                     if (action.type === 'SYNC_REQUEST') {
                         console.log('[RemoteBridge] 🔄 Sync request received. Asking renderer to broadcast state.');
@@ -152,14 +170,23 @@ export class RemoteBridge {
     }
 
     regenerateKeys() {
-        const config = store.get();
         const { roomId, remoteKey } = generatePairingKeys();
-        store.set({ ...config, remoteRoomId: roomId, remoteKey });
-        
+        if (!store.update({ remoteRoomId: roomId, remoteKey })) {
+            throw new Error('Pairing keys not regenerated: config.json could not be read or saved.');
+        }
+
         // Re-init with new keys
         this.init();
         
         return { roomId, remoteKey };
+    }
+
+    /** Stay offline rather than join a room the phone does not know, and try again. */
+    private scheduleInitRetry() {
+        const delay = this.initRetryDelayMs;
+        this.initRetryDelayMs = Math.min(delay * 2, INIT_RETRY_MAX_MS);
+        console.warn(`[RemoteBridge] Remote control offline: config.json could not be read or saved. Retrying in ${delay / 1000} s.`);
+        this.initRetryTimeout = setTimeout(() => this.init(), delay);
     }
 
     private sendToRenderer(channel: string, data: unknown) {

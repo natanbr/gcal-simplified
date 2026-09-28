@@ -49,8 +49,13 @@ export class ApiService {
         return store.get();
     }
 
+    /** Merged onto the file as it is now, never replacing it: a Settings copy
+     *  without the pairing would otherwise unpair the phone. Throws so the
+     *  renderer's Save can say the settings were not saved. */
     saveSettings(config: UserConfig) {
-        store.set(config);
+        if (!store.update(config)) {
+            throw new Error('Settings not saved: config.json could not be read or saved.');
+        }
     }
 
     async getCalendars() {
