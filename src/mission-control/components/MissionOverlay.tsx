@@ -252,7 +252,7 @@ export function MissionOverlay() {
                                         minWidth: 52,
                                         minHeight: 44,
                                         WebkitTapHighlightColor: 'transparent',
-                                        touchAction: 'manipulation',
+                                        touchAction: 'none', // a drifting finger must not turn a hold into a pan
                                         userSelect: 'none',
                                     }}
                                 >
