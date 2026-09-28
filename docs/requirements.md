@@ -181,6 +181,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     - **A ticked calendar that fails for good — deleted, or no longer shared with this account (Google answers 403 or 404) — makes every strict read fail, with no sign on screen or in the log.** Pro-D detection stops; once the saved 16 days run out the log shows "(weekday; calendar not read)" and the bag follows Monday to Friday. Unticking that calendar in Settings restores reading. A parent-visible signal is a follow-up.
     - A strict read follows every page of a calendar's answer (Google may send fewer events than a page holds, even none, with a "more" token); a calendar still sending pages after 10 fails the read.
     - A **timed** event titled "Pro-D day" is ignored — only all-day events count — and the phone's Calendar app creates timed events by default.
+    - A real break or closure whose title also contains an announcement word (before, after, reopens, starts, camp, bus, …) is missed, e.g. an all-day "Winter Break – school reopens Jan 5": the bag shows on those days. The words veto only the break / no school / closed keywords; a Pro-D or non-instructional day is never vetoed ("Pro-D Day camp" is still a Pro-D day).
 
 - **Mood gauge and game tokens**:
   - The mood gauge is the only generator of game tokens. It fills at the mood's rate (`MOOD_TOKENS_PER_DAY`) during the active window and drains at a negative mood. A full gauge (100 %) grants a game token, and a grant resets the mood to 0.
@@ -1344,3 +1345,7 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
   missions as the cause even when the parent had taken some of the shields away.
 - The structural guard that the bag is placed only at a fresh start now also reads
   `routineTasks.ts` (a call hidden in `syncCreamTask` stayed green before; proven red since).
+- **Round 2.** The announcement words briefly vetoed every keyword, so "Pro-D Day camp", "Pro-D Day
+  (no bus)" and "Pro-D Day - before and after school care open" became school days. They now veto
+  only the break / no school / closed keywords (`vetoable` in `NO_SCHOOL_KEYWORDS`); Pro-D and
+  non-instructional days are never vetoed.

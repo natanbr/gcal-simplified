@@ -143,6 +143,12 @@ describe('classifySchoolCalendar — which events mean no school, and the reason
         ['Winter  Break', 'school break'], // two spaces
         ['Winter Vacation', 'school break'],
         ['Summer Holidays', 'school break'],
+        // The announcement words only veto the break / no school / closed
+        // keywords: a Pro-D day stays a Pro-D day whatever else the title says.
+        ['Pro-D Day camp', 'Pro-D day'],
+        ['Pro-D Day (no bus)', 'Pro-D day'],
+        ['Pro-D Day - before and after school care open', 'Pro-D day'],
+        ['Non-instructional day - after school care open', 'non-instructional day'],
     ])('also a no-school day: "%s" → "%s"', (title, reason) => {
         expect(classify([allDay(title, 2026, 9, 29)])).toEqual([{ date: '2026-09-29', reason }]);
     });

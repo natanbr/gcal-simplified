@@ -40,21 +40,23 @@ export interface SchoolCalendar {
  * Dashes: hyphen or U+2010–U+2014 (phones type en dashes and non-breaking
  * hyphens). "Pro-D" needs a dash or space, or a following "day": "prod" on
  * its own is a software release, not a closure.
+ * `vetoable`: an announcement word (NOT_A_CLOSURE) cancels this keyword.
  */
-export const NO_SCHOOL_KEYWORDS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
-    { pattern: /\bpro(?:[\s\-‐-—]+d\b|d\s*day\b)/i, label: 'Pro-D day' }, // Pro-D, Pro–D, Pro D, ProD Day
-    { pattern: /\bprofessional\s+development\b/i, label: 'Pro-D day' },
-    { pattern: /\bno\s+school\b/i, label: 'no school' },
-    { pattern: /\bschools?\s+(?:closed|closure)\b/i, label: 'school closed' },
-    { pattern: /\bnon[\s\-‐-—]?instructional\b/i, label: 'non-instructional day' },
-    { pattern: /\b(?:spring|winter|summer|christmas|mid-winter)\s+(?:break|vacation|holidays?)\b/i, label: 'school break' },
+export const NO_SCHOOL_KEYWORDS: ReadonlyArray<{ pattern: RegExp; label: string; vetoable: boolean }> = [
+    { pattern: /\bpro(?:[\s\-‐-—]+d\b|d\s*day\b)/i, label: 'Pro-D day', vetoable: false }, // Pro-D, Pro–D, Pro D, ProD Day
+    { pattern: /\bprofessional\s+development\b/i, label: 'Pro-D day', vetoable: false },
+    { pattern: /\bno\s+school\b/i, label: 'no school', vetoable: true },
+    { pattern: /\bschools?\s+(?:closed|closure)\b/i, label: 'school closed', vetoable: true },
+    { pattern: /\bnon[\s\-‐-—]?instructional\b/i, label: 'non-instructional day', vetoable: false },
+    { pattern: /\b(?:spring|winter|summer|christmas|mid-winter)\s+(?:break|vacation|holidays?)\b/i, label: 'school break', vetoable: true },
 ];
 
 /**
  * A title with one of these words is an announcement ABOUT a break or a
  * closure ("Classes resume after Spring Break", "No school bus today", "Early
  * dismissal - no school in the afternoon"), on a day that has school. It
- * overrides every keyword above; statutory holidays are not affected.
+ * vetoes only the `vetoable` keywords: "Pro-D Day camp" is still a Pro-D day.
+ * Statutory holidays are not affected.
  */
 export const NOT_A_CLOSURE = /\b(?:before|after|reopens?|resumes?|starts?|begins?|camp|concert|registration|bus|fair|dismissal|report\s+cards?)\b/i;
 
@@ -105,8 +107,9 @@ function cleanReason(value: unknown): string {
 function noSchoolReason(event: Record<string, unknown>): { reason: string; statutory: boolean } | null {
     const { id, title } = event;
     if (typeof id === 'string' && id.startsWith(STATUTORY_HOLIDAY_ID_PREFIX)) return { reason: cleanReason(title), statutory: true };
-    if (event.allDay !== true || typeof title !== 'string' || NOT_A_CLOSURE.test(title)) return null;
-    const keyword = NO_SCHOOL_KEYWORDS.find(k => k.pattern.test(title));
+    if (event.allDay !== true || typeof title !== 'string') return null;
+    const announcement = NOT_A_CLOSURE.test(title);
+    const keyword = NO_SCHOOL_KEYWORDS.find(k => k.pattern.test(title) && !(k.vetoable && announcement));
     return keyword ? { reason: keyword.label, statutory: false } : null;
 }
 
