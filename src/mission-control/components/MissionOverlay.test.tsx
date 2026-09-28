@@ -250,6 +250,12 @@ describe('MissionOverlay', () => {
         await act(async () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
+        // Minimized first, or the pill assertion below could never fail.
+        await act(async () => {
+            fireEvent.pointerDown(screen.getByTestId('mc-minimize-btn'));
+            fireEvent.pointerUp(screen.getByTestId('mc-minimize-btn'));
+        });
+        expect(screen.getByTestId('mc-mission-pill')).toBeInTheDocument();
         await act(async () => {
             fireEvent.click(screen.getByTestId('remote-stop-btn'));
         });
