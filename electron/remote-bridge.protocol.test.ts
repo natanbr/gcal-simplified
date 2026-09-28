@@ -155,7 +155,8 @@ describe('incoming actions — phone → desktop', () => {
         deliver({ payload: { key: REMOTE_KEY, action: { type: 'ADD_TOKEN' }, msgId: 'v1-msg', timestamp: Date.now() } });
         expect(dispatchedActions()).toEqual([]);
         const logged = consoleText();
-        expect(logged).toContain('Rejected unsigned action (protocol v1). A phone still in legacy mode sends one per connect');
+        // The phone never switches protocol on its own: a v1 sender was paired from an old QR code.
+        expect(logged).toContain('Rejected unsigned action (protocol v1): the phone was paired from an old QR code. Scan the current one');
         // Nothing from an unverified payload is echoed.
         expect(logged).not.toContain('v1-msg');
         expectGenuineStillDispatched();
