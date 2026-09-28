@@ -177,6 +177,15 @@ describe('hydration sanitizes a corrupt gauge and token count', () => {
         expect(trashed.gameTokens).toBe(MAX_GAME_TOKENS);
         expect(settle(load({ ...trashed })).gameTokens).toBe(MAX_GAME_TOKENS);
     });
+
+    it('a huge corrupt saved balance settles to exactly the room, not to 0', () => {
+        // Settling by subtracting the excess loses precision past 2^53: 1e17 - (1e17 - 4)
+        // rounds to 0. The target is computed directly instead.
+        const settle = (s: MCState) => mcReducer(s, { type: 'SETTLE_GAME_TOKEN_CAP', origin: 'system' });
+        const goal = initialState.cases.map(c => c.id === 0 ? { ...c, status: 'active' as const, reward: 'quick-game' as const, tokenCount: 0 } : c);
+        expect(settle(load({ gameTokens: 1e17, cases: goal })).gameTokens).toBe(MAX_GAME_TOKENS - 1);
+        expect(settle(load({ gameTokens: 1e17 })).gameTokens).toBe(MAX_GAME_TOKENS);
+    });
 });
 
 describe('a parent adjustment pays at most one token (the pre-fix behaviour)', () => {

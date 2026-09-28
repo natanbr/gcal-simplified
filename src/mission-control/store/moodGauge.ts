@@ -52,8 +52,10 @@ export function gameTokensOverCap(state: MCState): number {
 
 /** SETTLE_GAME_TOKEN_CAP: drops what is over the cap. The same state when nothing is. */
 export function settleGameTokenCap(state: MCState): MCState {
-    const over = gameTokensOverCap(state);
-    return over === 0 ? state : { ...state, gameTokens: state.gameTokens - over };
+    if (gameTokensOverCap(state) === 0) return state; // also a corrupt (non-finite) balance
+    // The target itself, not `gameTokens - over`: past 2^53 that subtraction rounds (1e17 settled to 0).
+    const room = MAX_GAME_TOKENS - reservedGameTokens(state.cases);
+    return { ...state, gameTokens: Math.max(0, Math.min(state.gameTokens, room)) };
 }
 
 /**
