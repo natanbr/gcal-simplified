@@ -87,6 +87,13 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: 'sanitize() drops unknown fields and clamps types; preload_contract pins the channel list to audit:append/audit:read only',
     },
     {
+        rule: 'store.update is the only writer of config.json: it re-reads the file and writes nothing over one it cannot read (only ENOENT reads as the defaults), so what store.get() returned is never written back',
+        source: 'CLAUDE.md → Architecture → config.json has one writer',
+        status: 'guarded',
+        guard: ['src/__tests__/config-writer-boundary.test.ts', 'electron/store.config-read.test.ts', 'electron/remote-bridge.config-read.test.ts', 'electron/api.save-settings.test.ts'],
+        verifiedRedBy: "each proven 2026-09-28 against the committed fix, then reverted: re-add a set() to the store object — the surface and single-write-site cases go red; a helper in electron/api.ts that writeFileSyncs path.join(…, 'config.json') — the path case goes red naming api.ts; a second writeFileSync (a reset()) in store.ts — surface and write-site cases; read every read error as ENOENT — 11 behavioural cases across the store, bridge and saveSettings suites; drop update()'s unreadable check — 13; drop the bridge's non-empty stored-key check — the key-less-action case; drop the bridge's retry — the three retry lifecycle cases (the destroy() case stays green: with no retry there is nothing to cancel).",
+    },
+    {
         rule: 'Mission Control never imports from src/components, src/hooks, src/utils',
         source: 'CLAUDE.md → Conventions',
         status: 'guarded',

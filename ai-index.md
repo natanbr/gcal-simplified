@@ -67,7 +67,9 @@ reaches the main process only through the preload bridge.
   **separate repo**: `C:\Users\brnat\Documents\Projects\mc-remote` (`npm run dev`, usually port 5174).
 * `audit-log.ts`: append-only NDJSON audit trail (no clear channel by design).
 * `power-policy.ts`: night-time screen blanking.
-* `store.ts`, `weather.ts`.
+* `store.ts`: `config.json` (calendar selection, settings, remote pairing). `read()` says loaded /
+  absent / unreadable; `update()` is the only writer and never writes over a file it cannot read.
+* `weather.ts`.
 
 ### `src/components/` (Global UI)
 Contains global, cross-domain UI components.

@@ -23,10 +23,13 @@
 //     'tsconfig.json' never matches);
 //   - electron/store.ts itself has one writeFileSync call site.
 //
-// verifiedRedBy: PENDING — to be proven after the fix, in an isolated copy.
-//   Planned mutations: re-add `set` to the store object; add
-//   `path.join(app.getPath('userData'), 'config.json')` + a writeFileSync in
-//   electron/api.ts; add a second writeFileSync to electron/store.ts.
+// verifiedRedBy (proven 2026-09-28 against the committed fix, then reverted):
+//   - re-add a `set()` to the store object → the surface case and the
+//     one-write-site case go red;
+//   - a helper in electron/api.ts that writeFileSyncs
+//     `path.join(…, 'config.json')` → the path case goes red naming api.ts;
+//   - a second writeFileSync (a `reset()`) in electron/store.ts → the surface
+//     and write-site cases go red.
 // ============================================================
 
 import { describe, it, expect, vi } from 'vitest';
