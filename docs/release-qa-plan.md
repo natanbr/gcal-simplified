@@ -166,6 +166,13 @@ least one item; the Space Rescue row lists every item that guards the drop rule.
 | G12 phone connection or remote control | 3.11.1, 3.11.2, 3.11.5 |
 | G13 remote allowlist | 3.11.6 |
 
+**Cross-repo precondition: the live phone app speaks remote protocol v2 (since 2026-09-28).** The
+desktop refuses every v1 message, so releasing it before `mc-remote` (main → Vercel) has the v2 build
+leaves the phone with no state and no working button. Before publishing, this must print a count
+above 0 (`mc_proto` is a string only the v2 phone bundle contains); if it prints 0, deploy
+`mc-remote` first:
+`curl -s "https://mc-remote.vercel.app/$(curl -s https://mc-remote.vercel.app/ | grep -o 'assets/index-[^"]*\.js')" | grep -c mc_proto`
+
 That is 28 items (29 with 3.2.2, one more with 3.11.7 when the phone app changed). A must-do item that cannot be run (no spare device, no touchscreen)
 needs a reason in the run log and Nathan's explicit OK before a GO.
 An item that fails only on its listed known bug is judged by that bug: it blocks when the bug itself
