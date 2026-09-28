@@ -240,7 +240,10 @@ describe('MissionOverlay', () => {
             fireEvent.click(screen.getByTestId('trigger-btn'));
         });
         const button = screen.getByTestId('mc-minimize-btn');
-        expect(button.style.touchAction).toBe('manipulation');
+        // 'none', like GlobalBank's hold button: with 'manipulation' a finger that
+        // drifts ~25 px during a long hold becomes a pan, the browser sends
+        // pointercancel and no pointerup, and the hold minimizes nothing.
+        expect(button.style.touchAction).toBe('none');
         expect(button.style.minHeight).toBe('44px');
         expect(button.style.minWidth).toBe('52px');
     });
