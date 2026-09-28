@@ -799,7 +799,8 @@ that is fine — it redraws in five minutes. For a consumer that *persists* the 
 the answer was "holidays only", non-empty, and it overwrote the stored Pro-D days. Three independent
 review lenses found it; the first implementation had guarded only the fully-empty case. The fix was
 at the source — an opt-in `{ strict: true }` third argument on the same channel, under which every
-forgiven failure (and a paginated, therefore partial, answer) throws — not a renderer-side guess about
+forgiven failure throws (and a paged answer is followed to its last page, at most 10, never cut at
+the first) — not a renderer-side guess about
 which lists "look" failed. Two siblings from the same change: hydration rebuilt each checklist from
 the defaults, so an injected task (Cream, and now School Bag) vanished on a restart mid-mission; and a
 weekday-dependent feature made every test that starts a mission on the real clock weekday-dependent
