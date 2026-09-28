@@ -1207,7 +1207,10 @@ From an independent review of PR 178 at 985592f.
   was stopped, fired `RESET_MISSION_WITH_TIMER`, which set the ended mission active again, hidden
   and saved. Now `isStaleMissionAction` (store/staleMissionAction.ts) refuses both when the named
   mission is not the running one, in the reducer and the log alike (the shield-lock pattern), and the
-  hold is dropped when the mission changes. The phone's plain Reset is unchanged.
+  hold is dropped when the mission changes. One exception for the Stop: with nothing running, a Stop
+  naming a mission still marked active (a desynced save, which the phone shows as running because it
+  reads each mission's own flag) is let through and clears it, logged; a Stop naming an inactive
+  mission is refused. The full Reset stays strict. The phone's plain Reset is unchanged.
 - **A settings save that ends the running mission is logged.** Saving a new start time for the
   running mission in MC Settings ends it (kept; open decision, PR 170). It used to be silent; it now
   writes "⏹️ Evening mission ended: its start time was changed in Settings", attributed 👤. The rule
