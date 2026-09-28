@@ -15,6 +15,7 @@ import { initialState, selectTotalWealth } from './mcReducer';
 import { sanitizeBehaviorProgress, sanitizeGameTokens } from './moodGauge';
 import { sanitizeMissedStreak } from './missionStreak';
 import { createLogEntry } from './activityLog';
+import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { REWARD_MAP } from '../rewardCatalogue';
 
@@ -139,6 +140,8 @@ export function loadPersistedState(): MCState {
 interface MCContextValue {
     state: MCState;
     dispatch: React.Dispatch<MCAction>;
+    /** Shared by every useMCDispatch (pendingState.ts). Absent on a bare test provider. */
+    pending?: React.MutableRefObject<PendingState>;
 }
 
 export const MCContext = createContext<MCContextValue | null>(null);
@@ -156,11 +159,13 @@ export function useMCState(): MCState {
 }
 
 export function useMCDispatch(): React.Dispatch<MCAction> {
-    const { state, dispatch } = useMCStore();
+    const { state, dispatch, pending } = useMCStore();
 
-    // Keep a fresh reference to state without forcing dispatch identity changes
-    const stateRef = useRef(state);
-    stateRef.current = state;
+    // Without the provider's shared one (a bare test provider): this component's
+    // render-time state, as before.
+    const own = useRef(pendingFrom(state));
+    if (!pending) own.current = pendingFrom(state);
+    const pendingRef = pending ?? own;
 
     // Command Wrapper / Interceptor
     return React.useCallback((action: MCAction) => {
@@ -170,17 +175,21 @@ export function useMCDispatch(): React.Dispatch<MCAction> {
             timestamp: action.timestamp || new Date().toISOString()
         };
 
-        // 1. Generate Log Entry based on CURRENT state and incoming action
-        const logEntry = createLogEntry(actionWithTimestamp, stateRef.current);
+        // 1. Generate the log entry from the state this action applies to: the last
+        //    render's, plus every intercepted dispatch since (pendingState.ts)
+        const logEntry = createLogEntry(actionWithTimestamp, currentPending(pendingRef.current));
 
-        // 2. Dispatch the actual action first
+        // 2. Dispatch the actual action first, queued as the very object React gets
+        pendingRef.current.queue.push(actionWithTimestamp);
         dispatch(actionWithTimestamp);
 
         // 3. Dispatch the logging side-effect if we recorded one
         if (logEntry) {
-            dispatch({ type: 'ADD_LOG', log: logEntry });
+            const addLog: MCAction = { type: 'ADD_LOG', log: logEntry };
+            pendingRef.current.queue.push(addLog);
+            dispatch(addLog);
         }
-    }, [dispatch]);
+    }, [dispatch, pendingRef]);
 }
 
 /** Returns the mission matching the given phase */
