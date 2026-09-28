@@ -52,9 +52,10 @@ const PAYLOAD_VALIDATORS: Partial<Record<MCAction['type'], (a: MCAction) => bool
     // good on an idle Calendar.
     SET_ACTIVE_MISSION: a => a.type === 'SET_ACTIVE_MISSION'
         && ['none', 'morning', 'evening'].includes(a.phase),
-    // The phone's Stop is the only way to stop a mission (2026-09-24). The reducer
-    // sets activeMission 'none' but resets only the mission whose phase matches, so
-    // a missing or bad phase left that mission active with its timer running.
+    // The phone's Stop is the only way to stop a mission (2026-09-24). A malformed
+    // phase is dropped here; a well-formed one naming a mission that is not running
+    // (a stale second tap) is refused by the reducer and the log alike, through
+    // store/staleMissionAction.ts. This check cannot do that: it has no state.
     CANCEL_MISSION: a => a.type === 'CANCEL_MISSION'
         && ['morning', 'evening'].includes(a.missionPhase),
     // `amount` is optional on this one (the reducer defaults it to 1), so the

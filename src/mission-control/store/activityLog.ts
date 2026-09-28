@@ -10,6 +10,7 @@ import type { MCState, MCAction, ActivityLogEntry } from '../types';
 import { mcReducer, selectTotalWealth } from './mcReducer';
 import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
+import { isStaleMissionAction } from './staleMissionAction';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
 import { gameTokenCapNote, gameTokenRoom } from './moodGauge';
@@ -80,10 +81,10 @@ const UNLOGGED_ACTIONS = new Set<MCAction['type']>([
 
 export function createLogEntry(action: MCAction, state: MCState): ActivityLogEntry | null {
     if (UNLOGGED_ACTIONS.has(action.type)) return null;
-    // Mirror the reducer's shield lock — same predicate, not a copied list. A
-    // refused deposit that still logged "Deposited 3 tokens" would put a token
-    // movement in the parent's audit trail that never happened.
-    if (isRefusedByShieldLock(state, action)) return null;
+    // Mirror the reducer's shield lock and stale-mission refusal — same predicates,
+    // not copies. A refused deposit that still logged "Deposited 3 tokens" would put
+    // a token movement in the parent's audit trail that never happened.
+    if (isRefusedByShieldLock(state, action) || isStaleMissionAction(state, action)) return null;
 
     // The action's own instant, not the wall clock: the reducer decides every
     // refusal from `action.timestamp`, and two separate clock reads can disagree

@@ -67,6 +67,7 @@ describe('action literal boundaries', () => {
             `${MC}hooks/useRemoteControl.ts`, // REMOTE_ALLOWED_ACTIONS: the phone's Stop
             `${MC}store/activityLog.ts`, // its log line
             `${MC}store/mcReducer.ts`, // the case, and the cream-task resync list
+            `${MC}store/staleMissionAction.ts`, // refuses a Stop for a mission that is not running
             `${MC}types.ts`, // the union member
         ]);
     });
