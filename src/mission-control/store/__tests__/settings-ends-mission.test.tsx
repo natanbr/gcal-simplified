@@ -57,7 +57,7 @@ describe('SET_SETTINGS that ends the running mission', () => {
         });
     });
 
-    it('a second save of the same time, with nothing running, writes nothing more', () => {
+    it('a second start-time change, once nothing runs, writes nothing more', () => {
         launchWithEveningRunning();
         save({ eveningStartsAt: '20:30' });
         save({ eveningStartsAt: '20:40' });

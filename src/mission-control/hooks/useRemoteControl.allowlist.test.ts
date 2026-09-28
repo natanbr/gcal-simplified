@@ -104,9 +104,9 @@ describe('remote action allowlist', () => {
         });
 
         it("rejects a phone Stop whose phase is missing or not a real mission", () => {
-            // Stop is phone-only since 2026-09-24. CANCEL_MISSION always sets
-            // activeMission 'none' but only resets the mission whose phase matches,
-            // so a bad phase left that mission's active/startedAt behind.
+            // Stop is phone-only since 2026-09-24. A malformed phase is dropped here;
+            // a well-formed one naming a mission that is not running is refused later,
+            // by the reducer and the log (mcReducer.stale-mission-action.test.ts).
             const listener = mountAndGetListener();
             listener({ type: 'CANCEL_MISSION' });
             listener({ type: 'CANCEL_MISSION', missionPhase: 'none' });
