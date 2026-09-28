@@ -64,6 +64,34 @@ describe('a Stop for a mission that is not running', () => {
     });
 });
 
+// The phone picks the Stop's phase from each mission's broadcast `active` flag
+// (mc-remote MissionsSection.tsx), not from `activeMission`. A desynced save
+// (`activeMission: 'none'` with a mission still `active`) shows that mission as
+// running on the phone, and its Stop is the only way to clear it.
+describe('a Stop for a mission stuck active with nothing running', () => {
+    const stuck: MCState = {
+        ...initialState,
+        activeMission: 'none',
+        missions: initialState.missions.map(m =>
+            m.phase === 'evening' ? { ...m, active: true, startedAt: '2026-09-28T19:00:00.000Z', durationMins: 60 } : m),
+    };
+
+    it('the Stop for the stuck mission clears it, and logs one line', () => {
+        const after = mcReducer(stuck, stop('evening'));
+
+        expect(mission(after, 'evening').active).toBe(false);
+        expect(mission(after, 'evening').startedAt).toBeUndefined();
+        expect(createLogEntry(stop('evening'), stuck)).toMatchObject({ message: 'Mission stopped', colorKey: 'evening' });
+    });
+
+    it('a Stop for the other, inactive mission changes nothing, and logs nothing', () => {
+        const after = mcReducer(stuck, stop('morning'));
+
+        expect(after.missions).toBe(stuck.missions);
+        expect(createLogEntry(stop('morning'), stuck)).toBeNull();
+    });
+});
+
 // The overlay's 2 s Reset hold used to fire for the mission it began on even
 // after that mission had ended (expired, or stopped from the phone). The reducer
 // then set it active again with nothing running: hidden, never expiring, saved.
