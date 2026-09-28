@@ -1446,23 +1446,27 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
   file.
 - **Now.** Only a missing file means "use the defaults". A file that exists but cannot be read is
   never written:
-  - the remote control stays offline and retries after 5 s, doubling, at most every 5 minutes; once
-    the file reads again it joins the saved room, so the phone keeps working without a new scan;
+  - the remote control leaves its room, stays offline and retries after 5 s, doubling, at most every
+    5 minutes; once the file reads again it joins the saved room, so the phone keeps working without
+    a new scan. The same happens when a new pairing cannot be saved: a room that was never saved is
+    never joined;
   - Save in Settings keeps the dialog open and says "Settings not saved: the settings file could not
     be read…";
   - Regenerate Keys changes nothing (the button shows no error yet);
   - the calendar keeps working on the defaults meanwhile, as before.
-- **Also.** Saving Settings merges into the file instead of replacing it, so a settings copy without
-  the pairing no longer unpairs the phone. A remote action is accepted only against a stored,
+- **Also.** Saving Settings merges into the file instead of replacing it, and ignores any pairing the
+  dialog sends: a copy loaded before Regenerate Keys no longer puts the old pairing back, and one
+  without the fields no longer unpairs the phone. A remote action is accepted only against a stored,
   non-empty key: a failed read used to leave the key undefined, which matched an action sent without
   one. The read failure is logged by error code only, because the parser's message quotes the file.
 - **Known limits.** A file that stays unreadable (for example half-written by a crash) keeps the app
   on the defaults with the remote offline until it is repaired or deleted by hand
   (`%APPDATA%\gcal-simplified\config.json` for the installed app). A Settings dialog opened while the
   file could not be read shows the defaults, and saving it after the file reads again writes what it
-  showed.
+  showed (except the pairing, which Save never touches).
 
 Tests: `electron/store.config-read.test.ts`, `electron/remote-bridge.config-read.test.ts`,
+`electron/remote-bridge.leave-room.test.ts`,
 `electron/api.save-settings.test.ts` (real files on disk, a lock simulated as `EBUSY`/`EPERM`), the
 Settings modal's save cases, and the structural `src/__tests__/config-writer-boundary.test.ts`;
 registered in `rule-registry.test.ts`.

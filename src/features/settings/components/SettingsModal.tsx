@@ -64,7 +64,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
         } catch (e) {
             console.error("Failed to save settings", e);
             // The main process refuses to write over a settings file it cannot read.
-            setSaveError('Settings not saved: the settings file could not be read. Close any program that may be using it (antivirus, backup) and try again.');
+            setSaveError('Settings not saved: the settings file could not be read or saved. Close any program that may be using it (antivirus, backup) and try again.');
         }
     };
 

@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
     }),
     getAllWindows: vi.fn<() => WindowSlice[]>().mockReturnValue([{ webContents: { send: vi.fn() } }]),
     storeGet: vi.fn<typeof store.get>(),
+    storeRead: vi.fn<typeof store.read>(),
     storeUpdate: vi.fn<typeof store.update>().mockReturnValue(true),
 }));
 
@@ -40,7 +41,7 @@ vi.mock('./store', () => ({
     store: {
         get: mocks.storeGet,
         // A readable file: the unreadable paths are covered on real disk in remote-bridge.config-read.test.ts.
-        read: () => ({ kind: 'loaded', config: mocks.storeGet() }),
+        read: mocks.storeRead,
         update: mocks.storeUpdate,
     },
 }));
@@ -61,6 +62,7 @@ describe('RemoteBridge (Main Process)', () => {
             remoteRoomId: 'room-123',
             remoteKey: 'secret-key',
         });
+        mocks.storeRead.mockImplementation(() => ({ kind: 'loaded', config: mocks.storeGet() }));
 
         bridge = new RemoteBridge();
     });
