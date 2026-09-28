@@ -1434,3 +1434,35 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
 - Tests: `useRemoteControl.allowlist.test.ts` refuses a remote `ADD_TOKEN` and a well-formed remote
   `COMPLETE_MISSION_ROUTINE` (both red before the change: dispatched once); the "tagged as remote"
   examples now use `ADJUST_SHIELD`.
+
+### 2026-09-28 A settings file that cannot be read is never written over
+
+- **Bug** (found in the 2026-09-28 security review of the remote protocol v2 change). When
+  `config.json` existed but could not be read (held by antivirus or a backup, half-written, or not a
+  JSON object), the app read it as the defaults. At startup the remote bridge then saw "no pairing",
+  generated one and saved defaults + the new pairing over the file: the selected calendars and task
+  lists, the theme and sleep settings and the phone pairing were gone, and the parent's phone stopped
+  working until the QR code was scanned again. Reproduced against the built app with a half-written
+  file.
+- **Now.** Only a missing file means "use the defaults". A file that exists but cannot be read is
+  never written:
+  - the remote control stays offline and retries after 5 s, doubling, at most every 5 minutes; once
+    the file reads again it joins the saved room, so the phone keeps working without a new scan;
+  - Save in Settings keeps the dialog open and says "Settings not saved: the settings file could not
+    be read…";
+  - Regenerate Keys changes nothing (the button shows no error yet);
+  - the calendar keeps working on the defaults meanwhile, as before.
+- **Also.** Saving Settings merges into the file instead of replacing it, so a settings copy without
+  the pairing no longer unpairs the phone. A remote action is accepted only against a stored,
+  non-empty key: a failed read used to leave the key undefined, which matched an action sent without
+  one. The read failure is logged by error code only, because the parser's message quotes the file.
+- **Known limits.** A file that stays unreadable (for example half-written by a crash) keeps the app
+  on the defaults with the remote offline until it is repaired or deleted by hand
+  (`%APPDATA%\gcal-simplified\config.json` for the installed app). A Settings dialog opened while the
+  file could not be read shows the defaults, and saving it after the file reads again writes what it
+  showed.
+
+Tests: `electron/store.config-read.test.ts`, `electron/remote-bridge.config-read.test.ts`,
+`electron/api.save-settings.test.ts` (real files on disk, a lock simulated as `EBUSY`/`EPERM`), the
+Settings modal's save cases, and the structural `src/__tests__/config-writer-boundary.test.ts`;
+registered in `rule-registry.test.ts`.

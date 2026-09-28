@@ -69,7 +69,8 @@ Vulnerabilities actually found and fixed in `gcal-simplified`. This app holds a 
 - Outbound URLs via `URL`/`URLSearchParams`.
 - `contextIsolation: true`, `nodeIntegration` off, window-open denied, permissions denied.
 - Remote-control payloads treated as untrusted: timestamp window (60s), replay de-dup (2-min TTL), and no blind cast to a typed interface.
-- No secret in code, logs, error strings, or anything reaching the renderer.
+- No secret in code, logs, error strings, or anything reaching the renderer. A parse error counts: Node's `JSON.parse` message quotes the text around the bad token, so log the errno code or a fixed phrase for a file that holds a secret.
+- A secret compared against a value that may come from a fallback needs an explicit "present and non-empty" check first. While config.json could not be read the stored remote key was `undefined`, and `receivedKey === storedKey` accepted an action sent without a key (2026-09-28).
 
 Existing tests to run and extend: `electron/auth_security.test.ts`, `electron/main_security.test.ts`, `electron/weather_security.test.ts`, `electron/remote-bridge.test.ts`.
 

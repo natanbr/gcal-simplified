@@ -816,3 +816,24 @@ new consumer can tell failure from an answer. When a feature depends on the date
 tests that act on the real clock and assert on what the feature changes. Verify a layout claim in the
 built app at the real widths (1366/1280): the bag pushed "Whining?" off a 1366 screen and no unit test
 can see that.
+
+## 2026-09-28 — A fallback is for reading; never write it back
+
+**Learning:** `store.get()` answered "config.json is missing" and "config.json is there but I could
+not read it" with the same defaults. Harmless for a reader (the calendar shows `primary` for a
+moment), destructive for every read-modify-write: at startup the remote bridge saw "no pairing" in
+the defaults and saved defaults + a new pairing over the real file, wiping the calendar selection,
+the settings and the phone pairing (reproduced against the built app with a half-written file). The
+same defaults turned an authorization check into `undefined === undefined`, so a remote action sent
+without a key matched while the read was failing. Three details carry the fix. Classify "absent" by
+`ENOENT` from the read itself: `existsSync` also answers false for a file it may not access, which
+would call a present file absent. Re-read at write time and refuse there, in the one writer, not in
+each caller: the lock can appear between a caller's read and its write (a case in
+`remote-bridge.config-read.test.ts`). Log the errno code, never the error: the `JSON.parse` message
+quotes about ten characters around the bad token, and this file holds the pairing key. One surprise
+from the real binary: on Windows an exclusive lock blocked the write as well, so the locked case lost
+no data, but the bridge then joined a room it had never saved, which leaves the phone just as
+unpaired. A write that fails has to count as a failure for whatever the caller does next.
+**Action:** A read that can fall back to defaults says so in its return type
+(`loaded | absent | unreadable`), and the single writer is the thing that refuses. Never write back a
+value that a fallback may have produced. Guarded by `src/__tests__/config-writer-boundary.test.ts`.
