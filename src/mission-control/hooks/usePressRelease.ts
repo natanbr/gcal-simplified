@@ -5,14 +5,19 @@
 // pointerup, not click). A press that began elsewhere and was released here
 // does not count, nor does one dragged off or cancelled by the browser.
 // Enter / Space fire it too. No timer.
+//
+// `resetKey`: when it changes, a press in flight is forgotten. The overlay that
+// uses this is always mounted, so without it a press still down when its mission
+// ended counted for the next mission's button (MissionOverlay passes the phase).
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { KeyboardEvent } from 'react';
 
-export function usePressRelease(onRelease: () => void) {
+export function usePressRelease(onRelease: () => void, resetKey?: unknown) {
     const pressed = useRef(false);
+    useEffect(() => { pressed.current = false; }, [resetKey]);
     return useMemo(() => ({
         onPointerDown: () => { pressed.current = true; },
         onPointerUp: () => {

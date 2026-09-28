@@ -220,6 +220,21 @@ describe('MissionOverlay', () => {
         expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
     });
 
+    // The press flag lives in the always-mounted overlay, not in the button. A press
+    // still down when its mission ended used to count for the NEXT mission's button.
+    it('a press begun on one mission does not minimize the next one on release', async () => {
+        renderOverlay(<><TriggerMission phase="morning" /><RemoteStop /></>);
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+        await act(async () => { fireEvent.pointerDown(screen.getByTestId('mc-minimize-btn')); });
+        await act(async () => { fireEvent.click(screen.getByTestId('remote-stop-btn')); });
+        expect(screen.queryByTestId('mc-minimize-btn')).not.toBeInTheDocument();
+        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
+        await act(async () => { fireEvent.pointerUp(screen.getByTestId('mc-minimize-btn')); });
+
+        expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
+        expect(screen.queryByTestId('mc-mission-pill')).not.toBeInTheDocument();
+    });
+
     it('Enter or Space on the focused button minimizes too', async () => {
         for (const key of ['Enter', ' ']) {
             cleanup();
