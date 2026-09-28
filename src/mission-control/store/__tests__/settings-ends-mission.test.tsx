@@ -6,8 +6,8 @@
 // expiry check). That is the one desktop path that ends a mission, and it used
 // to do so silently: no line, no miss, no attribution. The behaviour is kept
 // (open decision, PR 170); the line is not optional (CLAUDE.md → Attribution).
-// Written by createLogEntry from the reducer's own result, so the line cannot
-// disagree with the reschedule logic it describes.
+// Written by createLogEntry with the reducer's own check (missionReschedule.ts),
+// so the line cannot disagree with the reschedule logic, and costs no extra pass.
 // ============================================================
 
 import { render, act } from '@testing-library/react';
