@@ -39,16 +39,19 @@ function seed(blob: Record<string, unknown>) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ _migrationVersion: 1, ...blob }));
 }
 
-const invoke = vi.fn((channel: string) => {
+// Typed like the preload's invoke, so a call's payload is readable without a cast.
+const invoke = vi.fn<(channel: string, payload?: unknown) => Promise<unknown>>((channel: string) => {
     if (channel === 'app:info') return Promise.resolve({ version: 'test' });
     if (channel === 'settings:get') return Promise.resolve({});
     return Promise.resolve(undefined);
 });
 
+const isEntry = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null;
+
 /** Everything the audit bridge sent to electron/audit-log.ts. */
 const appended = () => invoke.mock.calls
     .filter(([channel]) => channel === 'audit:append')
-    .flatMap(call => (call as unknown[])[1] as Array<Record<string, unknown>>);
+    .flatMap(([, batch]) => (Array.isArray(batch) ? batch.filter(isEntry) : []));
 
 let live: MCState = initialState;
 /** Every distinct state object the store handed out, in order. */
