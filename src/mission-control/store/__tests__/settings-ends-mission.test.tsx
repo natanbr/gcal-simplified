@@ -11,12 +11,19 @@
 // ============================================================
 
 import { render, act } from '@testing-library/react';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { MCStoreProvider } from '../MCStoreProvider';
 import { useMCDispatch, useMCState } from '../useMCStore';
-import { initialState } from '../mcReducer';
+import { initialState, mcReducer } from '../mcReducer';
 import { createLogEntry } from '../activityLog';
 import type { MCAction, MCSettings, MCState } from '../../types';
+
+// The real reducer, wrapped so a test can count the passes the log line costs.
+vi.mock('../mcReducer', async importOriginal => {
+    const actual = await importOriginal<typeof import('../mcReducer')>();
+    return { ...actual, mcReducer: vi.fn(actual.mcReducer) };
+});
+const reducerSpy = vi.mocked(mcReducer);
 
 const ENDED = /ended: its start time was changed in Settings/;
 
@@ -76,6 +83,14 @@ describe('SET_SETTINGS that ends nothing writes no such line', () => {
         save(settings);
         expect(live.activeMission).toBe('evening');
         expect(ended()).toEqual([]);
+    });
+
+    it('costs no reducer pass: a save that leaves the running start time alone is decided without one', () => {
+        // activityLog.ts's own rule: a path that writes no line must not pay a speculative reduce.
+        const evening: MCState = { ...initialState, activeMission: 'evening' };
+        reducerSpy.mockClear();
+        expect(createLogEntry({ type: 'SET_SETTINGS', settings: { eveningDurationMins: 45, morningStartsAt: '05:15' } }, evening)).toBeNull();
+        expect(reducerSpy).not.toHaveBeenCalled();
     });
 
     it('a start-time change with nothing running', () => {
