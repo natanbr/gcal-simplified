@@ -59,6 +59,7 @@ export function MissionOverlay() {
             }
         },
         LONG_PRESS_MS,
+        phase, // a hold does not outlive its mission
     );
 
 
