@@ -1,4 +1,4 @@
-import React, { useReducer, useMemo, useEffect, useRef } from 'react';
+import React, { useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { mcReducer } from './mcReducer';
 import { MCContext, loadPersistedState, STORAGE_KEY } from './useMCStore';
 import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
@@ -6,6 +6,7 @@ import { useRemoteSync } from './useRemoteSync';
 import { useAuditTrail } from './useAuditTrail';
 import { useSuspensionExpiry } from './useSuspensionExpiry';
 import { useGameTokenCapSettle } from './useGameTokenCapSettle';
+import { gameTokensOverCap } from './moodGauge';
 
 /** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
@@ -21,6 +22,9 @@ function GameTokenCapSettle(): null {
 export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
     const [state, dispatch] = useReducer(mcReducer, undefined, loadPersistedState);
     const contextValue = useMemo(() => ({ state, dispatch }), [state]);
+    // Read once, at load. Mounted on every launch, the settle re-rendered on every
+    // store change for the app's lifetime, for a job only an over-cap load has.
+    const [needsSettle] = useState(() => gameTokensOverCap(state) > 0);
 
     // Accrue mood progress once a minute while the app is running.
     // This heartbeat is the ONLY generator of game tokens — see
@@ -69,7 +73,7 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     return (
         <MCContext.Provider value={contextValue}>
             <SuspensionExpiry />
-            <GameTokenCapSettle />
+            {needsSettle && <GameTokenCapSettle />}
             {children}
         </MCContext.Provider>
     );

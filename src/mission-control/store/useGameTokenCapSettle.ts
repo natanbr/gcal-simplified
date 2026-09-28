@@ -11,6 +11,8 @@
 //
 // Once per launch, before paint (a layout effect), and only when something is
 // over: a launch within the cap dispatches nothing and creates no new state.
+// MCStoreProvider mounts it only then, so it does not re-render on every store
+// change for the rest of the session.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
