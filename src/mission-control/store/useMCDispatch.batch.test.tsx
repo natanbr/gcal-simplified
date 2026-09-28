@@ -84,7 +84,7 @@ describe('useMCDispatch — across renders', () => {
         render(<MCStoreProvider><Probe /></MCStoreProvider>);
         const start = live.bankCount;
         act(() => { dispatch({ type: 'ADD_TOKEN' }); });
-        act(() => { raw({ type: 'ADD_TOKENS', amount: 3, timestamp: new Date().toISOString() }); });
+        act(() => { raw({ type: 'ADD_TOKENS', amount: 3, source: 'manual', timestamp: new Date().toISOString() }); });
         act(() => { dispatch({ type: 'REMOVE_TOKEN' }); });
 
         expect(live.bankCount).toBe(start + 3);
