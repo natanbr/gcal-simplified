@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMCStore, useMCDispatch } from './useMCStore';
-import { classifySchoolCalendar, schoolCalendarWindow } from './schoolDays';
+import { classifySchoolCalendar, sameSchoolCalendar, sanitizeSchoolCalendar, schoolCalendarWindow } from './schoolDays';
 
 export function useSchoolCalendarSync(): void {
     const { state } = useMCStore();
@@ -30,6 +30,11 @@ export function useSchoolCalendarSync(): void {
     // the read in flight stale — only a newer read may.
     const latestRead = useRef(0);
     const mounted = useRef(false);
+    // What is stored now, read when an answer lands. No dispatch is free: it is
+    // stamped, the wrapper runs the mood-gauge sync on it and the store hands
+    // out a new state object — so an answer that changes nothing sends nothing.
+    const stored = useRef(state.schoolCalendar);
+    stored.current = state.schoolCalendar;
 
     useEffect(() => {
         mounted.current = true;
@@ -55,7 +60,7 @@ export function useSchoolCalendarSync(): void {
                 const connected = await ipc.invoke('auth:check');
                 if (!current()) return;
                 if (connected !== true) {
-                    dispatch({ type: 'SET_SCHOOL_CALENDAR', calendar: null, origin: 'system' });
+                    if (stored.current) dispatch({ type: 'SET_SCHOOL_CALENDAR', calendar: null, origin: 'system' });
                     return;
                 }
                 const range = schoolCalendarWindow(new Date());
@@ -65,7 +70,9 @@ export function useSchoolCalendarSync(): void {
                 const events = await ipc.invoke('data:events', range.timeMin, range.timeMax, { strict: true });
                 if (!current()) return;
                 if (!Array.isArray(events)) throw new Error('data:events did not answer with a list');
-                dispatch({ type: 'SET_SCHOOL_CALENDAR', calendar: classifySchoolCalendar(events, range.from, range.to), origin: 'system' });
+                const calendar = classifySchoolCalendar(events, range.from, range.to);
+                if (sameSchoolCalendar(stored.current, sanitizeSchoolCalendar(calendar))) return;
+                dispatch({ type: 'SET_SCHOOL_CALENDAR', calendar, origin: 'system' });
             } catch (error) {
                 if (current()) console.warn('[SchoolCalendar] Could not read the calendar; keeping the stored school days.', error);
             }

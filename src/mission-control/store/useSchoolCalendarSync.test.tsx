@@ -126,12 +126,29 @@ describe('useSchoolCalendarSync — happy path', () => {
 });
 
 describe('useSchoolCalendarSync — negative', () => {
-    it('calendar not connected: stores null (weekday fallback) and never asks for events', async () => {
+    it('calendar not connected: clears stored days (weekday fallback) and never asks for events', async () => {
         const { invoke } = installIpc(ch => (ch === 'auth:check' ? false : []));
-        const { calendars } = mount();
+        const { calendars } = mount({ ...initialState, schoolCalendar: EXPECTED });
         await settle();
         expect(calendars()).toEqual([expect.objectContaining({ calendar: null, origin: 'system' })]);
         expect(eventFetches(invoke)).toBe(0);
+    });
+
+    // A dispatch is never free: it carries a timestamp, the wrapper runs the
+    // mood-gauge sync on it, and the store hands out a new state object — on
+    // every launch of a machine with no calendar (PR 178's settle test caught it).
+    it('calendar not connected and nothing stored: dispatches nothing', async () => {
+        installIpc(ch => (ch === 'auth:check' ? false : []));
+        const { dispatch } = mount();
+        await settle();
+        expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it('an answer identical to the stored days dispatches nothing', async () => {
+        installIpc();
+        const { dispatch } = mount({ ...initialState, schoolCalendar: EXPECTED });
+        await settle();
+        expect(dispatch).not.toHaveBeenCalled();
     });
 
     it('a strict rejection keeps the stored slice (no dispatch) and warns — offline, an expired login, a calendar or the holiday feed failing', async () => {

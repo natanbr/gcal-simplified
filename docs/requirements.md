@@ -1349,3 +1349,8 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
   (no bus)" and "Pro-D Day - before and after school care open" became school days. They now veto
   only the break / no school / closed keywords (`vetoable` in `NO_SCHOOL_KEYWORDS`); Pro-D and
   non-instructional days are never vetoed.
+- **Rebased onto PR 178.** The calendar reader now dispatches only when its answer changes what
+  is stored: "not connected" with nothing stored, or the same days again, sends nothing. Every
+  dispatch is stamped and runs the mood-gauge sync, so the old unconditional one handed out a new
+  state object on every launch without a calendar (PR 178's settle test caught it). The start line's
+  School Bag decision reads the interceptor's pending state like every other log line.
