@@ -789,3 +789,23 @@ origin/main` (which replays diffs) over reset+`add -A` (which replays a tree). B
 squash, run `git diff --stat <base>...HEAD` and read the file list: it must contain only files you
 meant to touch, and a deletion count in someone else's file is the signature of this bug. A green
 suite is not evidence here — that is exactly what makes it dangerous.
+
+## 2026-09-27 — A forgiving API's swallowed failure looks like an answer to its next consumer
+
+**Learning:** The School Bag reads school days through `data:events`, which was built for the
+Calendar view and forgives everything: a failing calendar becomes `[]`, the holiday feed down becomes
+`[]`, signed out becomes `[]`, and the statutory holidays come from an in-memory cache. For a view
+that is fine — it redraws in five minutes. For a consumer that *persists* the answer it is not: offline,
+the answer was "holidays only", non-empty, and it overwrote the stored Pro-D days. Three independent
+review lenses found it; the first implementation had guarded only the fully-empty case. The fix was
+at the source — an opt-in `{ strict: true }` third argument on the same channel, under which every
+forgiven failure (and a paginated, therefore partial, answer) throws — not a renderer-side guess about
+which lists "look" failed. Two siblings from the same change: hydration rebuilt each checklist from
+the defaults, so an injected task (Cream, and now School Bag) vanished on a restart mid-mission; and a
+weekday-dependent feature made every test that starts a mission on the real clock weekday-dependent
+(a fixed task-id list passed on Saturday and failed on Monday).
+**Action:** When a second consumer reuses an API, ask what the API does on failure and whether the
+new consumer can tell failure from an answer. When a feature depends on the date, grep the suite for
+tests that act on the real clock and assert on what the feature changes. Verify a layout claim in the
+built app at the real widths (1366/1280): the bag pushed "Whining?" off a 1366 screen and no unit test
+can see that.

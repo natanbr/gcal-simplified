@@ -106,3 +106,19 @@ reset. Renderer payloads are rebuilt field-by-field (never spread) with clamped 
 newline inside a message cannot forge a second entry.
 **Action:** If a future feature wants to prune the trail, do it in the main process on a time policy —
 do not add a renderer-reachable delete channel.
+
+## 2026-09-27 — Calendar content now drives state; third-party text now reaches the phone
+
+**Learning:** The School Bag is the first feature where calendar content *decides* something: an
+all-day event whose title matches a no-school keyword removes the task. Google auto-adds invites, so
+a stranger's all-day invite titled "No school" can remove the bag that day (accepted: it can never add
+a task or move tokens). Raw titles never leave the machine — a keyword match is logged by a fixed
+label — but a statutory holiday's nager.at name now reaches the "mission started" log line, therefore
+the Supabase broadcast and the NDJSON audit trail. Stripping `\p{Cc}` was not enough: `\p{Cf}`
+(U+202E right-to-left override, zero-width characters) passes it and can make a log line display
+misleadingly. Pre-existing and tracked as a separate task: `remote-bridge.ts` `broadcastState` sends
+`config.remoteKey` in plain text in every `state-update`, so a listener on the room learns the key
+that authenticates remote actions.
+**Action:** Any third-party or user-authored text on its way to the log, the broadcast or the audit
+trail goes through a cleaner that strips `[\p{Cc}\p{Cf}]`, trims and caps. Treat calendar content as
+untrusted input the moment it changes state.

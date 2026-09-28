@@ -202,3 +202,14 @@ call and its closure is scalar-replaced away by TurboFan, so the swap is below t
 (A/B deltas flipped sign across board occupancies). `dealStandardTriple` makes ~114 rng calls on an
 open board, ~31 at 60% fill — the deal is *cheaper* on a crowded board, because fewer candidates
 fit and there are fewer anchor pairs to walk.
+
+## 2026-09-27 — Event-triggered network work in the always-mounted tree
+
+`useSchoolCalendarSync` (inside `MCStoreProvider`, so also on the Calendar view) calls `auth:check` +
+`data:events` — Google Calendar and date.nager.at — on mount, when a mission ends, on `system:resume`
+and on `auth:success`. No timer, so `timer-registry.test.ts` does not see it; it is the first
+`system:resume` listener that makes outbound network calls. Its fetch effect depends on a boolean
+(`activeMission !== 'none'`), never on the whole state, and a real-store test pins one `data:events`
+call per mount across ordinary dispatches. Known and accepted: at launch it duplicates the Calendar
+view's first fetch (different range, `ApiService` shares no in-flight request) — once per launch, no
+idle cost.
