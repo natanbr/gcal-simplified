@@ -38,11 +38,11 @@ export function MissionOverlay() {
     const state    = useMCState();
     const dispatch = useMCDispatch();
     const [minimized,       setMinimized]      = useState(false);
-    const minimizePress = usePressRelease(useCallback(() => setMinimized(true), []));
 
     const BONUS_BASE = 2;
 
     const phase   = state.activeMission;
+    const minimizePress = usePressRelease(useCallback(() => setMinimized(true), []), phase);
     const mission = useMission(phase !== 'none' ? phase : 'morning');
     const whiningDetected = mission?.whiningDetected ?? false;
 
