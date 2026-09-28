@@ -59,7 +59,10 @@ describe('action literal boundaries', () => {
         ]);
     });
 
-    it('CANCEL_MISSION reaches the store only from the phone: no desktop control stops a mission', () => {
+    // Not the whole of "only the phone stops a mission": saving a new start time for
+    // the running mission in MC Settings still ends it, through SET_SETTINGS, and
+    // that is logged (settings-ends-mission.test.tsx; open decision, PR 170).
+    it('CANCEL_MISSION reaches the store only from the phone: no desktop gesture stops a mission', () => {
         // A stop sticks for the rest of the window and does not move the shield,
         // so a desktop gesture let the child end a mission (decision 2026-09-24).
         // The phone's Stop arrives through useRemoteControl's allowlist.

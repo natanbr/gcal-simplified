@@ -218,14 +218,17 @@ const REGISTRY: Rule[] = [
         defence: 'The behavioural half is useMissionScheduler.stop.test.tsx and useMissionScheduler.early-start.test.tsx, which drive the real reducer through a stop in both windows, a mission started before its window and stopped inside it, a relaunch and a rollover. Their no-timer cases go red on their own if the arm-time checks in schedulePhase are dropped (20 timers in 10 s).',
     },
     {
-        rule: 'Only the phone stops a mission: no desktop control dispatches CANCEL_MISSION, and "— Minimize" only minimizes',
+        rule: 'Only the phone stops a mission: no desktop gesture dispatches CANCEL_MISSION, "— Minimize" only minimizes, a settings save that ends the running mission is logged, and a Stop or full Reset naming a mission that is not running is refused',
         source: 'CLAUDE.md → Conventions → Only the phone stops a mission',
         status: 'guarded',
         guard: [
             'src/__tests__/action-literal-boundary.test.ts',
             'src/mission-control/components/MissionOverlay.test.tsx',
+            'src/mission-control/store/__tests__/mcReducer.stale-mission-action.test.ts',
+            'src/mission-control/store/__tests__/settings-ends-mission.test.tsx',
+            'src/mission-control/hooks/useLongPress.test.ts',
         ],
-        verifiedRedBy: "run both against MissionOverlay.tsx as it stood at 777c53b (the Minimize long-press dispatching CANCEL_MISSION) — the boundary case names components/MissionOverlay.tsx and the 5 s hold case reads activeMission 'none'; add `export const STOP_TYPE = \"CANCEL_MISSION\"` to MissionTimerDisplay.tsx — the boundary case names it, while the same dispatch inside a comment stays green (all proven 2026-09-24).",
+        verifiedRedBy: "run both against MissionOverlay.tsx as it stood at 777c53b (the Minimize long-press dispatching CANCEL_MISSION) — the boundary case names components/MissionOverlay.tsx and the 5 s hold case reads activeMission 'none'; add `export const STOP_TYPE = \"CANCEL_MISSION\"` to MissionTimerDisplay.tsx — the boundary case names it, while the same dispatch inside a comment stays green (all proven 2026-09-24). Drop `|| isStaleMissionAction(state, action)` from createLogEntry — 5 stale-mission cases go red (4 behavioural, 1 structural); drop it from the reducer — the same 4 plus the reducer's structural case; drop the SET_SETTINGS case from createLogEntry — both 'ends the running mission' cases go red; restore useLongPress.ts without the reset key — the 'reset key changes' case goes red, and with the reducer refusal also absent both overlay 'Reset hold in progress' cases do (all proven 2026-09-28).",
         defence: 'The list is exact, so a file that stops naming the action must leave it too. The phone side (mc-remote MissionsSection.tsx) lives in another repo; this repo only pins that CANCEL_MISSION stays on REMOTE_ALLOWED_ACTIONS (useRemoteControl.allowlist.test.ts) and that the reducer still stops the mission (mcReducer.mission-stop.test.ts).',
     },
     {

@@ -204,6 +204,14 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started`, type: 'mission', colorKey: action.phase, ...snap() };
         case 'CANCEL_MISSION':
             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
+        case 'SET_SETTINGS': {
+            // A new start time for the RUNNING mission ends it (kept; open decision,
+            // PR 170). Read off the reducer's result, so it cannot drift from it.
+            const phase = state.activeMission;
+            if (phase === 'none' || mcReducer(state, action).activeMission !== 'none') return null;
+            const label = phase === 'morning' ? 'Morning' : 'Evening';
+            return { id, timestamp: now, icon: '⏹️', message: `${label} mission ended: its start time was changed in Settings`, type: 'mission', colorKey: phase, ...snap() };
+        }
         case 'MARK_MISSION_TIMEOUT':
             // Suppressed: SET_ACTIVE_MISSION phase:'none' now logs the expiry event with full
             // phase context. Logging here too would produce a duplicate entry.
