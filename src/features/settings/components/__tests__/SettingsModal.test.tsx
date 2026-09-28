@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { SettingsModal } from '../SettingsModal';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 
 // Mock framer-motion to avoid animation issues in tests
 vi.mock('framer-motion', async () => {
@@ -64,12 +64,18 @@ describe('SettingsModal', () => {
         taskLists?: unknown[];
         settings?: Record<string, unknown>;
         error?: boolean;
+        /** Only `settings:save` rejects — the loads succeed, so no load banner. */
+        saveError?: boolean;
     }) => {
         mockInvoke.mockImplementation((channel: string) => {
             if (overrides?.error) {
                 return Promise.reject(new Error('API Error'));
             }
             switch (channel) {
+                case 'settings:save':
+                    return overrides?.saveError
+                        ? Promise.reject(new Error("Error invoking remote method 'settings:save': Error: config.json could not be read (EBUSY)"))
+                        : Promise.resolve(undefined);
                 case 'data:calendars':
                     return Promise.resolve(overrides?.calendars ?? defaultCalendars);
                 case 'data:tasklists':
@@ -168,5 +174,43 @@ describe('SettingsModal', () => {
 
         expect(screen.getByTestId('settings-modal-title')).toBeInTheDocument();
         expect(screen.getByTestId('save-settings-button')).toBeInTheDocument();
+    });
+
+    // The main process refuses to write over a config.json it could not read
+    // (locked by antivirus/backup, or corrupt) and rejects `settings:save`. The
+    // modal used to swallow that in a console.error and sit there looking saved.
+    describe('saving', () => {
+        it('closes and refreshes when the save succeeds (guard)', async () => {
+            setupMocks();
+            const onClose = vi.fn();
+            const onSave = vi.fn();
+            render(<SettingsModal onClose={onClose} onSave={onSave} />);
+            await waitFor(() => expect(screen.getByText('Calendars (2)')).toBeInTheDocument());
+
+            fireEvent.click(screen.getByTestId('save-settings-button'));
+
+            await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+            expect(onSave).toHaveBeenCalledTimes(1);
+            expect(mockInvoke).toHaveBeenCalledWith('settings:save', expect.objectContaining({ calendarIds: ['cal-1'] }));
+        });
+
+        it('stays open and says the settings were not saved when the save is refused', async () => {
+            setupMocks({ saveError: true });
+            const onClose = vi.fn();
+            const onSave = vi.fn();
+            const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            onTestFinished(() => quiet.mockRestore());
+            render(<SettingsModal onClose={onClose} onSave={onSave} />);
+            await waitFor(() => expect(screen.getByText('Calendars (2)')).toBeInTheDocument());
+
+            fireEvent.click(screen.getByTestId('save-settings-button'));
+
+            const banner = await screen.findByTestId('settings-save-error');
+            expect(banner).toBeVisible();
+            expect(banner).toHaveTextContent(/not saved/i);
+            expect(onClose).not.toHaveBeenCalled();
+            expect(onSave).not.toHaveBeenCalled();
+            expect(screen.queryByTestId('settings-load-error')).not.toBeInTheDocument();
+        });
     });
 });
