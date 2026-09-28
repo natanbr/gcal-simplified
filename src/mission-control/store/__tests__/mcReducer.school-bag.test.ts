@@ -62,6 +62,30 @@ describe('happy path — the bag is on the checklist of a school day', () => {
         expect(ids).toContain('cream');
         expect(ids.indexOf('school-bag')).toBe(ids.indexOf('bed') - 1);
     });
+
+    // One order in both phases: Cream, then the School Bag (last in the morning, right before Bed in the evening).
+    it('Cream enabled while the bag is on the list lands BEFORE the bag, in both phases', () => {
+        let state = start('morning', local(2026, 9, 28, 6));
+        state = mcReducer(state, { type: 'CANCEL_MISSION', missionPhase: 'morning', timestamp: local(2026, 9, 28, 6, 5).toISOString() });
+        state = start('evening', local(2026, 9, 28, 19), undefined, state);
+        state = mcReducer(state, { type: 'SET_SETTINGS', settings: { creamTaskEnabled: true, creamTaskDaysTarget: 3, creamTaskSchedule: 'both' } });
+        expect(tasksOf(state, 'morning').map(t => t.id).slice(-2)).toEqual(['cream', 'school-bag']);
+        expect(tasksOf(state, 'evening').map(t => t.id).slice(-3)).toEqual(['cream', 'school-bag', 'bed']);
+    });
+
+    it('a fresh start puts a bag carried from an earlier run back in its place', () => {
+        const [a, b, c, d, bed] = tasksOf(initialState, 'evening');
+        const bag = { id: 'school-bag', label: 'School Bag', icon: '🎒', completed: false, locksAt: null, locked: false };
+        const cream = { id: 'cream', label: 'Cream (3d left)', icon: 'Droplet', completed: false, locksAt: null, locked: false };
+        const carried: MCState = {
+            ...initialState,
+            settings: { ...initialState.settings, creamTaskEnabled: true },
+            creamTaskDaysLeft: 3,
+            missions: initialState.missions.map(m => (m.phase === 'evening' ? { ...m, tasks: [a, b, c, d, bag, cream, bed] } : m)),
+        };
+        expect(tasksOf(start('evening', local(2026, 9, 27, 19), undefined, carried), 'evening').map(t => t.id).slice(-3))
+            .toEqual(['cream', 'school-bag', 'bed']);
+    });
 });
 
 describe('negative — no bag when there is no school', () => {
@@ -199,12 +223,20 @@ describe('the mission-start log line says why the bag is, or is not, on the list
         const cases: Array<[MissionPhase, Date, SchoolCalendar | undefined]> = [];
         for (let d = 26; d <= 31; d++) {
             for (const cal of [undefined, read]) {
-                cases.push(['morning', new Date(2026, 8, d, 6), cal], ['evening', new Date(2026, 8, d, 19), cal]);
+                cases.push(
+                    ['morning', new Date(2026, 8, d, 6), cal],
+                    ['evening', new Date(2026, 8, d, 19), cal],
+                    ['evening', new Date(2026, 8, d, 0, 20), cal], // after midnight
+                    ['evening', new Date(2026, 8, d, 5, 30), cal], // between 05:00 and 06:00: the setting decides
+                );
             }
         }
-        for (const [phase, when, cal] of cases) {
-            const logged = startLine(phase, when, cal)?.includes('· 🎒 School Bag') ?? false;
-            expect(logged, `${phase} ${when.toDateString()}`).toBe(hasBag(start(phase, when, cal), phase));
+        const earlyMornings = { ...initialState, settings: { ...initialState.settings, morningStartsAt: '05:00' } };
+        for (const from of [initialState, earlyMornings]) {
+            for (const [phase, when, cal] of cases) {
+                const logged = startLine(phase, when, cal, from)?.includes('· 🎒 School Bag') ?? false;
+                expect(logged, `${phase} ${when.toString()} from ${from.settings.morningStartsAt}`).toBe(hasBag(start(phase, when, cal, from), phase));
+            }
         }
     });
 
@@ -228,9 +260,16 @@ describe('lifecycle — the decision uses the action instant, not the wall clock
         expect(hasBag(start('evening', local(2026, 9, 27, 23, 59)), 'evening')).toBe(true); // Sun 23:59 → Monday
     });
 
-    it('an evening started just after midnight packs for the day after THAT date', () => {
-        expect(hasBag(start('evening', new Date(2026, 8, 27, 0, 0, 30)), 'evening')).toBe(true);
-        expect(hasBag(start('evening', new Date(2026, 9, 3, 0, 0, 30)), 'evening')).toBe(false); // Sat → Sunday
+    it('an evening started after midnight, before the morning start, packs for THAT day (still the night before it)', () => {
+        expect(hasBag(start('evening', new Date(2026, 8, 28, 0, 0, 30)), 'evening')).toBe(true); // Mon 00:00:30 → Monday
+        expect(hasBag(start('evening', new Date(2026, 8, 27, 0, 0, 30)), 'evening')).toBe(false); // Sun 00:00:30 → Sunday
+        expect(hasBag(start('evening', new Date(2026, 9, 2, 0, 20)), 'evening')).toBe(true); // Fri 00:20 → Friday
+    });
+
+    it('the boundary is the morning start time from Settings, read from the state', () => {
+        const earlyMornings = { ...initialState, settings: { ...initialState.settings, morningStartsAt: '05:00' } };
+        expect(hasBag(start('evening', new Date(2026, 9, 2, 5, 30)), 'evening')).toBe(true); // before 06:00 → Friday
+        expect(hasBag(start('evening', new Date(2026, 9, 2, 5, 30), undefined, earlyMornings), 'evening')).toBe(false); // after 05:00 → Saturday
     });
 });
 
@@ -247,9 +286,12 @@ describe('structural — decided in one place', () => {
     }
 
     it('only mcReducer.ts calls withSchoolBag, once, inside the SET_ACTIVE_MISSION case', () => {
+        // Every file, routineTasks.ts included: only its `function withSchoolBag(`
+        // definition is not a call. (Skipping that file let a call hidden in
+        // syncCreamTask, which runs after every mission change, stay green.)
         const callers = productionFiles(mcRoot)
-            .map(file => ({ file: relative(mcRoot, file).split(sep).join('/'), calls: (readFileSync(file, 'utf-8').match(/\bwithSchoolBag\(/g) ?? []).length }))
-            .filter(({ file, calls }) => calls > 0 && file !== 'store/routineTasks.ts');
+            .map(file => ({ file: relative(mcRoot, file).split(sep).join('/'), calls: (readFileSync(file, 'utf-8').match(/(?<!function\s+)\bwithSchoolBag\(/g) ?? []).length }))
+            .filter(({ calls }) => calls > 0);
         expect(callers).toEqual([{ file: 'store/mcReducer.ts', calls: 1 }]);
         const reducer = readFileSync(join(mcRoot, 'store', 'mcReducer.ts'), 'utf-8');
         // Exactly the SET_ACTIVE_MISSION case: from its label to the next `case '` label.
@@ -257,8 +299,6 @@ describe('structural — decided in one place', () => {
         const next = reducer.slice(start + 1).search(/\n\s*case '/);
         expect(start).toBeGreaterThan(-1);
         expect(next).toBeGreaterThan(-1);
-        const setActiveCase = reducer.slice(start, start + 1 + next);
-        expect(setActiveCase).not.toMatch(/case 'SET_SCHOOL_CALENDAR'/);
-        expect(setActiveCase).toMatch(/withSchoolBag\(/);
+        expect(reducer.slice(start, start + 1 + next)).toMatch(/withSchoolBag\(/);
     });
 });

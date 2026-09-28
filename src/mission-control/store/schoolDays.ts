@@ -37,15 +37,26 @@ export interface SchoolCalendar {
  * shows for each — never the title itself. Case-insensitive; edit freely.
  * Never add the `g` flag: it makes `.test()` stateful and skip matches.
  * Statutory holidays need no entry — they are recognised by their id.
+ * Dashes: hyphen or U+2010–U+2014 (phones type en dashes and non-breaking
+ * hyphens). "Pro-D" needs a dash or space, or a following "day": "prod" on
+ * its own is a software release, not a closure.
  */
 export const NO_SCHOOL_KEYWORDS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
-    { pattern: /\bpro[\s-]?d\b/i, label: 'Pro-D day' }, // Pro-D, Pro D, ProD
-    { pattern: /\bprofessional development\b/i, label: 'Pro-D day' },
-    { pattern: /\bno school\b/i, label: 'no school' },
-    { pattern: /\bschools? closed\b/i, label: 'school closed' },
-    { pattern: /\bnon[\s-]?instructional\b/i, label: 'non-instructional day' },
-    { pattern: /\b(spring|winter|summer|christmas|mid-winter) (break|vacation|holidays?)\b/i, label: 'school break' },
+    { pattern: /\bpro(?:[\s\-‐-—]+d\b|d\s*day\b)/i, label: 'Pro-D day' }, // Pro-D, Pro–D, Pro D, ProD Day
+    { pattern: /\bprofessional\s+development\b/i, label: 'Pro-D day' },
+    { pattern: /\bno\s+school\b/i, label: 'no school' },
+    { pattern: /\bschools?\s+(?:closed|closure)\b/i, label: 'school closed' },
+    { pattern: /\bnon[\s\-‐-—]?instructional\b/i, label: 'non-instructional day' },
+    { pattern: /\b(?:spring|winter|summer|christmas|mid-winter)\s+(?:break|vacation|holidays?)\b/i, label: 'school break' },
 ];
+
+/**
+ * A title with one of these words is an announcement ABOUT a break or a
+ * closure ("Classes resume after Spring Break", "No school bus today", "Early
+ * dismissal - no school in the afternoon"), on a day that has school. It
+ * overrides every keyword above; statutory holidays are not affected.
+ */
+export const NOT_A_CLOSURE = /\b(?:before|after|reopens?|resumes?|starts?|begins?|camp|concert|registration|bus|fair|dismissal|report\s+cards?)\b/i;
 
 /**
  * electron/api.ts builds BC statutory holidays (nager.at) with this id prefix.
@@ -94,7 +105,7 @@ function cleanReason(value: unknown): string {
 function noSchoolReason(event: Record<string, unknown>): { reason: string; statutory: boolean } | null {
     const { id, title } = event;
     if (typeof id === 'string' && id.startsWith(STATUTORY_HOLIDAY_ID_PREFIX)) return { reason: cleanReason(title), statutory: true };
-    if (event.allDay !== true || typeof title !== 'string') return null;
+    if (event.allDay !== true || typeof title !== 'string' || NOT_A_CLOSURE.test(title)) return null;
     const keyword = NO_SCHOOL_KEYWORDS.find(k => k.pattern.test(title));
     return keyword ? { reason: keyword.label, statutory: false } : null;
 }
@@ -148,18 +159,40 @@ export type SchoolBagDecision =
     | { due: true; calendarRead: boolean }
     | { due: false; reason: string };
 
+/** Minutes after midnight for a valid "HH:MM", else null. */
+function minutesOfDay(hhmm: string): number | null {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+    if (!match) return null;
+    const [h, m] = [Number(match[1]), Number(match[2])];
+    return h < 24 && m < 60 ? h * 60 + m : null;
+}
+
+/**
+ * The evening packs the night BEFORE a day. Started after midnight but before
+ * the morning mission's start (Fri 00:20, by ▶ Start or the phone), it is
+ * still that night, so it packs for the same calendar day. A start time it
+ * cannot read keeps the plain rule: the next calendar day.
+ */
+function eveningPacksForToday(now: Date, morningStartsAt: string): boolean {
+    const morning = minutesOfDay(morningStartsAt);
+    return morning !== null && now.getHours() * 60 + now.getMinutes() < morning;
+}
+
 /**
  * Whether a mission started at `instantIso` carries the school bag, and why.
  * The morning packs for TODAY; the evening packs the night before, for
  * TOMORROW (Sunday evening yes, Friday evening no). The reducer's fresh start
  * and the "mission started" log line both call this, so they cannot disagree.
  */
-export function schoolBagDecision(phase: MissionPhase, instantIso: string, calendar?: SchoolCalendar): SchoolBagDecision {
+export function schoolBagDecision(
+    phase: MissionPhase, instantIso: string, calendar: SchoolCalendar | undefined, morningStartsAt: string,
+): SchoolBagDecision {
     if (phase === 'none') return { due: false, reason: 'no mission' };
     const now = new Date(instantIso);
     if (Number.isNaN(now.getTime())) return { due: false, reason: 'time unknown' };
-    const when = phase === 'evening' ? 'tomorrow' : 'today';
-    const verdict = judgeDay(getLocalDateString(phase === 'evening' ? addLocalDays(now, 1) : now), calendar);
+    const packsForToday = phase === 'morning' || eveningPacksForToday(now, morningStartsAt);
+    const when = packsForToday ? 'today' : 'tomorrow';
+    const verdict = judgeDay(getLocalDateString(packsForToday ? now : addLocalDays(now, 1)), calendar);
     if (verdict.kind === 'weekend') return { due: false, reason: `${when} is ${verdict.dayName}` };
     if (verdict.kind === 'no-school') return { due: false, reason: verdict.reason };
     return { due: true, calendarRead: verdict.calendarRead };

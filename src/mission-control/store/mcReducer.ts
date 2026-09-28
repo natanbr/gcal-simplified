@@ -28,7 +28,7 @@ import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
 import { reschedulesRunningMission, startTimeChanged } from './missionReschedule';
-import { syncCreamTask, withSchoolBag } from './routineTasks';
+import { CREAM_TASK_ID, syncCreamTask, withSchoolBag } from './routineTasks';
 import { sameSchoolCalendar, sanitizeSchoolCalendar, schoolBagDecision } from './schoolDays';
 import { createDefaultSkillProgress } from '../skills/types';
 import { canSelectReward, rewardCost } from '../rewardCatalogue';
@@ -325,7 +325,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             const wasCompleted = currentTask.completed;
             const nextCompleted = !wasCompleted;
 
-            if (action.taskId === 'cream') {
+            if (action.taskId === CREAM_TASK_ID) {
                 const schedule = state.settings.creamTaskSchedule ?? 'evening';
                 const dec = schedule === 'both' ? 0.5 : 1;
                 if (nextCompleted) {
@@ -345,7 +345,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                     : m,
             );
             // Auto-disable if today was the last day
-            if (action.taskId === 'cream' && nextState.creamTaskDaysLeft === 0) {
+            if (action.taskId === CREAM_TASK_ID && nextState.creamTaskDaysLeft === 0) {
                  nextState.settings = { ...nextState.settings, creamTaskEnabled: false };
             }
             return nextState;
@@ -386,7 +386,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
 
             const now = actionInstant(action);
             // Decided only here (never mid-run); activityLog.ts's start line shares schoolBagDecision.
-            const bagDue = schoolBagDecision(action.phase, now, state.schoolCalendar).due;
+            const bagDue = schoolBagDecision(action.phase, now, state.schoolCalendar, state.settings.morningStartsAt).due;
             return {
                 ...state,
                 activeMission: action.phase,

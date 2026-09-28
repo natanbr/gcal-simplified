@@ -204,7 +204,7 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             }
             if (state.activeMission !== 'none') return null; // mirrors the reducer: one mission at a time
             // Same decision the reducer's fresh start takes, so the line cannot disagree with the list.
-            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started${schoolBagLogNote(schoolBagDecision(action.phase, now, state.schoolCalendar))}`, type: 'mission', colorKey: action.phase, ...snap() };
+            return { id, timestamp: now, icon: action.phase === 'morning' ? '☀️' : '🌙', message: `${action.phase} mission started${schoolBagLogNote(schoolBagDecision(action.phase, now, state.schoolCalendar, state.settings.morningStartsAt))}`, type: 'mission', colorKey: action.phase, ...snap() };
         case 'CANCEL_MISSION':
             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'SET_SETTINGS': {
