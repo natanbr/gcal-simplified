@@ -89,7 +89,7 @@ export class RemoteBridge {
 
         const roomId = pairedRoomId();
         if (!roomId) {
-            this.scheduleInitRetry();
+            this.goOfflineAndRetry();
             return;
         }
         this.initRetryDelayMs = INIT_RETRY_FIRST_MS;
@@ -181,8 +181,16 @@ export class RemoteBridge {
         return { roomId, remoteKey };
     }
 
-    /** Stay offline rather than join a room the phone does not know, and try again. */
-    private scheduleInitRetry() {
+    /** Stay offline rather than join a room the phone does not know, and try again.
+     *  Offline means out of the old room too: after a regenerate it would carry the new key there. */
+    private goOfflineAndRetry() {
+        if (this.channel && this.supabase) this.supabase.removeChannel(this.channel);
+        this.channel = null;
+        if (this.isOnline) {
+            this.isOnline = false;
+            this.sendToRenderer('remote:status-changed', false);
+        }
+
         const delay = this.initRetryDelayMs;
         this.initRetryDelayMs = Math.min(delay * 2, INIT_RETRY_MAX_MS);
         console.warn(`[RemoteBridge] Remote control offline: config.json could not be read or saved. Retrying in ${delay / 1000} s.`);

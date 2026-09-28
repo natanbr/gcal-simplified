@@ -145,6 +145,24 @@ describe('store — a present but unreadable file is never written over', () => 
         expect(bytes().equals(before), 'config.json was rewritten').toBe(true);
     });
 
+    it('reports a failed write as not written, so no caller acts on a pairing that was never saved', () => {
+        seed(JSON.stringify({ calendarIds: ['cal-a'] }));
+        const before = bytes();
+        const realWrite = fs.writeFileSync;
+        let writeHits = 0;
+        vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof realWrite>) => {
+            if (typeof args[0] !== 'number' && path.resolve(String(args[0])) === path.resolve(CONFIG)) {
+                writeHits++;
+                throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+            }
+            realWrite(...args);
+        });
+
+        expect(store.update(PAIRING)).toBe(false);
+        expect(writeHits, 'the write fault never fired — the case proves nothing').toBeGreaterThan(0);
+        expect(bytes().equals(before)).toBe(true);
+    });
+
     it('logs nothing that quotes the file, not even a JSON.parse error message', () => {
         // V8 quotes only ~10 characters from the bad token, so a longer secret
         // would never appear whole and this case would pass on a leaking store.

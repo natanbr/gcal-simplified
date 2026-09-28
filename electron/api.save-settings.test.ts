@@ -77,6 +77,18 @@ describe('ApiService.saveSettings', () => {
         expect(onDisk()).toMatchObject({ calendarIds: ['cal-b'], taskListIds: [], remoteRoomId: 'room-orig', remoteKey: 'key-orig' });
     });
 
+    // Settings opened, then Regenerate Keys in Mission Control, then Save: the
+    // dialog's copy still holds the old pairing. The main process owns it.
+    it('ignores a pairing the renderer sends, stale or cleared', () => {
+        seed(JSON.stringify(SEED, null, 2));
+
+        new ApiService().saveSettings({ calendarIds: ['cal-b'], taskListIds: [], remoteRoomId: 'room-stale', remoteKey: 'key-stale' });
+        expect(onDisk()).toMatchObject({ calendarIds: ['cal-b'], remoteRoomId: 'room-orig', remoteKey: 'key-orig' });
+
+        new ApiService().saveSettings({ calendarIds: ['cal-c'], taskListIds: [], remoteRoomId: undefined, remoteKey: undefined });
+        expect(onDisk()).toMatchObject({ calendarIds: ['cal-c'], remoteRoomId: 'room-orig', remoteKey: 'key-orig' });
+    });
+
     it('throws and writes nothing when config.json is corrupt', () => {
         seed('{"calendarIds": ["cal-a"], "remoteRoomId": "room-orig", "remoteKey": "key-o');
         const before = bytes();

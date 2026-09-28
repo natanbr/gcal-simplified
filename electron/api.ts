@@ -49,11 +49,15 @@ export class ApiService {
         return store.get();
     }
 
-    /** Merged onto the file as it is now, never replacing it: a Settings copy
-     *  without the pairing would otherwise unpair the phone. Throws so the
-     *  renderer's Save can say the settings were not saved. */
+    /** Merged onto the file as it is now, never replacing it. The pairing is the
+     *  main process's: a Settings copy loaded before a Regenerate Keys, or one
+     *  without the fields, would otherwise put back the old pairing or clear it.
+     *  Throws so the renderer's Save can say the settings were not saved. */
     saveSettings(config: UserConfig) {
-        if (!store.update(config)) {
+        const settings: Partial<UserConfig> = { ...config };
+        delete settings.remoteRoomId;
+        delete settings.remoteKey;
+        if (!store.update(settings)) {
             throw new Error('Settings not saved: config.json could not be read or saved.');
         }
     }

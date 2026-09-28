@@ -82,7 +82,8 @@ function readConfig(): ConfigRead {
     if (typeof loaded !== 'object' || loaded === null || Array.isArray(loaded)) {
         return unreadable('not a JSON object');
     }
-    // Merge with defaults to ensure safety
+    // Merge with defaults to ensure safety. Every field must be listed: update()
+    // writes back only what this returns, so a field left out is erased on the next write.
     return {
         kind: 'loaded',
         config: {
@@ -99,7 +100,7 @@ function readConfig(): ConfigRead {
             weekStartDay: loaded.weekStartDay || 'today',
             remoteRoomId: loaded.remoteRoomId,
             remoteKey: loaded.remoteKey
-        },
+        } satisfies Record<keyof UserConfig, unknown>,
     };
 }
 
