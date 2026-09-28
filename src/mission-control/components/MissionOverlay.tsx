@@ -93,6 +93,8 @@ export function MissionOverlay() {
     const collectBonus = useCallback((origin?: 'auto') => {
         dispatch({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase as Exclude<MissionPhase, 'none'>, bonusTokens: effectiveBonus, origin });
     }, [dispatch, effectiveBonus, phase]);
+    // Stable: MissionTimerDisplay's expiry effect re-fires whenever this changes identity.
+    const autoCollect = useCallback(() => collectBonus('auto'), [collectBonus]);
 
     // Auto-collect when timer expires with all tasks done
     // even when the mission overlay is hidden (timer component unmounted).
@@ -225,7 +227,7 @@ export function MissionOverlay() {
                             <MissionTimerDisplay
                                 mission={mission}
                                 allDone={allDone}
-                                onTimerExpiredWithAllDone={() => collectBonus('auto')}
+                                onTimerExpiredWithAllDone={autoCollect}
                                 onTimerExpiredInfo={handleTimerExpiredInfo}
                             />
 

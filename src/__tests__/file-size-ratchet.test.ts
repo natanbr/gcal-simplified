@@ -80,7 +80,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // gone: only the phone stops one; the button now only minimizes).
     // 481 → 482 the same day (review fix: Minimize fires only for a press that began
     // on it; the logic lives in hooks/usePressRelease.ts, this is its import).
-    'src/mission-control/components/MissionOverlay.tsx': 482,
+    // 482 → 484 on 2026-09-28 (the auto-collect callback made stable: an inline
+    // arrow re-fired the timer's expiry effect and wrote a third completion line).
+    'src/mission-control/components/MissionOverlay.tsx': 484,
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
     // committing it optimistically made coins vanish from the pile).
     'src/mission-control/components/GlobalBank.tsx': 407,
