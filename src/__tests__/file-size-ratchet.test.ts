@@ -106,8 +106,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // lines that delegate the wording to moodGauge's gameTokenCapNote. Moving the
     // game-token cases out was the cleaner fix, but not this close to a release.
     // 304 → 305 on 2026-09-28 (+1: the import of isStaleMissionAction; the mirror
-    // shares the shield-lock line).
-    'src/mission-control/store/activityLog.ts': 305,
+    // shares the shield-lock line), then 305 → 313 the same day (+8: the SET_SETTINGS
+    // case that logs a settings save ending the running mission, which was silent).
+    // Moving the mission cases out is the split this file needs next.
+    'src/mission-control/store/activityLog.ts': 313,
     // NEW on 2026-09-24 at 302 (was 300): the SETTLE_GAME_TOKEN_CAP union member
     // and its one-line doc comment. Split candidate: MCAction into its own module.
     'src/mission-control/types.ts': 302,
