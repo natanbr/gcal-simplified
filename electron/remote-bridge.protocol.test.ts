@@ -109,12 +109,14 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-    // Across every case: the pairing secret never reaches a log line.
-    expect(consoleText()).not.toContain(REMOTE_KEY);
+    // Read the log, tear down, THEN assert: a failure must not skip the teardown.
+    const logged = consoleText();
     bridge.destroy();
     vi.restoreAllMocks();
     delete process.env.VITE_SUPABASE_URL;
     delete process.env.VITE_SUPABASE_ANON_KEY;
+    // Across every case: the pairing secret never reaches a log line.
+    expect(logged).not.toContain(REMOTE_KEY);
 });
 
 describe('broadcastState — desktop → phone', () => {

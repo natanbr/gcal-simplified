@@ -56,7 +56,7 @@ describe('verifyRemoteMessage', () => {
         expect(verifyRemoteMessage('', 'action', ACTION_BODY, forged)).toBe(false);
     });
 
-    it('rejects — without throwing — when the key is not a string (a hand-edited config)', () => {
+    it('fails closed — no throw — when the key is 123, {}, null or undefined (a hand-edited or missing key)', () => {
         // createHmac throws ERR_INVALID_ARG_TYPE on these, on every message.
         for (const key of [123, {}, null, undefined]) {
             expect(() => verifyRemoteMessage(key, 'action', ACTION_BODY, ACTION_SIG)).not.toThrow();

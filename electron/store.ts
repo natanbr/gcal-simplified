@@ -24,6 +24,9 @@ export interface UserConfig {
     /** 2 = generated for signed messages (protocol v2). Absent = a v1 pairing,
      *  whose key was broadcast in plain text: init() renews it once. */
     remotePairingVersion?: number;
+    /** ISO time of an AUTOMATIC renewal the phone has not yet answered: the
+     *  Remote tab shows a notice until one verified message arrives. */
+    remotePairingRenewedAt?: string;
 }
 
 
@@ -159,6 +162,7 @@ function readConfig(): ConfigRead {
             remoteRoomId: nonEmptyString(loaded.remoteRoomId),
             remoteKey: nonEmptyString(loaded.remoteKey),
             remotePairingVersion: typeof loaded.remotePairingVersion === 'number' ? loaded.remotePairingVersion : undefined,
+            remotePairingRenewedAt: nonEmptyString(loaded.remotePairingRenewedAt),
         } satisfies Record<keyof UserConfig, unknown>,
     };
 }

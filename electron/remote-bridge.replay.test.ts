@@ -9,11 +9,13 @@
 //
 // Fake timers go on BEFORE init(): the seen-id cleanup is a setInterval armed
 // by init(), and an interval armed under real timers never fires on a fake one.
+// The wall clock can also step BACK (NTP, a manual change): the last two
+// sections pin what survives that.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { RemoteBridge } from './remote-bridge';
-import { sealRemoteMessage } from './remote-auth';
+import { openRemoteMessage, sealRemoteMessage } from './remote-auth';
 import type { store } from './store';
 
 type BroadcastHandler = (message: { payload?: unknown }) => void;
@@ -33,12 +35,21 @@ vi.mock('./store', () => ({ store: { read: mocks.storeRead, update: vi.fn() } })
 
 let bridge: RemoteBridge;
 let deliver!: BroadcastHandler;
+let channelSend: Mock<(message: unknown) => Promise<string>>;
 
 function action(msgId: string, timestamp: number) {
     return { payload: sealRemoteMessage(KEY, 'action', { action: { type: 'ADD_TOKEN' }, msgId, timestamp }) };
 }
 
 const dispatches = () => mocks.rendererSend.mock.calls.filter(([ch]) => ch === 'remote-control:action').length;
+
+/** The timestamps inside every state-update the bridge sent, in order. */
+function sentStamps(): unknown[] {
+    return channelSend.mock.calls.map(([message]) => {
+        const payload = (message as { payload: unknown }).payload;
+        return openRemoteMessage(KEY, 'state-update', payload)?.timestamp;
+    });
+}
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -48,9 +59,11 @@ beforeEach(() => {
     process.env.VITE_SUPABASE_ANON_KEY = 'mock-anon-key';
     const config = { calendarIds: [], taskListIds: [], remoteRoomId: 'room-under-test', remoteKey: KEY, remotePairingVersion: 2 };
     mocks.storeRead.mockReturnValue({ kind: 'loaded', config, raw: { ...config } });
-    const channel: { on: Mock; subscribe: Mock } = {
+    channelSend = vi.fn<(message: unknown) => Promise<string>>().mockResolvedValue('ok');
+    const channel: { on: Mock; subscribe: Mock; send: typeof channelSend } = {
         on: vi.fn((_type: string, _filter: unknown, handler: BroadcastHandler) => { deliver = handler; return channel; }),
         subscribe: vi.fn(() => channel),
+        send: channelSend,
     };
     mocks.createClient.mockReturnValue({ channel: vi.fn(() => channel), removeChannel: vi.fn() });
     for (const level of ['log', 'warn', 'error'] as const) vi.spyOn(console, level).mockImplementation(() => undefined);
@@ -96,5 +109,35 @@ describe('the 60-second age window', () => {
         // Control: the harness does dispatch a fresh one.
         deliver(action('fresh', Date.now()));
         expect(dispatches()).toBe(1);
+    });
+});
+
+describe('a backward clock step', () => {
+    it('cannot replay a signed action whose msgId was already forgotten', () => {
+        const captured = action('captured-1', Date.now());
+        deliver(captured);
+        expect(dispatches()).toBe(1);
+
+        // Pruned at the 180 s tick (older than the 120 s memory)...
+        vi.advanceTimersByTime(180_000);
+        // ...then the clock steps back, so the captured timestamp is fresh again.
+        vi.setSystemTime(NOON);
+        deliver(captured);
+        expect(dispatches()).toBe(1);
+
+        // Control: a genuine action newer than anything forgotten still lands.
+        deliver(action('genuine-after-step', NOON.getTime() + 1_000));
+        expect(dispatches()).toBe(2);
+    });
+
+    it('never stamps a state-update older than, or equal to, the previous one', async () => {
+        await bridge.broadcastState({ bankCount: 1 });
+        await bridge.broadcastState({ bankCount: 2 }); // same millisecond
+        vi.setSystemTime(NOON.getTime() - 5_000);      // the clock steps back
+        await bridge.broadcastState({ bankCount: 3 });
+
+        const t = NOON.getTime();
+        // The phone keeps only strictly newer states: equal or older ones are dropped.
+        expect(sentStamps()).toEqual([t, t + 1, t + 2]);
     });
 });

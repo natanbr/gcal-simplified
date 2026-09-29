@@ -72,8 +72,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
     // 755 → 734 on 2026-09-24 (TimeInput moved to its own file, which paid for
-    // Save refusing a cleared auto-trigger time).
-    'src/mission-control/components/MCSettingsOverlay.tsx': 734,
+    // Save refusing a cleared auto-trigger time), then 734 → 732 on 2026-09-28
+    // (the Remote tab's header moved to RemotePairingHeader.tsx).
+    'src/mission-control/components/MCSettingsOverlay.tsx': 732,
     // 648 → 649 on 2026-09-03 (+1: dropping the mcReducer barrel splits one
     // import line into two, since the lock and the window now come from their
     // own modules),

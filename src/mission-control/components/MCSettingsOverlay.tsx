@@ -19,6 +19,7 @@ import { TimeInput } from './TimeInput';
 import { missingTimesHint } from './missingTimesHint';
 import { regeneratePairing } from '../utils/regeneratePairing';
 import { buildPairingUrl } from '../utils/pairingUrl';
+import { RemotePairingHeader } from './RemotePairingHeader';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -572,10 +573,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
 
                                 {activeTab === 'remote' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(160,150,230,0.2)', paddingBottom: 8 }}>
-                                            <span style={{ fontSize: 18 }}>📱</span>
-                                            <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--mc-text)' }}>Remote Control Pairing</span>
-                                        </div>
+                                        <RemotePairingHeader />
                                         <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
                                             <div style={{ 
                                                 background: 'white', 

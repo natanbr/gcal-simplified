@@ -1,10 +1,8 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { BrowserWindow } from 'electron';
-import crypto from 'node:crypto';
-import { store, type StoreFailure, type WriteResult } from './store';
+import type { StoreFailure } from './store';
 import { isRecord, openRemoteMessage, sealRemoteMessage } from './remote-auth';
-
-interface Pairing { roomId: string; remoteKey: string }
+import { clearRenewalNotice, currentPairing, generatePairing, savePairing, type Pairing } from './remote-pairing';
 
 /** What remote:regenerate resolves to: the new pairing, or why the old one was kept. */
 export type RegenerateKeysResult = ({ ok: true } & Pairing) | StoreFailure;
@@ -14,8 +12,6 @@ const MAX_ACTION_AGE_MS = 60_000;
 /** At least twice the age window: an action dated a full window ahead stays
  *  acceptable for two windows, so a shorter memory lets it be replayed once. */
 const SEEN_ID_TTL_MS = 2 * MAX_ACTION_AGE_MS;
-/** The pairing format this build writes; an unmarked (v1) pairing is renewed once. */
-const PAIRING_VERSION = 2;
 
 /** The verified content of an action message: every field required. */
 function parseActionContent(content: Record<string, unknown>):
@@ -29,46 +25,9 @@ function parseActionContent(content: Record<string, unknown>):
     return { action: { ...action, type }, msgId, timestamp };
 }
 
-/** Cryptographically random pairing credentials for the remote channel. */
-function generatePairingKeys(): Pairing {
-    return {
-        roomId: crypto.randomUUID(),
-        remoteKey: crypto.randomBytes(15).toString('base64url'),
-    };
-}
-
-/** Retry schedule while config.json cannot be read: 5 s, doubling, capped at 5 min. */
+/** Retry schedule while config.json cannot be read or the pairing cannot be saved: 5 s, doubling, capped at 5 min. */
 const INIT_RETRY_FIRST_MS = 5_000;
 const INIT_RETRY_MAX_MS = 5 * 60_000;
-
-/** Saves a pairing with the protocol v2 marker. */
-function savePairing(pairing: Pairing): WriteResult {
-    return store.update({ remoteRoomId: pairing.roomId, remoteKey: pairing.remoteKey, remotePairingVersion: PAIRING_VERSION });
-}
-
-/**
- * The pairing to join, generating and saving one on first run and renewing one
- * that predates protocol v2: v1 broadcast its key in plain text, and a signature
- * keyed with a leaked key proves nothing. Null when the settings file cannot be
- * read (never renew from a fallback), or the new pairing cannot be saved:
- * joining a room that was never saved leaves the phone on a room nobody can
- * reach, and the pairing being replaced is the leaked one. Synchronous on
- * purpose: main.ts runs createWindow() and then remoteBridge.init() in the same
- * tick, so a renewed pairing is on disk before the renderer can ask for it.
- */
-function currentPairing(): Pairing | null {
-    const current = store.read();
-    if (current.kind === 'unreadable') return null;
-    const { remoteRoomId, remoteKey, remotePairingVersion } = current.config;
-    if (remoteRoomId && remoteKey && remotePairingVersion === PAIRING_VERSION) return { roomId: remoteRoomId, remoteKey };
-
-    const pairing = generatePairingKeys();
-    if (!savePairing(pairing).ok) return null;
-    if (remoteRoomId && remoteKey) {
-        console.log('[RemoteBridge] Pairing renewed for signed messages (protocol v2): scan the QR code again on the phone.');
-    }
-    return pairing;
-}
 
 export class RemoteBridge {
     private supabase: SupabaseClient | null = null;
@@ -76,7 +35,15 @@ export class RemoteBridge {
     /** What this bridge last joined with. The main process is the pairing's only owner (settings:save never
      *  writes it), so a file that turns unreadable mid-session must not change who may act. */
     private pairing: Pairing | null = null;
-    private seenIds = new Map<string, number>();
+    /** The Remote tab's re-scan notice is on disk (remote-pairing.ts). Set by init() from the pairing it
+     *  joins; the first verified message clears it, with ONE attempt, so a locked file cannot turn every
+     *  phone message into a blocking write. */
+    private renewalPending = false;
+    /** msgId → when it arrived here, and the sender's own timestamp. */
+    private seenIds = new Map<string, { seenAt: number; sentAt: number }>();
+    /** The newest sender timestamp among forgotten ids: nothing at or below it is accepted. */
+    private replayFloor = 0;
+    private lastStateStamp = 0;
     private cleanupInterval: NodeJS.Timeout | null = null;
     private initRetryTimeout: NodeJS.Timeout | null = null;
     private initRetryDelayMs = INIT_RETRY_FIRST_MS;
@@ -103,7 +70,7 @@ export class RemoteBridge {
         console.log(`[RemoteBridge] ENV KEY: ${process.env.VITE_SUPABASE_ANON_KEY ? 'FOUND' : 'MISSING'}`);
 
         // First, credentials or not: settings:get must never hand out a v1 key.
-        const pairing = currentPairing();
+        const current = currentPairing();
 
         const url = process.env.VITE_SUPABASE_URL;
         const key = process.env.VITE_SUPABASE_ANON_KEY;
@@ -116,8 +83,11 @@ export class RemoteBridge {
         if (!this.cleanupInterval) {
             this.cleanupInterval = setInterval(() => {
                 const now = Date.now();
-                for (const [msgId, timestamp] of this.seenIds.entries()) {
-                    if (now - timestamp > SEEN_ID_TTL_MS) {
+                for (const [msgId, seen] of this.seenIds.entries()) {
+                    if (now - seen.seenAt > SEEN_ID_TTL_MS) {
+                        // Forgetting an id must not reopen it: a backward clock step
+                        // would make its timestamp fresh again. Keep a floor instead.
+                        this.replayFloor = Math.max(this.replayFloor, seen.sentAt);
                         this.seenIds.delete(msgId);
                     }
                 }
@@ -133,11 +103,12 @@ export class RemoteBridge {
             this.supabase = createClient(url, key);
         }
 
-        if (!pairing) {
+        if (!current) {
             this.goOfflineAndRetry();
             return;
         }
-        this.join(pairing);
+        this.renewalPending = current.renewalPending;
+        this.join(current.pairing);
     }
 
     private join(pairing: Pairing) {
@@ -186,7 +157,7 @@ export class RemoteBridge {
     }
 
     regenerateKeys(): RegenerateKeysResult {
-        const pairing = generatePairingKeys();
+        const pairing = generatePairing();
         const saved = savePairing(pairing);
         if (!saved.ok) return saved;
 
@@ -224,6 +195,7 @@ export class RemoteBridge {
                 : '[RemoteBridge] ❌ Rejected action: missing or invalid signature.');
             return;
         }
+        this.acknowledgeRenewal();
 
         const parsed = parseActionContent(content);
         if (!parsed) {
@@ -241,9 +213,13 @@ export class RemoteBridge {
             console.log(`[RemoteBridge] Ignoring duplicate msgId: ${msgId}`);
             return;
         }
+        if (timestamp <= this.replayFloor) {
+            console.warn(`[RemoteBridge] Ignoring replayed ${action.type}: sent no later than a message already forgotten.`);
+            return;
+        }
         // Recorded only now, after the signature verified, so unauthenticated
         // traffic can neither grow the map nor pre-burn a genuine msgId.
-        this.seenIds.set(msgId, Date.now());
+        this.seenIds.set(msgId, { seenAt: Date.now(), sentAt: timestamp });
 
         if (action.type === 'SYNC_REQUEST') {
             console.log('[RemoteBridge] 🔄 Sync request received. Asking renderer to broadcast state.');
@@ -254,6 +230,15 @@ export class RemoteBridge {
         // Authorisation stays in the renderer's REMOTE_ALLOWED_ACTIONS.
         console.log(`[RemoteBridge] ✅ Verified action: ${action.type} (msgId: ${msgId})`);
         this.sendToRenderer('remote-control:action', action);
+    }
+
+    /** A verified message: the phone holds the joined key, so a pending re-scan notice is answered. */
+    private acknowledgeRenewal() {
+        if (!this.renewalPending) return;
+        this.renewalPending = false;
+        if (!clearRenewalNotice().ok) {
+            console.warn('[RemoteBridge] The phone answered, but the re-scan notice could not be cleared: the next start tries again.');
+        }
     }
 
     private sendToRenderer(channel: string, data: unknown) {
@@ -268,11 +253,16 @@ export class RemoteBridge {
 
         try {
             console.log('[RemoteBridge] Broadcasting state update...');
+            // Strictly increasing: the phone keeps only states newer than the last
+            // it accepted, so a backward clock step or two sends in one millisecond
+            // would drop a fresh state.
+            const timestamp = Math.max(Date.now(), this.lastStateStamp + 1);
+            this.lastStateStamp = timestamp;
             // Signed with the joined key, never carrying it: the channel is public (remote-auth.ts).
             await this.channel.send({
                 type: 'broadcast',
                 event: 'state-update',
-                payload: sealRemoteMessage(this.pairing.remoteKey, 'state-update', { state, timestamp: Date.now() }),
+                payload: sealRemoteMessage(this.pairing.remoteKey, 'state-update', { state, timestamp }),
             });
         } catch (e) {
             console.error('[RemoteBridge] Broadcast state failed:', e);

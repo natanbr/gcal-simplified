@@ -11,6 +11,7 @@ import { staleIncompleteRunPhases } from './staleMissionRun';
 import { gameTokensOverCap } from './moodGauge';
 import { pendingFrom } from './pendingState';
 import { useSchoolCalendarSync } from './useSchoolCalendarSync';
+import { pairingRenewedLogEntry } from './pairingRenewal';
 
 /** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
@@ -71,11 +72,21 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
         return () => clearTimeout(persistTimerRef.current);
     }, [state]);
 
-    // Sync remote control keys from Electron store
+    // Read when the settings:get below resolves, not at mount: logs may have moved on.
+    const logsRef = useRef(state.activityLogs);
+    logsRef.current = state.activityLogs;
+
+    // Sync remote control keys from Electron store, and log an automatic
+    // pairing renewal once (store/pairingRenewal.ts).
     useEffect(() => {
         if (window.ipcRenderer) {
-            (window.ipcRenderer.invoke('settings:get') as Promise<{ remoteRoomId?: string; remoteKey?: string }>)
+            (window.ipcRenderer.invoke('settings:get') as Promise<{ remoteRoomId?: string; remoteKey?: string } | undefined>)
                 .then((config) => {
+                    if (!config) return;
+                    // Hand-built, dispatched raw: it logs no action, so the shield-lock
+                    // re-check CLAUDE.md asks of hand-built entries does not apply.
+                    const renewalLine = pairingRenewedLogEntry(config, logsRef.current);
+                    if (renewalLine) dispatch({ type: 'ADD_LOG', log: renewalLine });
                     if (config.remoteRoomId && config.remoteKey) {
                         dispatch({ 
                             type: 'SET_SETTINGS', 
@@ -86,7 +97,7 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
                         });
                     }
                 })
-                .catch(() => { /* settings file busy or unreadable: the pairing keys stay as they were */ });
+                .catch(() => { /* settings file busy or unreadable: the pairing keys stay as they were, and no renewal line is logged */ });
         }
     }, []);
 

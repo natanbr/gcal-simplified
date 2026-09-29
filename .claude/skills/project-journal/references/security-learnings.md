@@ -161,3 +161,10 @@ unmarked pairing once (`remotePairingVersion`), and `settings:save` can no longe
 of the pairing back. Also: replay defences that live in memory reset on a restart or a page load and
 reopen exactly the replay they stop. After a desktop restart `seenIds` is empty, so an action
 captured in the previous ≤60 s can be replayed once. Accepted residual risk, documented, not fixed.
+**Learning (code review):** de-dup windows judged by the wall clock alone reopen on a backward clock
+step: once an id is pruned, the step makes its timestamp fresh again. Keep a floor (the newest sender
+timestamp you have forgotten) and stamp your own outgoing sequence monotonically. And never act on a
+write you have not confirmed: the renewed pairing is joined only when `store.update` reports it
+landed (`store.set` used to swallow the error), and the re-scan notice goes in the same update as the
+pairing it describes. A forced security change also needs a notice where the user looks,
+held until the other side answers; a main-process log line reaches nobody in a packaged build.
