@@ -93,8 +93,11 @@ Never the real one. A profile is Electron's userData directory: the Mission Cont
 - **(b) Upgrade:** state saved by the previous release, loaded by the new build. Hydration and
   sanitisation bugs only show here. Recipe: `git worktree add` the previous tag (`$T`, section 3).
   If `git diff $T HEAD -- package-lock.json` is empty, link `node_modules` (`cmd /c mklink /J`);
-  otherwise run `npm ci` there, so the old state comes from the code that actually shipped. Build it
-  the same way, launch it with `--user-data-dir=$env:TEMP\gcal-qa-upgrade`, and create realistic
+  otherwise run `npm ci` there, so the old state comes from the code that actually shipped. Copy
+  the repo's `.env` into that worktree before building (never commit it): without the Supabase
+  settings the old build writes no remote pairing, and the pass never exercises the one-time
+  v1 → v2 pairing renewal and its "re-paired" notice. Build it the same way, launch it with
+  `--user-data-dir=$env:TEMP\gcal-qa-upgrade`, and create realistic
   state (tokens in the bank and a goal, a completed mission, a suspended privilege, a few quiz
   answers, 30+ log entries). Write down what the screen shows, quit, then launch the **new**
   `dist-electron/main.js` on the same folder. Create the state through the old build's own UI, so

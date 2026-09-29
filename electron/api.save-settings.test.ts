@@ -10,9 +10,10 @@
 //     write-failed, with the file's path), never a thrown string.
 //   - getSettings (settings:get) throws while the file cannot be read, so the
 //     dialog never offers the defaults as the user's settings and saves them back.
-//   - The pairing's protocol v2 marker (remotePairingVersion) is main-owned too:
-//     a settings copy loaded before Regenerate Keys, or a renderer sending a
-//     malformed marker, must never bring back or unmark a pairing.
+//   - The pairing's protocol v2 marker (remotePairingVersion) and the re-scan
+//     notice (remotePairingRenewedAt) are main-owned too: a settings copy loaded
+//     before Regenerate Keys, or a renderer sending malformed values, must never
+//     bring back or unmark a pairing, nor clear or forge the notice.
 // Real store on one temp userData dir (store.ts memoizes the path); auth and
 // googleapis are stubbed only so api.ts can be imported.
 // ============================================================
@@ -93,18 +94,22 @@ describe('ApiService.saveSettings', () => {
         expect(written).not.toHaveProperty('remotePairingVersion');
     });
 
-    it('keeps the stored pairing and its protocol marker, whatever the renderer sends for them', () => {
-        seed(JSON.stringify({ ...SEED, remotePairingVersion: 2 }, null, 2));
+    it('keeps the stored pairing, its protocol marker and the re-scan notice, whatever the renderer sends for them', () => {
+        const RENEWED_AT = '2026-09-28T09:00:00.000Z';
+        seed(JSON.stringify({ ...SEED, remotePairingVersion: 2, remotePairingRenewedAt: RENEWED_AT }, null, 2));
         // Untrusted IPC data, built the way it arrives: parsed JSON.
         const fromRenderer: UserConfig[] = [
-            JSON.parse('{"calendarIds":["a"],"taskListIds":[],"remoteRoomId":"attacker-room","remoteKey":"old-leaked-key","remotePairingVersion":1}'),
+            JSON.parse('{"calendarIds":["a"],"taskListIds":[],"remoteRoomId":"attacker-room","remoteKey":"old-leaked-key","remotePairingVersion":1,"remotePairingRenewedAt":"1999-01-01T00:00:00.000Z"}'),
             JSON.parse('{"calendarIds":["b"],"taskListIds":[]}'),
             JSON.parse('{"calendarIds":["c"],"taskListIds":[],"remoteRoomId":123,"remoteKey":{},"remotePairingVersion":"2"}'),
         ];
 
         for (const config of fromRenderer) {
             expect(save(config)).toEqual({ ok: true });
-            expect(onDisk()).toMatchObject({ calendarIds: config.calendarIds, remoteRoomId: 'room-orig', remoteKey: 'key-orig', remotePairingVersion: 2 });
+            // A stale copy must not clear the notice either: the phone has not answered yet.
+            expect(onDisk()).toMatchObject({
+                calendarIds: config.calendarIds, remoteRoomId: 'room-orig', remoteKey: 'key-orig', remotePairingVersion: 2, remotePairingRenewedAt: RENEWED_AT,
+            });
         }
     });
 

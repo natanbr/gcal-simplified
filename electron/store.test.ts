@@ -57,6 +57,13 @@ describe('store.read — remote pairing fields', () => {
         }
     });
 
+    it('keeps the pending-renewal notice time, and drops one that is not a non-empty string', () => {
+        writeConfig({ calendarIds: [], remoteRoomId: ROOM, remoteKey: KEY, remotePairingVersion: 2, remotePairingRenewedAt: '2026-09-28T12:00:00.000Z' });
+        expect(loaded().remotePairingRenewedAt).toBe('2026-09-28T12:00:00.000Z');
+        writeConfig({ calendarIds: [], remoteRoomId: ROOM, remoteKey: KEY, remotePairingVersion: 2, remotePairingRenewedAt: 42 });
+        expect(loaded().remotePairingRenewedAt).toBeUndefined();
+    });
+
     it('drops a protocol marker that is not a number', () => {
         writeConfig({ calendarIds: [], remoteRoomId: ROOM, remoteKey: KEY, remotePairingVersion: '2' });
         expect(loaded().remotePairingVersion).toBeUndefined();

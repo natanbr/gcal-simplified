@@ -10,9 +10,9 @@
 
 import { store, type UserConfig, type WriteResult } from './store';
 
-/** Owned by the main process (remote-bridge.ts): the room and key, and the marker saying the
- *  pairing was made for signed messages. */
-type PairingField = 'remoteRoomId' | 'remoteKey' | 'remotePairingVersion';
+/** Owned by the main process (remote-pairing.ts): the room and key, the marker saying the pairing
+ *  was made for signed messages, and the re-scan notice of an automatic renewal. */
+type PairingField = 'remoteRoomId' | 'remoteKey' | 'remotePairingVersion' | 'remotePairingRenewedAt';
 
 /** The fields the Settings dialog may write. Typed over every field but the pairing, so a new
  *  UserConfig field is a tsc error here until someone decides which side it belongs to. */
