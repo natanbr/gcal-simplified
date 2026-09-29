@@ -12,10 +12,12 @@ import type { MCAction } from '../types';
  * for. Anything not on this list is dropped and logged — notably CLEAR_LOGS,
  * RESET_GAME_TOKENS, ADD_LOG, SET_SETTINGS and START_GAME, none of which the
  * remote app sends and all of which would either destroy evidence or strand
- * state (a remote START_GAME with no overlay mounted is unclosable).
+ * state (a remote START_GAME with no overlay mounted is unclosable). ADD_TOKEN
+ * and COMPLETE_MISSION_ROUTINE are off it too: no phone build ever sent them.
+ * The mission overlay dispatches COMPLETE_MISSION_ROUTINE locally, and a local
+ * dispatch never passes this list.
  */
 const REMOTE_ALLOWED_ACTIONS: ReadonlySet<MCAction['type']> = new Set<MCAction['type']>([
-    'ADD_TOKEN',
     'ADD_TOKENS',
     'REMOVE_TOKEN',
     'ADD_RESPONSIBILITY_POINT',
@@ -25,7 +27,6 @@ const REMOTE_ALLOWED_ACTIONS: ReadonlySet<MCAction['type']> = new Set<MCAction['
     'CANCEL_MISSION',
     'CHEAT_ATTEMPT',
     'COMPLETE_TASK',
-    'COMPLETE_MISSION_ROUTINE',
     'CONSUME_GAME_TOKEN',
     'GRANT_GAME_TOKEN',
     'RESET_MISSION',
@@ -62,9 +63,6 @@ const PAYLOAD_VALIDATORS: Partial<Record<MCAction['type'], (a: MCAction) => bool
     // validator must accept `undefined` or the remote's own button breaks.
     ADD_RESPONSIBILITY_POINT: a => a.type === 'ADD_RESPONSIBILITY_POINT'
         && (a.amount === undefined || Number.isFinite(a.amount)),
-    // This action also gives a shield back, so an unvalidated payload would
-    // unlock the bank as well as NaN-poison the balance.
-    COMPLETE_MISSION_ROUTINE: a => a.type === 'COMPLETE_MISSION_ROUTINE' && Number.isFinite(a.bonusTokens),
     ADJUST_BEHAVIOR_PROGRESS: a => a.type === 'ADJUST_BEHAVIOR_PROGRESS' && Number.isFinite(a.amount),
     ADJUST_MISSION_END: a => a.type === 'ADJUST_MISSION_END' && Number.isFinite(a.deltaMinutes),
     SET_MOOD_WIND: a => a.type === 'SET_MOOD_WIND' && Number.isFinite(a.level),

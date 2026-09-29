@@ -42,8 +42,17 @@ function mountAndGetListener(): (payload: unknown) => void {
     return captured;
 }
 
-/** Action types that must never be reachable over the wire. */
-const FORBIDDEN: Array<{ type: string; why: string }> = [
+/**
+ * Action types that must never be reachable over the wire. `payload` makes the
+ * send well-formed, so the allowlist refuses it and not a payload validator.
+ */
+const FORBIDDEN: Array<{ type: string; why: string; payload?: Record<string, unknown> }> = [
+    { type: 'ADD_TOKEN', why: 'no phone build sends it; every bank +1, phone or desktop, sends ADD_TOKENS' },
+    {
+        type: 'COMPLETE_MISSION_ROUTINE',
+        payload: { missionPhase: 'morning', bonusTokens: 2 },
+        why: 'no phone build sends it; would end a running mission as completed with unticked tasks and any bonus',
+    },
     { type: 'CLEAR_LOGS', why: 'would let the remote erase the parent-facing history' },
     { type: 'RESET_GAME_TOKENS', why: 'no remote button exists; destroys earned tokens' },
     { type: 'ADD_LOG', why: 'would let the remote forge activity-log entries' },
@@ -64,10 +73,10 @@ describe('remote action allowlist', () => {
     });
 
     describe('refuses actions the remote has no business sending', () => {
-        for (const { type, why } of FORBIDDEN) {
+        for (const { type, why, payload } of FORBIDDEN) {
             it(`rejects ${type} — ${why}`, () => {
                 const listener = mountAndGetListener();
-                listener({ type });
+                listener({ type, ...payload });
                 expect(mockDispatch).not.toHaveBeenCalled();
             });
         }
@@ -146,10 +155,10 @@ describe('remote action allowlist', () => {
     describe('still accepts the legitimate remote surface', () => {
         it('dispatches an allowed action, tagged as remote', () => {
             const listener = mountAndGetListener();
-            listener({ type: 'ADD_TOKEN' });
+            listener({ type: 'ADJUST_SHIELD', delta: 1 });
 
             expect(mockDispatch).toHaveBeenCalledWith(
-                expect.objectContaining({ type: 'ADD_TOKEN', isRemote: true, origin: 'remote' })
+                expect.objectContaining({ type: 'ADJUST_SHIELD', delta: 1, isRemote: true, origin: 'remote' })
             );
         });
 
@@ -162,7 +171,6 @@ describe('remote action allowlist', () => {
                 SET_ACTIVE_MISSION: { phase: 'morning' },
                 CANCEL_MISSION: { missionPhase: 'morning' },
                 ADJUST_SHIELD: { delta: 1 },
-                COMPLETE_MISSION_ROUTINE: { missionPhase: 'morning', bonusTokens: 2 },
                 ADJUST_BEHAVIOR_PROGRESS: { amount: 1, reason: 'test' },
                 ADJUST_MISSION_END: { missionPhase: 'morning', deltaMinutes: 5 },
                 SET_MOOD_WIND: { level: 1 },
@@ -281,11 +289,10 @@ describe('remote action allowlist', () => {
             // real button. Extras here are latent authorisation surface.
             const extras = [...REMOTE_ALLOWED_ACTIONS].filter(
                 t => !TYPES_SENT_BY_REMOTE_APP.includes(t) &&
-                    // Deliberate: mission completion/reset variants the remote
-                    // reaches indirectly through COMPLETE_TASK flows.
-                    // ADD_TOKEN: no phone button sends it (the phone's +1 sends
-                    // ADD_TOKENS); exempt since the first capture, reason unrecorded.
-                    !['ADD_TOKEN', 'COMPLETE_MISSION_ROUTINE', 'RESET_MISSION_WITH_TIMER'].includes(t)
+                    // RESET_MISSION_WITH_TIMER: docs/requirements.md (Mission Streak
+                    // Shield → "Reset re-arms the occurrence") specifies the
+                    // long-press reset as remote-reachable; no phone build sends it yet.
+                    t !== 'RESET_MISSION_WITH_TIMER'
             );
             expect(extras, `allowlist entries with no corresponding remote button: ${extras.join(', ')}`).toEqual([]);
         });

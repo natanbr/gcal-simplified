@@ -45,7 +45,7 @@ describe('useRemoteControl', () => {
         // Get the listener passed to ipcRenderer.on
         const listener = on.mock.calls[0][1];
         
-        const mockAction = { type: 'ADD_TOKEN' };
+        const mockAction = { type: 'ADJUST_SHIELD', delta: 1 };
         listener(mockAction);
 
         expect(mockDispatch).toHaveBeenCalledWith({ ...mockAction, isRemote: true, origin: 'remote' });
