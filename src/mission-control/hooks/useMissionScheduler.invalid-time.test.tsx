@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initialState } from '../store/mcReducer';
 import { STORAGE_KEY, loadPersistedState } from '../store/useMCStore';
 import type { MCState } from '../types';
-import { at, INSIDE_WINDOW, renderLiveScheduler, startLogs, step } from './schedulerTestKit';
+import { at, INSIDE_WINDOW, jumpTo, renderLiveScheduler, startLogs, step } from './schedulerTestKit';
 
 /** What Save wrote after the morning time field was cleared. */
 function clearedMorning(base: MCState = initialState): MCState {
@@ -131,6 +131,37 @@ describe('scheduler — an unparseable task lock time', () => {
         setTimeoutSpy.mockClear();
         step(5_000);
         expect(setTimeoutSpy, 'timers re-armed in 5 s for a lock time that does not exist').not.toHaveBeenCalled();
+        unmount();
+    });
+});
+
+// The one rule for an entered time (store/hhmm.ts). '24:00' and '06:5' are
+// refused by it but read by the lenient end-time parser, so a scheduler that
+// fell back to that parser would arm them: at 00:00 and at 06:05.
+describe('scheduler — a start the strict rule refuses arms nothing, even one the end-time parser reads', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+    it.each<[string, [number, number], [number, number, number]]>([
+        ['24:00', [23, 58], [0, 2, 1]],
+        ['06:5', [6, 0], [6, 10, 0]],
+    ])('a morning start of %j never starts the morning mission', (bad, [h, m], [jh, jm, day]) => {
+        vi.setSystemTime(at(h, m));
+        const state: MCState = {
+            ...initialState,
+            settings: { ...initialState.settings, morningStartsAt: bad },
+            missions: initialState.missions.map(x => (x.phase === 'morning' ? { ...x, startsAt: bad } : x)),
+        };
+        const { live, unmount } = renderLiveScheduler(state);
+        step(100);
+        jumpTo(at(jh, jm, day));
+        step(100);
+
+        expect(live.state.activeMission).toBe('none');
+        expect(startLogs(live.state, 'morning')).toBe(0);
         unmount();
     });
 });

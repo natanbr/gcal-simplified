@@ -6,8 +6,11 @@
 
 import React, { createContext, useContext, useRef } from 'react';
 import type {
+    ActivityLogEntry,
     MCState,
     MCAction,
+    MCSettings,
+    Mission,
     MissionPhase,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
@@ -19,7 +22,8 @@ import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
-import { hydrateMissionTimes, sanitizeMissionTimes } from './hhmm';
+import { hydrateMissionTimes, missionDurationMins, sanitizeMissionTimes } from './hhmm';
+import { getLocalDateString, MAX_ACTIVITY_LOGS } from './behaviorSync';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export { selectTotalWealth };
@@ -33,6 +37,34 @@ const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 /** A real instant that is not in the future (a stamp written under a clock set ahead). */
 function isPastInstant(value: unknown): value is string {
     return typeof value === 'string' && Date.parse(value) <= Date.now();
+}
+
+/**
+ * A mission saved running with no readable duration (JSON writes NaN as null)
+ * whose window closed before today. The expiry tick would charge a miss dated
+ * on the launch day, a shield segment for a data bug, and mark today's
+ * occurrence concluded, so that day's mission never started. So it ends here
+ * with no outcome, like a Stop. A run whose window reaches today keeps the
+ * repair in hydrateMissionTimes and ends normally.
+ */
+function isIncompleteRunFromEarlierDay(saved: Partial<Mission>, window: Mission, settings: MCSettings): saved is Partial<Mission> & { startedAt: string } {
+    if (!saved.active || !isPastInstant(saved.startedAt) || Number.isFinite(saved.durationMins)) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Date.parse(saved.startedAt) + missionDurationMins(window, settings) * 60_000 <= today.getTime();
+}
+
+function endedAtStartupLog(phase: Exclude<MissionPhase, 'none'>, startedAt: string): ActivityLogEntry {
+    const name = phase === 'morning' ? 'Morning' : 'Evening';
+    return {
+        id: `startup-ended-${phase}-${startedAt}`,
+        timestamp: new Date().toISOString(),
+        icon: '⏹️',
+        message: `${name} mission from ${getLocalDateString(new Date(startedAt))} ended at startup: its saved record was incomplete`,
+        type: 'mission',
+        colorKey: phase,
+        source: 'system',
+    };
 }
 
 export function loadPersistedState(): MCState {
@@ -71,26 +103,37 @@ export function loadPersistedState(): MCState {
         });
 
         const settings = sanitizeMissionTimes({ ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) });
+        const endedAtStartup: ActivityLogEntry[] = [];
+        const endedPhases = new Set<MissionPhase>();
+        const missions = initialState.missions.map(defaultM => {
+            const savedM = parsed.missions?.find(m => m.phase === defaultM.phase);
+            if (!savedM) return defaultM;
+            const hydrated = hydrateMissionTimes({
+                ...defaultM,
+                ...savedM,
+                // Must survive a restart: a relaunch inside the window after a
+                // stop would otherwise start the mission again.
+                lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
+                // Icon + label come from the code; a Cream or School Bag task
+                // the saved run carried is kept, ticked or not (routineTasks.ts).
+                tasks: hydrateMissionTasks(defaultM.tasks, savedM.tasks),
+            }, settings);
+            if (hydrated.phase === 'none' || !isIncompleteRunFromEarlierDay(savedM, hydrated, settings)) return hydrated;
+            endedAtStartup.push(endedAtStartupLog(hydrated.phase, savedM.startedAt));
+            endedPhases.add(hydrated.phase);
+            // No outcome: no miss, no conclusion date. The run's start (or a
+            // later stamp) as lastActiveAt keeps that old occurrence from restarting.
+            const later = hydrated.lastActiveAt && hydrated.lastActiveAt > savedM.startedAt ? hydrated.lastActiveAt : savedM.startedAt;
+            return { ...hydrated, active: false, startedAt: undefined, durationMins: undefined, lastActiveAt: later };
+        });
         return {
             ...initialState,
             ...parsed,
             // Merge saved settings over defaults (so new settings fields always have values)
             settings,
             cases,
-            missions: initialState.missions.map(defaultM => {
-                const savedM = parsed.missions?.find(m => m.phase === defaultM.phase);
-                if (!savedM) return defaultM;
-                return hydrateMissionTimes({
-                    ...defaultM,
-                    ...savedM,
-                    // Must survive a restart: a relaunch inside the window after a
-                    // stop would otherwise start the mission again.
-                    lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
-                    // Icon + label come from the code; a Cream or School Bag task
-                    // the saved run carried is kept, ticked or not (routineTasks.ts).
-                    tasks: hydrateMissionTasks(defaultM.tasks, savedM.tasks),
-                }, settings);
-            }),
+            missions,
+            ...(parsed.activeMission && endedPhases.has(parsed.activeMission) ? { activeMission: 'none' as const } : {}),
             // Merge responsibilities from defaults so new tasks always appear
             responsibilities: initialState.responsibilities.map(defaultR => {
                 const savedR = parsed.responsibilities?.find(r => r.id === defaultR.id);
@@ -104,7 +147,7 @@ export function loadPersistedState(): MCState {
                 const savedPriv = parsed.privileges?.find(p => p.id === defaultPriv.id);
                 return savedPriv ? { ...defaultPriv, ...savedPriv } : defaultPriv;
             }),
-            activityLogs,
+            activityLogs: [...endedAtStartup, ...activityLogs].slice(0, MAX_ACTIVITY_LOGS),
             // Never top tokens back up on restart (that would refund spent game
             // tokens); a corrupt null is 0. Over the cap: useGameTokenCapSettle, logged.
             gameTokens: sanitizeGameTokens(parsed.gameTokens, initialState.gameTokens),

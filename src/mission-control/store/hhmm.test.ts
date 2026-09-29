@@ -70,6 +70,12 @@ describe('missionWindowEnd — start + duration', () => {
         expect(missionWindowEnd('23:30', 60)).toBe('24:30');
     });
 
+    it('rounds to whole seconds, so the end is never written in exponent form', () => {
+        // 60.0000001 % 60 is 1e-7, which String() writes as "1e-7".
+        expect(missionWindowEnd('06:00', 60.0000001)).toBe('07:00');
+        expect(windowEndToMins(missionWindowEnd('06:00', 59.99999999))).toBe(420);
+    });
+
     it('has no end for a start it cannot read', () => {
         expect(missionWindowEnd('', 30)).toBeNull();
     });

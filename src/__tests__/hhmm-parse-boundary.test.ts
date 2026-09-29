@@ -10,8 +10,9 @@
 // (hhmm.test.ts proves the current readers agree), hence this guard.
 //
 // It looks for the two shapes a hand parser takes: a split on ':' and a regex
-// literal for digits-colon-digits. A heuristic, not a proof: slice/indexOf
-// parsing gets past it (none exists today). Scope is src/mission-control/ — the Calendar
+// literal for digits-colon-digits (`\d` or any character class such as [0-5]).
+// A heuristic, not a proof: slice/indexOf parsing gets past it (none exists
+// today). Scope is src/mission-control/ — the Calendar
 // app reads Google's ISO timestamps and never an HH:MM setting. It lives here,
 // not under src/mission-control/, because it uses the shared source walk and
 // Mission Control may not import from outside itself, tests included.
@@ -26,10 +27,12 @@ import { productionSources, readSource, toRepoPath } from './helpers/sourceFiles
 const ALLOWED = 'src/mission-control/store/hhmm.ts';
 
 const HAND_PARSE = new RegExp([
-    // .split(':'), .split(":"), .split(`:`), .split(/:/), .split(':', 2)
-    /\.split\(\s*(['"`]:['"`]|\/:\/)\s*[,)]/.source,
-    // /^\d{1,2}:\d{2}$/, /(\d+):(\d+)/, /([0-9]{2}):([0-9]{2})/ … — digits, colon, digits in a regex
-    /(\\d|\[0-9\])(\{[\d,]+\}|\+|\*)?\)?:\(?(\\d|\[0-9\])/.source,
+    // .split(':'), .split(":"), .split(`:`), .split(':', 2), and a split on any
+    // regex containing a colon: .split(/:/), .split(/\s*:\s*/)
+    /\.split\(\s*(['"`]:['"`]\s*[,)]|\/[^/\n]*:[^/\n]*\/)/.source,
+    // A digit token, a colon, a digit token, in a regex: /^\d{1,2}:\d{2}$/,
+    // /(\d+):(\d+)/, /([0-9]{2}):([0-9]{2})/, /^([01]\d|2[0-3]):([0-5]\d)$/ …
+    /(\\d|\[[^\]\n]*\])(\{[\d,]+\}|[+*?])?\)?:\(?(\\d|\[[^\]\n]*\])/.source,
 ].join('|'));
 
 function isComment(line: string): boolean {
@@ -47,6 +50,8 @@ describe('HH:MM parsing lives in store/hhmm.ts', () => {
             'const match = /(\\d+):(\\d+)/.exec(value);',
             "const [h, m] = hhmm.split(':', 2).map(Number);",
             'const match = /^([0-9]{2}):([0-9]{2})$/.exec(value);',
+            'const strict = /^([01]\\d|2[0-3]):([0-5]\\d)$/;',
+            'const [h, m] = t.split(/\\s*:\\s*/).map(Number);',
         ];
         expect(parses.filter(line => !HAND_PARSE.test(line))).toEqual([]);
         expect(HAND_PARSE.test("const [date] = iso.split('T');")).toBe(false);

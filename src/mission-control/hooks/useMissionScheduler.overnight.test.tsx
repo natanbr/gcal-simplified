@@ -37,13 +37,17 @@ describe('an evening window that crosses midnight', () => {
         unmount();
     });
 
-    it('a timer that fires late, after midnight but inside the window, still starts it', () => {
+    it('a timer that fires 30 min late, inside the window before midnight, still starts it', () => {
         vi.setSystemTime(at(23, 20));
         const { live, unmount } = renderLiveScheduler(lateEvening());
         step(100);
         expect(live.state.activeMission, 'precondition: armed, not started').toBe('none');
 
-        // The machine sleeps through 23:30; the timer fires on wake at 00:00.
+        // The machine sleeps through 23:30. vi.setSystemTime keeps the pending
+        // timer's remaining delay, so it fires at about 23:59:59.9: before
+        // midnight, but past the 5 min tolerance, so only the window end read
+        // from '24:30' keeps it on time. (After midnight the scheduler aims at
+        // tonight's occurrence and does not start it; an older limit.)
         vi.setSystemTime(at(23, 50));
         jumpTo(at(0, 0, 1));
         step(100);
