@@ -837,3 +837,17 @@ unpaired. A write that fails has to count as a failure for whatever the caller d
 **Action:** A read that can fall back to defaults says so in its return type
 (`loaded | absent | unreadable`), and the single writer is the thing that refuses. Never write back a
 value that a fallback may have produced. Guarded by `src/__tests__/config-writer-boundary.test.ts`.
+
+**Follow-up the same day (code review of PR 182):** the first fix refused *every* unreadable file,
+which traded one failure for another: a crash mid-write (plain `writeFileSync` truncates first), an
+empty file, or a UTF-8 BOM from a PowerShell 5.1 hand repair left the app on defaults for good, with
+the remote offline and Settings unable to save. The distinction that settles it is the error's
+*kind*, not "readable or not": a read that throws with an errno is transient (someone holds the
+file) — refuse and retry; content that read fine but will never parse is permanent — move it aside
+(`config.json.corrupt-<time>`, bytes kept) and carry on as absent. Write through a temp file +
+rename so the app cannot produce a half-written file itself; the rename retry is synchronous
+(`Atomics.wait`) because it runs on the main thread, so it is bounded at ~140 ms. Two more lessons:
+a component that re-reads a secret per message turns any mid-session read failure into a silent
+outage while its status still says "connected" — keep what you joined with; and a dialog that edits
+a stored object must not offer Save until *that object* has loaded — `Promise.all` let a failing
+calendar list leave the dialog on its placeholder, and Save wiped the saved selections.
