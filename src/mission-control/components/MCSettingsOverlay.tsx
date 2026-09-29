@@ -94,7 +94,7 @@ function DurationStepper({
                 ))}
             </div>
             {/* Slider */}
-            <input
+            <input className="mc-field"
                 type="range"
                 min={5}
                 max={120}
@@ -440,17 +440,17 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                             <AnimatePresence>
                                                 {draft.creamTaskEnabled && (
                                                     <motion.div
-                                                        initial={{ opacity: 0, height: 0 }}
-                                                        animate={{ opacity: 1, height: 'auto' }}
-                                                        exit={{ opacity: 0, height: 0 }}
-                                                        style={{ overflow: 'hidden' }}
+                                                        // Clip only while the height animates: a lasting clip cut the sides off the select's focus ring.
+                                                        initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                                                        animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
+                                                        exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
                                                     >
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 4 }}>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                                                 <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mc-text-muted)' }}>
                                                                     Schedule
                                                                 </span>
-                                                                <select 
+                                                                <select className="mc-field"
                                                                     value={draft.creamTaskSchedule ?? 'evening'}
                                                                     onChange={e => set('creamTaskSchedule', e.target.value as 'morning' | 'evening' | 'both')}
                                                                     style={{
@@ -461,7 +461,6 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                                         border: '1.5px solid rgba(130,120,200,0.25)',
                                                                         background: 'rgba(255,255,255,0.8)',
                                                                         color: 'var(--mc-text)',
-                                                                        outline: 'none',
                                                                     }}
                                                                 >
                                                                     <option value="morning">Morning Only</option>
@@ -478,7 +477,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                                         {draft.creamTaskDaysTarget}
                                                                     </span>
                                                                 </div>
-                                                                <input
+                                                                <input className="mc-field"
                                                                     type="range"
                                                                     min={1}
                                                                     max={30}
@@ -516,7 +515,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                                 <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--mc-text-muted)' }}>Tokens:</span>
-                                                                <input 
+                                                                <input className="mc-field"
                                                                     type="number"
                                                                     min={1}
                                                                     max={100}
@@ -528,7 +527,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                                     style={{
                                                                         width: 50, padding: '4px 8px', borderRadius: 8, border: '1.5px solid rgba(160,150,230,0.3)',
                                                                         fontFamily: "'Nunito', sans-serif", fontSize: 14, fontWeight: 800, color: 'var(--mc-text)',
-                                                                        textAlign: 'center', outline: 'none', background: 'white'
+                                                                        textAlign: 'center', background: 'white'
                                                                     }}
                                                                 />
                                                             </div>

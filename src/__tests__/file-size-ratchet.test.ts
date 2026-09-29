@@ -74,8 +74,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 755 → 734 on 2026-09-24 (TimeInput moved to its own file, which paid for
     // Save refusing a cleared auto-trigger time), then 734 → 732 on 2026-09-28
     // (the Remote tab's header moved out), then 732 → 641 on 2026-09-29 (the
-    // Remote tab's QR code and Regenerate Keys moved to RemotePairingPanel.tsx).
-    'src/mission-control/components/MCSettingsOverlay.tsx': 641,
+    // Remote tab's QR code and Regenerate Keys moved to RemotePairingPanel.tsx),
+    // then 641 → 640 the same day (the Schedule select's inline `outline: 'none'`
+    // line went; every field's focus ring is the .mc-field rule in mc.css).
+    'src/mission-control/components/MCSettingsOverlay.tsx': 640,
     // 648 → 649 on 2026-09-03 (+1: dropping the mcReducer barrel splits one
     // import line into two, since the lock and the window now come from their
     // own modules),

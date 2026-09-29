@@ -426,12 +426,13 @@
   animation-fill-mode: forwards;
 }
 
-/* Settings time fields. An inline style cannot say :focus-visible, so the ring
-   lives here (and the field must carry no inline outline, which would win). */
-.mc-time-input:focus:not(:focus-visible) {
+/* Every Settings field (time, select, number, range, text). An inline style
+   cannot say :focus-visible, so the ring lives here (and a field must carry no
+   inline outline, which would win). Guarded by MCSettingsOverlay.focus-ring.test.tsx. */
+.mc-field:focus:not(:focus-visible) {
   outline: none;
 }
-.mc-time-input:focus-visible {
+.mc-field:focus-visible {
   outline: 2px solid var(--mc-focus-ring);
   outline-offset: 2px;
 }

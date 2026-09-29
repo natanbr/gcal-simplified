@@ -1660,3 +1660,24 @@ restart, a later renewal, the state's pairing cleared and set again, hydration),
 `electron/remote-auth.test.ts` (signature length, body cap) and
 `electron/remote-auth.vector-drift.test.ts`; registered in `rule-registry.test.ts`. Release QA 3.11.8
 checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` differences.
+
+### 2026-09-29 Every Mission Control Settings field shows keyboard focus
+
+- **Fixed.** The 2026-09-26 focus ring covered only the "Auto-trigger at" time field. The cream-task
+  Schedule select and the reward-cost number fields still carried an inline `outline: none`, so
+  keyboard focus on them was invisible (an inline outline beats any stylesheet rule). Both inline
+  outlines are gone. The class is renamed `mc-time-input` → `mc-field` and every Settings field
+  carries it (time, select, number, the three range sliders, the pairing URL in `RemotePairingPanel.tsx`), so one `mc.css` rule
+  draws the 2 px `--mc-focus-ring` outline on `:focus-visible` for all of them.
+- **Fixed, found while verifying.** The cream-task section kept `overflow: hidden` after its open
+  animation, and the Schedule select sits flush in it, so the ring's left and right sides were cut
+  off. The section now clips only while its height animates (Framer `transitionEnd`).
+- E2E: `mc-settings.spec.ts` Tabs onto the Schedule select and a reward cost in real Chromium and
+  checks the computed outline is solid violet (red before the fix: `none`). The no-clipping check on
+  the select runs only with `E2E_HEADED=1`: a hidden E2E window never runs Framer's open animation.
+- Tests: `MCSettingsOverlay.focus-ring.test.tsx` opens every tab that has fields, with the cream task
+  and a v2 pairing (a fake `settings:get`) so the conditional fields render, and fails on any field
+  without `mc-field` or with an inline outline (red before the fix: 14 fields). It also reads the rule from `mc.css`, since
+  jsdom does not match `:focus-visible`.
+- Open: the invalid-time border uses `--mc-red` (#ff7b7b), about 2.3:1 on the panel, under the 3:1
+  WCAG 1.4.11 asks for a non-text indicator. A darker token is proposed, not applied.
