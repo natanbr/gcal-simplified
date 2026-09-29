@@ -168,3 +168,7 @@ write you have not confirmed: the renewed pairing is joined only when `store.upd
 landed (`store.set` used to swallow the error), and the re-scan notice goes in the same update as the
 pairing it describes. A forced security change also needs a notice where the user looks,
 held until the other side answers; a main-process log line reaches nobody in a packaged build.
+**Learning (second review):** when rotating a credential, a failure path must fail closed, never
+fall back to the credential being retired. The first "keep the current pairing if the write fails"
+kept the leaked v1 key working for as long as config.json stayed locked; it now stays offline and
+retries (5 s doubling to 5 min), never on the retired pairing.

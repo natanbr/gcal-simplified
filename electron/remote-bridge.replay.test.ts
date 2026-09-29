@@ -130,6 +130,19 @@ describe('a backward clock step', () => {
         expect(dispatches()).toBe(2);
     });
 
+    it('floors on the SENDER time: an action dated ahead of the desktop clock cannot replay either', () => {
+        // The phone's clock runs 30 s ahead. A floor on the desktop's arrival time (NOON) would sit
+        // below this timestamp and let the replay through after the step back.
+        const captured = action('captured-ahead', NOON.getTime() + 30_000);
+        deliver(captured);
+        expect(dispatches()).toBe(1);
+
+        vi.advanceTimersByTime(180_000);
+        vi.setSystemTime(NOON);
+        deliver(captured);
+        expect(dispatches()).toBe(1);
+    });
+
     it('never stamps a state-update older than, or equal to, the previous one', async () => {
         await bridge.broadcastState({ bankCount: 1 });
         await bridge.broadcastState({ bankCount: 2 }); // same millisecond

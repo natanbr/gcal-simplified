@@ -249,6 +249,27 @@ describe('the renewal notice (remotePairingRenewedAt)', () => {
 });
 
 describe('a pairing write that does not reach the disk', () => {
+    it('never falls back to the v1 pairing it could not replace: stays offline, no notice, no room or key logged', () => {
+        // Keeping the old room would keep the leaked key working for as long as the write keeps
+        // failing (a read-only or locked config.json is not transient). The retries are pinned
+        // on the real store in remote-bridge.real-store.test.ts.
+        saved = { calendarIds: [], taskListIds: [], remoteRoomId: OLD_ROOM, remoteKey: OLD_KEY };
+        failWrites();
+        const bridge = start();
+
+        expect(joins).toBe(0);
+        expect(bridge.getStatus()).toBe(false);
+        expect(saved).toEqual({ calendarIds: [], taskListIds: [], remoteRoomId: OLD_ROOM, remoteKey: OLD_KEY });
+        const lines = consoleLines();
+        expect(lines.filter(line => line.startsWith(OFFLINE))).toHaveLength(1);
+        expect(lines).not.toContain(RENEWED);
+        const [attempted] = writes();
+        expect(attempted).toMatchObject({ remotePairingVersion: 2, remotePairingRenewedAt: expect.any(String) });
+        for (const secret of [OLD_ROOM, OLD_KEY, String(attempted.remoteRoomId), String(attempted.remoteKey)]) {
+            expect(lines.join('\n')).not.toContain(secret);
+        }
+    });
+
     it('stays offline, retrying, when there was no pairing to keep', () => {
         saved = { calendarIds: [], taskListIds: [] };
         failWrites();
