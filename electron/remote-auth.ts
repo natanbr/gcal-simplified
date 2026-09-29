@@ -21,6 +21,14 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export type RemoteEvent = 'action' | 'state-update';
 
+/** base64url of a 32-byte HMAC-SHA256, without padding. Anything else is refused before hashing. */
+export const REMOTE_SIG_LENGTH = 43;
+
+/** The largest body verified. The biggest message on the channel is the state-update useRemoteSync
+ *  builds (about 10 KB even with 20 log lines of 200 characters); actions are under 1 KB. Six times
+ *  that leaves room to grow while an unauthenticated sender cannot make us hash megabytes. */
+export const MAX_REMOTE_BODY_CHARS = 64 * 1024;
+
 export interface RemoteEnvelope {
     v: 2;
     /** JSON.stringify of the content — signed as this exact string. */
@@ -45,6 +53,8 @@ export function signRemoteMessage(key: string, event: RemoteEvent, body: string)
 export function verifyRemoteMessage(key: unknown, event: RemoteEvent, body: string, sig: unknown): boolean {
     // An empty key signs with an HMAC anybody can compute.
     if (typeof key !== 'string' || key === '' || typeof sig !== 'string') return false;
+    // Cheap refusals first: the HMAC is the costly step, and these could never match.
+    if (sig.length !== REMOTE_SIG_LENGTH || body.length > MAX_REMOTE_BODY_CHARS) return false;
     const expected = Buffer.from(signRemoteMessage(key, event, body), 'utf8');
     const received = Buffer.from(sig, 'utf8');
     // timingSafeEqual throws on a length mismatch; the length of a MAC is public.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPairingUrl } from './pairingUrl';
+import { buildPairingUrl, readPairing } from './pairingUrl';
 
 const ROOM = '5f0c2a9e-7b1d-4c3e-9a8f-2d6b4e1c7a90';
 const KEY = 'q7Lk2mPz9XwR4tYb8NcV';
@@ -29,5 +29,25 @@ describe('buildPairingUrl', () => {
         expect(fragment.get('room')).toBe('room&v=1');
         expect(fragment.get('key')).toBe(awkwardKey);
         expect(fragment.getAll('v')).toEqual(['2']);
+    });
+});
+
+describe('readPairing — the pairing a settings:get result may draw as a QR code', () => {
+    it('returns room and key of a pairing marked for protocol v2', () => {
+        expect(readPairing({ remoteRoomId: ROOM, remoteKey: KEY, remotePairingVersion: 2 })).toEqual({ roomId: ROOM, remoteKey: KEY });
+    });
+
+    it('returns null for an unmarked pairing (the leaked v1 one), a partial one or anything malformed', () => {
+        const refused: unknown[] = [
+            { remoteRoomId: ROOM, remoteKey: KEY },
+            { remoteRoomId: ROOM, remoteKey: KEY, remotePairingVersion: 1 },
+            { remoteRoomId: ROOM, remoteKey: KEY, remotePairingVersion: '2' },
+            { remoteRoomId: ROOM, remotePairingVersion: 2 },
+            { remoteKey: KEY, remotePairingVersion: 2 },
+            { remoteRoomId: '', remoteKey: KEY, remotePairingVersion: 2 },
+            { remoteRoomId: 123, remoteKey: {}, remotePairingVersion: 2 },
+            undefined, null, 'room', [ROOM, KEY],
+        ];
+        for (const config of refused) expect(readPairing(config), JSON.stringify(config)).toBeNull();
     });
 });

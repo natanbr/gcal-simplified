@@ -65,7 +65,7 @@ const fire = (payload: Broadcast['payload']) => {
     h.actionHandler?.({ payload });
 };
 let msg = 0;
-/** Signed with `key` (protocol v2); no key â†’ an unsigned v1-style payload. */
+/** Signed with `key` (protocol v2); no key → an unsigned v1-style payload. */
 const action = (key?: string): Broadcast['payload'] => {
     const content = { action: { type: 'ADD_TOKEN' }, msgId: `m${++msg}`, timestamp: Date.now() };
     return key === undefined ? content : sealRemoteMessage(key, 'action', content);

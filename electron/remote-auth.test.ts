@@ -4,6 +4,8 @@ import {
     verifyRemoteMessage,
     sealRemoteMessage,
     openRemoteMessage,
+    MAX_REMOTE_BODY_CHARS,
+    REMOTE_SIG_LENGTH,
 } from './remote-auth';
 
 // The shared test vector of remote protocol v2. The phone repo (mc-remote) pins
@@ -158,6 +160,39 @@ describe('openRemoteMessage', () => {
         for (const body of ['null', '"state"', '[1,2]', '42']) {
             const envelope = { v: 2, body, sig: signRemoteMessage(VECTOR_KEY, 'state-update', body) };
             expect(openRemoteMessage(VECTOR_KEY, 'state-update', envelope)).toBeNull();
+        }
+    });
+});
+
+describe('cheap refusals, before any HMAC is computed', () => {
+    it('refuses a signature that is not 43 characters (base64url HMAC-SHA256, no padding)', () => {
+        expect(REMOTE_SIG_LENGTH).toBe(ACTION_SIG.length);
+        for (const sig of ['', 'abc', ACTION_SIG.slice(0, -1), `${ACTION_SIG}A`, `${ACTION_SIG}=`, 'x'.repeat(10_000)]) {
+            expect(verifyRemoteMessage(VECTOR_KEY, 'action', ACTION_BODY, sig)).toBe(false);
+            expect(openRemoteMessage(VECTOR_KEY, 'action', { v: 2, body: ACTION_BODY, sig })).toBeNull();
+        }
+    });
+
+    it(`refuses a body over ${MAX_REMOTE_BODY_CHARS} characters, even correctly signed, and accepts one at the cap`, () => {
+        const atCap = JSON.stringify({ pad: 'p'.repeat(MAX_REMOTE_BODY_CHARS - 10) });
+        expect(atCap).toHaveLength(MAX_REMOTE_BODY_CHARS);
+        const overCap = JSON.stringify({ pad: 'p'.repeat(MAX_REMOTE_BODY_CHARS - 9) });
+        const signedOverCap = signRemoteMessage(VECTOR_KEY, 'action', overCap);
+
+        expect(verifyRemoteMessage(VECTOR_KEY, 'action', overCap, signedOverCap)).toBe(false);
+        expect(openRemoteMessage(VECTOR_KEY, 'action', { v: 2, body: overCap, sig: signedOverCap })).toBeNull();
+        expect(verifyRemoteMessage(VECTOR_KEY, 'action', atCap, signRemoteMessage(VECTOR_KEY, 'action', atCap))).toBe(true);
+    });
+
+    it('makes both checks before it signs (structural: node:crypto cannot be spied on from here)', () => {
+        // vi.mock('node:crypto') does not reach remote-auth.ts in this setup (tried 2026-09-29),
+        // so the order is read from the function itself: both refusals come before the HMAC.
+        const source = verifyRemoteMessage.toString();
+        const hmac = source.indexOf('signRemoteMessage(');
+        expect(hmac, 'verifyRemoteMessage no longer signs: update this guard').toBeGreaterThan(-1);
+        for (const check of ['REMOTE_SIG_LENGTH', 'MAX_REMOTE_BODY_CHARS']) {
+            expect(source.indexOf(check), `${check} is not checked`).toBeGreaterThan(-1);
+            expect(source.indexOf(check), `${check} is checked after the HMAC was computed`).toBeLessThan(hmac);
         }
     });
 });

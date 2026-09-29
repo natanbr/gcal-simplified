@@ -6,7 +6,9 @@
 // mount so the Remote tab can draw the QR code). The broadcast payload is an
 // explicit projection, and the channel is public: one careless spread of
 // `settings` would put the key back on the wire inside every signed
-// state-update, where a signature hides nothing.
+// state-update, where a signature hides nothing. The same goes for the
+// renewal-logged marker (settings.remotePairingRenewalLogged): it is
+// bookkeeping of this machine, not state the phone draws.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -19,7 +21,8 @@ const ROOM = '5f0c2a9e-7b1d-4c3e-9a8f-2d6b4e1c7a90';
 const KEY = 'q7Lk2mPz9XwR4tYb8NcV';
 const invoke = vi.fn<NonNullable<Window['ipcRenderer']>['invoke']>(() => Promise.resolve(undefined));
 
-const paired: MCState = { ...initialState, settings: { ...initialState.settings, remoteRoomId: ROOM, remoteKey: KEY } };
+const LOGGED_MARKER = '2026-09-28T09:00:00.000Z';
+const paired: MCState = { ...initialState, settings: { ...initialState.settings, remoteRoomId: ROOM, remoteKey: KEY, remotePairingRenewalLogged: LOGGED_MARKER } };
 
 beforeEach(() => {
     vi.useFakeTimers();
@@ -42,5 +45,8 @@ describe('remote payload — the pairing', () => {
         const payload = JSON.stringify(broadcasts[0][1]);
         expect(payload).not.toContain(KEY);
         expect(payload).not.toContain(ROOM);
+        expect(payload).not.toContain('remotePairingRenewalLogged');
+        expect(payload).not.toContain(LOGGED_MARKER);
+        expect(broadcasts[0][1]).not.toHaveProperty('settings');
     });
 });

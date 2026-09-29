@@ -11,7 +11,7 @@ import { staleIncompleteRunPhases } from './staleMissionRun';
 import { gameTokensOverCap } from './moodGauge';
 import { pendingFrom } from './pendingState';
 import { useSchoolCalendarSync } from './useSchoolCalendarSync';
-import { pairingRenewedLogEntry } from './pairingRenewal';
+import { pairingRenewedLogEntry, remotePairingSettings } from './pairingRenewal';
 
 /** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
@@ -75,27 +75,22 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     // Read when the settings:get below resolves, not at mount: logs may have moved on.
     const logsRef = useRef(state.activityLogs);
     logsRef.current = state.activityLogs;
+    const settingsRef = useRef(state.settings);
+    settingsRef.current = state.settings;
 
-    // Sync remote control keys from Electron store, and log an automatic
-    // pairing renewal once (store/pairingRenewal.ts).
+    // Once per start: the pairing from Electron's store (store/pairingRenewal.ts): its room and key,
+    // cleared when settings:get hands out no v2 pairing, and an automatic renewal logged once.
     useEffect(() => {
         if (window.ipcRenderer) {
-            (window.ipcRenderer.invoke('settings:get') as Promise<{ remoteRoomId?: string; remoteKey?: string } | undefined>)
-                .then((config) => {
+            window.ipcRenderer.invoke('settings:get')
+                .then((config: unknown) => {
                     if (!config) return;
-                    // Hand-built, dispatched raw: it logs no action, so the shield-lock
-                    // re-check CLAUDE.md asks of hand-built entries does not apply.
-                    const renewalLine = pairingRenewedLogEntry(config, logsRef.current);
+                    // Both dispatched raw, like the heartbeat: neither logs an action, so the
+                    // shield-lock re-check CLAUDE.md asks of hand-built entries does not apply.
+                    const renewalLine = pairingRenewedLogEntry(config, logsRef.current, settingsRef.current.remotePairingRenewalLogged);
                     if (renewalLine) dispatch({ type: 'ADD_LOG', log: renewalLine });
-                    if (config.remoteRoomId && config.remoteKey) {
-                        dispatch({ 
-                            type: 'SET_SETTINGS', 
-                            settings: { 
-                                remoteRoomId: config.remoteRoomId, 
-                                remoteKey: config.remoteKey 
-                            } 
-                        });
-                    }
+                    const pairing = remotePairingSettings(config, settingsRef.current);
+                    if (pairing) dispatch({ type: 'SET_SETTINGS', settings: pairing });
                 })
                 .catch(() => { /* settings file busy or unreadable: the pairing keys stay as they were, and no renewal line is logged */ });
         }

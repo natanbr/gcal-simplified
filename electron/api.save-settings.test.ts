@@ -157,6 +157,26 @@ describe('ApiService.getSettings (settings:get)', () => {
         expect(new ApiService().getSettings()).toMatchObject({ calendarIds: ['cal-a'], taskListIds: ['list-1'], sleepEnabled: false });
     });
 
+    // The Remote tab draws its QR code from this read. An unmarked pairing is the leaked v1 one, or
+    // one the main process is still trying to replace (the renewal could not be saved yet): the
+    // renderer must never be handed it, or it would show the leaked key in a room nobody joins.
+    it('hands out no room or key for a pairing without the protocol v2 marker', () => {
+        for (const marker of [{}, { remotePairingVersion: 1 }, { remotePairingVersion: '2' }]) {
+            seed(JSON.stringify({ ...SEED, ...marker }, null, 2));
+            const settings = new ApiService().getSettings();
+            expect(settings).toMatchObject({ calendarIds: ['cal-a'], taskListIds: ['list-1'], sleepEnabled: false });
+            expect(settings).not.toHaveProperty('remoteRoomId');
+            expect(settings).not.toHaveProperty('remoteKey');
+        }
+    });
+
+    it('hands out a pairing marked for protocol v2, with its re-scan notice', () => {
+        seed(JSON.stringify({ ...SEED, remotePairingVersion: 2, remotePairingRenewedAt: '2026-09-28T09:00:00.000Z' }, null, 2));
+        expect(new ApiService().getSettings()).toMatchObject({
+            remoteRoomId: 'room-orig', remoteKey: 'key-orig', remotePairingVersion: 2, remotePairingRenewedAt: '2026-09-28T09:00:00.000Z',
+        });
+    });
+
     it('returns the defaults when there is no file yet', () => {
         expect(new ApiService().getSettings()).toMatchObject({ calendarIds: ['primary'], taskListIds: [] });
     });

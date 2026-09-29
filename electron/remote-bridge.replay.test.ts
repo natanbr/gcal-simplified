@@ -1,11 +1,12 @@
 // ============================================================
 // Replay defences of RemoteBridge, on a fake clock.
 // ------------------------------------------------------------
-// Two numbers work together: an action is accepted while its timestamp is
-// within MAX_ACTION_AGE_MS of this machine's clock (either direction), and its
-// msgId is remembered for the seen-id TTL. The TTL must cover the whole window
-// a signed action stays acceptable, or a captured action is replayed once
-// after its id is pruned.
+// Three things work together: an action is accepted while its timestamp is
+// within MAX_ACTION_AGE_MS of this machine's clock (either direction), its
+// msgId is remembered for the seen-id TTL, and a forgotten id leaves a floor
+// (its sender's timestamp) that nothing older may pass. The floor stops a
+// replay after a prune; the TTL (twice the window) keeps a fast phone's id out
+// of the floor until a slower phone's genuine messages are all newer than it.
 //
 // Fake timers go on BEFORE init(): the seen-id cleanup is a setInterval armed
 // by init(), and an interval armed under real timers never fires on a fake one.
@@ -95,6 +96,22 @@ describe('seen-id TTL', () => {
     });
 });
 
+describe('two phones with opposite clock errors', () => {
+    it('do not refuse each other: pruning the fast phone id must not floor out the slow phone', () => {
+        // Just before the first cleanup tick (60 s after init), so the next one is 61 s later.
+        vi.advanceTimersByTime(59_000);
+        deliver(action('phone-a-1', Date.now() + 50_000)); // phone A runs 50 s fast
+        deliver(action('phone-b-1', Date.now() - 50_000)); // phone B runs 50 s slow
+        expect(dispatches()).toBe(2);
+
+        // Past the 120 s tick: with a TTL of one window, A's id is pruned there and the
+        // floor jumps to A's timestamp, 100 s ahead of anything B can send now.
+        vi.advanceTimersByTime(62_000);
+        deliver(action('phone-b-2', Date.now() - 50_000)); // B's next genuine tap
+        expect(dispatches(), 'the slow phone was refused as a replay').toBe(3);
+    });
+});
+
 describe('the 60-second age window', () => {
     it('accepts an action exactly 60 000 ms off, in either direction', () => {
         deliver(action('past-edge', Date.now() - 60_000));
@@ -152,5 +169,29 @@ describe('a backward clock step', () => {
         const t = NOON.getTime();
         // The phone keeps only strictly newer states: equal or older ones are dropped.
         expect(sentStamps()).toEqual([t, t + 1, t + 2]);
+    });
+
+    it('starts again from the clock when the last stamp is further ahead than the phone accepts', async () => {
+        // The desktop clock ran 5 min fast, then was corrected. The phone refuses a state more than
+        // 120 s ahead of its own clock, so continuing from the fast stamp would be refused until
+        // real time caught up; a stamp from now is newer than anything the phone accepted.
+        vi.setSystemTime(NOON.getTime() + 5 * 60_000);
+        await bridge.broadcastState({ bankCount: 1 });
+        vi.setSystemTime(NOON);
+        await bridge.broadcastState({ bankCount: 2 });
+        await bridge.broadcastState({ bankCount: 3 }); // same millisecond: still strictly increasing
+
+        const t = NOON.getTime();
+        expect(sentStamps()).toEqual([t + 5 * 60_000, t, t + 1]);
+    });
+
+    it('keeps counting up from a stamp the phone still accepts (at most 120 s ahead)', async () => {
+        vi.setSystemTime(NOON.getTime() + 120_000);
+        await bridge.broadcastState({ bankCount: 1 });
+        vi.setSystemTime(NOON);
+        await bridge.broadcastState({ bankCount: 2 });
+
+        const t = NOON.getTime();
+        expect(sentStamps()).toEqual([t + 120_000, t + 120_001]);
     });
 });
