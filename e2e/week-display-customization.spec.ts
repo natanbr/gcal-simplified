@@ -67,7 +67,7 @@ test.describe('Week Display Customization', () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ipcMain.handle('settings:save', (_: any, config: any) => {
                 mockSettings = { ...mockSettings, ...config };
-                return true;
+                return { ok: true }; // SaveSettingsResult: the dialog stays open on anything else
             });
 
             ipcMain.removeHandler('data:calendars');
