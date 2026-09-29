@@ -134,6 +134,7 @@ T=$(git describe --tags --abbrev=0)               # before the bump: the last pu
 git log --oneline --no-merges $T..HEAD            # every change since
 git diff --dirstat=files,3 $T..HEAD -- src electron   # which areas moved
 git diff $T..HEAD -- docs/requirements.md | grep '^+### '   # changelog entries added since
+gh api "repos/natanbr/mc-remote/commits?sha=main&since=$(git log -1 --format=%cI $T)" --jq length   # phone commits since: > 0 makes 3.11.7 must-do
 ```
 
 QA runs before the bump, so `git describe` returns the previous release. Once the release commit
@@ -155,7 +156,7 @@ least one item; the Space Rescue row lists every item that guards the drop rule.
 | G2 upgrade loses state | 3.12.7 |
 | G3 a second instance boots | 3.2.3; 3.2.2 too when `electron/main.ts` or `electron/single-instance.ts` changed since `$T` |
 | G4 mission at the wrong time or twice | 3.5.7, 3.5.12, 3.12.8 |
-| G5 shield lock traps the parent | 3.6.4, 3.11.6, 3.11.7 |
+| G5 shield lock traps the parent | 3.6.4, 3.11.6; 3.11.7 too when mc-remote `main` moved since `$T` |
 | G6 idle CPU or memory | 3.4.1 with 3.4.4 |
 | G7 install, launch, auto-update | 3.1.1, 3.1.2, 3.1.3; 3.1.6 right after publishing |
 | G8 crash or blank screen | 3.1.3, 3.3.14 |
@@ -165,7 +166,7 @@ least one item; the Space Rescue row lists every item that guards the drop rule.
 | G12 phone connection or remote control | 3.11.1, 3.11.2, 3.11.5 |
 | G13 remote allowlist | 3.11.6 |
 
-That is 29 items (30 with 3.2.2). A must-do item that cannot be run (no spare device, no touchscreen)
+That is 28 items (29 with 3.2.2, one more with 3.11.7 when the phone app changed). A must-do item that cannot be run (no spare device, no touchscreen)
 needs a reason in the run log and Nathan's explicit OK before a GO.
 An item that fails only on its listed known bug is judged by that bug: it blocks when the bug itself
 breaks a rule (bug 1 breaks G4, and is already shipped: section 5), not otherwise (bug 8 in 3.1.3).
@@ -266,8 +267,10 @@ pass, and update this table when it merges.
 - **Q1** Active Hours: the Settings copy promises "Before" / "After" buckets and the spec "Pre" /
   "Post" buckets; the app lists out-of-hours events unlabeled with the all-day events (3.3.5). Fix
   the copy and spec, or build the buckets?
-- **Q2** The requirements' "Earning is never blocked" (Streak shield) contradicts the lock freezing
-  the child's own earning (CLAUDE.md → Mission streak shield; 3.6.2). The requirement looks stale.
+- **Q2** (resolved 2026-09-28) The requirements' "Earning is never blocked" (Streak shield)
+  contradicted the lock freezing the child's own earning (CLAUDE.md → Mission streak shield; 3.6.2).
+  It was stale: the 2026-09-03 decision "Lock at 6 — the child's whole economy freezes" stands, and
+  the sentence was removed from the requirements.
 - **Q3** Snake is keyboard-only (3.10.9): does the child's setup have a keyboard?
 - **Q4** Phone "Effects" and "Reactions" show nothing while the desktop is on the Calendar, because
   the overlay lives in MC (3.11.4). Intended?

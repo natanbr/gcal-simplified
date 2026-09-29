@@ -230,8 +230,13 @@ machinery than this project wants.
 
 **Snapshot guards need a freshness check.** `useRemoteControl.allowlist.test.ts` hardcodes the action
 types the separate `mc-remote` repo sends. That snapshot cannot notice the other repo changing, so a
-second test re-derives the list from the sibling checkout when it exists and **skips with a console
-note when it does not** — a guard that fails for environmental reasons (CI, fresh clone) gets deleted.
+second test re-derives the list from the sibling checkout when it exists and **skips when it does
+not** — a guard that fails for environmental reasons (CI, fresh clone) gets deleted. Skip with
+`ctx.skip(...)`, never a bare `return`: vitest counts a return as passed, so "never compared" reads
+as "compared and matched" (fixed 2026-09-28). The live walk reads the other repo's production
+sources only: its test fixtures are not buttons, and one would otherwise be reported as "newly
+sent" with advice to allowlist it. A red "no longer sent" can also mean the sibling checkout is
+older than the capture commit; fast-forward it before editing the snapshot.
 
 **False positive: `preload.ts` exporting its whitelists.** They are exported purely so
 `preload_contract.test.ts` can import real values instead of regex-parsing the file (a reformat or a
