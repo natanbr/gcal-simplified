@@ -86,7 +86,7 @@ export function RemotePairingPanel() {
                     {url ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                             <QRCodeCanvas value={url} size={180} level="H" includeMargin={false} />
-                            <input
+                            <input className="mc-field"
                                 type="text"
                                 readOnly
                                 value={url}

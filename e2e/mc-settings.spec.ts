@@ -11,7 +11,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
     ELECTRON_MAIN,
     expect,
@@ -83,5 +83,60 @@ test.describe('Mission Control — Settings Overlay', () => {
 
         // localStorage must reflect the new value
         expect(await readSetting(page, 'morningStartsAt')).toBe('07:15');
+    });
+
+    test('a Tab onto a Settings field draws the violet focus ring', async ({ mcPage: page }, testInfo) => {
+        // jsdom cannot match :focus-visible, so the unit tests only read the
+        // .mc-field rule; this is the check that Chromium actually draws it.
+        const ring = (field: Locator) => field.evaluate(el => {
+            const s = getComputedStyle(el);
+            return `${s.outlineStyle} ${s.outlineColor}`;
+        });
+        const VIOLET = 'solid rgb(109, 84, 200)'; // --mc-focus-ring → --mc-chart-violet #6d54c8
+        // The ring reaches 4px past the field (2px offset + 2px width); an
+        // overflow-clipping ancestor closer than that cuts it off.
+        const clippedBy = (field: Locator) => field.evaluate(el => {
+            const f = el.getBoundingClientRect();
+            const cuts: string[] = [];
+            for (let a = el.parentElement; a; a = a.parentElement) {
+                if (getComputedStyle(a).overflow === 'visible') continue;
+                const c = a.getBoundingClientRect();
+                if (f.left - c.left < 4 || c.right - f.right < 4 || f.top - c.top < 4 || c.bottom - f.bottom < 4) {
+                    cuts.push(`${a.tagName} overflow ${getComputedStyle(a).overflow}`);
+                }
+            }
+            return cuts;
+        });
+        const shot = async (name: string, field: Locator) => {
+            await field.scrollIntoViewIfNeeded();
+            const box = await field.boundingBox();
+            if (!box) throw new Error(`${name}: field has no box`);
+            const clip = { x: box.x - 40, y: box.y - 40, width: box.width + 80, height: box.height + 80 };
+            await testInfo.attach(name, { body: await page.screenshot({ clip }), contentType: 'image/png' });
+        };
+        await page.locator('[data-testid="mc-settings-btn"]').click();
+
+        // Schedule select: rendered once the cream task is on; Tab from its toggle reaches it.
+        await page.getByText('🧴 Missions Tasks').click();
+        const creamToggle = page.getByText('"Put on Cream"').locator('xpath=..').locator('button');
+        await creamToggle.click();
+        await creamToggle.press('Tab');
+        const schedule = page.locator('select.mc-field');
+        await expect(schedule).toBeFocused();
+        expect(await ring(schedule)).toBe(VIOLET);
+        // The section clips while its open animation runs, by design, and a
+        // hidden E2E window never runs that animation, so this needs E2E_HEADED=1.
+        if (process.env.E2E_HEADED === '1') await expect.poll(() => clippedBy(schedule)).toEqual([]);
+        await shot('schedule-select-focus', schedule);
+
+        // Reward cost: Tab from the first row (its cost field, then its toggle) to the second cost.
+        await page.getByText('🎁 Rewards').click();
+        const costs = page.locator('input[type="number"].mc-field');
+        await costs.first().press('Tab');
+        await page.keyboard.press('Tab');
+        await expect(costs.nth(1)).toBeFocused();
+        expect(await ring(costs.nth(1))).toBe(VIOLET);
+        expect(await clippedBy(costs.nth(1))).toEqual([]);
+        await shot('reward-cost-focus', costs.nth(1));
     });
 });
