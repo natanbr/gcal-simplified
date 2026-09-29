@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { BrowserWindow } from 'electron';
 import crypto from 'node:crypto';
-import { store, type StoreFailure } from './store';
+import { store, type StoreFailure, type WriteResult } from './store';
 import { isRecord, openRemoteMessage, sealRemoteMessage } from './remote-auth';
 
 interface Pairing { roomId: string; remoteKey: string }
@@ -11,6 +11,11 @@ export type RegenerateKeysResult = ({ ok: true } & Pairing) | StoreFailure;
 
 /** Actions older or newer than this are refused (clock drift allowance). */
 const MAX_ACTION_AGE_MS = 60_000;
+/** At least twice the age window: an action dated a full window ahead stays
+ *  acceptable for two windows, so a shorter memory lets it be replayed once. */
+const SEEN_ID_TTL_MS = 2 * MAX_ACTION_AGE_MS;
+/** The pairing format this build writes; an unmarked (v1) pairing is renewed once. */
+const PAIRING_VERSION = 2;
 
 /** The verified content of an action message: every field required. */
 function parseActionContent(content: Record<string, unknown>):
@@ -36,19 +41,33 @@ function generatePairingKeys(): Pairing {
 const INIT_RETRY_FIRST_MS = 5_000;
 const INIT_RETRY_MAX_MS = 5 * 60_000;
 
+/** Saves a pairing with the protocol v2 marker. */
+function savePairing(pairing: Pairing): WriteResult {
+    return store.update({ remoteRoomId: pairing.roomId, remoteKey: pairing.remoteKey, remotePairingVersion: PAIRING_VERSION });
+}
+
 /**
- * The pairing to join, generating and saving one on first run. Null when the
- * settings file cannot be read, or the new pairing cannot be saved: joining a
- * room that was never saved leaves the phone on a room nobody can reach.
+ * The pairing to join, generating and saving one on first run and renewing one
+ * that predates protocol v2: v1 broadcast its key in plain text, and a signature
+ * keyed with a leaked key proves nothing. Null when the settings file cannot be
+ * read (never renew from a fallback), or the new pairing cannot be saved:
+ * joining a room that was never saved leaves the phone on a room nobody can
+ * reach, and the pairing being replaced is the leaked one. Synchronous on
+ * purpose: main.ts runs createWindow() and then remoteBridge.init() in the same
+ * tick, so a renewed pairing is on disk before the renderer can ask for it.
  */
 function currentPairing(): Pairing | null {
     const current = store.read();
     if (current.kind === 'unreadable') return null;
-    const { remoteRoomId, remoteKey } = current.config;
-    if (remoteRoomId && remoteKey) return { roomId: remoteRoomId, remoteKey };
+    const { remoteRoomId, remoteKey, remotePairingVersion } = current.config;
+    if (remoteRoomId && remoteKey && remotePairingVersion === PAIRING_VERSION) return { roomId: remoteRoomId, remoteKey };
 
     const pairing = generatePairingKeys();
-    return store.update({ remoteRoomId: pairing.roomId, remoteKey: pairing.remoteKey }).ok ? pairing : null;
+    if (!savePairing(pairing).ok) return null;
+    if (remoteRoomId && remoteKey) {
+        console.log('[RemoteBridge] Pairing renewed for signed messages (protocol v2): scan the QR code again on the phone.');
+    }
+    return pairing;
 }
 
 export class RemoteBridge {
@@ -83,6 +102,9 @@ export class RemoteBridge {
         console.log(`[RemoteBridge] ENV URL: ${process.env.VITE_SUPABASE_URL ? 'FOUND' : 'MISSING'}`);
         console.log(`[RemoteBridge] ENV KEY: ${process.env.VITE_SUPABASE_ANON_KEY ? 'FOUND' : 'MISSING'}`);
 
+        // First, credentials or not: settings:get must never hand out a v1 key.
+        const pairing = currentPairing();
+
         const url = process.env.VITE_SUPABASE_URL;
         const key = process.env.VITE_SUPABASE_ANON_KEY;
 
@@ -95,7 +117,7 @@ export class RemoteBridge {
             this.cleanupInterval = setInterval(() => {
                 const now = Date.now();
                 for (const [msgId, timestamp] of this.seenIds.entries()) {
-                    if (now - timestamp > 120000) {
+                    if (now - timestamp > SEEN_ID_TTL_MS) {
                         this.seenIds.delete(msgId);
                     }
                 }
@@ -111,7 +133,6 @@ export class RemoteBridge {
             this.supabase = createClient(url, key);
         }
 
-        const pairing = currentPairing();
         if (!pairing) {
             this.goOfflineAndRetry();
             return;
@@ -166,7 +187,7 @@ export class RemoteBridge {
 
     regenerateKeys(): RegenerateKeysResult {
         const pairing = generatePairingKeys();
-        const saved = store.update({ remoteRoomId: pairing.roomId, remoteKey: pairing.remoteKey });
+        const saved = savePairing(pairing);
         if (!saved.ok) return saved;
 
         // Join what was just saved, with no re-read: a lock right after the save must not
@@ -196,11 +217,10 @@ export class RemoteBridge {
      *  Never logs the key, the body or the signature. */
     private handleAction(raw: unknown) {
         // The joined pairing, never a fresh read: a read that fails has no key.
-        const remoteKey = this.pairing?.remoteKey;
-        const content = remoteKey ? openRemoteMessage(remoteKey, 'action', raw) : null;
+        const content = openRemoteMessage(this.pairing?.remoteKey, 'action', raw);
         if (!content) {
             console.warn(isRecord(raw) && 'key' in raw
-                ? '[RemoteBridge] ❌ Rejected unsigned action — the phone app is outdated (protocol v1); reload it.'
+                ? '[RemoteBridge] ❌ Rejected unsigned action (protocol v1). A phone still in legacy mode sends one per connect; if its buttons do nothing, reload the phone app.'
                 : '[RemoteBridge] ❌ Rejected action: missing or invalid signature.');
             return;
         }

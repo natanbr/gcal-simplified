@@ -56,6 +56,16 @@ describe('verifyRemoteMessage', () => {
         expect(verifyRemoteMessage('', 'action', ACTION_BODY, forged)).toBe(false);
     });
 
+    it('rejects — without throwing — when the key is not a string (a hand-edited config)', () => {
+        // createHmac throws ERR_INVALID_ARG_TYPE on these, on every message.
+        for (const key of [123, {}, null, undefined]) {
+            expect(() => verifyRemoteMessage(key, 'action', ACTION_BODY, ACTION_SIG)).not.toThrow();
+            expect(verifyRemoteMessage(key, 'action', ACTION_BODY, ACTION_SIG)).toBe(false);
+            expect(() => openRemoteMessage(key, 'action', { v: 2, body: ACTION_BODY, sig: ACTION_SIG })).not.toThrow();
+            expect(openRemoteMessage(key, 'action', { v: 2, body: ACTION_BODY, sig: ACTION_SIG })).toBeNull();
+        }
+    });
+
     it('rejects a signature of the wrong length without throwing', () => {
         for (const sig of ['', 'abc', ACTION_SIG.slice(0, -1), `${ACTION_SIG}A`, `${ACTION_SIG}=`]) {
             expect(() => verifyRemoteMessage(VECTOR_KEY, 'action', ACTION_BODY, sig)).not.toThrow();

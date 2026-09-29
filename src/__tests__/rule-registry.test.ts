@@ -121,15 +121,20 @@ const REGISTRY: Rule[] = [
         defence: 'Enforced by Electron/the OS, not by a code path a unit test can call. Presence is checked structurally in electron/preload_contract.test.ts; real behaviour is proven by launching the built app twice: node scripts/verify-single-instance.mjs',
     },
     {
-        rule: 'The remote pairing key is never on the wire: both remote events travel as a signed { v: 2, body, sig } envelope, verified before anything else is read; the key is never sent, logged, or put in a URL query',
+        rule: 'The remote pairing key is never on the wire: both remote events travel as a signed { v: 2, body, sig } envelope, verified before anything else is read; the key is never sent, logged, or put in a URL query; the main process owns the pairing fields and renews a v1 pairing once',
         source: 'CLAUDE.md → Architecture → Remote pairing key never on the wire',
         status: 'guarded',
         guard: [
             'electron/remote-bridge.protocol.test.ts',
             'electron/remote-auth.test.ts',
             'src/mission-control/utils/pairingUrl.test.ts',
+            'src/__tests__/remote-key-boundary.test.ts',
+            'electron/remote-bridge.pairing.test.ts',
+            'electron/api.save-settings.test.ts',
+            'electron/store.test.ts',
+            'electron/remote-bridge.replay.test.ts',
         ],
-        verifiedRedBy: 'proven 2026-09-28. remote-bridge.protocol.test.ts run against the v1 bridge: 14 of 15 red — the state-update payload contained "key":"<remoteKey>", a v1 { key, action } payload with the correct key was dispatched, signed actions were not, and the init log held the full room id. Its join-error case went red while the subscribe callback still handed the supabase-js Error (message and cause quoting the topic) to console.log. remote-auth.test.ts: drop the event name and "\\n" from the MAC input — 6 red, including both pinned shared-vector cases and the domain-separation case; delete the length check before timingSafeEqual — the wrong-length case goes red (it throws). pairingUrl.test.ts: set url.search instead of url.hash — all 3 red.',
+        verifiedRedBy: 'proven 2026-09-28. remote-bridge.protocol.test.ts run against the v1 bridge: 14 of 15 red — the state-update payload contained "key":"<remoteKey>", a v1 { key, action } payload with the correct key was dispatched, signed actions were not, and the init log held the full room id. Its join-error case went red while the subscribe callback still handed the supabase-js Error (message and cause quoting the topic) to console.log. remote-auth.test.ts: drop the event name and "\\n" from the MAC input — 6 red, including both pinned shared-vector cases and the domain-separation case; delete the length check before timingSafeEqual — the wrong-length case goes red (it throws). pairingUrl.test.ts: set url.search instead of url.hash — all 3 red. Review round, same day: remote-key-boundary.test.ts part (i) red with one MCSettingsOverlay call site reverted to the ?room=&key= template literal (names MCSettingsOverlay.tsx:616), part (ii) red with a raw { key, state } broadcast added to remote-bridge.ts (names the line); remote-bridge.pairing.test.ts red before the renewal existed (no store write for an unmarked pairing, no marker on a fresh or regenerated one, ERR_INVALID_ARG_TYPE thrown for a numeric key); the pairing cases now in api.save-settings.test.ts (first written as api.settings.test.ts) red while saveSettings wrote the renderer object whole (attacker-room stored; a stale copy reverted the regenerated room), and again on the config-writer base with remotePairingVersion copied by SETTINGS_FIELDS (the marker the renderer sent was stored); store.test.ts red while get() dropped remotePairingVersion and passed 123 through; remote-bridge.replay.test.ts red with the seen-id TTL set to MAX_ACTION_AGE_MS (2 dispatches), with > turned into >= (the exact-60000 case) and with the window widened by 1 ms (the 60001 case); the key-change cases in remote-bridge.protocol.test.ts red with regenerateKeys() not joining the pairing it saved (the revoked key still dispatched) and with the key re-read from the store per message (the key on disk dispatched without a join).',
     },
     {
         rule: 'mcReducer.ts is a pure reducer — no side effects, no wall-clock reads',

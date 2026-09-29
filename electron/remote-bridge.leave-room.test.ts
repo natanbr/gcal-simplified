@@ -58,7 +58,8 @@ afterAll(() => fs.rmSync(h.userData, { recursive: true, force: true }));
 const CONFIG = path.join(h.userData, 'config.json');
 const realRead = fs.readFileSync;
 const realWrite = fs.writeFileSync;
-const SEED = { calendarIds: ['cal-a'], taskListIds: ['list-1'], remoteRoomId: 'room-orig', remoteKey: 'key-orig' };
+/** Marked as protocol v2: an unmarked pairing is renewed at the first v2 start (remote-bridge.pairing.test.ts). */
+const SEED = { calendarIds: ['cal-a'], taskListIds: ['list-1'], remoteRoomId: 'room-orig', remoteKey: 'key-orig', remotePairingVersion: 2 };
 const isConfig = (file: unknown) => typeof file !== 'number' && path.resolve(String(file)) === path.resolve(CONFIG);
 const busy = () => Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
 

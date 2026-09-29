@@ -64,6 +64,12 @@ function expectGenuineStillDispatched() {
     expect(dispatchedActions()).toHaveLength(before + 1);
 }
 
+/** config.json as the store reads it: this room, `remoteKey`, already marked as protocol v2. */
+function storeHolds(remoteKey: string) {
+    const config = { calendarIds: [], taskListIds: [], remoteRoomId: ROOM_ID, remoteKey, remotePairingVersion: 2 };
+    mocks.storeRead.mockReturnValue({ kind: 'loaded', config, raw: { ...config } });
+}
+
 function consoleText(): string {
     return consoleSpies
         .flatMap(spy => spy.mock.calls.flat())
@@ -76,8 +82,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     process.env.VITE_SUPABASE_URL = 'https://mock.supabase.co';
     process.env.VITE_SUPABASE_ANON_KEY = 'mock-anon-key';
-    const config = { calendarIds: [], taskListIds: [], remoteRoomId: ROOM_ID, remoteKey: REMOTE_KEY };
-    mocks.storeRead.mockReturnValue({ kind: 'loaded', config, raw: { ...config } });
+    storeHolds(REMOTE_KEY);
     mocks.storeUpdate.mockReturnValue({ ok: true });
 
     rendererSend = vi.fn();
@@ -149,14 +154,20 @@ describe('incoming actions — phone → desktop', () => {
         // The core regression: v1 accepted exactly this.
         deliver({ payload: { key: REMOTE_KEY, action: { type: 'ADD_TOKEN' }, msgId: 'v1-msg', timestamp: Date.now() } });
         expect(dispatchedActions()).toEqual([]);
-        expect(consoleText()).toContain('the phone app is outdated (protocol v1)');
+        const logged = consoleText();
+        expect(logged).toContain('Rejected unsigned action (protocol v1). A phone still in legacy mode sends one per connect');
+        // Nothing from an unverified payload is echoed.
+        expect(logged).not.toContain('v1-msg');
         expectGenuineStillDispatched();
     });
 
-    it('rejects a tampered body under the original signature', () => {
+    it('rejects a tampered body under the original signature, and logs neither body nor sig', () => {
         const genuine = signedAction({ type: 'ADD_TOKEN' });
-        deliver({ payload: { ...genuine, body: genuine.body.replace('ADD_TOKEN', 'CLEAR_LOGS') } });
+        const tamperedBody = genuine.body.replace('ADD_TOKEN', 'CLEAR_LOGS');
+        deliver({ payload: { ...genuine, body: tamperedBody } });
         expect(dispatchedActions()).toEqual([]);
+        const logged = consoleText();
+        for (const secret of [genuine.sig, genuine.body, tamperedBody]) expect(logged).not.toContain(secret);
         expectGenuineStillDispatched();
     });
 
@@ -229,6 +240,45 @@ describe('incoming actions — phone → desktop', () => {
         expect(() => deliver({})).not.toThrow();
         expect(() => deliver({ payload: null })).not.toThrow();
         expect(dispatchedActions()).toEqual([]);
+    });
+});
+
+describe('a changed pairing key', () => {
+    /** The key inside the state-update the bridge sent last. */
+    async function broadcastKey(...keys: string[]): Promise<string | undefined> {
+        await bridge.broadcastState({ bankCount: 2 });
+        const { body, sig } = (channelSend.mock.calls.at(-1)?.[0] as { payload: { body: string; sig: string } }).payload;
+        return keys.find(key => verifyRemoteMessage(key, 'state-update', body, sig));
+    }
+
+    it('Regenerate Keys applies the new key to the next message, in both directions', async () => {
+        // The old key works first, so a key cached anywhere but the joined pairing shows up.
+        deliver({ payload: signedAction({ type: 'ADD_TOKEN' }) });
+        expect(dispatchedActions()).toHaveLength(1);
+
+        const renewed = bridge.regenerateKeys();
+        if (!renewed.ok) throw new Error(`regenerateKeys refused: ${renewed.reason}`);
+
+        deliver({ payload: signedAction({ type: 'ADD_TOKEN' }) });
+        expect(dispatchedActions(), 'the revoked key still dispatched').toHaveLength(1);
+        deliver({ payload: seal('action', { action: { type: 'ADD_TOKEN' }, msgId: 'new-key', timestamp: Date.now() }, renewed.remoteKey) });
+        expect(dispatchedActions()).toHaveLength(2);
+        expect(await broadcastKey(REMOTE_KEY, renewed.remoteKey)).toBe(renewed.remoteKey);
+        expect(consoleText()).not.toContain(renewed.remoteKey);
+    });
+
+    it('a key changed on disk without a join changes nothing: the bridge keeps the pairing it joined', async () => {
+        // The main process owns the pairing (settings:save never writes it), so only
+        // regenerateKeys() or the next start changes the key the bridge trusts.
+        const NEW_KEY = 'Nw3PairingKey_after0';
+        storeHolds(NEW_KEY);
+
+        deliver({ payload: seal('action', { action: { type: 'ADD_TOKEN' }, msgId: 'disk-key', timestamp: Date.now() }, NEW_KEY) });
+        expect(dispatchedActions()).toEqual([]);
+        deliver({ payload: signedAction({ type: 'ADD_TOKEN' }) });
+        expect(dispatchedActions()).toHaveLength(1);
+        expect(await broadcastKey(REMOTE_KEY, NEW_KEY)).toBe(REMOTE_KEY);
+        expect(mocks.storeRead, 'a per-message re-read of the file').toHaveBeenCalledTimes(1);
     });
 });
 

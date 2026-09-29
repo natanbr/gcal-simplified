@@ -70,6 +70,7 @@ describe('RemoteBridge (Main Process)', () => {
             taskListIds: [],
             remoteRoomId: 'room-123',
             remoteKey: 'secret-key',
+            remotePairingVersion: 2,
         });
         mocks.storeRead.mockImplementation(() => ({ kind: 'loaded', config: mocks.storeGet(), raw: {} }));
 
