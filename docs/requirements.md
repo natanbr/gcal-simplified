@@ -1233,7 +1233,8 @@ reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION
 - **Now**: Save is disabled while a time is empty, the empty field is outlined, and the footer
   names which time is missing and on which tab. `SET_SETTINGS` keeps the
   stored start time for a value that is not `HH:MM`, and that refused value is not a time change, so
-  a running mission keeps running. At load, an invalid saved time becomes the default and the
+  a running mission keeps running and no "mission ended: its start time was changed" line is written
+  (the check lives in `missionReschedule.ts`, which the reducer and the log share). At load, an invalid saved time becomes the default and the
   mission window is rebuilt from it. The scheduler does not arm a timer for a time that is not a
   real `HH:MM` (mission or task lock) and warns once in the console. It checks the text, not the
   parsed date: `'999:00'` parses, but its delay is over `setTimeout`'s 2^31-1 ms limit and fires at
