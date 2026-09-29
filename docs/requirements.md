@@ -108,7 +108,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
   - **Only the phone can stop a mission (decided 2026-09-24)**: the phone's Stop sends `CANCEL_MISSION`, which stays on `REMOTE_ALLOWED_ACTIONS`. The desktop has no stop gesture: "— Minimize" only minimizes, a short tap and a long hold alike, because a stop sticks for the rest of the window without moving the shield, so a hold let the child end a mission. "↺ Reset" and its 2 s hold are unchanged (not decided yet). One desktop path still ends a mission: saving a new start time for the **running** mission in MC Settings ends it (no miss, the shield does not move). That is kept, and logged as "⏹️ Morning/Evening mission ended: its start time was changed in Settings", attributed 👤 (open decision for Nathan, PR 170; it used to be silent).
   - **A Stop or a full Reset for a mission that is not running is refused (2026-09-28)**: a phone Stop naming the other phase (a stale second tap) or a Reset hold that fires after its mission ended changes nothing and writes no log line. The phone's plain Reset (tasks only) is unchanged.
-  - **Shield +1 / −1 buttons (planned, phone side)**: the phone is getting buttons to hand a shield back or take one away. They send `ADJUST_SHIELD`, which the desktop already accepts (allowlist, validator, reducer); the phone side is being built separately in the mc-remote repo.
+  - **Shield −1 / +1 buttons (shipped in mc-remote 2026-09-28)**: the phone's Shield card has "−1 shield" and "+1 shield". They send `ADJUST_SHIELD` with `delta: -1` / `delta: 1`, which the desktop accepts (allowlist, validator, reducer). Details under Mission Streak Shield → Parent-adjustable shields.
   - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
   - **Global Listener**: The remote action listener is registered globally in the application shell. This guarantees that remote commands are processed continuously, even when viewing the calendar or when the mission overlay is active.
   - **Detailed Mission State Reflection**: The remote control displays individual card views for both Morning and Evening missions simultaneously. Each card reflects its current state (Active/Inactive), live countdown timers, adjustment buttons, task checklist progress (percentage bar and expandable/collapsible checkbox list), and whining status (highlighted pulsing indicator).
@@ -201,7 +201,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **What never freezes**: completing a mission (the exit), and the parent's tools — granting tokens, granting a game token, handing a shield back, removing a token, refunding a goal. Locking any of those would make the lock inescapable or take the adult's override away.
   - Every frozen control also *looks* refused (greyed, `🔒 Bank locked`), because a refused action deliberately writes no log line — so an enabled-looking button that silently does nothing leaves no trace for the child or the parent. Earning is never blocked — mission bonuses, responsibility claims and parent/remote grants still land, because collecting them is the way out. The locked flag is derived from the streak, never persisted.
   - **Shield bar** (`ShieldPanel.tsx`, between the Mood Gauge and Privileges): a six-segment bar sub-card in Column 3 — full at 0 misses, one segment lost per miss; green 0–2, amber 3–4, red 5, empty and locked at 6. The colour is the whole message: there is **no** status caption ("shield is strong/cracking"). The only text on the card is the 🔒 **Bank locked** line, shown when the shield is broken.
-  - **Parent-adjustable shields (remote)**: the parent can hand a shield back or take one away from the phone. One remote action, `ADJUST_SHIELD`, carries a delta in *segments* (positive = give a shield back = streak down). It is clamped to the same 0…6 range, is attributed like any other remote action, and drives the same lock/unlock log lines — so a shield given back at 6 unlocks the bank exactly as a completed mission does. `missedMissionStreak` therefore rides the remote-sync broadcast, so the phone can draw the same bar. **Host-side only so far**: the action, its allowlist entry and its payload validator are live here, but the `mc-remote` app has not shipped the +/- buttons yet, so there is nothing to press today. Every shield move is logged and attributed to whoever made it — a parent taking the last shield reads "Last shield taken away", never "6 missions missed in a row".
+  - **Parent-adjustable shields (remote)**: the parent can hand a shield back or take one away from the phone. One remote action, `ADJUST_SHIELD`, carries a delta in *segments* (positive = give a shield back = streak down). It is clamped to the same 0…6 range, is attributed like any other remote action, and drives the same lock/unlock log lines — so a shield given back at 6 unlocks the bank exactly as a completed mission does. `missedMissionStreak` therefore rides the remote-sync broadcast, so the phone can draw the same bar. **The phone's buttons (mc-remote, shipped 2026-09-28)**: the Shield card shows the same six segments, "N / 6", and "🔒 Bank locked" at 0 left, with "−1 shield" and "+1 shield" under it. −1 is disabled at 0 left. +1 is never disabled by the phone's snapshot: the phone does not age it and a lost desktop broadcast is not re-sent, so a stale "6 / 6" could grey out +1 for hours, and +1 is the parent's only remote way out of a locked bank; a +1 at 6 / 6 is clamped on the desktop, changes nothing and writes no line. While the shield is broken the phone also disables the Responsibilities −1 / +1 point buttons, because the desktop refuses those points. Every shield move is logged on the desktop and attributed to whoever made it (📱 for the phone): "💥 Shield taken away — N / 6 left" or "🛡️ Shield given back — N / 6 left", plus the lock or unlock line when it crosses 0 — a parent taking the last shield reads "Last shield taken away — bank and goals locked.", never "6 missions missed in a row"; handing it back reads "Shield given back — bank and goals unlocked."
 - **Quick-Game Availability Window**:
   - Games are playable only *between* the day's missions: from the moment the morning mission has concluded (completed **or** failed) until the moment the evening mission starts.
   - The rule is literal — "concluded", not "the morning window has passed". A morning that never ran at all (machine asleep at 06:00, app opened later) keeps games shut for the whole day; otherwise a child could earn the day's games by keeping the app closed through the routine. The escape hatch is human: the parent starts the mission by hand from Settings.
@@ -1208,7 +1208,7 @@ pins the settle's one dispatcher.
   still on `REMOTE_ALLOWED_ACTIONS`) is the only way to stop a mission; the reducer is unchanged.
 - **Not changed.** "↺ Reset" keeps its tap (tasks) and 2 s hold (tasks and timer): not decided yet.
 - **Planned, phone side.** The phone is getting +1 / −1 shield buttons that send `ADJUST_SHIELD`,
-  which the desktop already accepts.
+  which the desktop already accepts. (Shipped: see 2026-09-28 "The phone's shield buttons".)
 
 Tests: `MissionOverlay.test.tsx` (a 5 s hold only minimizes and logs no stop; the button keeps its
 size and `touch-action`; a remote `CANCEL_MISSION` still closes the overlay and the pill);
@@ -1354,3 +1354,21 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
   dispatch is stamped and runs the mood-gauge sync, so the old unconditional one handed out a new
   state object on every launch without a calendar (PR 178's settle test caught it). The start line's
   School Bag decision reads the interceptor's pending state like every other log line.
+
+### 2026-09-28 The phone's shield buttons
+
+- **Shipped (mc-remote PR 2, in mc-remote main at 7372b89).** The phone's Shield card has
+  "−1 shield" and "+1 shield", which send `ADJUST_SHIELD` with `delta: -1` / `delta: 1`. The desktop
+  already accepted it (allowlist, payload validator, reducer clamp, log lines), so nothing changed
+  on the desktop side.
+- **Phone behaviour.** −1 is disabled at 0 left. +1 is never disabled from the phone's snapshot: a
+  stale "6 / 6" (the phone does not age it, and a lost broadcast is not re-sent) must never block
+  the parent's way out of a locked bank; a +1 at 6 / 6 is clamped on the desktop and writes no line.
+  While the shield is broken the phone shows "🔒 Bank locked" and disables the Responsibilities
+  −1 / +1 point buttons.
+- **Desktop log.** Every press that moves the shield writes "Shield taken away — N / 6 left" or
+  "Shield given back — N / 6 left", attributed 📱, plus the lock or unlock line when it crosses 0.
+- **Drift guard.** `TYPES_SENT_BY_REMOTE_APP` in `useRemoteControl.allowlist.test.ts` was
+  re-captured from mc-remote 7372b89 and now lists `ADJUST_SHIELD`; its exemption from "does not
+  allow anything the remote app never sends" is gone. The live comparison against a checkout of
+  that commit reported exactly one new type, `ADJUST_SHIELD`, before the change and none after.
