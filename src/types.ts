@@ -52,6 +52,19 @@ export interface UserConfig {
     weekStartDay?: 'sunday' | 'monday' | 'today';
 }
 
+/** Why the main process wrote nothing (mirrors electron/store.ts WriteResult).
+ *  `file` is the settings file's full path, for the message the user reads. */
+export interface SettingsWriteFailure {
+    ok: false;
+    /** locked: another program holds the file · unreadable: it could not be read · write-failed: disk, permissions */
+    reason: 'locked' | 'unreadable' | 'write-failed';
+    code?: string;
+    file: string;
+}
+
+/** What `settings:save` resolves to. It never rejects for a refused write. */
+export type SaveSettingsResult = { ok: true } | SettingsWriteFailure;
+
 export interface WeatherData {
     current: {
         temperature: number;

@@ -1,10 +1,15 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { BrowserWindow } from 'electron';
 import crypto from 'node:crypto';
-import { store } from './store';
+import { store, type StoreFailure } from './store';
+
+interface Pairing { roomId: string; remoteKey: string }
+
+/** What remote:regenerate resolves to: the new pairing, or why the old one was kept. */
+export type RegenerateKeysResult = ({ ok: true } & Pairing) | StoreFailure;
 
 /** Cryptographically random pairing credentials for the remote channel. */
-function generatePairingKeys(): { roomId: string; remoteKey: string } {
+function generatePairingKeys(): Pairing {
     return {
         roomId: crypto.randomUUID(),
         remoteKey: crypto.randomBytes(15).toString('base64url'),
@@ -16,23 +21,26 @@ const INIT_RETRY_FIRST_MS = 5_000;
 const INIT_RETRY_MAX_MS = 5 * 60_000;
 
 /**
- * The room to join, generating and saving a pairing on first run. Null when
- * config.json cannot be read, or the new pairing cannot be saved: joining a
+ * The pairing to join, generating and saving one on first run. Null when the
+ * settings file cannot be read, or the new pairing cannot be saved: joining a
  * room that was never saved leaves the phone on a room nobody can reach.
  */
-function pairedRoomId(): string | null {
+function currentPairing(): Pairing | null {
     const current = store.read();
     if (current.kind === 'unreadable') return null;
     const { remoteRoomId, remoteKey } = current.config;
-    if (remoteRoomId && remoteKey) return remoteRoomId;
+    if (remoteRoomId && remoteKey) return { roomId: remoteRoomId, remoteKey };
 
     const pairing = generatePairingKeys();
-    return store.update({ remoteRoomId: pairing.roomId, remoteKey: pairing.remoteKey }) ? pairing.roomId : null;
+    return store.update({ remoteRoomId: pairing.roomId, remoteKey: pairing.remoteKey }).ok ? pairing : null;
 }
 
 export class RemoteBridge {
     private supabase: SupabaseClient | null = null;
     private channel: RealtimeChannel | null = null;
+    /** What this bridge last joined with. The main process is the pairing's only owner (settings:save never
+     *  writes it), so a file that turns unreadable mid-session must not change who may act. */
+    private pairing: Pairing | null = null;
     private seenIds = new Map<string, number>();
     private cleanupInterval: NodeJS.Timeout | null = null;
     private initRetryTimeout: NodeJS.Timeout | null = null;
@@ -87,21 +95,31 @@ export class RemoteBridge {
             this.supabase = createClient(url, key);
         }
 
-        const roomId = pairedRoomId();
-        if (!roomId) {
+        const pairing = currentPairing();
+        if (!pairing) {
             this.goOfflineAndRetry();
             return;
+        }
+        this.join(pairing);
+    }
+
+    private join(pairing: Pairing) {
+        if (!this.supabase) return;
+        if (this.initRetryTimeout) {
+            clearTimeout(this.initRetryTimeout);
+            this.initRetryTimeout = null;
         }
         this.initRetryDelayMs = INIT_RETRY_FIRST_MS;
 
         if (this.channel) {
             this.supabase.removeChannel(this.channel);
         }
+        this.pairing = pairing;
 
-        const currentChannel = this.supabase.channel(`remote-control:${roomId}`);
+        const currentChannel = this.supabase.channel(`remote-control:${pairing.roomId}`);
         this.channel = currentChannel;
         
-        console.log(`[RemoteBridge] Initializing. Room ID: ${roomId}`);
+        console.log(`[RemoteBridge] Initializing. Room ID: ${pairing.roomId}`);
 
         currentChannel
             .on('broadcast', { event: 'action' }, (payload: { payload: { key: string; action: Record<string, unknown>; msgId?: string; timestamp?: number } }) => {
@@ -127,10 +145,9 @@ export class RemoteBridge {
                     return;
                 }
 
-                // Re-fetch config to ensure we have latest key
-                const expectedKey = store.get().remoteKey;
-
-                // A failed read has no key: undefined must never match a payload that sent none.
+                // The joined pairing, never a fresh read: a read that fails has no key, and
+                // undefined must never match a payload that sent none.
+                const expectedKey = this.pairing?.remoteKey;
                 if (typeof expectedKey === 'string' && expectedKey !== '' && receivedKey === expectedKey) {
                     // Special case: Sync Request
                     if (action.type === 'SYNC_REQUEST') {
@@ -169,16 +186,15 @@ export class RemoteBridge {
             });
     }
 
-    regenerateKeys() {
-        const { roomId, remoteKey } = generatePairingKeys();
-        if (!store.update({ remoteRoomId: roomId, remoteKey })) {
-            throw new Error('Pairing keys not regenerated: config.json could not be read or saved.');
-        }
+    regenerateKeys(): RegenerateKeysResult {
+        const pairing = generatePairingKeys();
+        const saved = store.update({ remoteRoomId: pairing.roomId, remoteKey: pairing.remoteKey });
+        if (!saved.ok) return saved;
 
-        // Re-init with new keys
-        this.init();
-        
-        return { roomId, remoteKey };
+        // Join what was just saved, with no re-read: a lock right after the save must not
+        // leave the bridge in the room being revoked.
+        this.join(pairing);
+        return { ok: true, ...pairing };
     }
 
     /** Stay offline rather than join a room the phone does not know, and try again.
@@ -193,7 +209,7 @@ export class RemoteBridge {
 
         const delay = this.initRetryDelayMs;
         this.initRetryDelayMs = Math.min(delay * 2, INIT_RETRY_MAX_MS);
-        console.warn(`[RemoteBridge] Remote control offline: config.json could not be read or saved. Retrying in ${delay / 1000} s.`);
+        console.warn(`[RemoteBridge] Remote control offline: the settings file could not be read or saved. Retrying in ${delay / 1000} s.`);
         this.initRetryTimeout = setTimeout(() => this.init(), delay);
     }
 
@@ -205,9 +221,7 @@ export class RemoteBridge {
     }
 
     async broadcastState(state: unknown) {
-        if (!this.supabase || !this.channel) return;
-        const config = store.get();
-        if (!config.remoteRoomId || !config.remoteKey) return;
+        if (!this.channel || !this.pairing) return;
 
         try {
             console.log('[RemoteBridge] Broadcasting state update...');
@@ -215,7 +229,7 @@ export class RemoteBridge {
                 type: 'broadcast',
                 event: 'state-update',
                 payload: {
-                    key: config.remoteKey,
+                    key: this.pairing.remoteKey,
                     state,
                     timestamp: Date.now()
                 }

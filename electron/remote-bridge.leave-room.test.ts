@@ -3,16 +3,17 @@
 // is never joined.
 //
 // What this protects (review of the config.json fix, 2026-09-28):
-//   - regenerateKeys() saves pairing B, then init() re-reads config.json. If
-//     antivirus locks the file in that instant, init() used to return before
-//     leaving room A: the bridge stayed subscribed there, still reported
-//     online, and broadcast state under key B into the room the parent was
-//     revoking.
+//   - regenerateKeys() used to save pairing B and then re-read config.json in
+//     init(). If antivirus locked the file in that instant, init() returned
+//     before leaving room A: the bridge stayed subscribed there, still reported
+//     online, and broadcast state under key B into the room being revoked. It
+//     now joins the pairing it just saved, with no re-read; and any init() that
+//     cannot join leaves the room it was in.
 //   - A pairing whose write failed must not be joined: the phone can never
-//     learn a room that was never saved. store.update() returns false for a
-//     failed write, and nothing else in the suites makes a write fail.
+//     learn a room that was never saved.
 // Harness: real store on one temp dir (store.ts memoizes the path); read and
-// write faults that throw only for config.json, each asserted to have fired.
+// write faults that throw only for config.json (writes go to config.json.tmp
+// first), each asserted to have fired.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
@@ -81,7 +82,8 @@ beforeEach(() => {
         return realRead(...args);
     }) as typeof fs.readFileSync);
     vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof realWrite>) => {
-        if (fault.writeLocked && isConfig(args[0])) { fault.writeHits++; throw busy(); }
+        // store.update writes config.json.tmp, then renames it over config.json.
+        if (fault.writeLocked && isConfig(String(args[0]).replace(/\.tmp$/, ''))) { fault.writeHits++; throw busy(); }
         realWrite(...args);
     });
     Object.assign(process.env, { VITE_SUPABASE_URL: 'https://mock.supabase.co', VITE_SUPABASE_ANON_KEY: 'mock-anon-key' });
@@ -122,13 +124,13 @@ describe('RemoteBridge — a pairing that could not be saved is never joined', (
         expect(h.joined).toEqual([`remote-control:${String(saved.remoteRoomId)}`]);
     });
 
-    it('regenerateKeys() throws when the new pairing cannot be written, and stays in the saved room', () => {
+    it('regenerateKeys() refuses when the new pairing cannot be written, and stays in the saved room', () => {
         seed(SEED);
         bridge.init();
         const before = bytes();
         fault.writeLocked = true;
 
-        expect(() => bridge.regenerateKeys()).toThrow(/config\.json/);
+        expect(bridge.regenerateKeys()).toEqual({ ok: false, reason: 'locked', code: 'EBUSY', file: CONFIG });
         expect(fault.writeHits).toBeGreaterThan(0);
         expect(bytes().equals(before)).toBe(true);
         expect(h.joined).toEqual(['remote-control:room-orig']);
@@ -137,24 +139,36 @@ describe('RemoteBridge — a pairing that could not be saved is never joined', (
 });
 
 describe('RemoteBridge — going offline leaves the room it was in', () => {
-    it('leaves the old room when the re-read after a regenerate fails, and joins the new one once it reads', async () => {
+    it('regenerateKeys() joins the pairing it just saved, even if the file locks right after the save', () => {
+        seed(SEED);
+        bridge.init();
+        // update()'s own read succeeds and saves pairing B; every read after it is locked.
+        fault.readsBeforeLock = fault.reads + 1;
+
+        const result = bridge.regenerateKeys();
+
+        if (!result.ok) throw new Error(`regenerateKeys refused: ${result.reason}`);
+        expect(h.removed, 'still subscribed to the room the parent is revoking').toEqual(['remote-control:room-orig']);
+        expect(h.joined.at(-1)).toBe(`remote-control:${result.roomId}`);
+        expect(bridge.getStatus()).toBe(true);
+    });
+
+    it('leaves the room it was in when a later init() cannot read the file, and rejoins once it can', async () => {
         seed(SEED);
         bridge.init();
         expect(h.joined).toEqual(['remote-control:room-orig']);
-        expect(bridge.getStatus()).toBe(true);
-        // update()'s own read succeeds and saves pairing B; init()'s re-read right after it is locked.
-        fault.readsBeforeLock = fault.reads + 1;
+        fault.readsBeforeLock = fault.reads;
 
-        const { roomId } = bridge.regenerateKeys();
+        bridge.init();
 
-        expect(fault.readHits, 'the re-read fault never fired — the case proves nothing').toBeGreaterThan(0);
-        expect(h.removed, 'still subscribed to the room the parent is revoking').toEqual(['remote-control:room-orig']);
+        expect(fault.readHits, 'the read fault never fired — the case proves nothing').toBeGreaterThan(0);
+        expect(h.removed).toEqual(['remote-control:room-orig']);
         expect(bridge.getStatus()).toBe(false);
         expect(statusSent().at(-1)).toBe(false);
 
         fault.readsBeforeLock = null;
         await vi.advanceTimersByTimeAsync(5_000);
-        expect(h.joined.at(-1)).toBe(`remote-control:${roomId}`);
+        expect(h.joined.at(-1)).toBe('remote-control:room-orig');
         expect(bridge.getStatus()).toBe(true);
     });
 

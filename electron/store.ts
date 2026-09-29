@@ -23,13 +23,31 @@ export interface UserConfig {
     remoteKey?: string;
 }
 
+
+/** Why nothing was written. `file` is the full path, for the message the user reads. */
+export interface StoreFailure {
+    ok: false;
+    /** locked: another program holds the file (EBUSY/EPERM/EACCES) · unreadable: any other read error · write-failed: disk, permissions */
+    reason: 'locked' | 'unreadable' | 'write-failed';
+    code?: string;
+    file: string;
+}
+
+export type WriteResult = { ok: true } | StoreFailure;
+
 /** What a read of config.json found. Only 'absent' means the defaults are the truth. */
 export type ConfigRead =
-    | { kind: 'loaded'; config: UserConfig }
+    /** `raw` is the object on disk: update() merges onto it, so keys this build does not know survive. */
+    | { kind: 'loaded'; config: UserConfig; raw: Record<string, unknown> }
+    /** No file — or content that can never parse, which was first moved aside to config.json.corrupt-<time>. */
     | { kind: 'absent'; config: UserConfig }
-    /** Locked (EBUSY/EPERM — antivirus, a backup), half-written, or not a JSON object.
-     *  `reason` is an errno code or a fixed phrase, never the file's content. */
-    | { kind: 'unreadable'; reason: string };
+    /** The read itself failed. Usually antivirus or a backup holding the file: transient, so nothing moves. */
+    | { kind: 'unreadable'; failure: StoreFailure };
+
+/** Errors that mean "another program has the file right now" — worth waiting for, never worth quarantining. */
+const LOCKED_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
+/** Waits between rename attempts. This runs on the main thread and blocks every window: keep the sum small. */
+const RENAME_RETRY_MS = [20, 40, 80];
 
 let configPath = '';
 
@@ -58,34 +76,64 @@ function errorCode(e: unknown): string | undefined {
     return typeof e === 'object' && e !== null && 'code' in e && typeof e.code === 'string' ? e.code : undefined;
 }
 
-function unreadable(reason: string): ConfigRead {
-    // The reason only: a JSON.parse message quotes the file, and the file holds the pairing key.
-    console.error(`[store] config.json could not be read (${reason}); nothing will be written to it.`);
-    return { kind: 'unreadable', reason };
+function failure(reason: StoreFailure['reason'], code: string | undefined, file: string): StoreFailure {
+    return code ? { ok: false, reason, code, file } : { ok: false, reason, file };
+}
+
+/** Readers call get() on every fetch, broadcast and power check: a persisting problem logs once, not once a read. */
+let reportedProblem: string | null = null;
+
+function unreadable(e: unknown, file: string): ConfigRead {
+    const code = errorCode(e);
+    if (reportedProblem !== code) {
+        reportedProblem = code ?? 'no error code';
+        // The code only: a JSON.parse message quotes the file, and the file holds the pairing key.
+        console.error(`[store] config.json could not be read (${reportedProblem}); nothing will be written to it until it can.`);
+    }
+    return { kind: 'unreadable', failure: failure(code && LOCKED_CODES.has(code) ? 'locked' : 'unreadable', code, file) };
+}
+
+/** Content that will never parse is moved aside: refusing it would leave the app on defaults for good,
+ *  and writing over it would lose the bytes. A rename that is refused means the file is in use. */
+function quarantine(file: string, what: string): ConfigRead {
+    const aside = `${file}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    try {
+        fs.renameSync(file, aside);
+    } catch (e) {
+        return unreadable(e, file);
+    }
+    reportedProblem = null;
+    console.error(`[store] config.json ${what}: moved it to ${aside} and started again from the defaults (the phone must scan the QR code again).`);
+    return { kind: 'absent', config: defaults() };
 }
 
 function readConfig(): ConfigRead {
-    let raw: string;
+    const file = getPath();
+    let text: string;
     try {
-        raw = fs.readFileSync(getPath(), 'utf-8');
+        text = fs.readFileSync(file, 'utf-8');
     } catch (e) {
         // ENOENT, not existsSync: existsSync also answers false for a file it may not access.
-        const code = errorCode(e);
-        return code === 'ENOENT' ? { kind: 'absent', config: defaults() } : unreadable(code ?? 'read failed');
+        if (errorCode(e) !== 'ENOENT') return unreadable(e, file);
+        reportedProblem = null;
+        return { kind: 'absent', config: defaults() };
     }
+    // PowerShell 5.1's Set-Content -Encoding UTF8 writes a BOM, so a hand repair produces one.
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
     let loaded;
     try {
-        loaded = JSON.parse(raw);
+        loaded = JSON.parse(text);
     } catch {
-        return unreadable('not valid JSON');
+        return quarantine(file, text.trim() === '' ? 'is empty' : 'is not valid JSON');
     }
     if (typeof loaded !== 'object' || loaded === null || Array.isArray(loaded)) {
-        return unreadable('not a JSON object');
+        return quarantine(file, 'is not a JSON object');
     }
-    // Merge with defaults to ensure safety. Every field must be listed: update()
-    // writes back only what this returns, so a field left out is erased on the next write.
+    reportedProblem = null;
+    // Merge with defaults to ensure safety. Every field is listed, so a new UserConfig field is a tsc error here.
     return {
         kind: 'loaded',
+        raw: loaded,
         config: {
             calendarIds: Array.isArray(loaded.calendarIds) ? loaded.calendarIds : ['primary'],
             taskListIds: Array.isArray(loaded.taskListIds) ? loaded.taskListIds : [],
@@ -104,6 +152,43 @@ function readConfig(): ConfigRead {
     };
 }
 
+function sleepSync(ms: number): void {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function writeFailed(e: unknown, file: string, temp: string): StoreFailure {
+    try {
+        fs.rmSync(temp, { force: true });
+    } catch {
+        // A leftover temp file is harmless: config.json is intact and the next write replaces it.
+    }
+    const code = errorCode(e);
+    console.error(`[store] config.json could not be written (${code ?? 'no error code'}).`);
+    return failure(code && LOCKED_CODES.has(code) ? 'locked' : 'write-failed', code, file);
+}
+
+/** Temp file + rename: a crash mid-write leaves the old file whole, where writeFileSync would
+ *  have truncated it first. Antivirus often holds a file it just saw written, so the rename is
+ *  retried briefly before the write is reported as locked. */
+function writeAtomically(file: string, text: string): WriteResult {
+    const temp = `${file}.tmp`;
+    try {
+        fs.writeFileSync(temp, text);
+    } catch (e) {
+        return writeFailed(e, file, temp);
+    }
+    for (let attempt = 0; ; attempt++) {
+        try {
+            fs.renameSync(temp, file);
+            return { ok: true };
+        } catch (e) {
+            const code = errorCode(e);
+            if (!code || !LOCKED_CODES.has(code) || attempt >= RENAME_RETRY_MS.length) return writeFailed(e, file, temp);
+            sleepSync(RENAME_RETRY_MS[attempt]);
+        }
+    }
+}
+
 export const store = {
     /** For readers only. An unreadable file reads as the defaults, so never write
      *  back what this returns — that is how a locked file became the defaults. */
@@ -115,17 +200,12 @@ export const store = {
     /** A fresh read that says whether the file was loaded, absent or unreadable. */
     read: readConfig,
 
-    /** The only writer. Re-reads the file first and writes nothing over one it
-     *  cannot read. False when nothing was written. */
-    update(patch: Partial<UserConfig>): boolean {
+    /** The only writer. Re-reads the file first, writes nothing over one it cannot read,
+     *  and merges the patch onto the file as it is on disk. */
+    update(patch: Partial<UserConfig>): WriteResult {
         const current = readConfig();
-        if (current.kind === 'unreadable') return false;
-        try {
-            fs.writeFileSync(getPath(), JSON.stringify({ ...current.config, ...patch }, null, 2));
-            return true;
-        } catch (e) {
-            console.error(`[store] config.json could not be written (${errorCode(e) ?? 'write failed'}).`);
-            return false;
-        }
+        if (current.kind === 'unreadable') return current.failure;
+        const onDisk = current.kind === 'loaded' ? current.raw : current.config;
+        return writeAtomically(getPath(), JSON.stringify({ ...onDisk, ...patch }, null, 2));
     }
 };

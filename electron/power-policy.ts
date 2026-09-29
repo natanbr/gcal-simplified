@@ -8,7 +8,7 @@
 
 import { powerMonitor } from 'electron';
 import { execFile } from 'node:child_process';
-import { apiService } from './api';
+import { store } from './store';
 
 const IDLE_SECONDS_BEFORE_BLANK = 300;
 const CHECK_INTERVAL_MS = 60 * 1000;
@@ -35,7 +35,7 @@ function turnOffScreen(): void {
 
 function checkPowerPolicy(): void {
     try {
-        const config = apiService.getSettings();
+        const config = store.get(); // tolerant: a locked file reads as the defaults for one check
         if (config.sleepEnabled === false) return; // Explicit false check, default true
 
         const currentHour = new Date().getHours();

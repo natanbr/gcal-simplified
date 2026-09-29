@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
     getAllWindows: vi.fn<() => WindowSlice[]>().mockReturnValue([{ webContents: { send: vi.fn() } }]),
     storeGet: vi.fn<typeof store.get>(),
     storeRead: vi.fn<typeof store.read>(),
-    storeUpdate: vi.fn<typeof store.update>().mockReturnValue(true),
+    storeUpdate: vi.fn<typeof store.update>().mockReturnValue({ ok: true }),
 }));
 
 // Mock Supabase
@@ -62,7 +62,7 @@ describe('RemoteBridge (Main Process)', () => {
             remoteRoomId: 'room-123',
             remoteKey: 'secret-key',
         });
-        mocks.storeRead.mockImplementation(() => ({ kind: 'loaded', config: mocks.storeGet() }));
+        mocks.storeRead.mockImplementation(() => ({ kind: 'loaded', config: mocks.storeGet(), raw: {} }));
 
         bridge = new RemoteBridge();
     });

@@ -11,25 +11,22 @@
 // caller write whatever it had — and every caller had built its config from a
 // read that turned a locked or corrupt file into the defaults. The remote
 // bridge did that at every startup and wiped the file. The behavioural suites
-// (electron/store.config-read, remote-bridge.config-read, api.save-settings)
-// cover today's callers; a NEW writer — a second `set`, a helper that writes
-// the path itself — is by definition not covered by them.
+// (electron/store.config-read, store.config-write, remote-bridge.*,
+// api.save-settings) cover today's callers; a NEW writer — a second `set`, a
+// helper that writes the path itself, an electron-store left on its default
+// name — is by definition not covered by them.
 //
-// What each case scans:
+// What each case scans (production files under src/ and electron/):
 //   - the store's public surface is exactly get / read / update;
-//   - no other production file names config.json as a path (a quoted
-//     'config.json' or '<dir>/config.json'; comments and prose such as an error
-//     message saying "config.json could not be read" do not count, and
-//     'tsconfig.json' never matches);
-//   - electron/store.ts itself has one writeFileSync call site.
+//   - no file but electron/store.ts mentions config.json at all, in any case,
+//     on a non-comment line (prose included: the store hands out the path, so
+//     nobody else needs the name; 'tsconfig.json' does not match);
+//   - no electron-store / conf instance without a name, or named 'config':
+//     their default file IS userData/config.json (security-learnings.md, the
+//     2025 incident where a manual write destroyed the OAuth tokens);
+//   - electron/store.ts touches the disk from a pinned set of call sites.
 //
-// verifiedRedBy (proven 2026-09-28 against the committed fix, then reverted):
-//   - re-add a `set()` to the store object → the surface case and the
-//     one-write-site case go red;
-//   - a helper in electron/api.ts that writeFileSyncs
-//     `path.join(…, 'config.json')` → the path case goes red naming api.ts;
-//   - a second writeFileSync (a `reset()`) in electron/store.ts → the surface
-//     and write-site cases go red.
+// verifiedRedBy: see the registry entry in rule-registry.test.ts.
 // ============================================================
 
 import { describe, it, expect, vi } from 'vitest';
@@ -42,43 +39,57 @@ const STORE = 'electron/store.ts';
 const SOURCES = productionSources(['src', 'electron']).map(f => ({ rel: toRepoPath(f), src: readSource(f) }));
 
 const isComment = (line: string) => /^\s*(\/\/|\*|\/\*)/.test(line);
-/** A string literal that IS the file name, or a path ending in it: 'config.json', `${dir}/config.json`. */
-const CONFIG_PATH_LITERAL = /(['"`])(?:[^'"`\n]*[/\\])?config\.json\1/;
+const codeLines = (src: string) => src.split('\n').map((line, i) => ({ line, n: i + 1 })).filter(({ line }) => !isComment(line));
+const CONFIG_NAME = /(?<![\w-])config\.json/i;
+
+/** Every way store.ts may touch the disk, and how often. Each site has a reason:
+ *  writeFileSync — the temp file; renameSync — the temp over config.json, and a
+ *  file that can never parse moved aside; rmSync — the temp after a failed rename. */
+const STORE_DISK_CALLS: Record<string, number> = {
+    writeFileSync: 1, renameSync: 2, rmSync: 1,
+    appendFileSync: 0, copyFileSync: 0, unlinkSync: 0, createWriteStream: 0, promises: 0,
+};
 
 describe('config.json has exactly one writer', () => {
     it('exposes get, read and update — no raw set that writes whatever it is given', () => {
         expect(Object.keys(store).sort()).toEqual(['get', 'read', 'update']);
     });
 
-    it('is named as a path only in electron/store.ts', () => {
+    it('is mentioned only in electron/store.ts', () => {
         expect(SOURCES.length, 'the file walk found nothing — the guard would pass vacuously').toBeGreaterThan(50);
         expect(
-            SOURCES.find(f => f.rel === STORE)?.src.split('\n').some(line => !isComment(line) && CONFIG_PATH_LITERAL.test(line)),
-            'electron/store.ts no longer names config.json — the pattern below would pass vacuously',
+            codeLines(SOURCES.find(f => f.rel === STORE)?.src ?? '').some(({ line }) => CONFIG_NAME.test(line)),
+            'electron/store.ts no longer names config.json — the pattern would pass vacuously',
         ).toBe(true);
 
-        const offenders: string[] = [];
-        for (const { rel, src } of SOURCES) {
-            if (rel === STORE) continue;
-            src.split('\n').forEach((line, i) => {
-                if (!isComment(line) && CONFIG_PATH_LITERAL.test(line)) offenders.push(`${rel}:${i + 1} — ${line.trim()}`);
-            });
-        }
+        const offenders = SOURCES.filter(f => f.rel !== STORE).flatMap(({ rel, src }) =>
+            codeLines(src).filter(({ line }) => CONFIG_NAME.test(line)).map(({ line, n }) => `${rel}:${n} — ${line.trim()}`));
         expect(
             offenders,
-            'These name config.json as a path outside the store. Go through store.update, which re-reads ' +
-            'the file and refuses to write over one it cannot read:\n  ' + offenders.join('\n  '),
+            'These name config.json outside the store. Write through store.update (it re-reads the file and ' +
+            'refuses to write over one it cannot read), and show the path the store returns in `file`:\n  ' + offenders.join('\n  '),
         ).toEqual([]);
     });
 
-    it('writes from exactly one call site inside electron/store.ts', () => {
-        const src = SOURCES.find(f => f.rel === STORE)?.src ?? '';
-        const sites = src.split('\n')
-            .map((line, i) => ({ line, n: i + 1 }))
-            .filter(({ line }) => !isComment(line) && /\bwriteFileSync\s*\(/.test(line));
-        expect(
-            sites.map(s => `${STORE}:${s.n} — ${s.line.trim()}`),
-            'store.update must be the only path to disk; a second write site is a second writer',
-        ).toHaveLength(1);
+    it('has no electron-store or conf instance that would default to config.json', () => {
+        const offenders: string[] = [];
+        for (const { rel, src } of SOURCES) {
+            for (const match of src.matchAll(/\bnew\s+(Store|Conf)\b/g)) {
+                const call = src.slice(match.index, src.indexOf(')', match.index) + 1);
+                const name = /\bname\s*:\s*(['"`])([^'"`]+)\1/.exec(call)?.[2];
+                if (!name || name.toLowerCase() === 'config') {
+                    offenders.push(`${rel}:${src.slice(0, match.index).split('\n').length} — ${call.replace(/\s+/g, ' ')}`);
+                }
+            }
+        }
+        expect(offenders, 'An unnamed (or "config") store writes userData/config.json behind store.ts:\n  ' + offenders.join('\n  ')).toEqual([]);
+    });
+
+    it('touches the disk from electron/store.ts only through its pinned call sites', () => {
+        const lines = codeLines(SOURCES.find(f => f.rel === STORE)?.src ?? '');
+        const counted = Object.fromEntries(Object.keys(STORE_DISK_CALLS).map(call => [
+            call, lines.filter(({ line }) => new RegExp(`\\b(fs\\.)?${call}\\b\\s*[(.]`).test(line)).length,
+        ]));
+        expect(counted, 'A new disk call in store.ts is a new writer: give it a reason and pin it above').toEqual(STORE_DISK_CALLS);
     });
 });

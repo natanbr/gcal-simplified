@@ -1,30 +1,28 @@
 // ============================================================
-// config.json — "absent" is not "unreadable".
+// config.json reads — "absent", "locked" and "will never parse" are different.
 //
 // What this protects: the settings file holds the user's calendar selection,
 // task lists, power/theme settings and the phone pairing. `store.get()` used to
-// return the same hard-coded defaults whether the file was missing (defaults
-// are right) or present but unreadable (antivirus or a backup holding it:
-// EBUSY/EPERM; truncated or non-object content). Every read-modify-write then
-// wrote those defaults back over the real file, and the remote bridge did so
-// automatically at startup.
+// return the same defaults for a missing file and for one it could not read,
+// and every read-modify-write then saved those defaults over the real file.
 //
 // The contract pinned here:
-//   read()   → 'loaded' | 'absent' (only on ENOENT) | 'unreadable' (anything
-//              else — I/O error, bad JSON, empty file, JSON that is not a plain
-//              object). The reason is an errno code or a fixed phrase, never
-//              file content.
-//   update() → re-reads at write time; 'unreadable' writes NOTHING and returns
-//              false; otherwise writes { ...config, ...patch } and returns true.
-//   get()    → for readers only; 'unreadable' reads as the defaults.
-// And: no log line may carry the file's content (a JSON.parse SyntaxError
-// quotes a snippet of it, which can be the pairing key).
+//   read() → 'loaded'     the file parsed to an object (a leading BOM is fine:
+//                          PowerShell 5.1's `Set-Content -Encoding UTF8` writes
+//                          one, so the documented hand repair produces it);
+//            'absent'     no file (ENOENT) — or content that can never parse
+//                          (truncated, empty, NUL-filled, not an object), which
+//                          is MOVED ASIDE to config.json.corrupt-<time> first,
+//                          so the bytes survive and the app recovers by itself;
+//            'unreadable' the read itself failed (EBUSY/EPERM/EACCES from
+//                          antivirus or a backup): transient, so the file is
+//                          left exactly where it is. A quarantine whose rename
+//                          fails is 'unreadable' too.
+//   No log line carries file content, and a persisting problem logs once.
 //
 // Real store, real disk: one temp userData dir per file, because store.ts
-// memoizes the config path on first use. The I/O fault is a spy on the shared
-// `fs` object that throws only for config.json; every locked case asserts the
-// spy fired, so a store that stops going through fs.readFileSync fails loudly
-// instead of passing vacuously.
+// memoizes the config path on first use. Faults are spies on the shared `fs`
+// object that throw only for config.json; each case asserts its fault fired.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
@@ -41,167 +39,153 @@ paths.userData = fs.mkdtempSync(path.join(os.tmpdir(), 'store-config-read-'));
 afterAll(() => fs.rmSync(paths.userData, { recursive: true, force: true }));
 
 const CONFIG = path.join(paths.userData, 'config.json');
-/** Captured before any spy, so "after" bytes are read past the fault. */
 const realRead = fs.readFileSync;
+const realRename = fs.renameSync;
 
-/** The defaults `get()` returns today for a missing file. */
 const DEFAULTS = {
-    calendarIds: ['primary'],
-    taskListIds: [],
-    themeMode: 'auto',
-    manualDayStart: 7,
-    manualDayEnd: 19,
-    sleepEnabled: true,
-    sleepStart: 22,
-    sleepEnd: 6,
-    weekStartDay: 'today',
+    calendarIds: ['primary'], taskListIds: [], themeMode: 'auto', manualDayStart: 7, manualDayEnd: 19,
+    sleepEnabled: true, sleepStart: 22, sleepEnd: 6, weekStartDay: 'today',
 };
 const PAIRING = { remoteRoomId: 'room-new', remoteKey: 'key-new' };
 
-const lock = { code: null as string | null, hits: 0 };
+const fault = { readCode: null as string | null, readHits: 0, renameCode: null as string | null, renameHits: 0 };
+const isConfig = (file: unknown) => typeof file !== 'number' && path.resolve(String(file)) === path.resolve(CONFIG);
+const fsError = (code: string) => Object.assign(new Error(`${code}: operation failed`), { code });
 
-function lockedRead(...args: Parameters<typeof realRead>) {
-    const [file] = args;
-    if (lock.code && typeof file !== 'number' && path.resolve(String(file)) === path.resolve(CONFIG)) {
-        lock.hits++;
-        throw Object.assign(new Error(`${lock.code}: resource busy or locked, open '${String(file)}'`), { code: lock.code });
-    }
-    return realRead(...args);
-}
-
-const seed = (content: string) => fs.writeFileSync(CONFIG, content);
+const seed = (content: string | Buffer) => fs.writeFileSync(CONFIG, content);
 const bytes = () => realRead(CONFIG);
-const onDisk = (): Record<string, unknown> => JSON.parse(realRead(CONFIG, 'utf-8'));
+const quarantined = () => fs.readdirSync(paths.userData).filter(name => name.startsWith('config.json.corrupt-'));
+const errorLines = () => vi.mocked(console.error).mock.calls.map(args => args.map(a => (typeof a === 'string' ? a : inspect(a))).join(' '));
 
 beforeEach(() => {
-    fs.rmSync(CONFIG, { force: true });
-    lock.code = null;
-    lock.hits = 0;
-    vi.spyOn(fs, 'readFileSync').mockImplementation(lockedRead as typeof fs.readFileSync);
+    for (const name of fs.readdirSync(paths.userData)) fs.rmSync(path.join(paths.userData, name), { force: true });
+    Object.assign(fault, { readCode: null, readHits: 0, renameCode: null, renameHits: 0 });
+    vi.spyOn(fs, 'readFileSync').mockImplementation(((...args: Parameters<typeof realRead>) => {
+        if (fault.readCode && isConfig(args[0])) { fault.readHits++; throw fsError(fault.readCode); }
+        return realRead(...args);
+    }) as typeof fs.readFileSync);
+    vi.spyOn(fs, 'renameSync').mockImplementation((...args: Parameters<typeof realRename>) => {
+        if (fault.renameCode && isConfig(args[0])) { fault.renameHits++; throw fsError(fault.renameCode); }
+        realRename(...args);
+    });
+    for (const level of ['log', 'warn', 'error'] as const) vi.spyOn(console, level).mockImplementation(() => undefined);
+    // A lock case in an earlier test leaves "already reported" state behind; one clean read resets it.
+    store.read();
 });
 
-afterEach(() => {
-    vi.restoreAllMocks();
-    fs.rmSync(CONFIG, { force: true });
-});
+afterEach(() => vi.restoreAllMocks());
 
-describe('store — a missing file is the only one that reads as the defaults', () => {
-    it('reads an absent file as the defaults and writes defaults + patch', () => {
+describe('store.read — a missing or readable file', () => {
+    it('reads an absent file as the defaults', () => {
+        expect(store.read()).toEqual({ kind: 'absent', config: DEFAULTS });
+    });
+
+    it('loads a file with a leading BOM (what a PowerShell 5.1 hand repair writes)', () => {
+        seed('﻿' + JSON.stringify({ calendarIds: ['cal-a'], ...PAIRING }));
         const read = store.read();
-        expect(read.kind).toBe('absent');
-        if (read.kind !== 'absent') return;
-        expect(read.config).toEqual(DEFAULTS);
-
-        expect(store.update(PAIRING)).toBe(true);
-        expect(onDisk()).toEqual({ ...DEFAULTS, ...PAIRING });
-    });
-
-    it('merges a patch into a loaded file and keeps every field it did not name', () => {
-        seed(JSON.stringify({ calendarIds: ['cal-a', 'cal-b'], taskListIds: ['list-1'], sleepEnabled: false }));
-
-        expect(store.read().kind).toBe('loaded');
-        expect(store.update(PAIRING)).toBe(true);
-        expect(onDisk()).toMatchObject({
-            calendarIds: ['cal-a', 'cal-b'],
-            taskListIds: ['list-1'],
-            sleepEnabled: false,
-            ...PAIRING,
-        });
+        expect(read.kind).toBe('loaded');
+        if (read.kind === 'loaded') expect(read.config).toMatchObject({ calendarIds: ['cal-a'], ...PAIRING });
+        expect(quarantined()).toEqual([]);
     });
 });
 
-describe('store — a present but unreadable file is never written over', () => {
-    const BAD_CONTENT: Array<[string, string]> = [
-        ['truncated JSON', '{"calendarIds": ["cal-a"], "remoteKey": "sec'],
+describe('store.read — content that can never parse is moved aside, not refused for ever', () => {
+    const NEVER_PARSES: Array<[string, string | Buffer]> = [
+        ['truncated JSON (a crash mid-write)', '{"calendarIds": ["cal-a"], "remoteKey": "sec'],
         ['an empty file', ''],
+        ['a NUL-filled file', Buffer.alloc(64)],
         ['null', 'null'],
         ['an array', '[]'],
         ['a number', '42'],
-        ['a string', '"x"'],
     ];
 
-    it.each(BAD_CONTENT)('treats %s as unreadable: get() gives defaults, update() refuses', (_label, content) => {
+    it.each(NEVER_PARSES)('quarantines %s and reads as absent', (_label, content) => {
         seed(content);
         const before = bytes();
 
-        const read = store.read();
-        expect(read.kind).toBe('unreadable');
-        if (read.kind === 'unreadable') expect(read.reason).toMatch(/\S/);
-        expect(store.get()).toEqual(DEFAULTS);
-        expect(store.update(PAIRING)).toBe(false);
-        expect(bytes().equals(before), 'config.json was rewritten').toBe(true);
+        expect(store.read()).toEqual({ kind: 'absent', config: DEFAULTS });
+
+        const [aside, ...more] = quarantined();
+        expect(more, 'one read, one quarantine').toEqual([]);
+        expect(realRead(path.join(paths.userData, aside)).equals(before), 'the bytes were not kept').toBe(true);
+        expect(fs.existsSync(CONFIG)).toBe(false);
+        expect(errorLines().some(line => line.includes(aside)), 'no log line names where the file went').toBe(true);
+        expect(store.update(PAIRING)).toEqual({ ok: true });
     });
 
-    it.each(['EBUSY', 'EPERM'])('treats a %s read error as unreadable and leaves the bytes alone', (code) => {
-        seed(JSON.stringify({ calendarIds: ['cal-a'], ...PAIRING }));
+    it('refuses instead when the quarantine rename is itself refused, and keeps the bytes in place', () => {
+        seed('{"calendarIds": ["cal-a"], "remoteKey": "sec');
         const before = bytes();
-        lock.code = code;
+        fault.renameCode = 'EPERM';
 
         const read = store.read();
-        expect(lock.hits, 'the fs fault never fired — the case proves nothing').toBeGreaterThan(0);
-        expect(read).toEqual({ kind: 'unreadable', reason: code });
+
+        expect(fault.renameHits, 'the rename fault never fired').toBeGreaterThan(0);
+        expect(read).toEqual({ kind: 'unreadable', failure: { ok: false, reason: 'locked', code: 'EPERM', file: CONFIG } });
         expect(store.get()).toEqual(DEFAULTS);
-        expect(store.update({ calendarIds: ['clobber'] })).toBe(false);
-        expect(bytes().equals(before), 'config.json was rewritten').toBe(true);
-    });
-
-    it('reports a failed write as not written, so no caller acts on a pairing that was never saved', () => {
-        seed(JSON.stringify({ calendarIds: ['cal-a'] }));
-        const before = bytes();
-        const realWrite = fs.writeFileSync;
-        let writeHits = 0;
-        vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof realWrite>) => {
-            if (typeof args[0] !== 'number' && path.resolve(String(args[0])) === path.resolve(CONFIG)) {
-                writeHits++;
-                throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
-            }
-            realWrite(...args);
-        });
-
-        expect(store.update(PAIRING)).toBe(false);
-        expect(writeHits, 'the write fault never fired — the case proves nothing').toBeGreaterThan(0);
         expect(bytes().equals(before)).toBe(true);
+        expect(quarantined()).toEqual([]);
     });
 
-    it('logs nothing that quotes the file, not even a JSON.parse error message', () => {
-        // V8 quotes only ~10 characters from the bad token, so a longer secret
-        // would never appear whole and this case would pass on a leaking store.
-        const SECRET = 'SECRET42';
+    it('logs where the file went but nothing it contained, not even a JSON.parse message', () => {
+        const SECRET = 'SECRET42'; // V8 quotes ~10 characters around the bad token
         const content = `{"remoteKey": ${SECRET}}`;
         expect(() => JSON.parse(content), 'the fixture no longer provokes a quoting message').toThrow(SECRET);
         seed(content);
 
-        const spies = (['log', 'info', 'warn', 'error', 'debug'] as const)
-            .map(level => vi.spyOn(console, level).mockImplementation(() => undefined));
-        const leaked = () => spies.flatMap(spy => spy.mock.calls.flat()).map(arg =>
-            arg instanceof Error ? `${arg.message}\n${arg.stack ?? ''}\n${inspect(arg)}` : typeof arg === 'string' ? arg : inspect(arg, { depth: 6 }),
-        ).filter(line => line.includes(SECRET));
-
         store.get();
-        expect(leaked(), 'a log line quotes config.json').toEqual([]);
 
-        store.update({ calendarIds: ['cal-a'] });
-        expect(leaked(), 'a log line quotes config.json').toEqual([]);
-
-        const read = store.read();
-        expect(read.kind).toBe('unreadable');
-        if (read.kind === 'unreadable') expect(read.reason).not.toContain(SECRET);
+        const everything = (['log', 'warn', 'error'] as const).flatMap(level => vi.mocked(console[level]).mock.calls.flat())
+            .map(arg => (arg instanceof Error ? `${arg.message}\n${arg.stack ?? ''}` : typeof arg === 'string' ? arg : inspect(arg, { depth: 6 })));
+        expect(everything.filter(line => line.includes(SECRET))).toEqual([]);
+        expect(quarantined()).toHaveLength(1);
     });
 });
 
-describe('store — lifecycle: the lock lifts', () => {
-    it('reads fresh on every call, so the file loads once the lock is gone', () => {
-        seed(JSON.stringify({ calendarIds: ['cal-a'], taskListIds: ['list-1'], sleepEnabled: false }));
-        lock.code = 'EBUSY';
-        expect(store.read().kind).toBe('unreadable');
-        expect(lock.hits).toBeGreaterThan(0);
+describe('store.read — a read that fails is transient: refuse, never quarantine', () => {
+    it.each(['EBUSY', 'EPERM', 'EACCES'])('treats a %s read as locked and leaves the file where it is', (code) => {
+        seed(JSON.stringify({ calendarIds: ['cal-a'], ...PAIRING }));
+        const before = bytes();
+        fault.readCode = code;
 
-        lock.code = null;
+        const read = store.read();
+
+        expect(fault.readHits, 'the read fault never fired').toBeGreaterThan(0);
+        expect(read).toEqual({ kind: 'unreadable', failure: { ok: false, reason: 'locked', code, file: CONFIG } });
+        expect(store.get()).toEqual(DEFAULTS);
+        expect(store.update({ calendarIds: ['clobber'] })).toEqual({ ok: false, reason: 'locked', code, file: CONFIG });
+        fault.readCode = null;
+        expect(bytes().equals(before), 'config.json was rewritten').toBe(true);
+        expect(quarantined()).toEqual([]);
+    });
+
+    it('calls any other read error unreadable, not locked', () => {
+        seed(JSON.stringify({ calendarIds: ['cal-a'] }));
+        fault.readCode = 'EIO';
+        expect(store.read()).toEqual({ kind: 'unreadable', failure: { ok: false, reason: 'unreadable', code: 'EIO', file: CONFIG } });
+    });
+
+    it('logs a persisting lock once, and again after the file was readable in between', () => {
+        seed(JSON.stringify({ calendarIds: ['cal-a'] }));
+        fault.readCode = 'EBUSY';
+        store.get(); store.get(); store.read();
+        expect(errorLines().filter(line => line.includes('EBUSY'))).toHaveLength(1);
+
+        fault.readCode = null;
+        store.get();
+        fault.readCode = 'EBUSY';
+        store.get();
+        expect(errorLines().filter(line => line.includes('EBUSY'))).toHaveLength(2);
+    });
+
+    it('reads fresh on every call, so the file loads once the lock lifts', () => {
+        seed(JSON.stringify({ calendarIds: ['cal-a'], taskListIds: ['list-1'], sleepEnabled: false }));
+        fault.readCode = 'EBUSY';
+        expect(store.read().kind).toBe('unreadable');
+
+        fault.readCode = null;
         const read = store.read();
         expect(read.kind).toBe('loaded');
         if (read.kind === 'loaded') expect(read.config).toMatchObject({ calendarIds: ['cal-a'], taskListIds: ['list-1'], sleepEnabled: false });
-
-        expect(store.update(PAIRING)).toBe(true);
-        expect(onDisk()).toMatchObject({ calendarIds: ['cal-a'], ...PAIRING });
     });
 });
