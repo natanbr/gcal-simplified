@@ -1444,29 +1444,44 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
   lists, the theme and sleep settings and the phone pairing were gone, and the parent's phone stopped
   working until the QR code was scanned again. Reproduced against the built app with a half-written
   file.
-- **Now.** Only a missing file means "use the defaults". A file that exists but cannot be read is
-  never written:
+- **Now.** Only a missing file means "use the defaults". A file another program holds (antivirus, a
+  backup) is never written over:
   - the remote control leaves its room, stays offline and retries after 5 s, doubling, at most every
     5 minutes; once the file reads again it joins the saved room, so the phone keeps working without
-    a new scan. The same happens when a new pairing cannot be saved: a room that was never saved is
-    never joined;
-  - Save in Settings keeps the dialog open and says "Settings not saved: the settings file could not
-    be read…";
-  - Regenerate Keys changes nothing (the button shows no error yet);
-  - the calendar keeps working on the defaults meanwhile, as before.
-- **Also.** Saving Settings merges into the file instead of replacing it, and ignores any pairing the
-  dialog sends: a copy loaded before Regenerate Keys no longer puts the old pairing back, and one
-  without the fields no longer unpairs the phone. A remote action is accepted only against a stored,
-  non-empty key: a failed read used to leave the key undefined, which matched an action sent without
-  one. The read failure is logged by error code only, because the parser's message quotes the file.
-- **Known limits.** A file that stays unreadable (for example half-written by a crash) keeps the app
-  on the defaults with the remote offline until it is repaired or deleted by hand
-  (`%APPDATA%\gcal-simplified\config.json` for the installed app). A Settings dialog opened while the
-  file could not be read shows the defaults, and saving it after the file reads again writes what it
-  showed (except the pairing, which Save never touches).
+    a new scan. A room that was never saved is never joined;
+  - Settings does not load the saved settings while the file is held: it says "Settings could not be
+    loaded: the settings file is in use by another program", offers Retry and keeps Save disabled. A
+    Save refused at the last moment keeps the dialog open and names the file and the reason
+    (in use / could not be read / could not be written);
+  - Regenerate Keys keeps the current keys and says "Keys not changed: the settings file is busy or
+    could not be written. The current QR code still works";
+  - the calendar keeps working meanwhile.
+- **A file that can never be read is set aside, not kept for ever.** Content that will not parse —
+  half-written by a crash, empty, or not a settings object — is moved to
+  `config.json.corrupt-<date and time>` next to it (kept for inspection) and the app starts again from
+  the defaults; the phone then needs one new scan of the QR code. A file saved with a byte-order mark
+  (what PowerShell 5.1 writes) now loads normally.
+- **Also.** Saves go to a temporary file that then replaces `config.json` in one step, so a crash
+  mid-save can no longer leave a half-written file; if antivirus holds the file the replace is retried
+  briefly (under 0.2 s) before the save is reported as refused. Saving Settings merges into the file
+  (keys a newer version wrote survive) and copies only the settings fields, never the pairing: a copy
+  loaded before Regenerate Keys no longer puts the old pairing back. Settings no longer offers empty
+  placeholders for saving when the calendar or task lists fail to load (offline, expired sign-in):
+  Save waits for the saved settings and saves those. The remote control checks actions against the
+  pairing it joined with, so a settings file that is locked or deleted while the app runs no longer
+  cuts the phone off, and an action without that key is refused. A read problem is logged once, by
+  error code only.
+- **Resetting the settings by hand.** Quit the app, delete `%APPDATA%\gcal-simplified\config.json`,
+  start the app, then scan the QR code again on the phone. Deleting the file while the app runs does
+  not reset the pairing: the remote keeps the one it joined until the next start.
+- **Known limits.** A pairing value that is not a string in a hand-edited file is passed through
+  as-is; the key check rejects it, and protocol v2 (PR 180) adds the type check on read. A Regenerate
+  Keys that succeeds writes the new keys to the file at once, while the Mission Control panel keeps
+  them in its draft until Save (older behaviour, unchanged).
 
-Tests: `electron/store.config-read.test.ts`, `electron/remote-bridge.config-read.test.ts`,
-`electron/remote-bridge.leave-room.test.ts`,
-`electron/api.save-settings.test.ts` (real files on disk, a lock simulated as `EBUSY`/`EPERM`), the
-Settings modal's save cases, and the structural `src/__tests__/config-writer-boundary.test.ts`;
+Tests: `electron/store.config-read.test.ts`, `electron/store.config-write.test.ts`,
+`electron/remote-bridge.config-read.test.ts`, `electron/remote-bridge.leave-room.test.ts`,
+`electron/remote-bridge.memory-pairing.test.ts`, `electron/api.save-settings.test.ts` (real files on
+disk; locks simulated as `EBUSY`/`EPERM`/`EACCES`), the Settings modal, Dashboard, Mission Control
+settings and `regeneratePairing` cases, and the structural `src/__tests__/config-writer-boundary.test.ts`;
 registered in `rule-registry.test.ts`.
