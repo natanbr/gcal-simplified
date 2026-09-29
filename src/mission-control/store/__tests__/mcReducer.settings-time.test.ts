@@ -89,11 +89,22 @@ describe('SET_SETTINGS — valid start times still apply (guard)', () => {
 // The stepper cannot produce these, but SET_SETTINGS is the gate for anything
 // that reaches it: a non-finite duration derived `endsAt: 'NaN:NaN'`.
 describe('SET_SETTINGS — a duration that is not a real length is ignored', () => {
-    it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -5, 1440])('morningDurationMins %s keeps 30 and the 06:00–06:30 window', bad => {
+    const UNREAL = [Number.NaN, Number.POSITIVE_INFINITY, 0, -5, 1440, 1e-7];
+
+    it.each(UNREAL)('morningDurationMins %s keeps 30 and the 06:00–06:30 window', bad => {
         const next = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: bad } });
 
         expect(next.settings.morningDurationMins).toBe(30);
         expect(mission(next, 'morning').endsAt).toBe('06:30');
+    });
+
+    // Each arm of the filter separately: one test per phase, or a filter that
+    // checks only the morning key passes.
+    it.each(UNREAL)('eveningDurationMins %s keeps 60 and the 19:00–20:00 window', bad => {
+        const next = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningDurationMins: bad } });
+
+        expect(next.settings.eveningDurationMins).toBe(60);
+        expect(mission(next, 'evening').endsAt).toBe('20:00');
     });
 
     it('guard: 45 and the 10-second test duration still apply', () => {

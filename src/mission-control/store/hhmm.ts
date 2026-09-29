@@ -43,7 +43,10 @@ export function windowEndToMins(value: unknown): number | null {
 }
 
 function minsToHhmm(totalMins: number): string {
-    return `${String(Math.floor(totalMins / 60)).padStart(2, '0')}:${String(totalMins % 60).padStart(2, '0')}`;
+    // Whole seconds first: 60.0000001 % 60 is 1e-7, which String() writes in
+    // exponent form that windowEndToMins cannot read back.
+    const mins = Math.round(totalMins * 60) / 60;
+    return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
 }
 
 /** The `endsAt` for a mission starting at `startsAt`, or null for a start it cannot read. */
@@ -54,12 +57,13 @@ export function missionWindowEnd(startsAt: string, durationMins: number): string
 
 /**
  * A real mission length: one second up to (not including) a day. 0 ends a
- * mission the moment it starts, and 1440 wraps the window back onto its own
- * start, which reads as 0 too. Below a second is 0 in disguise: 5e-324 vanishes
- * in start + duration, and 1e-7 is written in exponent form no parser reads.
- * Fractions are fine: that is the 10-second test duration.
+ * mission the moment it starts. A day or more would still be running when its
+ * next occurrence starts, and its unwrapped end (06:00 + 1440 is '30:00') could
+ * pass the 47:59 windowEndToMins reads. Below a second is 0 in disguise:
+ * 5e-324 vanishes in start + duration. Fractions are fine: that is the
+ * 10-second test duration. A plain boolean, like isValidHhmm.
  */
-export function isValidDurationMins(value: unknown): value is number {
+export function isValidDurationMins(value: unknown): boolean {
     return typeof value === 'number' && Number.isFinite(value) && value >= 1 / 60 && value < 24 * 60;
 }
 
@@ -131,10 +135,12 @@ export function deriveMissionWindow(m: Mission, settings: MCSettings): Mission {
  * Hydration for one mission: its window re-derived, and a mission saved running
  * with no readable duration (JSON writes NaN as null) given one. The expiry
  * check skips a null duration, so that mission never ended, ADJUST_MISSION_END
- * ignored it, and no other mission could start.
+ * ignored it, and no other mission could start. Running means `active`, not
+ * only `startedAt`: an ended mission keeps its startedAt with no duration.
+ * (A run from an earlier day is ended at load instead: useMCStore.tsx.)
  */
 export function hydrateMissionTimes(m: Mission, settings: MCSettings): Mission {
     const derived = deriveMissionWindow(m, settings);
-    if (!derived.startedAt || Number.isFinite(derived.durationMins)) return derived;
+    if (!derived.active || !derived.startedAt || Number.isFinite(derived.durationMins)) return derived;
     return { ...derived, durationMins: missionDurationMins(derived, settings) };
 }
