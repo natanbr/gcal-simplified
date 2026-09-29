@@ -1368,7 +1368,8 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
   −1 / +1 point buttons.
 - **Desktop log.** Every press that moves the shield writes "Shield taken away — N / 6 left" or
   "Shield given back — N / 6 left", attributed 📱, plus the lock or unlock line when it crosses 0.
-- **Drift guard.** `TYPES_SENT_BY_REMOTE_APP` in `useRemoteControl.allowlist.test.ts` was
+- **Drift guard** (now `hooks/useRemoteControl.drift.test.ts`, split out of
+  `useRemoteControl.allowlist.test.ts` unchanged). `TYPES_SENT_BY_REMOTE_APP` was
   re-captured from mc-remote 7372b89 and now lists `ADJUST_SHIELD`; its exemption from "does not
   allow anything the remote app never sends" is gone. The live comparison against a checkout of
   that commit reported exactly one new type, `ADJUST_SHIELD`, before the change and none after.

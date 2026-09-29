@@ -76,7 +76,9 @@ export function isEconomyLocked(state: MCState): boolean {
  *
  * Deliberately ABSENT, and they must stay absent:
  *   COMPLETE_MISSION_ROUTINE — the exit. Locking it makes the lock inescapable.
- *   ADD_TOKEN / ADD_TOKENS   — the parent's grant, from the phone or the app.
+ *   ADD_TOKENS / ADD_TOKEN   — the parent's grant: ADD_TOKENS from the phone or
+ *                              the app. ADD_TOKEN has no dispatcher left (not even
+ *                              remote, since 2026-09-28) and stays unlocked anyway.
  *   ADJUST_SHIELD            — the parent's override, the second way out.
  *   GRANT_GAME_TOKEN         — a parent action too (the phone's button); the
  *                              MOOD gauge's automatic accrual is frozen

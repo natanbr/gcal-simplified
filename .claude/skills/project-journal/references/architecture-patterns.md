@@ -228,7 +228,8 @@ explaining the trade — which is exactly the reviewable act the mechanism is fo
 fail may not be capable of failing. Do this by hand — a mutation-testing framework is far more
 machinery than this project wants.
 
-**Snapshot guards need a freshness check.** `useRemoteControl.allowlist.test.ts` hardcodes the action
+**Snapshot guards need a freshness check.** `useRemoteControl.drift.test.ts` (split out of
+`useRemoteControl.allowlist.test.ts` on 2026-09-28) hardcodes the action
 types the separate `mc-remote` repo sends. That snapshot cannot notice the other repo changing, so a
 second test re-derives the list from the sibling checkout when it exists and **skips when it does
 not** — a guard that fails for environmental reasons (CI, fresh clone) gets deleted. Skip with

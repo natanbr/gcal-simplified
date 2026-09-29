@@ -118,8 +118,10 @@ describe('mcReducer — RESET_RESPONSIBILITY', () => {
 
 // ──────────────────────────────────────────────────────────────
 // Activity tokenReward — bank payout on claim
-// The UI dispatches ADD_TOKEN × tokenReward then RESET_RESPONSIBILITY.
-// These tests validate the reducer produces the correct combined state.
+// The Claim button dispatches ONE action, RESET_RESPONSIBILITY with
+// claimTokens: tokenReward (ResponsibilityPanel.tsx); the reducer pays the bank
+// from it. These cases used to replay ADD_TOKEN × 3 first, a path the UI does
+// not take, and stayed green with the claimTokens payout removed.
 // ──────────────────────────────────────────────────────────────
 
 function activity(state: MCState) {
@@ -135,14 +137,11 @@ describe('Activity tokenReward — bank payout on claim', () => {
         expect(recycling(initialState).tokenReward).toBeUndefined();
     });
 
-    it('claim sequence: ADD_TOKEN ×3 then RESET gives bank +3', () => {
+    it('claim: RESET_RESPONSIBILITY with claimTokens 3 gives bank +3', () => {
         const startingBank = initialState.bankCount;
-        // Simulate what the Claim button dispatches
+        // What the Claim button dispatches
         const state = applyActions([
-            { type: 'ADD_TOKEN' },
-            { type: 'ADD_TOKEN' },
-            { type: 'ADD_TOKEN' },
-            { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
+            { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3 },
         ]);
         expect(state.bankCount).toBe(startingBank + 3);
     });
@@ -158,10 +157,7 @@ describe('Activity tokenReward — bank payout on claim', () => {
 
         // Then claim
         const state = applyActions([
-            { type: 'ADD_TOKEN' },
-            { type: 'ADD_TOKEN' },
-            { type: 'ADD_TOKEN' },
-            { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
+            { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3 },
         ], earned);
 
         expect(activity(state).pointsEarned).toBe(0);
@@ -173,10 +169,7 @@ describe('Activity tokenReward — bank payout on claim', () => {
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
-            { type: 'ADD_TOKEN' },
-            { type: 'ADD_TOKEN' },
-            { type: 'ADD_TOKEN' },
-            { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
+            { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3 },
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' }, // new session
         ]);
         expect(activity(afterClaim).pointsEarned).toBe(1);
