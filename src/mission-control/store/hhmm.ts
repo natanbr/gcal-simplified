@@ -21,7 +21,9 @@ export function hhmmToMins(value: unknown): number | null {
     return h <= 23 && m <= 59 ? h * 60 + m : null;
 }
 
-export function isValidHhmm(value: unknown): value is string {
+/** A plain boolean, not `value is string`: a predicate would narrow a string
+ *  argument to `never` on the false branch, and '' is a string. */
+export function isValidHhmm(value: unknown): boolean {
     return hhmmToMins(value) !== null;
 }
 

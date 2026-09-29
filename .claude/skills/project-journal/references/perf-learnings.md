@@ -219,7 +219,7 @@ value at every layer it crosses: the form (Save disabled, with the reason on scr
 (`withoutInvalidMissionTimes`, formerly `withoutInvalidStartTimes`, keeps the stored time), hydration (`sanitizeMissionTimes`, formerly `sanitizeStartTimes`, repairs a
 profile that already holds it) and the consumer (the scheduler arms nothing). This was the third
 reader to trip on a cleared Settings time, after `behaviorSync` (a NaN mood rate) and `gameWindow`.
-They now share `store/hhmm.ts` (since 2026-09-26 the only parser, `hhmmToMins`, guarded by `hhmm-parse-boundary.test.ts`; the derived `endsAt` has its own `windowEndToMins` because it passes midnight and carries the 10-second test duration's fraction). The proof is behavioural:
+Since 2026-09-29 every reader parses through `store/hhmm.ts` — the scheduler, the mood gauge, the quick-game window, the school-bag decision, the Save check and the reschedule check — with one rule, `hhmmToMins`, guarded by `hhmm-parse-boundary.test.ts` (it caught `schoolDays.ts`'s own one-or-two-digit parser on the rebase); the derived `endsAt` has its own `windowEndToMins` because it passes midnight and carries the 10-second test duration's fraction). The proof is behavioural:
 the invalid-time case in `idle-performance.test.tsx` counts dispatches and `setTimeout` calls over
 10 s. Extending `timer-registry` to recursive timeouts is still open.
 

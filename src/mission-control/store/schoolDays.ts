@@ -16,6 +16,7 @@
 
 import type { MissionPhase } from '../types';
 import { getLocalDateString } from './behaviorSync';
+import { hhmmToMins } from './hhmm';
 
 export interface NoSchoolDay {
     date: string;
@@ -162,14 +163,6 @@ export type SchoolBagDecision =
     | { due: true; calendarRead: boolean }
     | { due: false; reason: string };
 
-/** Minutes after midnight for a valid "HH:MM", else null. */
-function minutesOfDay(hhmm: string): number | null {
-    const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
-    if (!match) return null;
-    const [h, m] = [Number(match[1]), Number(match[2])];
-    return h < 24 && m < 60 ? h * 60 + m : null;
-}
-
 /**
  * The evening packs the night BEFORE a day. Started after midnight but before
  * the morning mission's start (Fri 00:20, by ▶ Start or the phone), it is
@@ -177,7 +170,7 @@ function minutesOfDay(hhmm: string): number | null {
  * cannot read keeps the plain rule: the next calendar day.
  */
 function eveningPacksForToday(now: Date, morningStartsAt: string): boolean {
-    const morning = minutesOfDay(morningStartsAt);
+    const morning = hhmmToMins(morningStartsAt);
     return morning !== null && now.getHours() * 60 + now.getMinutes() < morning;
 }
 

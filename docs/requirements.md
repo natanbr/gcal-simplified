@@ -1237,7 +1237,7 @@ reducer, its log, the action type and the remote allowlist names `CANCEL_MISSION
   a running mission keeps running and no "mission ended: its start time was changed" line is written
   (the check lives in `missionReschedule.ts`, which the reducer and the log share). At load, an invalid saved time becomes the default and the
   mission window is rebuilt from it. The scheduler does not arm a timer for a time that is not a
-  real `HH:MM` (mission or task lock) and warns once in the console. It checks the text, not the
+  real `HH:MM` (mission or task lock) and warns in the console each time it re-arms (mount, a settings change, a resume from sleep). It checks the text, not the
   parsed date: `'999:00'` parses, but its delay is over `setTimeout`'s 2^31-1 ms limit and fires at
   once too. The other mission keeps its schedule.
 - **Shared helper**: `store/hhmm.ts` (`isValidHhmm`, plus the HH:MM helpers moved out of the reducer).
@@ -1275,6 +1275,10 @@ Follow-up to the 2026-09-24 fix; the three open items its review left out.
   once). `SET_SETTINGS` and load derive the window through one function, `deriveMissionWindow`. The
   guard also catches `split(':', 2)` and `[0-9]` regexes. New scheduler tests pin an evening window that
   crosses midnight: a launch at 23:40 and a late timer at 00:00 both start it.
+- **Rebase onto main (2026-09-29).** The guard caught a fifth parser that arrived meanwhile: the
+  school-bag decision (`schoolDays.ts`) read the morning start with its own one-or-two-digit rule. It
+  now uses `hhmmToMins`, so `6:00` there keeps the plain rule (pack for the next day) like every other
+  reader. `isValidHhmm` returns a plain boolean: as a type predicate it narrowed a string to `never`.
 - **Focus ring.** The Settings time field had `outline: none` with nothing in its place. It now shows
   a 2 px `--mc-focus-ring` outline on `:focus-visible` (the rule lives in `mc.css`; an inline style
   cannot express `:focus-visible`).

@@ -306,7 +306,9 @@ describe('schoolBagDecision — whether the bag is on the list', () => {
         expect(schoolBagDecision('evening', iso(2026, 10, 2, 5, 30), undefined, '05:00').due).toBe(false);
     });
 
-    it.each(['', '25:99', 'soon', '6'])('a morning start it cannot read (%j) keeps the plain rule: the next calendar day', (morningStartsAt) => {
+    // '6:00' and '06:00:00' follow the one rule every reader of an entered time
+    // uses (store/hhmm.ts): Save, load and the scheduler all refuse them too.
+    it.each(['', '25:99', 'soon', '6', '6:00', '06:00:00'])('a morning start it cannot read (%j) keeps the plain rule: the next calendar day', (morningStartsAt) => {
         expect(schoolBagDecision('evening', iso(2026, 10, 2, 0, 20), undefined, morningStartsAt).due).toBe(false); // Fri → Saturday
     });
 
