@@ -2,19 +2,7 @@ import { google, type calendar_v3 } from 'googleapis';
 import crypto from 'node:crypto';
 import { authService } from './auth';
 import { store, UserConfig, type WriteResult } from './store';
-
-type PairingField = 'remoteRoomId' | 'remoteKey';
-
-/** The fields the Settings dialog may write. Typed over every field but the pairing, so a new
- *  UserConfig field is a tsc error here until someone decides which side it belongs to. */
-const SETTINGS_FIELDS: Record<Exclude<keyof UserConfig, PairingField>, true> = {
-    calendarIds: true, taskListIds: true, activeHoursStart: true, activeHoursEnd: true, themeMode: true,
-    manualDayStart: true, manualDayEnd: true, sleepEnabled: true, sleepStart: true, sleepEnd: true, weekStartDay: true,
-};
-
-function copyField<K extends keyof UserConfig>(from: UserConfig, to: Partial<UserConfig>, key: K): void {
-    if (key in from) to[key] = from[key];
-}
+import { loadSettingsForDialog, saveSettingsFromDialog } from './settings-dialog';
 
 // Duplicate definition to avoid import issues from src in electron context if needed
 // but we will try to stick to local types or basic mapping.
@@ -58,29 +46,14 @@ export class ApiService {
     private calendarColorsCache: { colors: Map<string, string>; fetchedAt: number } | null = null;
     private static readonly CALENDAR_COLORS_TTL_MS = 60 * 60 * 1000;
 
-    /** For the Settings dialog (settings:get). Throws while the file cannot be read, so the
-     *  dialog never offers the defaults as the user's settings and then saves them back. */
+    /** settings:get — strict: throws while the file cannot be read (settings-dialog.ts). */
     getSettings(): UserConfig {
-        const current = store.read();
-        if (current.kind === 'unreadable') {
-            const { reason, code, file } = current.failure;
-            // The dialog shows this sentence as it is, so it follows the same reason classes as a refused save.
-            throw new Error(reason === 'locked'
-                ? `Settings could not be loaded: ${file} is in use by another program (antivirus or a backup). Try again in a moment.`
-                : `Settings could not be loaded: ${file} could not be read${code ? ` (${code})` : ''}. Try again in a moment.`);
-        }
-        return current.config;
+        return loadSettingsForDialog();
     }
 
-    /** Copies only the settings fields and merges them onto the file. The pairing is the main
-     *  process's: a Settings copy loaded before a Regenerate Keys cannot put the old one back.
-     *  A refused write is a result the dialog explains, never a throw. */
+    /** settings:save — settings fields only, never the pairing; a refusal is a result. */
     saveSettings(config: UserConfig): WriteResult {
-        const settings: Partial<UserConfig> = {};
-        if (typeof config === 'object' && config !== null) {
-            for (const key of Object.keys(SETTINGS_FIELDS) as (keyof typeof SETTINGS_FIELDS)[]) copyField(config, settings, key);
-        }
-        return store.update(settings);
+        return saveSettingsFromDialog(config);
     }
 
     async getCalendars() {
