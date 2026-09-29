@@ -282,3 +282,55 @@ describe('MCSettingsOverlay — reward costs', () => {
         expect(screen.getByText(/open goal keeps its cost/i)).toBeInTheDocument();
     });
 });
+
+// ── Remote pairing: regenerate ────────────────────────────────────────────────
+
+describe('MCSettingsOverlay — regenerate pairing keys', () => {
+    const OLD_PAIRING = 'room=room-old&key=key-old';
+
+    /** Seeds the current pairing and routes IPC to `answers` (unlisted channels resolve `{}`). */
+    function pairedWith(answers: Record<string, () => Promise<unknown>>) {
+        localStorage.setItem('mc-state-v5', JSON.stringify({ settings: { remoteRoomId: 'room-old', remoteKey: 'key-old' } }));
+        window.ipcRenderer = {
+            invoke: vi.fn((channel: string) => (answers[channel] ?? (() => Promise.resolve({})))()),
+            on: vi.fn(() => () => {}),
+        };
+    }
+    async function openRemoteTab() {
+        await renderAndOpen();
+        await act(async () => { fireEvent.click(screen.getByText('📱 Remote')); });
+    }
+    const pairingUrl = () => (screen.getByTitle('Click to copy URL') as HTMLInputElement).value;
+
+    afterEach(() => { delete window.ipcRenderer; });
+
+    it('keeps the current keys and says so when the new keys could not be saved', async () => {
+        pairedWith({ 'remote:regenerate': () => Promise.resolve({ ok: false, reason: 'locked', code: 'EBUSY', file: 'C:\\settings-file.json' }) });
+        await openRemoteTab();
+
+        await act(async () => { fireEvent.click(screen.getByText(/Regenerate Keys/)); });
+
+        expect(screen.getByRole('alert')).toHaveTextContent(/^Keys not changed: the settings file is busy or could not be written\. The current QR code still works/);
+        expect(pairingUrl()).toContain(OLD_PAIRING);
+    });
+
+    it('shows the new keys when they were saved', async () => {
+        pairedWith({ 'remote:regenerate': () => Promise.resolve({ ok: true, roomId: 'room-new', remoteKey: 'key-new' }) });
+        await openRemoteTab();
+
+        await act(async () => { fireEvent.click(screen.getByText(/Regenerate Keys/)); });
+
+        expect(pairingUrl()).toContain('room=room-new&key=key-new');
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    // settings:get rejects while another program holds the settings file. The
+    // provider's key sync must swallow that (it used to be an unhandled rejection).
+    it('keeps the stored pairing when the settings file cannot be read at start-up', async () => {
+        pairedWith({ 'settings:get': () => Promise.reject(new Error('settings file is busy')) });
+        await openRemoteTab();
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+
+        expect(pairingUrl()).toContain(OLD_PAIRING);
+    });
+});

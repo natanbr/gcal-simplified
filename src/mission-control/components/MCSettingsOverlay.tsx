@@ -17,6 +17,7 @@ import { LearningProgressPanel } from './progress/LearningProgressPanel';
 import { useLongPress } from '../hooks/useLongPress';
 import { TimeInput } from './TimeInput';
 import { missingTimesHint } from './missingTimesHint';
+import { regeneratePairing } from '../utils/regeneratePairing';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -218,9 +219,10 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
     // Local draft — only committed on "Save"
     const [draft, setDraft] = useState<MCSettings>(() => state.settings);
     const [activeTab, setActiveTab] = useState<SettingsTabId>('time');
+    const [regenerateError, setRegenerateError] = useState<string | null>(null);
 
     // Reset draft whenever the panel opens
-    const handleOpen = () => setDraft(state.settings);
+    const handleOpen = () => { setDraft(state.settings); setRegenerateError(null); };
 
     const set = <K extends keyof MCSettings>(key: K, value: MCSettings[K]) =>
         setDraft(prev => ({ ...prev, [key]: value }));
@@ -637,14 +639,11 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                 <motion.button
                                                     whileTap={{ scale: 0.95 }}
                                                     onClick={async () => {
-                                                        if (window.ipcRenderer) {
-                                                            const newKeys = await window.ipcRenderer.invoke('remote:regenerate') as { roomId: string; remoteKey: string };
-                                                            setDraft(prev => ({ 
-                                                                ...prev, 
-                                                                remoteRoomId: newKeys.roomId, 
-                                                                remoteKey: newKeys.remoteKey 
-                                                            }));
-                                                        }
+                                                        if (!window.ipcRenderer) return;
+                                                        setRegenerateError(null);
+                                                        const outcome = await regeneratePairing(window.ipcRenderer);
+                                                        if (!outcome.ok) { setRegenerateError(outcome.message); return; }
+                                                        setDraft(prev => ({ ...prev, remoteRoomId: outcome.roomId, remoteKey: outcome.remoteKey }));
                                                     }}
                                                     style={{
                                                         marginTop: 8,
@@ -661,6 +660,7 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                                 >
                                                     🔄 Regenerate Keys
                                                 </motion.button>
+                                                {regenerateError && <p role="alert" style={{ margin: 0, fontSize: 12, fontWeight: 700, lineHeight: 1.4, color: 'var(--mc-shield-danger-text)' }}>{regenerateError}</p>}
                                             </div>
                                         </div>
 
