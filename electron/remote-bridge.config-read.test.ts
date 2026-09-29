@@ -6,10 +6,11 @@
 // bridge saw "no pairing" and wrote defaults + a new pairing over the real file,
 // destroying the user's settings and phone pairing. The same failed read left
 // the stored key undefined, so a broadcast with NO key matched and dispatched.
-// Contract: unreadable → no channel, offline, retry init() (5 s doubling, cap
-// 5 min, forever; success resets, destroy() cancels); a paired file is never
-// written; regenerateKeys() throws instead of writing; an action needs a
-// non-empty stored key equal to the received one.
+// Contract: locked → no channel, offline, retry init() (5 s doubling, cap
+// 5 min, forever; success resets, destroy() cancels); content that can never
+// parse is moved aside by the store and the bridge pairs afresh; a paired file
+// is never written; regenerateKeys() returns a refusal instead of writing. The
+// key gate itself lives in remote-bridge.memory-pairing.test.ts.
 // Harness: real store on one temp dir (store.ts memoizes the path), subscribe()
 // reports SUBSCRIBED at once so getStatus() discriminates, and an fs fault that
 // throws only for config.json — every locked case asserts it fired.
@@ -79,7 +80,6 @@ const bytes = () => realRead(CONFIG);
 const onDisk = (): Record<string, unknown> => JSON.parse(realRead(CONFIG, 'utf-8'));
 /** Distinct fake-clock times at which a locked read was attempted, as gaps between them. */
 const attemptGaps = () => [...new Set(lock.attempts)].map((t, i, all) => (i === 0 ? 0 : t - all[i - 1])).slice(1);
-const actionsSent = () => h.send.mock.calls.filter(([channel]) => channel === 'remote-control:action');
 
 let bridge: RemoteBridge;
 
@@ -119,15 +119,19 @@ describe('RemoteBridge.init — regression: an unreadable config.json is left al
         expect(bridge.getStatus()).toBe(false);
     });
 
-    it('does not rewrite a truncated file and joins no channel', () => {
+    it('keeps the bytes of a truncated file (moved aside by the store) and pairs afresh', () => {
         seed('{"calendarIds": ["cal-a"], "remoteRoomId": "room-orig", "remoteKey": "key-o');
         const before = bytes();
 
         bridge.init();
 
-        expect(bytes().equals(before), 'init() wrote over a corrupt config.json').toBe(true);
-        expect(h.joined).toEqual([]);
-        expect(bridge.getStatus()).toBe(false);
+        const aside = fs.readdirSync(h.userData).filter(name => name.startsWith('config.json.corrupt-'));
+        expect(aside).toHaveLength(1);
+        expect(realRead(path.join(h.userData, aside[0])).equals(before), 'the corrupt bytes were lost').toBe(true);
+        const fresh = onDisk();
+        expect(fresh.remoteRoomId).not.toBe('room-orig');
+        expect(h.joined).toEqual([`remote-control:${String(fresh.remoteRoomId)}`]);
+        fs.rmSync(path.join(h.userData, aside[0]), { force: true });
     });
 
     it('refuses when the lock appears between its read and its write (no pairing yet)', () => {
@@ -242,56 +246,27 @@ describe('RemoteBridge.regenerateKeys', () => {
         seed(SEED);
         bridge.init();
 
-        const { roomId, remoteKey } = bridge.regenerateKeys();
+        const result = bridge.regenerateKeys();
+        if (!result.ok) throw new Error(`regenerateKeys refused: ${result.reason}`);
+        const { roomId, remoteKey } = result;
 
         expect(onDisk()).toMatchObject({ calendarIds: ['cal-a'], taskListIds: ['list-1'], sleepEnabled: false, remoteRoomId: roomId, remoteKey });
         expect(roomId).not.toBe('room-orig');
         expect(h.joined.at(-1)).toBe(`remote-control:${roomId}`);
     });
 
-    it('throws and writes nothing when config.json cannot be read', () => {
+    it('refuses, writes nothing and stays in the saved room when config.json cannot be read', () => {
         seed(SEED);
         bridge.init();
         const before = bytes();
         lock.code = 'EBUSY';
 
-        let thrown: unknown = null;
-        try { bridge.regenerateKeys(); } catch (e) { thrown = e; }
+        const result = bridge.regenerateKeys();
 
         expect(lock.hits, 'the fs fault never fired — the case proves nothing').toBeGreaterThan(0);
         expect(bytes().equals(before), 'regenerateKeys() wrote over a config.json it could not read').toBe(true);
-        expect(thrown).toBeInstanceOf(Error);
-        expect(String(thrown)).toMatch(/config\.json/);
+        expect(result).toEqual({ ok: false, reason: 'locked', code: 'EBUSY', file: CONFIG });
         expect(h.joined).toEqual(['remote-control:room-orig']); // no re-init
-    });
-});
-
-describe('RemoteBridge action handler — the pairing key gate', () => {
-    const fire = (payload: Broadcast['payload']) => {
-        expect(h.actionHandler, 'init() registered no action handler').not.toBeNull();
-        h.actionHandler?.({ payload });
-    };
-
-    it('dispatches an action carrying the stored key (control: the harness sees a dispatch)', () => {
-        seed(SEED);
-        bridge.init();
-
-        fire({ key: 'key-orig', action: { type: 'ADD_TOKEN' }, msgId: 'm0', timestamp: Date.now() });
-
-        expect(actionsSent()).toEqual([['remote-control:action', { type: 'ADD_TOKEN' }]]);
-    });
-
-    it('rejects a key-less action while config.json cannot be read', () => {
-        seed(SEED);
-        bridge.init();
-        lock.code = 'EBUSY';
-
-        fire({ action: { type: 'ADD_TOKEN' }, msgId: 'm1', timestamp: Date.now() });
-        fire({ key: undefined, action: { type: 'ADD_TOKEN' }, msgId: 'm2', timestamp: Date.now() });
-
-        // Today the handler re-reads config.json per action. If a fix caches the
-        // key instead, this premise no longer holds: re-seed the failure, do not delete the check.
-        expect(lock.hits, 'the handler never re-read the key — the case proves nothing').toBeGreaterThan(0);
-        expect(actionsSent(), 'an action with no key was dispatched').toEqual([]);
+        expect(bridge.getStatus()).toBe(true);
     });
 });

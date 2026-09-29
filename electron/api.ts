@@ -1,7 +1,20 @@
 import { google, type calendar_v3 } from 'googleapis';
 import crypto from 'node:crypto';
 import { authService } from './auth';
-import { store, UserConfig } from './store';
+import { store, UserConfig, type WriteResult } from './store';
+
+type PairingField = 'remoteRoomId' | 'remoteKey';
+
+/** The fields the Settings dialog may write. Typed over every field but the pairing, so a new
+ *  UserConfig field is a tsc error here until someone decides which side it belongs to. */
+const SETTINGS_FIELDS: Record<Exclude<keyof UserConfig, PairingField>, true> = {
+    calendarIds: true, taskListIds: true, activeHoursStart: true, activeHoursEnd: true, themeMode: true,
+    manualDayStart: true, manualDayEnd: true, sleepEnabled: true, sleepStart: true, sleepEnd: true, weekStartDay: true,
+};
+
+function copyField<K extends keyof UserConfig>(from: UserConfig, to: Partial<UserConfig>, key: K): void {
+    if (key in from) to[key] = from[key];
+}
 
 // Duplicate definition to avoid import issues from src in electron context if needed
 // but we will try to stick to local types or basic mapping.
@@ -45,21 +58,26 @@ export class ApiService {
     private calendarColorsCache: { colors: Map<string, string>; fetchedAt: number } | null = null;
     private static readonly CALENDAR_COLORS_TTL_MS = 60 * 60 * 1000;
 
+    /** For the Settings dialog (settings:get). Throws while the file cannot be read, so the
+     *  dialog never offers the defaults as the user's settings and then saves them back. */
     getSettings(): UserConfig {
-        return store.get();
+        const current = store.read();
+        if (current.kind === 'unreadable') {
+            const { reason, code, file } = current.failure;
+            throw new Error(`Settings could not be read: ${file} is ${reason === 'locked' ? 'in use by another program' : 'unreadable'} (${code ?? 'no error code'}).`);
+        }
+        return current.config;
     }
 
-    /** Merged onto the file as it is now, never replacing it. The pairing is the
-     *  main process's: a Settings copy loaded before a Regenerate Keys, or one
-     *  without the fields, would otherwise put back the old pairing or clear it.
-     *  Throws so the renderer's Save can say the settings were not saved. */
-    saveSettings(config: UserConfig) {
-        const settings: Partial<UserConfig> = { ...config };
-        delete settings.remoteRoomId;
-        delete settings.remoteKey;
-        if (!store.update(settings)) {
-            throw new Error('Settings not saved: config.json could not be read or saved.');
+    /** Copies only the settings fields and merges them onto the file. The pairing is the main
+     *  process's: a Settings copy loaded before a Regenerate Keys cannot put the old one back.
+     *  A refused write is a result the dialog explains, never a throw. */
+    saveSettings(config: UserConfig): WriteResult {
+        const settings: Partial<UserConfig> = {};
+        if (typeof config === 'object' && config !== null) {
+            for (const key of Object.keys(SETTINGS_FIELDS) as (keyof typeof SETTINGS_FIELDS)[]) copyField(config, settings, key);
         }
+        return store.update(settings);
     }
 
     async getCalendars() {
