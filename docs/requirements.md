@@ -1372,3 +1372,22 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
   re-captured from mc-remote 7372b89 and now lists `ADJUST_SHIELD`; its exemption from "does not
   allow anything the remote app never sends" is gone. The live comparison against a checkout of
   that commit reported exactly one new type, `ADJUST_SHIELD`, before the change and none after.
+
+### 2026-09-28 The remote can no longer send ADD_TOKEN or COMPLETE_MISSION_ROUTINE
+
+- **Changed (review of PR 183).** Both were on `REMOTE_ALLOWED_ACTIONS` although no phone build ever
+  sent either. `ADD_TOKEN` has no dispatcher at all: the desktop's "⚙️ Bank Admin" and the phone's
+  "Bank Tokens" buttons both send `ADD_TOKENS`. `COMPLETE_MISSION_ROUTINE` is dispatched locally by
+  the mission overlay, and a local dispatch never passes the allowlist. So the two entries only
+  widened what a remote could do. A key holder could send a well-formed
+  `COMPLETE_MISSION_ROUTINE` while a mission ran with no task ticked: the mission ended as completed,
+  the bonus was paid, a shield came back and the quick-game window opened. Both are now refused
+  like any other type not on the list ("[Remote] Rejected disallowed action type: …", no log line),
+  and the payload validator for `COMPLETE_MISSION_ROUTINE` went with its entry.
+- **Unchanged.** Both stay out of the shield lock set and the reducer is untouched: a completed
+  mission is still the way out, and the parent's bank grants (`ADD_TOKENS`) still work while the
+  shield is broken.
+  `RESET_MISSION_WITH_TIMER` stays remote-reachable, as "Reset re-arms the occurrence" specifies.
+- Tests: `useRemoteControl.allowlist.test.ts` refuses a remote `ADD_TOKEN` and a well-formed remote
+  `COMPLETE_MISSION_ROUTINE` (both red before the change: dispatched once); the "tagged as remote"
+  examples now use `ADJUST_SHIELD`.

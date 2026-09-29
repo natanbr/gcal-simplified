@@ -122,3 +122,14 @@ that authenticates remote actions.
 **Action:** Any third-party or user-authored text on its way to the log, the broadcast or the audit
 trail goes through a cleaner that strips `[\p{Cc}\p{Cf}]`, trims and caps. Treat calendar content as
 untrusted input the moment it changes state.
+
+## 2026-09-28 — Allowlist entries justified by a local dispatch are not justified
+
+**Learning:** `ADD_TOKEN` and `COMPLETE_MISSION_ROUTINE` sat on `REMOTE_ALLOWED_ACTIONS` from
+2026-08-20 under a drift-guard exemption reading "reached indirectly through COMPLETE_TASK flows". No
+phone build ever sent either. The indirect path is a *local* dispatch (the mission overlay), and a
+local dispatch never passes the allowlist, so the reason could not justify a remote entry. The
+entry let a key holder complete a running mission with no task ticked and collect the bonus.
+**Action:** Removed both (PR 183). An exemption in the drift guard needs a reason that names a
+remote sender or a spec line that makes the type remote-reachable; "the desktop does it itself" is
+an argument for removal, not for an exemption.
