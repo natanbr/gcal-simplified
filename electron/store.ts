@@ -21,6 +21,9 @@ export interface UserConfig {
     // Remote Control
     remoteRoomId?: string;
     remoteKey?: string;
+    /** 2 = generated for signed messages (protocol v2). Absent = a v1 pairing,
+     *  whose key was broadcast in plain text: init() renews it once. */
+    remotePairingVersion?: number;
 }
 
 
@@ -50,6 +53,13 @@ const LOCKED_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
 const RENAME_RETRY_MS = [20, 40, 80];
 
 let configPath = '';
+
+/** A hand-edited config.json must not hand a number or an object to createHmac
+ *  (it throws on every message): anything else reads as absent, and the remote
+ *  bridge then generates a fresh pairing. */
+function nonEmptyString(value: unknown): string | undefined {
+    return typeof value === 'string' && value !== '' ? value : undefined;
+}
 
 function getPath() {
     if (!configPath) {
@@ -146,8 +156,9 @@ function readConfig(): ConfigRead {
             sleepStart: loaded.sleepStart ?? 22,
             sleepEnd: loaded.sleepEnd ?? 6,
             weekStartDay: loaded.weekStartDay || 'today',
-            remoteRoomId: loaded.remoteRoomId,
-            remoteKey: loaded.remoteKey
+            remoteRoomId: nonEmptyString(loaded.remoteRoomId),
+            remoteKey: nonEmptyString(loaded.remoteKey),
+            remotePairingVersion: typeof loaded.remotePairingVersion === 'number' ? loaded.remotePairingVersion : undefined,
         } satisfies Record<keyof UserConfig, unknown>,
     };
 }

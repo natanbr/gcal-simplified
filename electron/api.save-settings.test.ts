@@ -10,6 +10,9 @@
 //     write-failed, with the file's path), never a thrown string.
 //   - getSettings (settings:get) throws while the file cannot be read, so the
 //     dialog never offers the defaults as the user's settings and saves them back.
+//   - The pairing's protocol v2 marker (remotePairingVersion) is main-owned too:
+//     a settings copy loaded before Regenerate Keys, or a renderer sending a
+//     malformed marker, must never bring back or unmark a pairing.
 // Real store on one temp userData dir (store.ts memoizes the path); auth and
 // googleapis are stubbed only so api.ts can be imported.
 // ============================================================
@@ -19,10 +22,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ApiService } from './api';
+import { RemoteBridge } from './remote-bridge';
 import type { UserConfig } from './store';
 
 const paths = vi.hoisted(() => ({ userData: '' }));
-vi.mock('electron', () => ({ app: { getPath: () => paths.userData } }));
+vi.mock('electron', () => ({ app: { getPath: () => paths.userData }, BrowserWindow: { getAllWindows: () => [] } }));
 vi.mock('./auth', () => ({ authService: {} }));
 vi.mock('googleapis', () => ({ google: {} }));
 
@@ -87,6 +91,33 @@ describe('ApiService.saveSettings', () => {
         expect(written).toMatchObject({ calendarIds: ['cal-b'], themeMode: 'manual' });
         expect(written).not.toHaveProperty('injected');
         expect(written).not.toHaveProperty('remotePairingVersion');
+    });
+
+    it('keeps the stored pairing and its protocol marker, whatever the renderer sends for them', () => {
+        seed(JSON.stringify({ ...SEED, remotePairingVersion: 2 }, null, 2));
+        // Untrusted IPC data, built the way it arrives: parsed JSON.
+        const fromRenderer: UserConfig[] = [
+            JSON.parse('{"calendarIds":["a"],"taskListIds":[],"remoteRoomId":"attacker-room","remoteKey":"old-leaked-key","remotePairingVersion":1}'),
+            JSON.parse('{"calendarIds":["b"],"taskListIds":[]}'),
+            JSON.parse('{"calendarIds":["c"],"taskListIds":[],"remoteRoomId":123,"remoteKey":{},"remotePairingVersion":"2"}'),
+        ];
+
+        for (const config of fromRenderer) {
+            expect(save(config)).toEqual({ ok: true });
+            expect(onDisk()).toMatchObject({ calendarIds: config.calendarIds, remoteRoomId: 'room-orig', remoteKey: 'key-orig', remotePairingVersion: 2 });
+        }
+    });
+
+    it('a settings copy loaded before Regenerate Keys cannot revert the new pairing', () => {
+        seed(JSON.stringify({ ...SEED, remotePairingVersion: 2 }, null, 2));
+        const staleCopy = new ApiService().getSettings();
+
+        // Never init()ed: regenerateKeys() saves the new pairing and has no channel to join.
+        const renewed = new RemoteBridge().regenerateKeys();
+        if (!renewed.ok) throw new Error(`regenerateKeys refused: ${renewed.reason}`);
+        expect(save({ ...staleCopy, themeMode: 'manual' })).toEqual({ ok: true });
+
+        expect(onDisk()).toMatchObject({ themeMode: 'manual', remoteRoomId: renewed.roomId, remoteKey: renewed.remoteKey, remotePairingVersion: 2 });
     });
 
     it('moves a corrupt file aside and saves the settings over a fresh one', () => {

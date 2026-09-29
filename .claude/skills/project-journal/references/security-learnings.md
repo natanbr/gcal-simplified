@@ -153,5 +153,11 @@ was absent, and a msgId recorded before verification lets forged traffic pre-bur
 **Action:** Both events are `{ v: 2, body, sig }` (HMAC-SHA256 of `event + "\n" + body`, keyed with
 `remoteKey`; `electron/remote-auth.ts`); the key is never sent, logged, or put in a URL query (the
 pairing QR carries it in the fragment). The shared test vector is pinned in both repos
-(`electron/remote-auth.test.ts` here, the same constants in mc-remote). After deploying, rotate the
-pairing (Remote tab → "🔄 Regenerate Keys") and re-scan: the old key was on the wire for months.
+(`electron/remote-auth.test.ts` here, the same constants in mc-remote).
+**Learning (review round):** a protocol change does not revoke a key that already leaked — v2
+changed how the key is used, not which key. The first plan was "rotate by hand after deploying",
+a manual step nothing enforced. Ship the forced rotation with the fix: the first v2 start renews an
+unmarked pairing once (`remotePairingVersion`), and `settings:save` can no longer write a stale copy
+of the pairing back. Also: replay defences that live in memory reset on a restart or a page load and
+reopen exactly the replay they stop. After a desktop restart `seenIds` is empty, so an action
+captured in the previous ≤60 s can be replayed once. Accepted residual risk, documented, not fixed.

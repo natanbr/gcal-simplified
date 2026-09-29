@@ -39,10 +39,12 @@ export function signRemoteMessage(key: string, event: RemoteEvent, body: string)
 }
 
 /** Constant-time check of `sig`. Never throws: anything that is not the exact
- *  expected string — wrong type, wrong length, wrong key — is simply false. */
-export function verifyRemoteMessage(key: string, event: RemoteEvent, body: string, sig: unknown): boolean {
+ *  expected string — wrong type, wrong length, wrong key — is simply false.
+ *  `key` is unknown on purpose: it comes from config.json, and createHmac
+ *  throws on a number or an object. */
+export function verifyRemoteMessage(key: unknown, event: RemoteEvent, body: string, sig: unknown): boolean {
     // An empty key signs with an HMAC anybody can compute.
-    if (key.length === 0 || typeof sig !== 'string') return false;
+    if (typeof key !== 'string' || key === '' || typeof sig !== 'string') return false;
     const expected = Buffer.from(signRemoteMessage(key, event, body), 'utf8');
     const received = Buffer.from(sig, 'utf8');
     // timingSafeEqual throws on a length mismatch; the length of a MAC is public.
@@ -58,7 +60,7 @@ export function sealRemoteMessage(key: string, event: RemoteEvent, content: unkn
 /** Verifies an untrusted payload and returns its content, or null when it is
  *  not a genuine v2 envelope for `event` whose body is a JSON object. The
  *  signature is checked before the body is parsed. */
-export function openRemoteMessage(key: string, event: RemoteEvent, payload: unknown): Record<string, unknown> | null {
+export function openRemoteMessage(key: unknown, event: RemoteEvent, payload: unknown): Record<string, unknown> | null {
     if (!isRecord(payload) || payload.v !== 2) return null;
     const { body, sig } = payload;
     if (typeof body !== 'string' || !verifyRemoteMessage(key, event, body, sig)) return null;

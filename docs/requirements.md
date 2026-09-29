@@ -104,9 +104,11 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Secure Bridge**: Established via Supabase Realtime (Broadcast) and Electron IPC.
   - **Main Process Isolation**: All Supabase connections and key validations are restricted to the Main process.
   - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing. The key never travels on the channel, because anyone who knows the room id can join it; it is only used to sign.
-  - **Signed messages (remote protocol v2, 2026-09-28)**: every message in both directions (the phone's actions and its sync request, the desktop's state updates) is `{ v: 2, body, sig }`: `body` is a JSON string and `sig` an HMAC-SHA256 of the event name and the body, keyed with the pairing key (`electron/remote-auth.ts`). The desktop checks the signature before anything else, then requires a message id and a timestamp within 60 seconds of its own clock, then drops a message id it has already seen. A v1 message (the key in plain text) is refused even when the key is right, with the log line "the phone app is outdated (protocol v1); reload it". The room id is logged as an 8-character prefix only.
+  - **Signed messages (remote protocol v2, 2026-09-28)**: every message in both directions (the phone's actions and its sync request, the desktop's state updates) is `{ v: 2, body, sig }`: `body` is a JSON string and `sig` an HMAC-SHA256 of the event name and the body, keyed with the pairing key (`electron/remote-auth.ts`). The desktop checks the signature before anything else, then requires a message id and a timestamp within 60 seconds of its own clock, then drops a message id it has already seen. A v1 message (the key in plain text) is refused even when the key is right, with the log line "Rejected unsigned action (protocol v1). A phone still in legacy mode sends one per connect; if its buttons do nothing, reload the phone app." (during the rollout an updated phone in legacy mode sends one such sync request per connect, by design). The room id is logged as an 8-character prefix only.
+  - **Integrity, not confidentiality**: v2 stops anyone without the key from sending actions; it does not hide the state. Anyone who knows the room id can still read every state-update: the last 20 activity-log lines, the missions and their tasks, privileges and token counts.
+  - **The main process owns the pairing**: `settings:save` keeps the stored room id, key and `remotePairingVersion` and ignores whatever the renderer sends for them, so a settings screen opened before a renewal cannot write the old key back. A room id or key in `config.json` that is not a non-empty string reads as absent, and a fresh pairing is generated.
   - **QR Code Pairing**: Displayed in Settings for easy mobile connection. The URL is `https://mc-remote.vercel.app/#room=<roomId>&key=<key>&v=2`: the pairing data rides in the URL fragment, which a browser never sends to the server, so the key stays out of the host's request logs. `v=2` tells the phone to speak only the signed protocol.
-  - **Rollout of v2**: the v2 desktop works only with an `mc-remote` build that speaks protocol v2. The phone app deploys first (it works with a v1 or a v2 desktop), then the desktop release, then the pairing is regenerated ("🔄 Regenerate Keys" in the Remote tab) and the QR re-scanned, because the old key was sent in plain text for months.
+  - **Rollout of v2**: the v2 desktop works only with an `mc-remote` build that speaks protocol v2. The phone app deploys first (it works with a v1 or a v2 desktop), then the desktop release. **The first start of the v2 desktop renews the pairing by itself, once** (a pairing without `remotePairingVersion: 2` gets a new room id and key before the renderer can read it, and the log says "Pairing renewed for signed messages (protocol v2): scan the QR code again on the phone."), because the old key was sent in plain text for months and a signature keyed with it proves nothing. **The phone must re-scan the QR code after the update**; until then it is in the old room and does nothing.
   - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
   - **Only the phone can stop a mission (decided 2026-09-24)**: the phone's Stop sends `CANCEL_MISSION`, which stays on `REMOTE_ALLOWED_ACTIONS`. The desktop has no stop gesture: "— Minimize" only minimizes, a short tap and a long hold alike, because a stop sticks for the rest of the window without moving the shield, so a hold let the child end a mission. "↺ Reset" and its 2 s hold are unchanged (not decided yet). One desktop path still ends a mission: saving a new start time for the **running** mission in MC Settings ends it (no miss, the shield does not move). That is kept, and logged as "⏹️ Morning/Evening mission ended: its start time was changed in Settings", attributed 👤 (open decision for Nathan, PR 170; it used to be silent).
   - **A Stop or a full Reset for a mission that is not running is refused (2026-09-28)**: a phone Stop naming the other phase (a stale second tap) or a Reset hold that fires after its mission ended changes nothing and writes no log line. The phone's plain Reset (tasks only) is unchanged.
@@ -1546,17 +1548,30 @@ registered in `rule-registry.test.ts`.
   included, so forged traffic cannot use up a genuine id. A v1 payload is refused even with the right
   key. The pairing QR carries room, key and `v=2` in the URL fragment
   (`src/mission-control/utils/pairingUrl.ts`). The room id is logged as an 8-character prefix.
+- **The leaked key is retired automatically.** v2 changes how the key is used, not which key, so the
+  first v2 start renews a pairing that lacks `remotePairingVersion: 2` once, synchronously in
+  `init()`, before the renderer can read it. The renewal is one `store.update`; if it cannot be
+  saved the bridge stays offline and retries (5 s, doubling to 5 min), and never joins the pairing it
+  was replacing. `settings:save` keeps `remotePairingVersion` beside the room id and key
+  (`PairingField` in `settings-dialog.ts`): a settings screen loaded before a renewal cannot write
+  the old pairing back or unmark the new one. A non-string room id or key in `config.json` reads as
+  absent (it made `createHmac` throw on every message).
+- **What v2 does not do.** It protects integrity, not confidentiality: anyone with the room id can
+  still read the state-updates (last 20 log lines, missions, privileges, token counts).
 - **Rollout.** Deploy the `mc-remote` protocol v2 build first (it works with both desktop versions),
-  then release the desktop, then regenerate the pairing (Remote tab → "🔄 Regenerate Keys") and
-  re-scan the QR: the old key was on the wire for months, so a signature keyed with it proves nothing
-  to whoever captured it.
+  then release the desktop. On its first start the desktop renews the pairing; **re-scan the QR code
+  on the phone** (MC settings → Remote tab).
 
 Tests: `electron/remote-auth.test.ts` (the shared test vector, pinned in both repos; tampered body,
 wrong event, wrong key, wrong-length and non-string signatures), `electron/remote-bridge.protocol.test.ts`
 (what the bridge sends and accepts: v1 rejection, replay, forged message ids, no key in any log line),
 `src/mission-control/utils/pairingUrl.test.ts`; the existing `remote-bridge.test.ts` cases now send
-signed envelopes. Registered in `rule-registry.test.ts`. `docs/release-qa-checklist.md` 3.11.6 now
-sends signed envelopes too.
+signed envelopes. The one-time renewal, `settings:save` and non-string keys:
+`remote-bridge.pairing.test.ts`, `api.save-settings.test.ts`, `store.test.ts`; the seen-id TTL (now
+`2 × MAX_ACTION_AGE_MS`) and the exact 60-second edges: `remote-bridge.replay.test.ts`; a structural
+guard, `src/__tests__/remote-key-boundary.test.ts`, keeps a key out of any other hand-built URL and
+every broadcast sealed. Registered in `rule-registry.test.ts`. `docs/release-qa-checklist.md` 3.11.6
+now sends signed envelopes too.
 
 ### 2026-09-29 PR 184 review: a stuck mission from an earlier day ends with no miss
 

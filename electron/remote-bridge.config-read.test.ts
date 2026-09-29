@@ -56,7 +56,8 @@ afterAll(() => fs.rmSync(h.userData, { recursive: true, force: true }));
 
 const CONFIG = path.join(h.userData, 'config.json');
 const realRead = fs.readFileSync;
-const SEED = { calendarIds: ['cal-a'], taskListIds: ['list-1'], sleepEnabled: false, remoteRoomId: 'room-orig', remoteKey: 'key-orig' };
+/** Marked as protocol v2: an unmarked pairing is renewed at the first v2 start (remote-bridge.pairing.test.ts). */
+const SEED = { calendarIds: ['cal-a'], taskListIds: ['list-1'], sleepEnabled: false, remoteRoomId: 'room-orig', remoteKey: 'key-orig', remotePairingVersion: 2 };
 
 /** `code` set → every config.json read throws it. `armAfter` → the lock engages once that many reads succeeded. */
 const lock = { code: null as string | null, armAfter: null as number | null, reads: 0, hits: 0, attempts: [] as number[] };
