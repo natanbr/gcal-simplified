@@ -274,8 +274,11 @@ const REGISTRY: Rule[] = [
         rule: 'REMOTE_ALLOWED_ACTIONS is an allowlist; remote buttons must be added to it',
         source: 'CLAUDE.md → Conventions → Remote actions',
         status: 'guarded',
-        guard: 'src/mission-control/hooks/useRemoteControl.allowlist.test.ts',
-        verifiedRedBy: 'dispatch CLEAR_LOGS over the channel and expect it through',
+        guard: [
+            'src/mission-control/hooks/useRemoteControl.allowlist.test.ts',
+            'src/mission-control/hooks/useRemoteControl.drift.test.ts',
+        ],
+        verifiedRedBy: "dispatch CLEAR_LOGS over the channel and expect it through; a well-formed remote COMPLETE_MISSION_ROUTINE and a remote ADD_TOKEN were each dispatched once while still allowlisted (allowlist file). Drift file, with a sibling checkout of mc-remote 7372b89: the snapshot without ADJUST_SHIELD reports 'newly sent by the remote: ADJUST_SHIELD'; a production type: \"CONSUME_CASE\" reports it; exempting ADJUST_SHIELD or COMPLETE_MISSION_ROUTINE fails the exemption case (all proven 2026-09-28).",
     },
     {
         rule: 'skillProgress never rides the remote broadcast; reading content stays quiz-internal',

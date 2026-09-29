@@ -47,7 +47,7 @@ Any change touching state, IPC, credentials or scheduling needs to answer all fo
 | `src/__tests__/timer-registry.test.ts` | No unregistered `setInterval`; idle-Calendar timer budget (pre-existing) |
 | `src/__tests__/mission-control-isolation.test.ts` | MC never imports from the parent app, and vice versa; no cross-design-system tokens |
 | `electron/preload_contract.test.ts` | Every `ipcMain.handle` is whitelisted and every whitelist entry has a handler; audit trail stays append-only; single-instance lock present |
-| `useRemoteControl.allowlist.test.ts` — drift guard | Every action the companion remote app sends is allowlisted, and nothing more except the named exemptions in `ALLOWED_BUT_NOT_SENT`, each with its reason |
+| `useRemoteControl.drift.test.ts` — drift guard | Every action the companion remote app sends is allowlisted, and nothing more except the named exemptions in `ALLOWED_BUT_NOT_SENT`, each with its reason |
 | `mcReducer.token-generation.test.ts` | No calendar-day token grant can be reintroduced |
 | `scripts/verify-single-instance.mjs` | The lock actually holds, verified by launching the built app twice |
 
