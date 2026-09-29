@@ -288,19 +288,22 @@ describe('MCSettingsOverlay — reward costs', () => {
 describe('MCSettingsOverlay — regenerate pairing keys', () => {
     const OLD_PAIRING = 'room=room-old&key=key-old';
 
-    /** Seeds the current pairing and routes IPC to `answers` (unlisted channels resolve `{}`). */
+    /** Seeds the current pairing where the Remote tab reads it, a fresh settings:get (a v2 one, as
+     *  settings-dialog.ts hands out), and routes IPC to `answers` (unlisted channels resolve `{}`). */
     function pairedWith(answers: Record<string, () => Promise<unknown>>) {
-        localStorage.setItem('mc-state-v5', JSON.stringify({ settings: { remoteRoomId: 'room-old', remoteKey: 'key-old' } }));
+        const current = { remoteRoomId: 'room-old', remoteKey: 'key-old', remotePairingVersion: 2 };
+        const routes: Record<string, () => Promise<unknown>> = { 'settings:get': () => Promise.resolve(current), ...answers };
         window.ipcRenderer = {
-            invoke: vi.fn((channel: string) => (answers[channel] ?? (() => Promise.resolve({})))()),
+            invoke: vi.fn((channel: string) => (routes[channel] ?? (() => Promise.resolve({})))()),
             on: vi.fn(() => () => {}),
         };
     }
     async function openRemoteTab() {
         await renderAndOpen();
         await act(async () => { fireEvent.click(screen.getByText('📱 Remote')); });
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
     }
-    const pairingUrl = () => (screen.getByTitle('Click to copy URL') as HTMLInputElement).value;
+    const pairingUrl = () => (screen.queryByTitle('Click to copy URL') as HTMLInputElement | null)?.value ?? null;
 
     afterEach(() => { delete window.ipcRenderer; });
 
@@ -325,12 +328,15 @@ describe('MCSettingsOverlay — regenerate pairing keys', () => {
     });
 
     // settings:get rejects while another program holds the settings file. The
-    // provider's key sync must swallow that (it used to be an unhandled rejection).
-    it('keeps the stored pairing when the settings file cannot be read at start-up', async () => {
+    // provider's key sync and the Remote tab must swallow that (it used to be an
+    // unhandled rejection), and the tab must not fall back to the pairing
+    // Mission Control state holds: it may be the one the main process replaced.
+    it('shows no QR code, never the stored pairing, when the settings file cannot be read', async () => {
+        localStorage.setItem('mc-state-v5', JSON.stringify({ settings: { remoteRoomId: 'room-old', remoteKey: 'key-old' } }));
         pairedWith({ 'settings:get': () => Promise.reject(new Error('settings file is busy')) });
         await openRemoteTab();
-        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 
-        expect(pairingUrl()).toContain(OLD_PAIRING);
+        expect(pairingUrl()).toBeNull();
+        expect(screen.getByText(/Remote is not paired yet/)).toBeInTheDocument();
     });
 });

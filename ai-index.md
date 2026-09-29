@@ -74,7 +74,8 @@ reaches the main process only through the preload bridge.
   `store.update()` only. The first v2 start renews an unmarked pairing (`remotePairingVersion`)
   once, in one `store.update` that must land (otherwise the bridge stays offline and retries, never
   on the pairing it was replacing), and `remotePairingRenewedAt` drives the Remote tab's re-scan
-  notice (`RemotePairingHeader`) and one activity-log line (`store/pairingRenewal.ts`) until the
+  notice (`RemotePairingPanel`, which also draws the QR code from a fresh `settings:get`; that read
+  hands out only a v2-marked room and key) and one activity-log line (`store/pairingRenewal.ts`) until the
   phone's first verified message. The bridge keeps the pairing it joined in memory; `settings:save`
   never writes any of it (`PairingField` in `settings-dialog.ts`).
 * `audit-log.ts`: append-only NDJSON audit trail (no clear channel by design).

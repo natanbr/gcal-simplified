@@ -9,9 +9,15 @@ export type RegenerateKeysResult = ({ ok: true } & Pairing) | StoreFailure;
 
 /** Actions older or newer than this are refused (clock drift allowance). */
 const MAX_ACTION_AGE_MS = 60_000;
-/** At least twice the age window: an action dated a full window ahead stays
- *  acceptable for two windows, so a shorter memory lets it be replayed once. */
+/** Twice the age window. A replay after a prune is stopped by the replay floor; the TTL keeps a
+ *  forgotten id from raising that floor above another phone's genuine messages. An id accepted at
+ *  time t carries a stamp of at most t + window, and anything accepted after t + 2 x window carries
+ *  one of at least that; with one window, a phone 50 s fast floored out a phone 50 s slow. */
 const SEEN_ID_TTL_MS = 2 * MAX_ACTION_AGE_MS;
+/** The phone refuses a state-update stamped more than this ahead of its own clock. A last stamp this
+ *  far ahead of ours means our clock was corrected backwards: counting on from it would be refused
+ *  until real time caught up, so the next stamp starts again from the clock. */
+const PHONE_MAX_FUTURE_SKEW_MS = 120_000;
 
 /** The verified content of an action message: every field required. */
 function parseActionContent(content: Record<string, unknown>):
@@ -256,7 +262,8 @@ export class RemoteBridge {
             // Strictly increasing: the phone keeps only states newer than the last
             // it accepted, so a backward clock step or two sends in one millisecond
             // would drop a fresh state.
-            const timestamp = Math.max(Date.now(), this.lastStateStamp + 1);
+            const now = Date.now();
+            const timestamp = this.lastStateStamp - now > PHONE_MAX_FUTURE_SKEW_MS ? now : Math.max(now, this.lastStateStamp + 1);
             this.lastStateStamp = timestamp;
             // Signed with the joined key, never carrying it: the channel is public (remote-auth.ts).
             await this.channel.send({

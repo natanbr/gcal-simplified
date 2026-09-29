@@ -1,24 +1,32 @@
 // ============================================================
-// The one-time activity-log line for an automatic pairing renewal.
+// The one-time activity-log line for an automatic pairing renewal, and the
+// pairing Mission Control state keeps from settings:get.
 // ------------------------------------------------------------
 // A hand-built ADD_LOG (it describes no action, so createLogEntry never
 // derives it), dispatched from the provider's existing mount-time settings:get.
-// Its id is derived from the renewal time, so a restart — or the second run of
-// a StrictMode effect — cannot add it twice. settings:get throws while the
-// settings file cannot be read: then there is no line and no unhandled rejection.
+// "Already logged" is a marker in Mission Control state (settings
+// .remotePairingRenewalLogged = the renewal time it logged), not a search of
+// the 200-entry log: after CLEAR, or 200 newer lines, the search came up empty
+// and the line came back at every start, into the audit trail too. The same
+// read sets the state's room and key when a v2 pairing is handed out and
+// clears them when none is, so a leaked v1 key does not linger in mc-state-v5.
+// settings:get throws while the settings file cannot be read: then nothing
+// changes and there is no unhandled rejection.
 // ============================================================
 
-import { render, screen, act, cleanup } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
-import { pendingRenewalAt, pairingRenewedLogEntry, PAIRING_RENEWED_LOG_MESSAGE } from './pairingRenewal';
+import { pendingRenewalAt, pairingRenewedLogEntry, renewalLoggedMarker, PAIRING_RENEWED_LOG_MESSAGE } from './pairingRenewal';
 import { MCStoreProvider } from './MCStoreProvider';
-import { useMCState, STORAGE_KEY } from './useMCStore';
+import { useMCState, useMCDispatch, STORAGE_KEY, loadPersistedState } from './useMCStore';
 import { initialState } from './mcReducer';
 import type { ActivityLogEntry } from '../types';
 
 const RENEWED_AT = '2026-09-28T09:00:00.000Z';
+const LATER = '2026-10-05T18:30:00.000Z';
 const LOG_ID = `pairing-renewed-${RENEWED_AT}`;
+const V2 = { remoteRoomId: 'room-v2', remoteKey: 'key-v2', remotePairingVersion: 2 };
 let settings: unknown = {};
 let settingsError: Error | null = null;
 const invoke = vi.fn<NonNullable<Window['ipcRenderer']>['invoke']>((channel: string) => {
@@ -26,16 +34,31 @@ const invoke = vi.fn<NonNullable<Window['ipcRenderer']>['invoke']>((channel: str
     return settingsError ? Promise.reject(settingsError) : Promise.resolve(settings);
 });
 
-function LogIds() {
-    const { activityLogs } = useMCState();
-    return <output data-testid="ids">{activityLogs.map(l => l.id).join(',')}</output>;
+function Probe() {
+    const { activityLogs, settings: mc } = useMCState();
+    const dispatch = useMCDispatch();
+    return (
+        <>
+            <output data-testid="ids">{activityLogs.map(l => l.id).join(',')}</output>
+            <output data-testid="pairing">{`${mc.remoteRoomId ?? '-'}|${mc.remoteKey ?? '-'}|${mc.remotePairingRenewalLogged ?? '-'}`}</output>
+            <button onClick={() => dispatch({ type: 'CLEAR_LOGS' })}>clear logs</button>
+        </>
+    );
 }
 
-const renewalLines = () => screen.getByTestId('ids').textContent!.split(',').filter(id => id === LOG_ID).length;
+const linesFor = (renewedAt: string) => screen.getByTestId('ids').textContent!.split(',').filter(id => id === `pairing-renewed-${renewedAt}`).length;
+const renewalLines = () => linesFor(RENEWED_AT);
+const pairing = () => screen.getByTestId('pairing').textContent;
 
 async function mountProvider() {
-    render(<MCStoreProvider><LogIds /></MCStoreProvider>);
+    render(<MCStoreProvider><Probe /></MCStoreProvider>);
     await act(async () => { await Promise.resolve(); });
+}
+
+/** Let the provider's debounced (500 ms) localStorage write happen, then quit. */
+async function persistAndQuit() {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 600)); });
+    cleanup();
 }
 
 beforeEach(() => {
@@ -62,7 +85,7 @@ describe('pendingRenewalAt', () => {
 
 describe('pairingRenewedLogEntry', () => {
     it('builds an attributed system entry with a deterministic id', () => {
-        expect(pairingRenewedLogEntry({ remotePairingRenewedAt: RENEWED_AT }, [])).toEqual({
+        expect(pairingRenewedLogEntry({ remotePairingRenewedAt: RENEWED_AT }, [], undefined)).toEqual({
             id: LOG_ID,
             timestamp: RENEWED_AT,
             icon: '📱',
@@ -73,22 +96,66 @@ describe('pairingRenewedLogEntry', () => {
         });
     });
 
-    it('returns null when an entry with that id already exists, or nothing is pending', () => {
+    it('returns null when this renewal was already logged (the marker, or the line itself), or nothing is pending', () => {
         const existing: ActivityLogEntry = { id: LOG_ID, timestamp: RENEWED_AT, icon: '📱', message: 'x', type: 'system', source: 'system' };
-        expect(pairingRenewedLogEntry({ remotePairingRenewedAt: RENEWED_AT }, [existing])).toBeNull();
-        expect(pairingRenewedLogEntry({}, [])).toBeNull();
+        expect(pairingRenewedLogEntry({ remotePairingRenewedAt: RENEWED_AT }, [], RENEWED_AT)).toBeNull();
+        expect(pairingRenewedLogEntry({ remotePairingRenewedAt: RENEWED_AT }, [existing], undefined)).toBeNull();
+        expect(pairingRenewedLogEntry({}, [], undefined)).toBeNull();
+        // A later renewal is a new line, whatever the marker says about the earlier one.
+        expect(pairingRenewedLogEntry({ remotePairingRenewedAt: LATER }, [existing], RENEWED_AT)?.id).toBe(`pairing-renewed-${LATER}`);
+    });
+});
+
+describe('the "already logged" marker in mc-state-v5', () => {
+    it('hydrates a valid renewal time and reads anything else as "not logged"', () => {
+        expect(renewalLoggedMarker(RENEWED_AT)).toBe(RENEWED_AT);
+        for (const garbage of [42, {}, [], null, '', 'soon', true]) {
+            expect(renewalLoggedMarker(garbage), JSON.stringify(garbage)).toBeUndefined();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...initialState, _migrationVersion: 1, settings: { ...initialState.settings, remotePairingRenewalLogged: garbage } }));
+            expect(loadPersistedState().settings).not.toHaveProperty('remotePairingRenewalLogged');
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...initialState, _migrationVersion: 1, settings: { ...initialState.settings, remotePairingRenewalLogged: RENEWED_AT } }));
+        expect(loadPersistedState().settings.remotePairingRenewalLogged).toBe(RENEWED_AT);
     });
 });
 
 describe('MCStoreProvider — the renewal line on the activity log', () => {
-    it('is added once at mount while a renewal is pending', async () => {
-        settings = { remoteRoomId: 'r', remoteKey: 'k', remotePairingRenewedAt: RENEWED_AT };
+    it('is added once at mount while a renewal is pending, and marked as logged', async () => {
+        settings = { ...V2, remotePairingRenewedAt: RENEWED_AT };
+        await mountProvider();
+        expect(renewalLines()).toBe(1);
+        expect(pairing()).toBe(`room-v2|key-v2|${RENEWED_AT}`);
+    });
+
+    it('is not added again after CLEAR and a restart; a later renewal is added exactly once', async () => {
+        settings = { ...V2, remotePairingRenewedAt: RENEWED_AT };
+        await mountProvider();
+        expect(renewalLines()).toBe(1);
+        await act(async () => { fireEvent.click(screen.getByText('clear logs')); });
+        expect(renewalLines()).toBe(0);
+        await persistAndQuit();
+
+        await mountProvider(); // restart, the renewal still unanswered
+        expect(renewalLines(), 'the line came back after CLEAR').toBe(0);
+        await persistAndQuit();
+
+        settings = { ...V2, remotePairingRenewedAt: LATER };
+        await mountProvider();
+        expect(linesFor(LATER)).toBe(1);
+        await persistAndQuit();
+        await mountProvider();
+        expect(linesFor(LATER), 'the later renewal was logged twice').toBe(1);
+    });
+
+    it('is logged when the persisted marker is garbage (it reads as "not logged")', async () => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...initialState, _migrationVersion: 1, settings: { ...initialState.settings, remotePairingRenewalLogged: 42 } }));
+        settings = { ...V2, remotePairingRenewedAt: RENEWED_AT };
         await mountProvider();
         expect(renewalLines()).toBe(1);
     });
 
     it('is not added again when the log already has it (a restart)', async () => {
-        settings = { remoteRoomId: 'r', remoteKey: 'k', remotePairingRenewedAt: RENEWED_AT };
+        settings = { ...V2, remotePairingRenewedAt: RENEWED_AT };
         const existing: ActivityLogEntry = { id: LOG_ID, timestamp: RENEWED_AT, icon: '📱', message: PAIRING_RENEWED_LOG_MESSAGE, type: 'system', source: 'system' };
         const other: ActivityLogEntry = { id: 'later', timestamp: RENEWED_AT, icon: '🪙', message: 'a later line', type: 'manual', source: 'local' };
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...initialState, _migrationVersion: 1, activityLogs: [other, existing] }));
@@ -113,11 +180,45 @@ describe('MCStoreProvider — the renewal line on the activity log', () => {
     });
 
     it('adds nothing, and does not throw, when nothing is pending or settings:get returns nothing', async () => {
-        for (const value of [{ remoteRoomId: 'r', remoteKey: 'k' }, undefined]) {
+        for (const value of [V2, undefined]) {
             settings = value;
             await mountProvider();
             expect(renewalLines()).toBe(0);
             cleanup();
         }
+    });
+});
+
+describe('MCStoreProvider — the pairing Mission Control state keeps', () => {
+    const savedWith = (remote: Record<string, string>) => localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        ...initialState, _migrationVersion: 1, settings: { ...initialState.settings, ...remote },
+    }));
+
+    it('is cleared when settings:get hands out none, and set again by a later v2 read', async () => {
+        savedWith({ remoteRoomId: 'room-v1', remoteKey: 'key-v1' });
+        settings = { calendarIds: [] }; // no v2 pairing: settings-dialog.ts leaves room and key out
+        await mountProvider();
+        expect(pairing()).toBe('-|-|-');
+        await persistAndQuit();
+        expect(localStorage.getItem(STORAGE_KEY), 'the leaked key lingers in mc-state-v5').not.toContain('key-v1');
+
+        settings = V2;
+        await mountProvider();
+        expect(pairing()).toBe('room-v2|key-v2|-');
+    });
+
+    it('ignores an unmarked room and key even if one is handed out', async () => {
+        savedWith({ remoteRoomId: 'room-v1', remoteKey: 'key-v1' });
+        settings = { remoteRoomId: 'room-v1', remoteKey: 'key-v1' };
+        await mountProvider();
+        expect(pairing()).toBe('-|-|-');
+    });
+
+    it('is left alone when settings:get rejects', async () => {
+        savedWith({ remoteRoomId: 'room-v2', remoteKey: 'key-v2' });
+        settingsError = new Error('busy');
+        await mountProvider();
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        expect(pairing()).toBe('room-v2|key-v2|-');
     });
 });

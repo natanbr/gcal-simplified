@@ -9,6 +9,7 @@
 // ============================================================
 
 import { store, type UserConfig, type WriteResult } from './store';
+import { PAIRING_VERSION } from './remote-pairing';
 
 /** Owned by the main process (remote-pairing.ts): the room and key, the marker saying the pairing
  *  was made for signed messages, and the re-scan notice of an automatic renewal. */
@@ -27,7 +28,9 @@ function copyField<K extends keyof UserConfig>(from: UserConfig, to: Partial<Use
 
 /** settings:get. Throws while the file cannot be read, so the dialog never offers the defaults
  *  as the user's settings and then saves them back. The dialog shows the message as it is, so
- *  it follows the same reason classes as a refused save and names the file. */
+ *  it follows the same reason classes as a refused save and names the file. A room and key
+ *  without the protocol v2 marker are left out: that is the leaked v1 pairing, or one the
+ *  bridge has not managed to replace yet, and the Remote tab draws its QR code from this read. */
 export function loadSettingsForDialog(): UserConfig {
     const current = store.read();
     if (current.kind === 'unreadable') {
@@ -36,7 +39,11 @@ export function loadSettingsForDialog(): UserConfig {
             ? `Settings could not be loaded: ${file} is in use by another program (antivirus or a backup). Try again in a moment.`
             : `Settings could not be loaded: ${file} could not be read${code ? ` (${code})` : ''}. Try again in a moment.`);
     }
-    return current.config;
+    if (current.config.remotePairingVersion === PAIRING_VERSION) return current.config;
+    const settings = { ...current.config };
+    delete settings.remoteRoomId;
+    delete settings.remoteKey;
+    return settings;
 }
 
 /** settings:save. Copies only the settings fields and merges them onto the file; a refused
