@@ -283,6 +283,8 @@ export type MCAction = (
     | { type: 'GRANT_GAME_TOKEN' }
     /** Dispatched once at load, only when a saved balance is over the cap (useGameTokenCapSettle). */
     | { type: 'SETTLE_GAME_TOKEN_CAP' }
+    /** Dispatched once at load, only for a run from an earlier day saved with no readable duration (useStaleMissionRunEnd). */
+    | { type: 'END_STALE_MISSION_RUN'; missionPhase: Exclude<MissionPhase, 'none'> }
     | { type: 'CONSUME_GAME_TOKEN' }
     | { type: 'RESET_GAME_TOKENS' }
     | { type: 'TRIGGER_ANIMATION'; animation: MCAnimationType }

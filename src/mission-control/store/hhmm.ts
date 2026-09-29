@@ -137,7 +137,7 @@ export function deriveMissionWindow(m: Mission, settings: MCSettings): Mission {
  * check skips a null duration, so that mission never ended, ADJUST_MISSION_END
  * ignored it, and no other mission could start. Running means `active`, not
  * only `startedAt`: an ended mission keeps its startedAt with no duration.
- * (A run from an earlier day is ended at load instead: useMCStore.tsx.)
+ * (A run from an earlier day is left as saved and ended after load: staleMissionRun.ts.)
  */
 export function hydrateMissionTimes(m: Mission, settings: MCSettings): Mission {
     const derived = deriveMissionWindow(m, settings);

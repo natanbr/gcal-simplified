@@ -6,6 +6,8 @@ import { useRemoteSync } from './useRemoteSync';
 import { useAuditTrail } from './useAuditTrail';
 import { useSuspensionExpiry } from './useSuspensionExpiry';
 import { useGameTokenCapSettle } from './useGameTokenCapSettle';
+import { useStaleMissionRunEnd } from './useStaleMissionRunEnd';
+import { staleIncompleteRunPhases } from './staleMissionRun';
 import { gameTokensOverCap } from './moodGauge';
 import { pendingFrom } from './pendingState';
 import { useSchoolCalendarSync } from './useSchoolCalendarSync';
@@ -18,6 +20,11 @@ function SuspensionExpiry(): null {
 
 function GameTokenCapSettle(): null {
     useGameTokenCapSettle();
+    return null;
+}
+
+function StaleMissionRunEnd(): null {
+    useStaleMissionRunEnd();
     return null;
 }
 
@@ -36,6 +43,7 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     // Read once, at load. Mounted on every launch, the settle re-rendered on every
     // store change for the app's lifetime, for a job only an over-cap load has.
     const [needsSettle] = useState(() => gameTokensOverCap(state) > 0);
+    const [hasStaleRun] = useState(() => staleIncompleteRunPhases(state).length > 0);
 
     // Accrue mood progress once a minute while the app is running.
     // This heartbeat is the ONLY generator of game tokens — see
@@ -86,6 +94,7 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
         <MCContext.Provider value={contextValue}>
             <SuspensionExpiry />
             {needsSettle && <GameTokenCapSettle />}
+            {hasStaleRun && <StaleMissionRunEnd />}
             <SchoolCalendarSync />
             {children}
         </MCContext.Provider>

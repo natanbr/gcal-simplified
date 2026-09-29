@@ -16,6 +16,7 @@ import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
 import { gameTokenCapNote, gameTokenRoom } from './moodGauge';
 import { schoolBagDecision, schoolBagLogNote } from './schoolDays';
+import { staleRunEndedMessage } from './staleMissionRun';
 import { REWARD_MAP, canSelectReward } from '../rewardCatalogue';
 
 export type LogSource = NonNullable<ActivityLogEntry['source']>;
@@ -256,6 +257,10 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: '🎮', message: 'Mood token removed', type: 'reward', colorKey: 'system', ...snap() };
         case 'RESET_GAME_TOKENS':
             return { id, timestamp: now, icon: '🧹', message: 'Mood tokens reset to zero', type: 'system', colorKey: 'system', ...snap() };
+        case 'END_STALE_MISSION_RUN': {
+            const message = staleRunEndedMessage(state, action.missionPhase, now);
+            return message === null ? null : { id, timestamp: now, icon: '⏹️', message, type: 'mission', colorKey: action.missionPhase, ...snap() };
+        }
         case 'SETTLE_GAME_TOKEN_CAP': {
             const note = gameTokenCapNote(state);
             return note && { id, timestamp: now, icon: '🔧', ...note, type: 'reward', colorKey: 'system', ...snap() };

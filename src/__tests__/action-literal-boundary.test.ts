@@ -95,6 +95,18 @@ describe('action literal boundaries', () => {
         ]);
     });
 
+    it('END_STALE_MISSION_RUN is dispatched only by the end at load', () => {
+        // It ends a mission with no outcome, under a message that says "at
+        // startup". A second way in (a remote button, a timer) would end a
+        // running mission with no miss and no stop recorded.
+        expect(filesNaming('END_STALE_MISSION_RUN')).toEqual([
+            `${MC}store/activityLog.ts`, // its log line
+            `${MC}store/mcReducer.ts`, // the case
+            `${MC}store/useStaleMissionRunEnd.ts`, // the one dispatcher
+            `${MC}types.ts`, // the union member
+        ]);
+    });
+
     // Not the whole of "only the phone stops a mission": saving a new start time for
     // the running mission in MC Settings still ends it, through SET_SETTINGS, and
     // that is logged (settings-ends-mission.test.tsx; open decision, PR 170).

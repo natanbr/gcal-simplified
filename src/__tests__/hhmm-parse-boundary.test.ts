@@ -11,8 +11,10 @@
 //
 // It looks for the two shapes a hand parser takes: a split on ':' and a regex
 // literal for digits-colon-digits (`\d` or any character class such as [0-5]).
-// A heuristic, not a proof: slice/indexOf parsing gets past it (none exists
-// today). Scope is src/mission-control/ — the Calendar
+// A heuristic, not a proof. Known gaps (none exists today): slice/indexOf
+// parsing, whitespace around the colon in a regex (`/(\d+)\s*:\s*(\d+)/`), a
+// regex built from a string (`new RegExp('^(\\d{2}):…')`), and pulling the
+// numbers out with `.match(/\d+/g)`. Scope is src/mission-control/ — the Calendar
 // app reads Google's ISO timestamps and never an HH:MM setting. It lives here,
 // not under src/mission-control/, because it uses the shared source walk and
 // Mission Control may not import from outside itself, tests included.
