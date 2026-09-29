@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Save, Check, RefreshCw, Calendar, User, Settings, CheckSquare, Rocket } from 'lucide-react';
-import { CalendarSource, TaskListSource, UserConfig } from '../../../types';
+import { CalendarSource, SaveSettingsResult, SettingsWriteFailure, TaskListSource, UserConfig } from '../../../types';
 import { AccountSettingsTab } from './AccountSettingsTab';
 import { GeneralSettingsTab } from './GeneralSettingsTab';
 import { TasksSettingsTab } from './TasksSettingsTab';
@@ -12,6 +12,17 @@ interface SettingsModalProps {
     onLogout?: () => void; // Trigger a logout and re-login
 }
 
+const SETTINGS_UNREADABLE = 'Settings could not be loaded: the settings file is in use by another program. Try again in a moment.';
+
+function saveFailureMessage({ reason, code, file }: SettingsWriteFailure): string {
+    const detail = code ? ` (${code})` : '';
+    switch (reason) {
+        case 'locked': return `Settings not saved: ${file} is in use by another program (antivirus or a backup). Try again in a moment.`;
+        case 'unreadable': return `Settings not saved: ${file} could not be read${detail}. Try again in a moment.`;
+        case 'write-failed': return `Settings not saved: ${file} could not be written${detail}. Check free disk space and permissions, then try again.`;
+    }
+}
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, onLogout }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [appVersion, setAppVersion] = useState<string>('');
@@ -20,32 +31,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     const [saveError, setSaveError] = useState<string | null>(null);
     const [calendars, setCalendars] = useState<CalendarSource[]>([]);
     const [taskLists, setTaskLists] = useState<TaskListSource[]>([]);
-    const [config, setConfig] = useState<UserConfig>({ calendarIds: [], taskListIds: [] });
+    // null until settings:get answers: Save must never write a placeholder over the saved selections.
+    const [config, setConfig] = useState<UserConfig | null>(null);
+    const editConfig: React.Dispatch<React.SetStateAction<UserConfig>> = action =>
+        setConfig(prev => prev && (typeof action === 'function' ? action(prev) : action));
 
     const [activeSection, setActiveSection] = useState<'account' | 'general' | 'calendars' | 'tasks' | 'mission-control'>('account');
 
     const loadData = async () => {
         if (!window.ipcRenderer) return;
-        try {
-            setIsLoading(true);
-            setLoadError(null);
-            const [cals, lists, settings, appInfo] = await Promise.all([
-                window.ipcRenderer.invoke('data:calendars'),
-                window.ipcRenderer.invoke('data:tasklists'),
-                window.ipcRenderer.invoke('settings:get'),
-                window.ipcRenderer.invoke('app:info')
-            ]);
-
-            setCalendars(cals as CalendarSource[]);
-            setTaskLists(lists as TaskListSource[]);
-            setConfig(settings as UserConfig);
-            setAppVersion((appInfo as { version: string }).version);
-        } catch (e) {
-            console.error("Failed to load settings data", e);
-            setLoadError(e instanceof Error ? e.message : 'Failed to load settings data. Check your connection and try again.');
-        } finally {
-            setIsLoading(false);
+        setIsLoading(true);
+        setLoadError(null);
+        // allSettled: an offline calendar list must not stop the saved settings from loading.
+        const [cals, lists, settings, appInfo] = await Promise.allSettled([
+            window.ipcRenderer.invoke('data:calendars'),
+            window.ipcRenderer.invoke('data:tasklists'),
+            window.ipcRenderer.invoke('settings:get'),
+            window.ipcRenderer.invoke('app:info')
+        ]);
+        if (cals.status === 'fulfilled') setCalendars(cals.value as CalendarSource[]);
+        if (lists.status === 'fulfilled') setTaskLists(lists.value as TaskListSource[]);
+        if (settings.status === 'fulfilled') setConfig(settings.value as UserConfig);
+        if (appInfo.status === 'fulfilled') setAppVersion((appInfo.value as { version: string }).version);
+        const failed = [settings, cals, lists, appInfo].find(r => r.status === 'rejected');
+        if (failed?.status === 'rejected') {
+            console.error("Failed to load settings data", failed.reason);
+            setLoadError(settings.status === 'rejected' ? SETTINGS_UNREADABLE
+                : failed.reason instanceof Error ? failed.reason.message : 'Failed to load settings data. Check your connection and try again.');
         }
+        setIsLoading(false);
     };
 
     useEffect(() => {
@@ -55,16 +69,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     }, []);
 
     const handleSave = async () => {
-        if (!window.ipcRenderer) return;
+        if (!window.ipcRenderer || !config) return;
         setSaveError(null);
         try {
-            await window.ipcRenderer.invoke('settings:save', config);
+            const result = await window.ipcRenderer.invoke('settings:save', config) as SaveSettingsResult;
+            if (!result.ok) { setSaveError(saveFailureMessage(result)); return; }
             onSave();
             onClose();
         } catch (e) {
             console.error("Failed to save settings", e);
-            // The main process refuses to write over a settings file it cannot read.
-            setSaveError('Settings not saved: the settings file could not be read or saved. Close any program that may be using it (antivirus, backup) and try again.');
+            setSaveError('Settings not saved. Try again.');
         }
     };
 
@@ -81,7 +95,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
     };
 
     const toggleId = (key: 'calendarIds' | 'taskListIds', id: string) => {
-        setConfig(prev => {
+        editConfig(prev => {
             const currentIds = prev[key];
             const newIds = currentIds.includes(id)
                 ? currentIds.filter(item => item !== id)
@@ -174,11 +188,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
                             <AccountSettingsTab onLogout={onLogout} loadData={loadData} />
                         )}
 
-                        {activeSection === 'general' && (
-                            <GeneralSettingsTab config={config} setConfig={setConfig} appVersion={appVersion} isCheckingUpdates={isCheckingUpdates} handleCheckUpdates={handleCheckUpdates} />
+                        {activeSection === 'general' && config && (
+                            <GeneralSettingsTab config={config} setConfig={editConfig} appVersion={appVersion} isCheckingUpdates={isCheckingUpdates} handleCheckUpdates={handleCheckUpdates} />
                         )}
 
-                        {activeSection === 'calendars' && (
+                        {activeSection === 'calendars' && config && (
                             <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
                                 <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
                                     Calendars
@@ -206,7 +220,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
                             </div>
                         )}
 
-                        {activeSection === 'tasks' && (
+                        {activeSection === 'tasks' && config && (
                             <TasksSettingsTab config={config} taskLists={taskLists} toggleId={toggleId} />
                         )}
 
@@ -257,14 +271,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
                 {/* Footer */}
                 <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/50 flex justify-end gap-4 transition-colors duration-300">
                     {saveError && (
-                        <p role="alert" className="mr-auto self-center text-red-400 text-sm font-medium" data-testid="settings-save-error">{saveError}</p>
+                        <p role="alert" className="mr-auto self-center text-red-600 dark:text-red-400 text-sm font-medium" data-testid="settings-save-error">{saveError}</p>
                     )}
                     <button onClick={onClose} className="px-6 py-3 rounded-xl font-bold text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        className="px-8 py-3 rounded-xl font-bold bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2 whitespace-nowrap"
+                        disabled={!config}
+                        className="px-8 py-3 rounded-xl font-bold bg-zinc-900 dark:bg-white text-white dark:text-black enabled:hover:bg-zinc-700 dark:enabled:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2 whitespace-nowrap"
                         data-testid="save-settings-button"
                     >
                         <Save size={18} />

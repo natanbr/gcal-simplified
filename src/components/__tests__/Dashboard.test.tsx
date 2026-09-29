@@ -4,8 +4,8 @@
 // ============================================================
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 import { Dashboard } from '../Dashboard';
 
 // Mock ipcRenderer (Electron) so Dashboard doesn't hang on auth
@@ -87,5 +87,26 @@ describe('Dashboard — view mode controls', () => {
         render(<Dashboard onSwitchToMC={vi.fn()} />);
         const settingsBtn = await screen.findByTestId('settings-button');
         expect(settingsBtn).toBeTruthy();
+    });
+});
+
+// settings:get rejects while another program holds the settings file. The
+// events, tasks and weather loaded fine, so that must not read as a failed load.
+describe('Dashboard — settings file busy at start-up', () => {
+    it('keeps the loaded calendar without an error when settings:get fails', async () => {
+        mockIpcRenderer.invoke.mockImplementation((channel: string) => {
+            if (channel === 'settings:get') return Promise.reject(new Error('settings file is busy'));
+            if (channel === 'data:events' || channel === 'data:tasks') return Promise.resolve([]);
+            return Promise.resolve(null);
+        });
+        const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        onTestFinished(() => quiet.mockRestore());
+
+        render(<Dashboard />);
+        await waitFor(() => expect(mockIpcRenderer.invoke).toHaveBeenCalledWith('settings:get'));
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+
+        expect(screen.queryByText('Failed to load calendar data.')).toBeNull();
+        expect(screen.getByTestId('settings-button')).toBeTruthy();
     });
 });

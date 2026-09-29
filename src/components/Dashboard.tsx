@@ -143,8 +143,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
              setWeather(fetchedWeather as WeatherData);
 
              setLoadingMessage('Loading Settings...');
-             const fetchedSettings = await window.ipcRenderer.invoke('settings:get');
-             setConfig(fetchedSettings as UserConfig);
+             const fetchedSettings = await window.ipcRenderer.invoke('settings:get').catch(() => null); // settings file busy: keep the current config, the data loaded fine
+             if (fetchedSettings) setConfig(fetchedSettings as UserConfig);
           }
       } catch (err) {
           console.error("Failed to fetch data", err);

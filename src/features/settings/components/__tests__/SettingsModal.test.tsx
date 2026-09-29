@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { SettingsModal } from '../SettingsModal';
 import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 
@@ -59,35 +59,41 @@ describe('SettingsModal', () => {
         weekStartDay: 'today',
     };
 
+    /** Per-channel responses: a value resolves, `reject` rejects, a function is called
+     *  (to hand back a deferred promise). Unlisted channels use the defaults below. */
+    const REJECT = Symbol('reject');
+    type Response = unknown | typeof REJECT | (() => Promise<unknown>);
     const setupMocks = (overrides?: {
         calendars?: unknown[];
         taskLists?: unknown[];
         settings?: Record<string, unknown>;
+        /** Every channel rejects. */
         error?: boolean;
-        /** Only `settings:save` rejects — the loads succeed, so no load banner. */
-        saveError?: boolean;
+        channels?: Record<string, Response>;
     }) => {
+        const defaults: Record<string, unknown> = {
+            'settings:save': { ok: true },
+            'data:calendars': overrides?.calendars ?? defaultCalendars,
+            'data:tasklists': overrides?.taskLists ?? defaultTaskLists,
+            'settings:get': overrides?.settings ?? defaultSettings,
+            'app:info': { version: '1.0.0' },
+        };
         mockInvoke.mockImplementation((channel: string) => {
-            if (overrides?.error) {
-                return Promise.reject(new Error('API Error'));
-            }
-            switch (channel) {
-                case 'settings:save':
-                    return overrides?.saveError
-                        ? Promise.reject(new Error("Error invoking remote method 'settings:save': Error: config.json could not be read (EBUSY)"))
-                        : Promise.resolve(undefined);
-                case 'data:calendars':
-                    return Promise.resolve(overrides?.calendars ?? defaultCalendars);
-                case 'data:tasklists':
-                    return Promise.resolve(overrides?.taskLists ?? defaultTaskLists);
-                case 'settings:get':
-                    return Promise.resolve(overrides?.settings ?? defaultSettings);
-                case 'app:info':
-                    return Promise.resolve({ version: '1.0.0' });
-                default:
-                    return Promise.resolve(null);
-            }
+            if (overrides?.error) return Promise.reject(new Error('API Error'));
+            const response = overrides?.channels && channel in overrides.channels
+                ? overrides.channels[channel]
+                : defaults[channel] ?? null;
+            if (response === REJECT) return Promise.reject(new Error('API Error'));
+            if (typeof response === 'function') return (response as () => Promise<unknown>)();
+            return Promise.resolve(response);
         });
+    };
+
+    const saveButton = () => screen.getByTestId('save-settings-button');
+    const saveCalls = () => mockInvoke.mock.calls.filter(([channel]) => channel === 'settings:save');
+    const quietConsole = () => {
+        const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        onTestFinished(() => quiet.mockRestore());
     };
 
     it('should render at least one calendar when API returns calendars', async () => {
@@ -144,7 +150,8 @@ describe('SettingsModal', () => {
     });
 
     it('should show error banner when loading fails', async () => {
-        setupMocks({ error: true });
+        quietConsole();
+        setupMocks({ channels: { 'data:calendars': REJECT } });
 
         render(<SettingsModal onClose={vi.fn()} onSave={vi.fn()} />);
 
@@ -176,41 +183,132 @@ describe('SettingsModal', () => {
         expect(screen.getByTestId('save-settings-button')).toBeInTheDocument();
     });
 
-    // The main process refuses to write over a config.json it could not read
-    // (locked by antivirus/backup, or corrupt) and rejects `settings:save`. The
-    // modal used to swallow that in a console.error and sit there looking saved.
+    // The saved settings are the only thing Save may write back. A failed load
+    // used to leave the `{ calendarIds: [], taskListIds: [] }` placeholder in
+    // place, and Save wiped every calendar and task-list selection with it.
+    describe('loading', () => {
+        const SETTINGS_UNREADABLE = 'Settings could not be loaded: the settings file is in use by another program. Try again in a moment.';
+
+        it('keeps Save disabled until the saved settings have loaded', async () => {
+            let resolveSettings: (value: unknown) => void = () => undefined;
+            setupMocks({ channels: { 'settings:get': () => new Promise(resolve => { resolveSettings = resolve; }) } });
+            render(<SettingsModal onClose={vi.fn()} onSave={vi.fn()} />);
+            await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith('settings:get'));
+
+            expect(saveButton()).toBeDisabled();
+            fireEvent.click(saveButton());
+            expect(saveCalls()).toHaveLength(0);
+
+            await act(async () => resolveSettings(defaultSettings));
+            await waitFor(() => expect(saveButton()).toBeEnabled());
+        });
+
+        it('says the settings could not be loaded and never saves defaults when settings:get fails', async () => {
+            quietConsole();
+            setupMocks({ channels: { 'settings:get': REJECT } });
+            render(<SettingsModal onClose={vi.fn()} onSave={vi.fn()} />);
+
+            const banner = await screen.findByTestId('settings-load-error');
+            expect(banner).toHaveTextContent(SETTINGS_UNREADABLE);
+            expect(saveButton()).toBeDisabled();
+            fireEvent.click(saveButton());
+            await act(async () => undefined);
+            expect(saveCalls()).toHaveLength(0);
+        });
+
+        it('names the settings file, not the first error, when every call fails', async () => {
+            quietConsole();
+            setupMocks({ error: true });
+            render(<SettingsModal onClose={vi.fn()} onSave={vi.fn()} />);
+
+            expect(await screen.findByTestId('settings-load-error')).toHaveTextContent(SETTINGS_UNREADABLE);
+            expect(saveButton()).toBeDisabled();
+        });
+
+        it('still saves the real selections when only the calendars failed to load (offline, expired token)', async () => {
+            quietConsole();
+            setupMocks({ channels: { 'data:calendars': REJECT } });
+            const onClose = vi.fn();
+            render(<SettingsModal onClose={onClose} onSave={vi.fn()} />);
+
+            expect(await screen.findByTestId('settings-load-error')).toHaveTextContent('API Error');
+            await waitFor(() => expect(saveButton()).toBeEnabled());
+            fireEvent.click(saveButton());
+
+            await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+            expect(mockInvoke).toHaveBeenCalledWith('settings:save', expect.objectContaining({ calendarIds: ['cal-1'], taskListIds: ['tl-1'] }));
+        });
+    });
+
+    // `settings:save` resolves `{ ok: false, reason, file }` when the main process
+    // refused to write (file held by antivirus/backup, unreadable, disk full). The
+    // modal used to swallow a refusal in a console.error and sit there looking saved.
     describe('saving', () => {
-        it('closes and refreshes when the save succeeds (guard)', async () => {
-            setupMocks();
+        const FILE = 'C:\\Users\\parent\\AppData\\Roaming\\gcal-simplified\\settings-file.json';
+
+        const renderLoaded = async () => {
             const onClose = vi.fn();
             const onSave = vi.fn();
             render(<SettingsModal onClose={onClose} onSave={onSave} />);
             await waitFor(() => expect(screen.getByText('Calendars (2)')).toBeInTheDocument());
+            await waitFor(() => expect(saveButton()).toBeEnabled());
+            return { onClose, onSave };
+        };
 
-            fireEvent.click(screen.getByTestId('save-settings-button'));
+        it('closes and refreshes when the save succeeds (guard)', async () => {
+            setupMocks();
+            const { onClose, onSave } = await renderLoaded();
+
+            fireEvent.click(saveButton());
 
             await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
             expect(onSave).toHaveBeenCalledTimes(1);
             expect(mockInvoke).toHaveBeenCalledWith('settings:save', expect.objectContaining({ calendarIds: ['cal-1'] }));
         });
 
-        it('stays open and says the settings were not saved when the save is refused', async () => {
-            setupMocks({ saveError: true });
-            const onClose = vi.fn();
-            const onSave = vi.fn();
-            const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-            onTestFinished(() => quiet.mockRestore());
-            render(<SettingsModal onClose={onClose} onSave={onSave} />);
-            await waitFor(() => expect(screen.getByText('Calendars (2)')).toBeInTheDocument());
+        it.each([
+            [{ reason: 'locked', code: 'EBUSY' }, `Settings not saved: ${FILE} is in use by another program (antivirus or a backup). Try again in a moment.`],
+            [{ reason: 'unreadable', code: 'EPERM' }, `Settings not saved: ${FILE} could not be read (EPERM). Try again in a moment.`],
+            [{ reason: 'unreadable' }, `Settings not saved: ${FILE} could not be read. Try again in a moment.`],
+            [{ reason: 'write-failed', code: 'ENOSPC' }, `Settings not saved: ${FILE} could not be written (ENOSPC). Check free disk space and permissions, then try again.`],
+            [{ reason: 'write-failed' }, `Settings not saved: ${FILE} could not be written. Check free disk space and permissions, then try again.`],
+        ])('stays open and names the file when the save is refused: %o', async (failure, message) => {
+            setupMocks({ channels: { 'settings:save': { ok: false, file: FILE, ...failure } } });
+            const { onClose, onSave } = await renderLoaded();
 
-            fireEvent.click(screen.getByTestId('save-settings-button'));
+            fireEvent.click(saveButton());
 
-            const banner = await screen.findByTestId('settings-save-error');
-            expect(banner).toBeVisible();
-            expect(banner).toHaveTextContent(/not saved/i);
+            const line = await screen.findByTestId('settings-save-error');
+            expect(line).toBeVisible();
+            expect(line.textContent).toBe(message);
             expect(onClose).not.toHaveBeenCalled();
             expect(onSave).not.toHaveBeenCalled();
             expect(screen.queryByTestId('settings-load-error')).not.toBeInTheDocument();
+        });
+
+        it('says the settings were not saved when the save call itself fails', async () => {
+            quietConsole();
+            setupMocks({ channels: { 'settings:save': REJECT } });
+            const { onClose, onSave } = await renderLoaded();
+
+            fireEvent.click(saveButton());
+
+            expect((await screen.findByTestId('settings-save-error')).textContent).toBe('Settings not saved. Try again.');
+            expect(onClose).not.toHaveBeenCalled();
+            expect(onSave).not.toHaveBeenCalled();
+        });
+
+        it('clears the error on the next attempt', async () => {
+            let attempt = 0;
+            setupMocks({ channels: { 'settings:save': () => Promise.resolve(++attempt === 1 ? { ok: false, reason: 'locked', file: FILE } : { ok: true }) } });
+            const { onClose } = await renderLoaded();
+
+            fireEvent.click(saveButton());
+            await screen.findByTestId('settings-save-error');
+            fireEvent.click(saveButton());
+
+            await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+            expect(screen.queryByTestId('settings-save-error')).not.toBeInTheDocument();
         });
     });
 });

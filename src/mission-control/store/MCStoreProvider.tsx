@@ -77,7 +77,8 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
                             } 
                         });
                     }
-                });
+                })
+                .catch(() => { /* settings file busy or unreadable: the pairing keys stay as they were */ });
         }
     }, []);
 
