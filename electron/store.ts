@@ -153,7 +153,11 @@ function readConfig(): ConfigRead {
 }
 
 function sleepSync(ms: number): void {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    try {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    } catch {
+        // No SharedArrayBuffer here: retry at once rather than turn a lock into a throw out of update().
+    }
 }
 
 function writeFailed(e: unknown, file: string, temp: string): StoreFailure {

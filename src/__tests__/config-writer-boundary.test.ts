@@ -24,7 +24,9 @@
 //   - no electron-store / conf instance without a name, or named 'config':
 //     their default file IS userData/config.json (security-learnings.md, the
 //     2025 incident where a manual write destroyed the OAuth tokens);
-//   - electron/store.ts touches the disk from a pinned set of call sites.
+//   - electron/store.ts touches the disk only through an allowed set of fs calls,
+//     each used a pinned number of times — every `fs.<member>` and every import
+//     from an fs module is collected, so an unlisted call cannot hide.
 //
 // verifiedRedBy: see the registry entry in rule-registry.test.ts.
 // ============================================================
@@ -42,13 +44,12 @@ const isComment = (line: string) => /^\s*(\/\/|\*|\/\*)/.test(line);
 const codeLines = (src: string) => src.split('\n').map((line, i) => ({ line, n: i + 1 })).filter(({ line }) => !isComment(line));
 const CONFIG_NAME = /(?<![\w-])config\.json/i;
 
-/** Every way store.ts may touch the disk, and how often. Each site has a reason:
- *  writeFileSync — the temp file; renameSync — the temp over config.json, and a
- *  file that can never parse moved aside; rmSync — the temp after a failed rename. */
-const STORE_DISK_CALLS: Record<string, number> = {
-    writeFileSync: 1, renameSync: 2, rmSync: 1,
-    appendFileSync: 0, copyFileSync: 0, unlinkSync: 0, createWriteStream: 0, promises: 0,
-};
+/** The only fs calls store.ts may make, and how often. Each site has a reason:
+ *  readFileSync — the one read; writeFileSync — the temp file; renameSync — the temp
+ *  over config.json, and a file that can never parse moved aside; rmSync — the temp
+ *  after a failed rename. */
+const STORE_FS_CALLS: Record<string, number> = { readFileSync: 1, writeFileSync: 1, renameSync: 2, rmSync: 1 };
+const FS_MODULE = /^(node:)?fs(\/promises)?$|^(graceful-fs|fs-extra|original-fs)$/;
 
 describe('config.json has exactly one writer', () => {
     it('exposes get, read and update — no raw set that writes whatever it is given', () => {
@@ -85,11 +86,17 @@ describe('config.json has exactly one writer', () => {
         expect(offenders, 'An unnamed (or "config") store writes userData/config.json behind store.ts:\n  ' + offenders.join('\n  ')).toEqual([]);
     });
 
-    it('touches the disk from electron/store.ts only through its pinned call sites', () => {
-        const lines = codeLines(SOURCES.find(f => f.rel === STORE)?.src ?? '');
-        const counted = Object.fromEntries(Object.keys(STORE_DISK_CALLS).map(call => [
-            call, lines.filter(({ line }) => new RegExp(`\\b(fs\\.)?${call}\\b\\s*[(.]`).test(line)).length,
-        ]));
-        expect(counted, 'A new disk call in store.ts is a new writer: give it a reason and pin it above').toEqual(STORE_DISK_CALLS);
+    it('touches the disk from electron/store.ts only through its allowed fs calls', () => {
+        const code = codeLines(SOURCES.find(f => f.rel === STORE)?.src ?? '').map(({ line }) => line).join('\n');
+
+        // fs reaches store.ts only as the default import, so every call reads `fs.<member>`.
+        const fsImports = [...code.matchAll(/import\s+([^;]+?)\s+from\s+['"]([^'"]+)['"]/g)].filter(([, , from]) => FS_MODULE.test(from));
+        expect(fsImports.map(([, what, from]) => `${what} from ${from}`), 'import fs as a default only').toEqual(['fs from node:fs']);
+        expect(/\brequire\s*\(|\bimport\s*\(/.test(code), 'no require() or dynamic import beside it').toBe(false);
+        expect(/}\s*=\s*fs\b/.test(code), 'no destructuring out of fs').toBe(false);
+
+        const counted: Record<string, number> = {};
+        for (const [, member] of code.matchAll(/\bfs\s*\.\s*(\w+)/g)) counted[member] = (counted[member] ?? 0) + 1;
+        expect(counted, 'A new fs call in store.ts is a new way to touch the disk: give it a reason and pin it above').toEqual(STORE_FS_CALLS);
     });
 });

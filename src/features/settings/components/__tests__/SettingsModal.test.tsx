@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { SettingsModal } from '../SettingsModal';
 import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 
@@ -187,7 +187,9 @@ describe('SettingsModal', () => {
     // used to leave the `{ calendarIds: [], taskListIds: [] }` placeholder in
     // place, and Save wiped every calendar and task-list selection with it.
     describe('loading', () => {
-        const SETTINGS_UNREADABLE = 'Settings could not be loaded: the settings file is in use by another program. Try again in a moment.';
+        // A rejection that is not the main process's own refusal claims no reason it cannot know.
+        const SETTINGS_NOT_LOADED = 'Settings could not be loaded. Try again in a moment.';
+        const FILE = 'C:\\Users\\parent\\AppData\\Roaming\\gcal-simplified\\settings-file.json';
 
         it('keeps Save disabled until the saved settings have loaded', async () => {
             let resolveSettings: (value: unknown) => void = () => undefined;
@@ -209,19 +211,36 @@ describe('SettingsModal', () => {
             render(<SettingsModal onClose={vi.fn()} onSave={vi.fn()} />);
 
             const banner = await screen.findByTestId('settings-load-error');
-            expect(banner).toHaveTextContent(SETTINGS_UNREADABLE);
+            expect(banner).toHaveTextContent(SETTINGS_NOT_LOADED);
             expect(saveButton()).toBeDisabled();
             fireEvent.click(saveButton());
             await act(async () => undefined);
             expect(saveCalls()).toHaveLength(0);
         });
 
-        it('names the settings file, not the first error, when every call fails', async () => {
+        it('reports the settings failure, not the first error, when every call fails', async () => {
             quietConsole();
             setupMocks({ error: true });
             render(<SettingsModal onClose={vi.fn()} onSave={vi.fn()} />);
 
-            expect(await screen.findByTestId('settings-load-error')).toHaveTextContent(SETTINGS_UNREADABLE);
+            expect(await screen.findByTestId('settings-load-error')).toHaveTextContent(SETTINGS_NOT_LOADED);
+            expect(saveButton()).toBeDisabled();
+        });
+
+        // ipcRenderer.invoke rejects with "Error invoking remote method '<channel>': Error: <message>";
+        // the message is the main process's own sentence, with the reason and the file.
+        it.each([
+            `Settings could not be loaded: ${FILE} is in use by another program (antivirus or a backup). Try again in a moment.`,
+            `Settings could not be loaded: ${FILE} could not be read (EIO). Try again in a moment.`,
+        ])('shows the main process sentence (reason and file) when settings:get is refused: %s', async (sentence) => {
+            quietConsole();
+            setupMocks({ channels: { 'settings:get': () => Promise.reject(new Error(`Error invoking remote method 'settings:get': Error: ${sentence}`)) } });
+            render(<SettingsModal onClose={vi.fn()} onSave={vi.fn()} />);
+
+            const banner = await screen.findByTestId('settings-load-error');
+            expect(banner.textContent).toContain(sentence);
+            expect(banner.textContent).not.toContain('Error invoking remote method');
+            expect(within(banner).getByText(sentence)).toHaveClass('text-red-600', 'dark:text-red-400');
             expect(saveButton()).toBeDisabled();
         });
 
@@ -284,6 +303,16 @@ describe('SettingsModal', () => {
             expect(onClose).not.toHaveBeenCalled();
             expect(onSave).not.toHaveBeenCalled();
             expect(screen.queryByTestId('settings-load-error')).not.toBeInTheDocument();
+        });
+
+        it('never shows an empty line for a refusal reason it does not know', async () => {
+            setupMocks({ channels: { 'settings:save': { ok: false, reason: 'from-a-newer-build', file: FILE } } });
+            const { onClose } = await renderLoaded();
+
+            fireEvent.click(saveButton());
+
+            expect((await screen.findByTestId('settings-save-error')).textContent).toBe('Settings not saved. Try again.');
+            expect(onClose).not.toHaveBeenCalled();
         });
 
         it('says the settings were not saved when the save call itself fails', async () => {

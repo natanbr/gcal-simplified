@@ -125,11 +125,16 @@ describe('ApiService.getSettings (settings:get)', () => {
         expect(new ApiService().getSettings()).toMatchObject({ calendarIds: ['primary'], taskListIds: [] });
     });
 
-    it('throws while the file is locked, so the dialog never shows the defaults as the saved settings', () => {
+    // The dialog shows this sentence as it is (after Electron's IPC prefix), so it carries the
+    // same reason classes as a refused save and names the file.
+    it.each([
+        ['EBUSY', `Settings could not be loaded: ${CONFIG} is in use by another program (antivirus or a backup). Try again in a moment.`],
+        ['EIO', `Settings could not be loaded: ${CONFIG} could not be read (EIO). Try again in a moment.`],
+    ])('throws a %s read as the sentence the dialog shows, so it never offers the defaults as the saved settings', (code, sentence) => {
         seed(JSON.stringify(SEED, null, 2));
-        lock.code = 'EBUSY';
+        lock.code = code;
 
-        expect(() => new ApiService().getSettings()).toThrow(/in use/);
+        expect(() => new ApiService().getSettings()).toThrow(sentence);
         expect(lock.hits).toBeGreaterThan(0);
     });
 });

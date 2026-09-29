@@ -1449,10 +1449,11 @@ new cases in `MissionOverlay.test.tsx`, `useGameTokenCapSettle.test.tsx`,
   - the remote control leaves its room, stays offline and retries after 5 s, doubling, at most every
     5 minutes; once the file reads again it joins the saved room, so the phone keeps working without
     a new scan. A room that was never saved is never joined;
-  - Settings does not load the saved settings while the file is held: it says "Settings could not be
-    loaded: the settings file is in use by another program", offers Retry and keeps Save disabled. A
-    Save refused at the last moment keeps the dialog open and names the file and the reason
-    (in use / could not be read / could not be written);
+  - Settings does not load the saved settings while the file is held: it says why, naming the file
+    ("Settings could not be loaded: <file> is in use by another program…", or "…could not be read
+    (<code>)…"), offers Retry and keeps Save disabled. A Save refused at the last moment keeps the
+    dialog open and names the file and the reason (in use / could not be read / could not be
+    written);
   - Regenerate Keys keeps the current keys and says "Keys not changed: the settings file is busy or
     could not be written. The current QR code still works";
   - the calendar keeps working meanwhile.
