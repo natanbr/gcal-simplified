@@ -59,7 +59,10 @@ beforeEach(() => {
     for (const level of ['log', 'warn', 'error'] as const) vi.spyOn(console, level).mockImplementation(() => undefined);
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+});
 
 describe('store.update — merges onto the file as it is on disk', () => {
     it('writes defaults + patch when there is no file', () => {
@@ -117,6 +120,18 @@ describe('store.update — atomic: a temp file renamed over config.json', () => 
         expect(Date.now() - started, 'the main thread was held too long').toBeLessThan(1_000);
         expect(bytes().equals(before)).toBe(true);
         expect(fs.existsSync(TEMP), 'the temp file was left behind').toBe(false);
+    });
+
+    // The wait between renames uses Atomics.wait on a SharedArrayBuffer. Where that is not
+    // available the retry must go on without the wait, never turn a lock into a throw.
+    it('still retries, without waiting, when SharedArrayBuffer is unavailable', () => {
+        seed({ calendarIds: ['cal-a'] });
+        fault.renameFailures = 2;
+        vi.stubGlobal('SharedArrayBuffer', undefined);
+
+        expect(store.update(PAIRING)).toEqual({ ok: true });
+        expect(fault.renameHits).toBe(2);
+        expect(onDisk()).toMatchObject({ calendarIds: ['cal-a'], ...PAIRING });
     });
 
     it('does not retry an error that waiting cannot fix', () => {

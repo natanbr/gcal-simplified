@@ -1,26 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Save, Check, RefreshCw, Calendar, User, Settings, CheckSquare, Rocket } from 'lucide-react';
-import { CalendarSource, SaveSettingsResult, SettingsWriteFailure, TaskListSource, UserConfig } from '../../../types';
+import { CalendarSource, SaveSettingsResult, TaskListSource, UserConfig } from '../../../types';
 import { AccountSettingsTab } from './AccountSettingsTab';
 import { GeneralSettingsTab } from './GeneralSettingsTab';
 import { TasksSettingsTab } from './TasksSettingsTab';
+import { loadFailureMessage, saveFailureMessage, SETTINGS_NOT_SAVED } from './settingsMessages';
 
 interface SettingsModalProps {
     onClose: () => void;
     onSave: () => void; // Trigger a refresh
     onLogout?: () => void; // Trigger a logout and re-login
-}
-
-const SETTINGS_UNREADABLE = 'Settings could not be loaded: the settings file is in use by another program. Try again in a moment.';
-
-function saveFailureMessage({ reason, code, file }: SettingsWriteFailure): string {
-    const detail = code ? ` (${code})` : '';
-    switch (reason) {
-        case 'locked': return `Settings not saved: ${file} is in use by another program (antivirus or a backup). Try again in a moment.`;
-        case 'unreadable': return `Settings not saved: ${file} could not be read${detail}. Try again in a moment.`;
-        case 'write-failed': return `Settings not saved: ${file} could not be written${detail}. Check free disk space and permissions, then try again.`;
-    }
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, onLogout }) => {
@@ -56,7 +46,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
         const failed = [settings, cals, lists, appInfo].find(r => r.status === 'rejected');
         if (failed?.status === 'rejected') {
             console.error("Failed to load settings data", failed.reason);
-            setLoadError(settings.status === 'rejected' ? SETTINGS_UNREADABLE
+            setLoadError(settings.status === 'rejected' ? loadFailureMessage(settings.reason)
                 : failed.reason instanceof Error ? failed.reason.message : 'Failed to load settings data. Check your connection and try again.');
         }
         setIsLoading(false);
@@ -78,7 +68,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
             onClose();
         } catch (e) {
             console.error("Failed to save settings", e);
-            setSaveError('Settings not saved. Try again.');
+            setSaveError(SETTINGS_NOT_SAVED);
         }
     };
 
@@ -174,10 +164,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
                          {/* Error Banner */}
                          {loadError && (
                             <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-xl p-4 flex items-center justify-between" data-testid="settings-load-error">
-                                <span className="text-red-400 text-sm font-medium">{loadError}</span>
+                                <span className="text-red-600 dark:text-red-400 text-sm font-medium">{loadError}</span>
                                 <button
                                     onClick={() => { setLoadError(null); loadData(); }}
-                                    className="px-4 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 text-sm font-bold transition-colors flex items-center gap-2"
+                                    className="px-4 py-1.5 rounded-lg bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/30 text-sm font-bold transition-colors flex items-center gap-2"
                                 >
                                     <RefreshCw size={14} /> Retry
                                 </button>

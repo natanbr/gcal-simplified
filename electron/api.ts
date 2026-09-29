@@ -64,7 +64,10 @@ export class ApiService {
         const current = store.read();
         if (current.kind === 'unreadable') {
             const { reason, code, file } = current.failure;
-            throw new Error(`Settings could not be read: ${file} is ${reason === 'locked' ? 'in use by another program' : 'unreadable'} (${code ?? 'no error code'}).`);
+            // The dialog shows this sentence as it is, so it follows the same reason classes as a refused save.
+            throw new Error(reason === 'locked'
+                ? `Settings could not be loaded: ${file} is in use by another program (antivirus or a backup). Try again in a moment.`
+                : `Settings could not be loaded: ${file} could not be read${code ? ` (${code})` : ''}. Try again in a moment.`);
         }
         return current.config;
     }
