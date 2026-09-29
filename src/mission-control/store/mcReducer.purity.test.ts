@@ -44,6 +44,7 @@ const SAMPLE_ACTIONS: MCAction[] = [
     { type: 'SET_PRIVILEGE_STATUS', cardId: 'knife', status: 'suspended', suspendedUntil: TIMESTAMP },
     { type: 'EXPIRE_SUSPENSIONS' },
     { type: 'SETTLE_GAME_TOKEN_CAP', origin: 'system' },
+    { type: 'END_STALE_MISSION_RUN', missionPhase: 'evening', origin: 'system' },
     { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: 'tshirt' },
     { type: 'LOCK_TASK', missionPhase: 'morning', taskId: 'tshirt' },
     { type: 'SET_ACTIVE_MISSION', phase: 'morning' },

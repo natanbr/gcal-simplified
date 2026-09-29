@@ -163,7 +163,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load.
   - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
   - **A mission start time must be a real time (fixed 2026-09-24).** Settings → "Auto-trigger at" cannot be saved empty: Save is disabled, the empty field is outlined, and the footer names the empty time and its tab ("Set the Morning auto-trigger time (🕒 Missions Time tab) to save.") until both times are filled in. `SET_SETTINGS` also ignores a start time that is not `HH:MM` (it keeps the stored one and does not stop a running mission), a profile saved empty by an older version loads with the default time (06:00 / 19:00) and a window re-derived from its duration, and the scheduler arms nothing for a time that is not a real `HH:MM`.
-  - **A mission duration must be a real length (2026-09-26).** At least one second and less than 24 h (the 10-second test step counts; the duration slider starts at 5 min, so it cannot offer 0). `SET_SETTINGS` keeps the stored duration for anything else, and a profile holding one (JSON saves NaN as `null`) loads with the default (30 / 60 min). At load the mission window is always re-derived from the settings, never trusted from the saved copy, and a mission saved running with no readable duration gets its window's length, so it can end. If that run's window closed before today, it is ended at startup instead, with no outcome (no miss, no conclusion date, like a Stop) and one system log line ("Evening mission from <date> ended at startup: its saved record was incomplete"); ending it on the first tick would charge a miss on the launch day and stop that day's mission from starting. Every reader of an entered time (scheduler, mood gauge, quick-game window) uses the same strict `HH:MM` rule and does nothing with a time it cannot read; a mission end past midnight (`24:30`) is read as 00:30 the next day, so a launch or a late timer inside such a window *before midnight* still starts it; after midnight the scheduler aims at that evening's next occurrence and does not start it (an older limit, unchanged). Overnight windows are only partly supported: an evening that ends after midnight stamps the next day's date as done, so that day's evening does not start (older, open follow-up).
+  - **A mission duration must be a real length (2026-09-26).** At least one second and less than 24 h (the 10-second test step counts; the duration slider starts at 5 min, so it cannot offer 0). `SET_SETTINGS` keeps the stored duration for anything else, and a profile holding one (JSON saves NaN as `null`) loads with the default (30 / 60 min). At load the mission window is always re-derived from the settings, never trusted from the saved copy, and a mission saved running with no readable duration gets its window's length, so it can end. If that run's window closed before today, it is ended just after load instead (a logged system action, so it reaches the audit trail), with no outcome (no miss, no conclusion date, like a Stop) and one system log line ("Evening mission from <date> ended at startup: its saved record was incomplete"); ending it on the first tick would charge a miss on the launch day and stop that day's mission from starting. Every reader of an entered time (scheduler, mood gauge, quick-game window) uses the same strict `HH:MM` rule and does nothing with a time it cannot read; a mission end past midnight (`24:30`) is read as 00:30 the next day, so a launch or a late timer inside such a window *before midnight* still starts it; after midnight the scheduler aims at that evening's next occurrence and does not start it (an older limit, unchanged). Overnight windows are only partly supported: an evening that ends after midnight stamps the next day's date as done, so that day's evening does not start (older, open follow-up).
 
 - **School Bag task — school days only (added 2026-09-27)**:
   - Owner's rule: organizing the bag for school is a task in both routines, only on school days — not on holidays or Pro-D days. Read from the calendar when one is connected; otherwise Monday to Friday.
@@ -1534,9 +1534,15 @@ registered in `rule-registry.test.ts`.
   given its window's length at load and ended on the first 15 s tick. For a run from an earlier day,
   that tick charged a miss dated on the launch day (a shield segment for a data bug), stamped today's
   date as concluded, and so that day's mission never started, with no "skipped" line. Now a run whose
-  window closed before today is ended at startup with no outcome, like a Stop: no miss, no conclusion
-  date, `lastActiveAt` set to when it started, and one system log line ("Evening mission from
-  <date> ended at startup: its saved record was incomplete"). A run whose window reaches today keeps
+  window closed before today is left as saved by hydration and ended just after load by
+  `END_STALE_MISSION_RUN` (attributed `system`, dispatched once by `useStaleMissionRunEnd`), with no
+  outcome, like a Stop: no miss, no conclusion date, and one log line ("Evening mission from <date>
+  ended at startup: its saved record was incomplete") that reaches the audit trail. Written inside
+  `loadPersistedState` it did not: the audit bridge treats every loaded entry as already written. The
+  end stamps `lastActiveAt` at the launch instant, like any end; one known edge: a launch *inside*
+  that phase's window today counts today's occurrence as run, so it is not started (a parent can
+  ▶ Start it). The action is not remote-allowed and not refused by a broken shield (it frees the
+  store, it moves no token). A run whose window reaches today keeps
   its window's length and ends normally. Only a mission that is `active` gets a duration back: an
   ended mission keeps `startedAt` with no duration and is left alone.
 - **Guards.** The duration check in `SET_SETTINGS` is now tested per phase (a filter that checked
@@ -1548,7 +1554,10 @@ registered in `rule-registry.test.ts`.
   overnight-window wording is narrowed: a launch or late timer inside such a window starts it only
   before midnight.
 
-Tests: `store/persistence-stuck-run.test.ts` (an earlier day's run, tonight's evening still starting,
-a run from today, an ended mission), plus cases in `mcReducer.settings-time.test.ts`,
+Tests: `store/persistence-stuck-run.test.ts` (an earlier day's run detected, not ended, at load; the
+end with no outcome; tonight's evening still starting; a run from today; an overnight run launched
+at 00:10; yesterday's ended mission), `store/useStaleMissionRunEnd.test.tsx` (one line in the app and
+one in the audit trail, StrictMode, no second line on relaunch, not mounted on a normal launch),
+plus cases in `mcReducer.settings-time.test.ts`,
 `useMissionScheduler.invalid-time.test.tsx`, `schoolDays.test.ts`, `hhmm.test.ts` and
 `hhmm-parse-boundary.test.ts`.

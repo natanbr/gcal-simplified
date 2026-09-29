@@ -28,6 +28,7 @@ import { deriveMissionWindow, missionDurationMins, withoutInvalidMissionTimes } 
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
+import { endStaleMissionRun } from './staleMissionRun';
 import { reschedulesRunningMission, startTimeChanged } from './missionReschedule';
 import { CREAM_TASK_ID, syncCreamTask, withSchoolBag } from './routineTasks';
 import { sameSchoolCalendar, sanitizeSchoolCalendar, schoolBagDecision } from './schoolDays';
@@ -620,6 +621,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
 
         case 'SETTLE_GAME_TOKEN_CAP': // logged; see useGameTokenCapSettle
             return settleGameTokenCap(state);
+        case 'END_STALE_MISSION_RUN': // logged; see useStaleMissionRunEnd
+            return endStaleMissionRun(state, action.missionPhase, actionInstant(action));
 
         case 'CONSUME_GAME_TOKEN':
             if (state.gameTokens <= 0) return state;

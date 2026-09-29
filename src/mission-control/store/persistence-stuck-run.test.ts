@@ -8,25 +8,31 @@
 // a data bug, `lastCompletedOrFailedEveningDate` becomes today, and tonight's
 // evening then never starts, with no "skipped" line (review of PR 184).
 //
-// So a stuck run whose window closed before today ends at load with no
-// outcome, like a Stop: no miss, no conclusion, one attributed log line, and
-// `lastActiveAt` set to when it started so that old occurrence is not
-// restarted. A run from today keeps its window's length and ends normally.
+// So hydration only DETECTS a stuck run whose window closed before today and
+// leaves it as saved; END_STALE_MISSION_RUN, dispatched once after load
+// (useStaleMissionRunEnd), ends it with no outcome, like a Stop, and its log
+// line reaches the audit trail (useStaleMissionRunEnd.test.tsx). A run whose
+// window reaches today gets its window's length and ends normally.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { initialState } from './mcReducer';
+import { initialState, mcReducer } from './mcReducer';
 import { loadPersistedState, STORAGE_KEY } from './useMCStore';
+import { createLogEntry } from './activityLog';
+import { staleIncompleteRunPhases } from './staleMissionRun';
+import { isEconomyLocked, MISSED_LOCK_THRESHOLD } from './missionStreak';
+import { REMOTE_ALLOWED_ACTIONS } from '../hooks/useRemoteControl';
 import { at, jumpTo, renderLiveScheduler, startLogs, step } from '../hooks/schedulerTestKit';
-import type { MCState, MissionPhase } from '../types';
+import type { MCAction, MCState, MissionPhase } from '../types';
 
 type Phase = Exclude<MissionPhase, 'none'>;
 
 /** Saves `phase` as running since `startedAt` with the null duration JSON wrote. */
-function saveStuck(phase: Phase, startedAt: Date, extra: Record<string, unknown> = {}): void {
+function saveStuck(phase: Phase, startedAt: Date, extra: Record<string, unknown> = {}, top: Record<string, unknown> = {}): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
         ...initialState,
         activeMission: phase,
+        ...top,
         missions: initialState.missions.map(m => (m.phase === phase
             ? { ...m, active: true, startedAt: startedAt.toISOString(), durationMins: null, ...extra }
             : m)),
@@ -39,41 +45,27 @@ function mission(state: MCState, phase: Phase) {
     return m;
 }
 
+const startupLines = (s: MCState) => s.activityLogs.filter(l => l.message.includes('ended at startup'));
+// No timestamp: a stamped action also runs the mood-gauge sync, which is not under test.
+const endRun = (phase: Phase): MCAction => ({ type: 'END_STALE_MISSION_RUN', missionPhase: phase, origin: 'system' });
+
 describe('hydration — a mission saved running with no readable duration', () => {
     beforeEach(() => { vi.useFakeTimers(); localStorage.removeItem(STORAGE_KEY); });
     afterEach(() => { vi.useRealTimers(); localStorage.removeItem(STORAGE_KEY); });
 
-    it('a run from yesterday ends at load with no outcome and one system log line', () => {
-        const yesterday1900 = at(19, 0, -1);
-        saveStuck('evening', yesterday1900);
+    it('a run from yesterday loads as saved and is detected, not ended, by hydration', () => {
+        // Ending it inside loadPersistedState wrote a line the audit trail never
+        // saw: useAuditTrail treats every loaded entry as already written.
+        saveStuck('evening', at(19, 0, -1));
         vi.setSystemTime(at(7, 0));
 
         const reloaded = loadPersistedState();
 
-        expect(reloaded.activeMission).toBe('none');
-        expect(mission(reloaded, 'evening').active).toBe(false);
-        expect(mission(reloaded, 'evening').startedAt).toBeUndefined();
-        expect(mission(reloaded, 'evening').lastActiveAt).toBe(yesterday1900.toISOString());
-        expect(reloaded.missedMissionStreak, 'a miss charged for a data bug').toBe(0);
-        expect(reloaded.lastCompletedOrFailedEveningDate, 'recorded as a conclusion').toBeNull();
-        const lines = reloaded.activityLogs.filter(l => l.message.includes('ended at startup'));
-        expect(lines).toHaveLength(1);
-        expect(lines[0].source).toBe('system');
-        expect(lines[0].message).toMatch(/^Evening mission from \d{4}-\d{2}-\d{2} ended at startup/);
-    });
-
-    it('lifecycle: tonight’s evening still starts on time after that', () => {
-        saveStuck('evening', at(19, 0, -1));
-        vi.setSystemTime(at(7, 0));
-        const { live, unmount } = renderLiveScheduler(loadPersistedState());
-        step(100);
-
-        jumpTo(at(19, 0, 0, 30));
-        step(100);
-
-        expect(live.state.activeMission).toBe('evening');
-        expect(startLogs(live.state, 'evening')).toBe(1);
-        unmount();
+        expect(reloaded.activeMission).toBe('evening');
+        expect(mission(reloaded, 'evening').active).toBe(true);
+        expect(mission(reloaded, 'evening').durationMins ?? null, 'a duration would end it on the first tick, as a miss').toBeNull();
+        expect(startupLines(reloaded)).toHaveLength(0);
+        expect(staleIncompleteRunPhases(reloaded)).toEqual(['evening']);
     });
 
     it('a run from today keeps running with its window’s length, and ends normally', () => {
@@ -84,19 +76,95 @@ describe('hydration — a mission saved running with no readable duration', () =
 
         expect(reloaded.activeMission).toBe('morning');
         expect(mission(reloaded, 'morning').durationMins).toBe(30);
-        expect(reloaded.activityLogs.some(l => l.message.includes('ended at startup'))).toBe(false);
+        expect(staleIncompleteRunPhases(reloaded)).toEqual([]);
     });
 
-    it('a mission that already ended (active false) gets no duration back', () => {
+    it('an overnight run whose window reaches today is not an earlier day’s: 23:30 + 60, launched at 00:10', () => {
+        // The window END is compared with midnight, not the start.
+        saveStuck('evening', at(23, 30, -1), {}, {
+            settings: { ...initialState.settings, eveningStartsAt: '23:30', eveningDurationMins: 60 },
+        });
+        vi.setSystemTime(at(0, 10));
+
+        const reloaded = loadPersistedState();
+
+        expect(mission(reloaded, 'evening').active).toBe(true);
+        expect(mission(reloaded, 'evening').durationMins).toBe(60);
+        expect(staleIncompleteRunPhases(reloaded)).toEqual([]);
+    });
+
+    it('a mission that already ended (active false) from yesterday gets no duration and is not ended again', () => {
         // SET_ACTIVE_MISSION 'none' keeps startedAt and clears durationMins, so
-        // every timed-out mission looks like this on disk.
-        saveStuck('morning', at(6, 0), { active: false });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'), activeMission: 'none' }));
+        // every normally ended mission looks like this on disk.
+        saveStuck('morning', at(6, 0, -1), { active: false }, { activeMission: 'none' });
         vi.setSystemTime(at(9, 0));
 
         const reloaded = loadPersistedState();
 
         expect(mission(reloaded, 'morning').durationMins ?? null).toBeNull();
-        expect(reloaded.activityLogs.some(l => l.message.includes('ended at startup'))).toBe(false);
+        expect(staleIncompleteRunPhases(reloaded)).toEqual([]);
+    });
+});
+
+describe('END_STALE_MISSION_RUN — ends an earlier day’s stuck run with no outcome', () => {
+    beforeEach(() => { vi.useFakeTimers(); localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { vi.useRealTimers(); localStorage.removeItem(STORAGE_KEY); });
+
+    it('like a Stop: no miss, no conclusion date, the run cleared, the start/end stamped', () => {
+        saveStuck('evening', at(19, 0, -1));
+        vi.setSystemTime(at(7, 0));
+        const loaded = loadPersistedState();
+
+        const next = mcReducer(loaded, endRun('evening'));
+
+        expect(next.activeMission).toBe('none');
+        expect(mission(next, 'evening').active).toBe(false);
+        expect(mission(next, 'evening').startedAt).toBeUndefined();
+        expect(next.missedMissionStreak, 'a miss charged for a data bug').toBe(0);
+        expect(next.lastCompletedOrFailedEveningDate, 'recorded as a conclusion').toBeNull();
+        expect(mission(next, 'evening').lastActiveAt).toBe(new Date().toISOString());
+        const line = createLogEntry(endRun('evening'), loaded);
+        expect(line?.message).toMatch(/^Evening mission from \d{4}-\d{2}-\d{2} ended at startup: its saved record was incomplete$/);
+    });
+
+    it('is a no-op on a mission that is not an earlier day’s stuck run: same state, no line', () => {
+        saveStuck('morning', at(6, 0));
+        vi.setSystemTime(at(6, 10));
+        const loaded = loadPersistedState();
+
+        expect(mcReducer(loaded, endRun('morning'))).toBe(loaded);
+        expect(createLogEntry(endRun('morning'), loaded)).toBeNull();
+    });
+
+    it('is not refused by a broken shield: it frees the store and moves no token', () => {
+        saveStuck('evening', at(19, 0, -1), {}, { missedMissionStreak: MISSED_LOCK_THRESHOLD });
+        vi.setSystemTime(at(7, 0));
+        const loaded = loadPersistedState();
+        expect(isEconomyLocked(loaded), 'precondition: the shield is broken').toBe(true);
+
+        const next = mcReducer(loaded, endRun('evening'));
+
+        expect(next.activeMission).toBe('none');
+        expect(next.missedMissionStreak).toBe(MISSED_LOCK_THRESHOLD);
+        expect(createLogEntry(endRun('evening'), loaded)).not.toBeNull();
+    });
+
+    it('is not a remote action: the phone cannot end a mission with no outcome', () => {
+        expect(REMOTE_ALLOWED_ACTIONS.has('END_STALE_MISSION_RUN')).toBe(false);
+    });
+
+    it('lifecycle: tonight’s evening still starts on time after it', () => {
+        saveStuck('evening', at(19, 0, -1));
+        vi.setSystemTime(at(7, 0));
+        const { live, dispatch, unmount } = renderLiveScheduler(loadPersistedState());
+        dispatch(endRun('evening'));
+        step(100);
+
+        jumpTo(at(19, 0, 0, 30));
+        step(100);
+
+        expect(live.state.activeMission).toBe('evening');
+        expect(startLogs(live.state, 'evening')).toBe(1);
+        unmount();
     });
 });
