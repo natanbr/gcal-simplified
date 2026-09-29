@@ -852,3 +852,21 @@ a component that re-reads a secret per message turns any mid-session read failur
 outage while its status still says "connected" — keep what you joined with; and a dialog that edits
 a stored object must not offer Save until *that object* has loaded — `Promise.all` let a failing
 calendar list leave the dialog on its placeholder, and Save wiped the saved selections.
+
+## 2026-09-29 — A focus ring needs room, and a hidden E2E window never finishes a Framer animation
+
+**Learning:** Three traps from making every Mission Control Settings field show keyboard focus
+(`.mc-field` in `mc.css`). (1) An inline `outline` beats any stylesheet rule, `:focus-visible`
+included, so it has to be removed, not overridden. (2) A ring drawn outside the field (2px offset +
+2px width) is cut by any `overflow: hidden` ancestor sitting flush with it: the cream-task section in
+`MCSettingsOverlay.tsx` kept `overflow: hidden` after its height animation, and the Schedule select
+lost the ring's left and right sides. jsdom and a computed-style check both said "solid violet". Only
+a real screenshot showed the cut. (3) An `E2E_HEADLESS=1` window (`show: false`) never advances a
+Framer Motion animation, even with `setBackgroundThrottling(false)`. Every animated element stays at
+its `initial` values (opacity 0, height 0), and Playwright still clicks and focuses it. Screenshots
+force a frame, which is why headless shots can look "open". Also: a regex CSS reader that splits on
+`{}` takes the `/* */` comment right above a rule into its selector text. Strip comments first.
+**Action:** Clip only while a height animates (`transitionEnd: { overflow: 'visible' }`). Check that
+a ring has room with the `clippedBy` helper in `e2e/mc-settings.spec.ts`, not only the computed
+outline. Any E2E assertion on post-animation state runs only with `E2E_HEADED=1`, and its red run
+must be headed too: headless, it fails with or without the fix.
