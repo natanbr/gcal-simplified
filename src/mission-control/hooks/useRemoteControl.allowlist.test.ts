@@ -199,12 +199,14 @@ describe('remote action allowlist', () => {
         // The companion remote app lives in a separate repo (mc-remote). If a
         // button is added there and not here, the button silently does nothing.
         // This is the list of action types that repo dispatches, captured
-        // 2026-08-19. Update BOTH sides together.
+        // 2026-08-19 and re-captured 2026-09-28 from mc-remote 7372b89 (its
+        // shield −1 / +1 buttons). Update BOTH sides together.
         const TYPES_SENT_BY_REMOTE_APP = [
             'ADD_RESPONSIBILITY_POINT',
             'ADD_TOKENS',
             'ADJUST_BEHAVIOR_PROGRESS',
             'ADJUST_MISSION_END',
+            'ADJUST_SHIELD',
             'CANCEL_MISSION',
             'CHEAT_ATTEMPT',
             'COMPLETE_TASK',
@@ -281,11 +283,9 @@ describe('remote action allowlist', () => {
                 t => !TYPES_SENT_BY_REMOTE_APP.includes(t) &&
                     // Deliberate: mission completion/reset variants the remote
                     // reaches indirectly through COMPLETE_TASK flows.
-                    // ADJUST_SHIELD is the host running AHEAD of the app on
-                    // purpose — the +/- shield buttons are specified in
-                    // docs/requirements.md and wired here, but mc-remote has not
-                    // shipped them yet. Remove this exemption once it does.
-                    !['ADD_TOKEN', 'ADJUST_SHIELD', 'COMPLETE_MISSION_ROUTINE', 'RESET_MISSION_WITH_TIMER'].includes(t)
+                    // ADD_TOKEN: no phone button sends it (the phone's +1 sends
+                    // ADD_TOKENS); exempt since the first capture, reason unrecorded.
+                    !['ADD_TOKEN', 'COMPLETE_MISSION_ROUTINE', 'RESET_MISSION_WITH_TIMER'].includes(t)
             );
             expect(extras, `allowlist entries with no corresponding remote button: ${extras.join(', ')}`).toEqual([]);
         });

@@ -155,7 +155,7 @@ least one item; the Space Rescue row lists every item that guards the drop rule.
 | G2 upgrade loses state | 3.12.7 |
 | G3 a second instance boots | 3.2.3; 3.2.2 too when `electron/main.ts` or `electron/single-instance.ts` changed since `$T` |
 | G4 mission at the wrong time or twice | 3.5.7, 3.5.12, 3.12.8 |
-| G5 shield lock traps the parent | 3.6.4, 3.11.6 |
+| G5 shield lock traps the parent | 3.6.4, 3.11.6, 3.11.7 |
 | G6 idle CPU or memory | 3.4.1 with 3.4.4 |
 | G7 install, launch, auto-update | 3.1.1, 3.1.2, 3.1.3; 3.1.6 right after publishing |
 | G8 crash or blank screen | 3.1.3, 3.3.14 |
@@ -165,7 +165,7 @@ least one item; the Space Rescue row lists every item that guards the drop rule.
 | G12 phone connection or remote control | 3.11.1, 3.11.2, 3.11.5 |
 | G13 remote allowlist | 3.11.6 |
 
-That is 28 items (29 with 3.2.2). A must-do item that cannot be run (no spare device, no touchscreen)
+That is 29 items (30 with 3.2.2). A must-do item that cannot be run (no spare device, no touchscreen)
 needs a reason in the run log and Nathan's explicit OK before a GO.
 An item that fails only on its listed known bug is judged by that bug: it blocks when the bug itself
 breaks a rule (bug 1 breaks G4, and is already shipped: section 5), not otherwise (bug 8 in 3.1.3).
