@@ -1667,17 +1667,28 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   Schedule select and the reward-cost number fields still carried an inline `outline: none`, so
   keyboard focus on them was invisible (an inline outline beats any stylesheet rule). Both inline
   outlines are gone. The class is renamed `mc-time-input` → `mc-field` and every Settings field
-  carries it (time, select, number, the three range sliders, the pairing URL in `RemotePairingPanel.tsx`), so one `mc.css` rule
-  draws the 2 px `--mc-focus-ring` outline on `:focus-visible` for all of them.
+  carries it (time, select, number, the three range sliders, the pairing URL in
+  `RemotePairingPanel.tsx`), so one `mc.css` rule draws the 2 px `--mc-focus-ring` outline on `:focus-visible` for all of them.
 - **Fixed, found while verifying.** The cream-task section kept `overflow: hidden` after its open
   animation, and the Schedule select sits flush in it, so the ring's left and right sides were cut
-  off. The section now clips only while its height animates (Framer `transitionEnd`).
+  off. The section now clips only while its height animates. `overflow` has to be in Framer's
+  `animate` as well as `transitionEnd`: with it only in `initial`, Framer stored the end value but
+  never repainted it, and the section stayed `hidden` in most opens (found in review).
+- **A click shows the ring too.** Chromium matches `:focus-visible` on a click or tap for typing
+  fields and the select, so the time fields, the Schedule select, the reward costs and the pairing
+  URL show the ring after a click as well. Acceptable for a parent-only panel. Range sliders show it
+  only from the keyboard. A `:focus:not(:focus-visible) { outline: none }` rule was removed: it
+  never changed anything in Chromium. The ring falls back to `currentColor` outside the `--mc-*`
+  token scope.
 - E2E: `mc-settings.spec.ts` Tabs onto the Schedule select and a reward cost in real Chromium and
-  checks the computed outline is solid violet (red before the fix: `none`). The no-clipping check on
-  the select runs only with `E2E_HEADED=1`: a hidden E2E window never runs Framer's open animation.
-- Tests: `MCSettingsOverlay.focus-ring.test.tsx` opens every tab that has fields, with the cream task
-  and a v2 pairing (a fake `settings:get`) so the conditional fields render, and fails on any field
-  without `mc-field` or with an inline outline (red before the fix: 14 fields). It also reads the rule from `mc.css`, since
-  jsdom does not match `:focus-visible`.
+  checks the computed outline is solid violet (red before the fix: `none`), that no ancestor clips
+  the select's ring (red before the `animate` fix: `DIV overflow hidden`), and that a click on a
+  reward cost shows the ring.
+- Tests: `MCSettingsOverlay.focus-ring.test.tsx` walks every sidebar tab, with the cream task and a v2
+  pairing (a fake `settings:get`) so the conditional fields render, and fails on any field without
+  `mc-field` or with any inline `outline*` property (red before the fix: 14 fields). It reads the
+  ring rule from `mc.css`, since jsdom does not match `:focus-visible`. With the real Framer Motion,
+  it checks the cream section is `overflow: visible` 1 s after opening, from the toggle and on
+  re-entering the tab (both red before the `animate` fix).
 - Open: the invalid-time border uses `--mc-red` (#ff7b7b), about 2.3:1 on the panel, under the 3:1
   WCAG 1.4.11 asks for a non-text indicator. A darker token is proposed, not applied.

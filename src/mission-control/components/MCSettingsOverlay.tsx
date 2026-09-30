@@ -440,9 +440,9 @@ export function MCSettingsOverlay({ open, onClose }: MCSettingsOverlayProps) {
                                             <AnimatePresence>
                                                 {draft.creamTaskEnabled && (
                                                     <motion.div
-                                                        // Clip only while the height animates: a lasting clip cut the sides off the select's focus ring.
+                                                        // Clip only while the height animates (a lasting clip cut the select's focus ring); `overflow` in `animate` too, or Framer never repaints transitionEnd.
                                                         initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                                                        animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
+                                                        animate={{ opacity: 1, height: 'auto', overflow: 'hidden', transitionEnd: { overflow: 'visible' } }}
                                                         exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
                                                     >
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 4 }}>

@@ -124,9 +124,8 @@ test.describe('Mission Control — Settings Overlay', () => {
         const schedule = page.locator('select.mc-field');
         await expect(schedule).toBeFocused();
         expect(await ring(schedule)).toBe(VIOLET);
-        // The section clips while its open animation runs, by design, and a
-        // hidden E2E window never runs that animation, so this needs E2E_HEADED=1.
-        if (process.env.E2E_HEADED === '1') await expect.poll(() => clippedBy(schedule)).toEqual([]);
+        // Polled: the section clips while its open animation runs, by design.
+        await expect.poll(() => clippedBy(schedule)).toEqual([]);
         await shot('schedule-select-focus', schedule);
 
         // Reward cost: Tab from the first row (its cost field, then its toggle) to the second cost.
@@ -138,5 +137,9 @@ test.describe('Mission Control — Settings Overlay', () => {
         expect(await ring(costs.nth(1))).toBe(VIOLET);
         expect(await clippedBy(costs.nth(1))).toEqual([]);
         await shot('reward-cost-focus', costs.nth(1));
+
+        // A typing field matches :focus-visible on a click too, so a click also draws the ring.
+        await costs.nth(2).click();
+        expect(await ring(costs.nth(2))).toBe(VIOLET);
     });
 });

@@ -428,11 +428,11 @@
 
 /* Every Settings field (time, select, number, range, text). An inline style
    cannot say :focus-visible, so the ring lives here (and a field must carry no
-   inline outline, which would win). Guarded by MCSettingsOverlay.focus-ring.test.tsx. */
-.mc-field:focus:not(:focus-visible) {
-  outline: none;
-}
+   inline outline, which would win). Chromium matches :focus-visible on a click
+   or tap too for the typing fields and the select, so those show the ring then
+   as well. The fallback keeps a ring outside the --mc-* token scope.
+   Guarded by MCSettingsOverlay.focus-ring.test.tsx. */
 .mc-field:focus-visible {
-  outline: 2px solid var(--mc-focus-ring);
+  outline: 2px solid var(--mc-focus-ring, currentColor);
   outline-offset: 2px;
 }
