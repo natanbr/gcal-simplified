@@ -853,20 +853,25 @@ outage while its status still says "connected" — keep what you joined with; an
 a stored object must not offer Save until *that object* has loaded — `Promise.all` let a failing
 calendar list leave the dialog on its placeholder, and Save wiped the saved selections.
 
-## 2026-09-29 — A focus ring needs room, and a hidden E2E window never finishes a Framer animation
+## 2026-09-29 — A focus ring needs room, and Framer repaints only the values it animates
 
-**Learning:** Three traps from making every Mission Control Settings field show keyboard focus
-(`.mc-field` in `mc.css`). (1) An inline `outline` beats any stylesheet rule, `:focus-visible`
-included, so it has to be removed, not overridden. (2) A ring drawn outside the field (2px offset +
-2px width) is cut by any `overflow: hidden` ancestor sitting flush with it: the cream-task section in
-`MCSettingsOverlay.tsx` kept `overflow: hidden` after its height animation, and the Schedule select
-lost the ring's left and right sides. jsdom and a computed-style check both said "solid violet". Only
-a real screenshot showed the cut. (3) An `E2E_HEADLESS=1` window (`show: false`) never advances a
-Framer Motion animation, even with `setBackgroundThrottling(false)`. Every animated element stays at
-its `initial` values (opacity 0, height 0), and Playwright still clicks and focuses it. Screenshots
-force a frame, which is why headless shots can look "open". Also: a regex CSS reader that splits on
-`{}` takes the `/* */` comment right above a rule into its selector text. Strip comments first.
-**Action:** Clip only while a height animates (`transitionEnd: { overflow: 'visible' }`). Check that
-a ring has room with the `clippedBy` helper in `e2e/mc-settings.spec.ts`, not only the computed
-outline. Any E2E assertion on post-animation state runs only with `E2E_HEADED=1`, and its red run
-must be headed too: headless, it fails with or without the fix.
+**Learning:** Traps from making every Mission Control Settings field show keyboard focus (`.mc-field`
+in `mc.css`). (1) An inline `outline` (or any `outline*` property) beats any stylesheet rule,
+`:focus-visible` included, so it has to be removed, not overridden. (2) A ring drawn outside the
+field (2px offset + 2px width) is cut by an `overflow: hidden` ancestor sitting flush with it: the
+cream-task section in `MCSettingsOverlay.tsx` kept `overflow: hidden` after its height animation.
+jsdom and a computed-style check both said "solid violet"; only a screenshot showed the cut.
+(3) Framer Motion 12 repaints only values it animates: with `overflow` in `initial` and
+`transitionEnd` but not in `animate`, the end value was stored and never painted, so the section
+stayed `hidden` in most opens. I first blamed the hidden E2E window ("headless never runs Framer
+animations"). That was wrong: the Cancel/Save specs pass only because exit animations finish
+headless, and the fixed build passes the clip check headless. A stale inline style misled me.
+(4) Chromium matches `:focus-visible` on a click for typing fields and `<select>`, and its own ring
+is drawn only on `:focus-visible`, so `:focus:not(:focus-visible) { outline: none }` does nothing.
+(5) A regex CSS reader that splits on `{}` takes the `/* */` comment above a rule into its selector.
+**Action:** For a value set at the end of a Framer animation, put it in `animate` too
+(`animate={{ ..., overflow: 'hidden', transitionEnd: { overflow: 'visible' } }}`), and test it
+with the real framer-motion in jsdom (no Proxy mock): read the element's style ~1 s after opening.
+Check a ring has room with the `clippedBy` helper in `e2e/mc-settings.spec.ts`, not only the
+computed outline. Post-animation E2E checks run in the default headless run; when one fails only
+there, suspect the code before the window.
