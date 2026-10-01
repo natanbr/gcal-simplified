@@ -1,4 +1,4 @@
-import { shell, safeStorage } from 'electron';
+import { app, shell, safeStorage } from 'electron';
 import { google } from 'googleapis';
 import Store from 'electron-store';
 import http from 'http';
@@ -18,9 +18,17 @@ const SCOPES = [
     'https://www.googleapis.com/auth/tasks.readonly'
 ];
 
+/** A stored blob is a sign-in only with a token in it: a parsed `42`, `null` or `{}` is not. */
+function hasToken(value: unknown): value is Credentials {
+    if (typeof value !== 'object' || value === null) return false;
+    return ('access_token' in value && typeof value.access_token === 'string' && value.access_token !== '')
+        || ('refresh_token' in value && typeof value.refresh_token === 'string' && value.refresh_token !== '');
+}
+
 export class AuthService {
     private oauth2Client: OAuth2Client;
     private isAuthInProgress: boolean = false;
+    private credentialsLoaded = false;
 
     constructor() {
         // These will be loaded from env vars or a separate config file
@@ -30,19 +38,38 @@ export class AuthService {
             process.env.GOOGLE_CLIENT_SECRET
         );
 
-        // Load saved tokens
-        const tokens = this.loadTokens();
-        if (tokens) {
-            this.oauth2Client.setCredentials(tokens);
-        }
-
         // google-auth-library refreshes the access token in memory and never
-        // tells the store about it. Without this listener the persisted blob
-        // slowly goes stale, and a rotated refresh_token is lost on the next
-        // restart — which shows up as "I have to sign in again every few days".
+        // tells the store about it. This listener persists every refresh, so the
+        // stored blob stays current and a rotated refresh_token survives a
+        // restart. (It was once credited with the "sign in again every few days"
+        // symptom; the more likely cause was the credentials never loading on a
+        // relaunch, fixed 2026-10-01: see ensureCredentialsLoaded.)
         this.oauth2Client.on('tokens', (refreshed) => {
             this.saveTokens(refreshed);
         });
+    }
+
+    /**
+     * Loads the stored credentials into the client, once, on first use.
+     *
+     * Never in the constructor: the singleton is built when main.js is imported,
+     * before Electron's `app` is ready, and safeStorage cannot decrypt then (on
+     * Windows isEncryptionAvailable() is false and decryptString throws). Loading
+     * there started every relaunch with an empty client while isAuthenticated()
+     * said "signed in": an empty week with no error. Before ready this throws,
+     * because answering "signed out" would be a lie.
+     *
+     * Sign-in, the tokens listener and sign-out write the client and the store
+     * together, so a first load that runs after one of them reads what it wrote.
+     */
+    private ensureCredentialsLoaded(): void {
+        if (this.credentialsLoaded) return;
+        if (!app.isReady()) {
+            throw new Error('Google credentials were requested before the app is ready; safeStorage cannot decrypt them yet.');
+        }
+        this.credentialsLoaded = true;
+        const tokens = this.loadTokens();
+        if (tokens) this.oauth2Client.setCredentials(tokens);
     }
 
     /**
@@ -90,27 +117,29 @@ export class AuthService {
         if (isEncrypted && typeof stored === 'string' && safeStorage.isEncryptionAvailable()) {
             try {
                 const buffer = Buffer.from(stored, 'base64');
-                const decrypted = safeStorage.decryptString(buffer);
-                return JSON.parse(decrypted);
+                const parsed: unknown = JSON.parse(safeStorage.decryptString(buffer));
+                return hasToken(parsed) ? parsed : null;
             } catch (e) {
                 console.error('Failed to decrypt tokens', e);
                 return null;
             }
         } else if (typeof stored === 'object') {
             // Unencrypted object (legacy or fallback)
-            return stored as Credentials;
+            return hasToken(stored) ? stored : null;
         }
 
         return null;
     }
 
     getAuthClient() {
+        this.ensureCredentialsLoaded();
         return this.oauth2Client;
     }
 
+    /** Answers from the client's own credentials, so it never says "signed in" while the client holds none. */
     isAuthenticated() {
-        const tokens = this.loadTokens();
-        return !!tokens;
+        this.ensureCredentialsLoaded();
+        return hasToken(this.oauth2Client.credentials);
     }
 
     async startAuth(): Promise<void> {
