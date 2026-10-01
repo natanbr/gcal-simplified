@@ -172,3 +172,19 @@ held until the other side answers; a main-process log line reaches nobody in a p
 fall back to the credential being retired. The first "keep the current pairing if the write fails"
 kept the leaked v1 key working for as long as config.json stayed locked; it now stays offline and
 retries (5 s doubling to 5 min), never on the retired pairing.
+
+## 2026-10-01 — The Google tokens never loaded on a relaunch (a fourth "sign in again" cause)
+
+**Learning:** `export const authService = new AuthService()` runs when `main.js` is imported, before
+Electron's `app` is ready, and the constructor loaded the tokens. On Windows `safeStorage` is
+unusable before ready (`isEncryptionAvailable()` false, `decryptString` throws), so the load found
+nothing and the OAuth client started every relaunch empty, since v0.0.10. `isAuthenticated()` re-read
+the store later and said "signed in", so the login screen was skipped and every Google call failed
+quietly: an empty week. Two readers of one credential gave two answers. The 2026-08-19 entry
+explains "sign in again every few days" with three code causes; this was probably the bigger one.
+The old unit tests' `safeStorage` fake had no "before ready" state, so none of them could see it.
+**Action:** the readers load once on first use and throw before ready; `isAuthenticated()` answers
+from the client's own credentials (`electron/auth.ts`, `ensureCredentialsLoaded`). Pattern: a
+module-level singleton must not touch a ready-only Electron API (`safeStorage`, `screen`, sessions)
+in its constructor. A fake for such an API must behave like the real one before ready, or the test
+proves nothing. Guard: `electron/auth_app_ready.test.ts`.

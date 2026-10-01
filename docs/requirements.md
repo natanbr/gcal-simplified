@@ -95,6 +95,9 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **Google Login**:
   - Custom Login Screen with "Sign in with Google" button.
   - Uses Electron IPC (`auth:login`) to handle OAuth flow.
+  - Stays signed in across relaunches: the saved (encrypted) tokens are loaded once the app is
+    ready, and "signed in?" answers from the same credentials the Google calls use. Saved tokens
+    that cannot be read show the Sign in screen, never an empty week.
 - **Settings**:
   - **Active Hours**: Configurable Start and End times (0-23h).
   - **Calendars**: Toggle visibility of specific Google Calendars.
@@ -1692,3 +1695,38 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   re-entering the tab (both red before the `animate` fix).
 - Open: the invalid-time border uses `--mc-red` (#ff7b7b), about 2.3:1 on the panel, under the 3:1
   WCAG 1.4.11 asks for a non-text indicator. A darker token is proposed, not applied.
+
+### 2026-10-01 A relaunch stays signed in to Google
+
+- **Bug** (found by release QA, 2026-10-01; present since v0.0.10). After every relaunch the
+  calendar showed an empty week with no error: no events, no tasks, no calendar colours, and the
+  School Bag task could not read the school calendar. The login screen was skipped, because the
+  "signed in?" check found the saved tokens, but the Google connection itself had none: every
+  Google call failed in the main process with "No access, refresh token, API key or refresh
+  handler callback is set". Signing out and in again worked until the next relaunch. This is
+  probably the real cause of the household symptom "the calendar needs a new sign-in every few
+  days" (the 2026-08-19 token fixes did not cover it).
+- **Cause.** `electron/auth.ts` loaded the saved tokens while `main.js` was being imported, before
+  Electron is ready. On Windows the encrypted token store (`safeStorage`) cannot decrypt before
+  ready, so that load found nothing. The "signed in?" check read the store again later, after
+  ready, and succeeded: two answers from two reads.
+- **Now.** The saved tokens are loaded once, on the first Google call or "signed in?" check, which
+  always comes after the app is ready. "Signed in?" answers from the same credentials the Google
+  calls use, so the two cannot disagree: saved tokens that cannot be decrypted, are not JSON, or
+  hold no access or refresh token show "Sign in with Google" instead of an empty week. A check
+  that came before the app is ready would fail with an error instead of answering "signed out".
+  Sign-in, the token refresh (it still keeps the saved refresh token) and sign-out work as before.
+- Tests: `electron/auth_app_ready.test.ts` fakes Electron's Windows `safeStorage` (unusable before
+  ready) and uses the real Google OAuth client: importing `auth.ts` touches no `safeStorage`
+  method, a relaunch with saved tokens (fresh or expired access token) reaches Google, the
+  negative and before-ready cases, sign-in, refresh and sign-out. 8 of 15 were red before the
+  fix, with the production error among them. Registered in `rule-registry.test.ts`.
+- Built app, on a copy of the QA profile (signed in with a test account). The pre-fix build
+  reproduced it: "signed in", 0 events, the strict read and the calendar list failed, and the
+  main process logged the error. The fixed build, relaunched three times: no error logged, the
+  calendar list and a strict one-year read (11 events) answered every time, and the expired access
+  token was refreshed with the store still encrypted.
+- Not changed: `saveTokens` still writes the tokens unencrypted when `safeStorage` reports no
+  encryption (Linux without a keyring) or when encrypting throws. On Windows the first happens
+  only before ready, and nothing can save before ready now: sign-in arrives over IPC, and a refresh
+  needs credentials, which now exist only after ready.
