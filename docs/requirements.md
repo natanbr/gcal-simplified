@@ -1715,12 +1715,14 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   calls use, so the two cannot disagree: saved tokens that cannot be decrypted, are not JSON, or
   hold no access or refresh token show "Sign in with Google" instead of an empty week. A check
   that came before the app is ready would fail with an error instead of answering "signed out".
+  A read of the token file that fails (held by another program) is tried again by the next call.
   Sign-in, the token refresh (it still keeps the saved refresh token) and sign-out work as before.
 - Tests: `electron/auth_app_ready.test.ts` fakes Electron's Windows `safeStorage` (unusable before
   ready) and uses the real Google OAuth client: importing `auth.ts` touches no `safeStorage`
   method, a relaunch with saved tokens (fresh or expired access token) reaches Google, the
   negative and before-ready cases, sign-in, refresh and sign-out. 8 of 15 were red before the
-  fix, with the production error among them. Registered in `rule-registry.test.ts`.
+  fix, with the production error among them; a 16th case (a failed read is retried) was red
+  against the first version of the fix. Registered in `rule-registry.test.ts`.
 - Built app, on a copy of the QA profile (signed in with a test account). The pre-fix build
   reproduced it: "signed in", 0 events, the strict read and the calendar list failed, and the
   main process logged the error. The fixed build, relaunched three times: no error logged, the

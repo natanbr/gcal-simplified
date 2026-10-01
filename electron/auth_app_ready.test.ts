@@ -41,6 +41,8 @@ const fake = vi.hoisted(() => {
                 return text.slice('enc:'.length);
             }),
         },
+        /** When set, the next store read throws it (a file held by antivirus or a backup). */
+        storeReadError: { next: null as Error | null },
         openExternal: vi.fn(),
         /** Google's token endpoint (code exchange and refresh). */
         tokenEndpoint: vi.fn<typeof fetch>(),
@@ -55,7 +57,12 @@ vi.mock('electron', () => ({
 
 vi.mock('electron-store', () => ({
     default: class FakeStore {
-        get = (key: string) => fake.storeData.get(key);
+        get = (key: string) => {
+            const error = fake.storeReadError.next;
+            fake.storeReadError.next = null;
+            if (error) throw error;
+            return fake.storeData.get(key);
+        };
         set = (key: string, value: unknown) => { fake.storeData.set(key, value); };
         delete = (key: string) => { fake.storeData.delete(key); };
     },
@@ -129,6 +136,7 @@ async function authorization(authService: Awaited<ReturnType<typeof relaunch>>):
 describe('Google credentials and the app-ready lifecycle', () => {
     beforeEach(() => {
         fake.storeData.clear();
+        fake.storeReadError.next = null;
         fake.app.ready = false;
         vi.clearAllMocks();
         fake.tokenEndpoint.mockRejectedValue(new Error('this test expected no call to Google'));
@@ -218,6 +226,17 @@ describe('Google credentials and the app-ready lifecycle', () => {
 
         appReady();
         expect(authService.isAuthenticated()).toBe(true);
+    });
+
+    it('a store read that throws is retried by the next call, not remembered as "signed out"', async () => {
+        storeEncrypted(JSON.stringify(stored()));
+        const authService = await relaunch();
+        appReady();
+        fake.storeReadError.next = Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+
+        expect(() => authService.isAuthenticated()).toThrow('EBUSY');
+        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authorization(authService)).toBe('Bearer stored-access');
     });
 
     it.each([

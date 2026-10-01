@@ -67,8 +67,11 @@ export class AuthService {
         if (!app.isReady()) {
             throw new Error('Google credentials were requested before the app is ready; safeStorage cannot decrypt them yet.');
         }
-        this.credentialsLoaded = true;
         const tokens = this.loadTokens();
+        // Set only once the read returned: a store read that throws (the file
+        // held by antivirus or a backup) is retried by the next call instead of
+        // answering "signed out" until a restart.
+        this.credentialsLoaded = true;
         if (tokens) this.oauth2Client.setCredentials(tokens);
     }
 
