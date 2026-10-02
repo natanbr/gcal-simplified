@@ -142,7 +142,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     - **Space Rescue Game Rules**:
       - **8x8 Space Grid**: Renders an 8x8 debris-clearing canvas with 10 handcrafted initial layouts. Cleared horizontal rows or vertical columns clear debris, scoring points and filling a Rocket Flight Path meter.
       - **Line clears resolve exactly once**: a completed row or column explodes for 1.2s, then empties, and its satellite/electricity effects and the level's obstacles are applied once. A line scores once: a drop during the explosion that completes nothing new neither re-scores the exploding line nor delays it. A line completed while another is still exploding joins it: both empty together 1.2s after the later drop, and the feedback card stays up until then. The game is never declared over mid-explosion — those cells are about to be free. Starting a new game (which reopening Space Rescue does) cancels a pending clear. A drop in the same frame as a clear is judged against the cleared board.
-      - **Proactive Shapes Generator**: Under the board, 3 active shapes are dealt as one coherent hand rather than three independent draws, so the child is given a set that can actually be played out. Every dealt shape is guaranteed to have a valid placement **in the exact orientation it is dealt, at the moment it is dealt**. When the bank (or the rescue slot) is emptied while a line is exploding — by the drop that completed it, or by a later drop during the explosion — the emptied slots stay empty and are dealt when the clear resolves, after its obstacles have landed, so the new hand fits the board the child is actually left with. The rescue slot's Refresh is unavailable while the slot waits, so it cannot deal ahead of that. What the promise does not cover: shapes already in the bank before a clear resolves can still lose their space to the obstacles it adds (the level's asteroids and satellite, and the two asteroids a cleared electricity cell throws). The deal runs in four steps:
+      - **Proactive Shapes Generator**: In the tray (under the board, or beside it in two rows on a screen shorter than 880 px, see 2026-10-02), 3 active shapes are dealt as one coherent hand rather than three independent draws, so the child is given a set that can actually be played out. Every dealt shape is guaranteed to have a valid placement **in the exact orientation it is dealt, at the moment it is dealt**. When the bank (or the rescue slot) is emptied while a line is exploding — by the drop that completed it, or by a later drop during the explosion — the emptied slots stay empty and are dealt when the clear resolves, after its obstacles have landed, so the new hand fits the board the child is actually left with. The rescue slot's Refresh is unavailable while the slot waits, so it cannot deal ahead of that. What the promise does not cover: shapes already in the bank before a clear resolves can still lose their space to the obstacles it adds (the level's asteroids and satellite, and the two asteroids a cleared electricity cell throws). The deal runs in four steps:
         1. **Line-finisher**: with probability `X` the first shape is one that can complete a row or column. If the board is too empty for any shape to complete a line, this step is skipped rather than forced.
         2. **Look-ahead**: if that shape can finish a line, the board is forecast forward as if the child plays it at its most profitable anchor and the line drains away. The remaining two shapes are judged against that forecast.
         3. **Co-placement**: with probability `Y` the other two shapes are chosen so that *both* can be placed in the same round (in either order). If the board is too tight for any such pair, the deal falls back to shapes that finish a line — buying the space back — and then to two independent picks.
@@ -1739,3 +1739,36 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   token comes from the Google client, not from re-reading the file. A failed save can no longer
   discard a token Google just granted, or turn a successful sign-in into "Authentication failed".
   Sign-out clears the Google client before the file. Tests: `electron/auth_token_lifecycle.test.ts`.
+
+### 2026-10-02 Mission Control and Space Rescue fit the child's screen (1080p at 150 %)
+
+- **Bug** (found by release QA 3.13.1, 2026-10-01; already in v0.0.42). The child plays fullscreen
+  on a 1920x1080 touchscreen at 150 % Windows scaling, which the app sees as 1280x720 CSS px. There:
+  - Space Rescue showed only the top 13–41 % of each tray shape. The game panel is one screen tall
+    and clips what does not fit; the board (432 px) stacked over the tray (227 px) needs a screen
+    about 870 px tall. The child was grabbing shapes he could barely see.
+  - The main view cut the Privileges card (72 % visible) and Phone Games was below the screen
+    edge: the five cards need 335 px and column 3 is 323 px wide at 1280, so Phone Games wrapped
+    to a second row, and column 3 needed 107 px more height than it had.
+- **Space Rescue now.** On a screen shorter than 880 px the tray moves beside the board, in two rows
+  (two shapes on top, one centred below), between the board and the rescue slot. The board keeps
+  48 px cells and the tray 36 px cells; nothing is shrunk. At 880 px and taller (1920x1080 at
+  100 %, 1706x960) the layout is unchanged: the tray stays under the board.
+- **Main view now.** The five privilege cards stay on one row and narrow slightly when the column
+  is narrow (56 → 54 px wide at 1280). Column 3 (Recycling, Activity, Mood Gauge, Shield,
+  Privileges) now starts at the top of the screen beside the "🏆 Goals" heading instead of under it.
+  On a screen 800 px tall or less the stage padding, the card padding and the gaps in column 3 are
+  smaller, so the column fits at 720 px with 56 px to spare, and still fits with the shield's
+  "🔒 Bank locked" row showing.
+- Both switches are CSS media queries on the screen height (`mc.css`, "Short screens"): no timer,
+  no resize listener.
+- **Checked in the built app** at 1920x1080 (100 %), 1536x864 (125 %) and 1280x720 (150 %), with a
+  forced device scale factor and a window of that size: every tray shape, the board, every button
+  and both privilege cards fully visible; no page scroll; Settings opens with Save on screen.
+  Space Rescue drops (the release-QA drop spec, emulated touch: corners, edges, off-centre aims,
+  shapes hanging off the board, refused drops, two fingers): 30 of 30 landed on the ghost at each
+  of 100, 125 and 150 % (1280x720), ghost = expected cells 30 of 30, lift error 0 px, ghost cell
+  offset from the board cell 0 px. Before this fix only 10 of 30 drops could start at 1280x720.
+- Tests: `e2e/mc-layout-fit.spec.ts` (isolated profile, one launch per size) measures what the
+  browser laid out and drags a shape with the mouse to check that the ghost cells sit on the board
+  cells (≤ 0.5 px). It failed at 1280x720 before the fix and passes at all three sizes after.

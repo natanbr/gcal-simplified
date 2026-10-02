@@ -875,3 +875,23 @@ with the real framer-motion in jsdom (no Proxy mock): read the element's style ~
 Check a ring has room with the `clippedBy` helper in `e2e/mc-settings.spec.ts`, not only the
 computed outline. Post-animation E2E checks run in the default headless run; when one fails only
 there, suspect the code before the window.
+
+## 2026-10-02 — A screen-sized panel that clips hides a layout bug from every jsdom test
+
+**Learning:** Space Rescue's panel is `calc(100vh - 16px)` with `overflow: hidden`, and `.mc-root`
+is `100vh` with `overflow: hidden`. Neither ever scrolls, so content that does not fit is simply
+cut, silently. On the child's real screen (1920x1080 at 150 % = 1280x720 CSS px) the tray showed
+13–41 % of each shape and Phone Games was off screen, since at least v0.0.42, with every unit test
+green: jsdom has no layout. Two traps found while fixing it. (1) The privilege row was
+`flexWrap: 'wrap'`, so a width problem (5 cards need 335 px, the column had 323) became a height
+problem in another place. (2) The E2E window is never shown, and a hidden Electron window draws
+about **2 frames a second** whatever you pass (`setBackgroundThrottling(false)`,
+`--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`: all 2 fps, measured).
+Every Playwright actionability wait and every `mouse.move` step waits for a frame, so a spec with
+five clicks and a 12-step drag took 47–60 s per test and timed out.
+**Action:** Check a fit at the real target sizes in the built app: `--force-device-scale-factor`
+plus `setContentSize`, and a "visible fraction" clipped by the viewport and every non-`visible`
+overflow ancestor (`e2e/mc-layout-fit.spec.ts`). Switch layouts with a CSS media query on the
+height (`mc.css`, "Short screens"), not a resize listener. In a hidden-window spec whose subject is
+layout, `dispatchEvent('click')` and use few pointer steps; wait for an animation to settle by
+comparing `getBoundingClientRect().width` with `offsetWidth`, not with a guessed threshold.

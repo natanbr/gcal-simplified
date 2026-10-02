@@ -66,7 +66,7 @@ export function PrivilegeCardButton({ p, interactive = false }: PrivCardProps) {
     };
 
     return (
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flex: '0 1 56px', minWidth: 0 }}>
             {/* The card */}
             <motion.button
                 ref={cardRef}
@@ -76,7 +76,7 @@ export function PrivilegeCardButton({ p, interactive = false }: PrivCardProps) {
                 disabled={!interactive}
                 title={p.label}
                 style={{
-                    width: 56, height: 58,
+                    width: '100%', height: 58,
                     display: 'flex', flexDirection: 'column',
                     alignItems: 'center', justifyContent: 'center',
                     gap: isSuspended && !interactive ? 1 : 2,

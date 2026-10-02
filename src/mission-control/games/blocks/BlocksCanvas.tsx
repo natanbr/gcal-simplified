@@ -111,10 +111,11 @@ export function BlocksCanvas({
     }
 
     return (
-        <div style={{ display: 'flex', gap: 28, alignItems: 'stretch', width: '100%', height: '100%', justifyContent: 'center', position: 'relative' }}>
+        <div className="mc-blocks-stage" style={{ display: 'flex', alignItems: 'stretch', width: '100%', height: '100%', justifyContent: 'center', position: 'relative' }}>
             <Altimeter altitude={gameState.altitude} />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', position: 'relative' }}>
+            {/* Layout in mc.css: the tray goes beside the board on a short screen. */}
+            <div className="mc-blocks-board-col">
                 {import.meta.env.DEV && (
                     <PerformanceHUD
                         perfRef={dragPerfRef}

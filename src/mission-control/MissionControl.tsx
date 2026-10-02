@@ -174,7 +174,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           flex: 1,
           display: 'flex',
           gap: 14,
-          padding: '14px 18px',
+          padding: 'var(--mc-stage-pad-y) 18px',
           overflow: 'hidden',
           alignItems: 'stretch',
         }}
@@ -188,51 +188,55 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
         />
 
         {/* ── CENTER: Goal Pedestals + Responsibilities ── */}
-        <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-          <span style={{
-            fontSize: 11, fontWeight: 900, letterSpacing: '0.08em',
-            color: 'var(--mc-text)', textTransform: 'uppercase',
-          }}>
-            🏆 Goals
-          </span>
-          <div style={{ display: 'flex', gap: 10, flex: 1, minHeight: 0 }}>
-            {/* Column 1: cases 0 & 1 */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-              {state.cases.slice(0, 2).map(c => (
-                <GoalPedestal
-                  key={c.id}
-                  case_={c}
-                  cases={state.cases}
-                  bankCount={state.bankCount}
-                  innerRef={el => { pedestalRefs.current[c.id] = el; }}
-                  layoutRects={layoutRects.current}
-                  onQuickGameOpen={handleQuickGameOpen}
-                />
-              ))}
+        <div style={{ flex: 2, display: 'flex', gap: 10, minWidth: 0 }}>
+          {/* The "Goals" label heads columns 1-2 only: column 3 is not goals, and
+              at 1280x720 it needs the height of the label's row. */}
+          <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+            <span style={{
+              fontSize: 11, fontWeight: 900, letterSpacing: '0.08em',
+              color: 'var(--mc-text)', textTransform: 'uppercase',
+            }}>
+              🏆 Goals
+            </span>
+            <div style={{ display: 'flex', gap: 10, flex: 1, minHeight: 0 }}>
+              {/* Column 1: cases 0 & 1 */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+                {state.cases.slice(0, 2).map(c => (
+                  <GoalPedestal
+                    key={c.id}
+                    case_={c}
+                    cases={state.cases}
+                    bankCount={state.bankCount}
+                    innerRef={el => { pedestalRefs.current[c.id] = el; }}
+                    layoutRects={layoutRects.current}
+                    onQuickGameOpen={handleQuickGameOpen}
+                  />
+                ))}
+              </div>
+              {/* Column 2: cases 2 & 3 */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+                {state.cases.slice(2, 4).map(c => (
+                  <GoalPedestal
+                    key={c.id}
+                    case_={c}
+                    cases={state.cases}
+                    bankCount={state.bankCount}
+                    innerRef={el => { pedestalRefs.current[c.id] = el; }}
+                    layoutRects={layoutRects.current}
+                    onQuickGameOpen={handleQuickGameOpen}
+                  />
+                ))}
+              </div>
             </div>
-            {/* Column 2: cases 2 & 3 */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-              {state.cases.slice(2, 4).map(c => (
-                <GoalPedestal
-                  key={c.id}
-                  case_={c}
-                  cases={state.cases}
-                  bankCount={state.bankCount}
-                  innerRef={el => { pedestalRefs.current[c.id] = el; }}
-                  layoutRects={layoutRects.current}
-                  onQuickGameOpen={handleQuickGameOpen}
-                />
-              ))}
-            </div>
-            {/* Column 3: Responsibilities */}
-            {/* gap 6, not 8: Column 3 carries four cards and `.mc-root` is
-                overflow:hidden, so at 1366x768 the last card is simply gone. */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-              <ResponsibilityPanel />
-              <GameTokenPanel />
-              <ShieldPanel />
-              <PrivilegesPanel interactive={false} />
-            </div>
+          </div>
+          {/* Column 3: Responsibilities. Four cards, and `.mc-root` is
+              overflow:hidden, so whatever does not fit is simply gone: the gaps
+              and card padding tighten on a short screen (mc.css). */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--mc-col3-gap)', minWidth: 0 }}>
+            <ResponsibilityPanel />
+            <GameTokenPanel />
+            <ShieldPanel />
+            <PrivilegesPanel interactive={false} />
           </div>
         </div>
       </div>
