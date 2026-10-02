@@ -178,7 +178,7 @@ retries (5 s doubling to 5 min), never on the retired pairing.
 **Learning:** `export const authService = new AuthService()` runs when `main.js` is imported, before
 Electron's `app` is ready, and the constructor loaded the tokens. On Windows `safeStorage` is
 unusable before ready (`isEncryptionAvailable()` false, `decryptString` throws), so the load found
-nothing and the OAuth client started every relaunch empty, since v0.0.10. `isAuthenticated()` re-read
+nothing and the OAuth client started every relaunch empty, since v0.0.6 (76c8fb0). `isAuthenticated()` re-read
 the store later and said "signed in", so the login screen was skipped and every Google call failed
 quietly: an empty week. Two readers of one credential gave two answers. The 2026-08-19 entry
 explains "sign in again every few days" with three code causes; this was probably the bigger one.
@@ -187,4 +187,11 @@ The old unit tests' `safeStorage` fake had no "before ready" state, so none of t
 from the client's own credentials (`electron/auth.ts`, `ensureCredentialsLoaded`). Pattern: a
 module-level singleton must not touch a ready-only Electron API (`safeStorage`, `screen`, sessions)
 in its constructor. A fake for such an API must behave like the real one before ready, or the test
-proves nothing. Guard: `electron/auth_app_ready.test.ts`.
+proves nothing. Guards: `electron/auth_app_ready.test.ts` (auth.ts itself) and
+`src/__tests__/auth-ready-boundary.test.ts` (no module-scope `authService.`/`safeStorage.` read in
+`electron/`: a caller there was invisible to every unit test because they all mock `./auth`).
+**Second lesson (PR 186 review):** fixing a path that never ran makes its old edge cases live. The
+save in the `'tokens'` listener had been unreachable on a relaunched Windows session; once it ran
+every hour, a failed write fell back to plain text, the kept refresh token came from a store
+re-read that could fail, and a store error thrown inside the library's synchronous emit discarded
+the grant. When a fix revives a code path, review that path as new code.
