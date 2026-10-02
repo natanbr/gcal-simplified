@@ -18,11 +18,21 @@ const SCOPES = [
     'https://www.googleapis.com/auth/tasks.readonly'
 ];
 
-/** A stored blob is a sign-in only with a token in it: a parsed `42`, `null` or `{}` is not. */
-function hasToken(value: unknown): value is Credentials {
+/** google-auth-library's eagerRefreshThresholdMillis: an access token this close to expiry is refreshed, not sent. */
+const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+/**
+ * Whether these credentials can authorize a Google call: a refresh token, or an
+ * access token the client will still send. An expired access token with no
+ * refresh token is not a sign-in (every call fails "No refresh token is set."),
+ * and neither is a parsed `42`, `null` or `{}`.
+ */
+function canAuthorize(value: unknown): value is Credentials {
     if (typeof value !== 'object' || value === null) return false;
-    return ('access_token' in value && typeof value.access_token === 'string' && value.access_token !== '')
-        || ('refresh_token' in value && typeof value.refresh_token === 'string' && value.refresh_token !== '');
+    if ('refresh_token' in value && typeof value.refresh_token === 'string' && value.refresh_token !== '') return true;
+    return 'access_token' in value && typeof value.access_token === 'string' && value.access_token !== ''
+        && 'expiry_date' in value && typeof value.expiry_date === 'number'
+        && value.expiry_date > Date.now() + REFRESH_MARGIN_MS;
 }
 
 export class AuthService {
@@ -125,14 +135,14 @@ export class AuthService {
             try {
                 const buffer = Buffer.from(stored, 'base64');
                 const parsed: unknown = JSON.parse(safeStorage.decryptString(buffer));
-                return hasToken(parsed) ? parsed : null;
+                return canAuthorize(parsed) ? parsed : null;
             } catch (e) {
                 console.error('Failed to decrypt tokens', e);
                 return null;
             }
         } else if (typeof stored === 'object') {
             // Unencrypted object (legacy or fallback)
-            return hasToken(stored) ? stored : null;
+            return canAuthorize(stored) ? stored : null;
         }
 
         return null;
@@ -146,7 +156,7 @@ export class AuthService {
     /** Answers from the client's own credentials, so it never says "signed in" while the client holds none. */
     isAuthenticated() {
         this.ensureCredentialsLoaded();
-        return hasToken(this.oauth2Client.credentials);
+        return canAuthorize(this.oauth2Client.credentials);
     }
 
     async startAuth(): Promise<void> {
