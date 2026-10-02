@@ -62,6 +62,7 @@ export function BlocksGameOverlay({ open, onClose, engine }: BlocksGameOverlayPr
             }}
         >
             <motion.div
+                data-testid="blocks-game-panel"
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.92, opacity: 0 }}
