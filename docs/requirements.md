@@ -1698,7 +1698,7 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
 
 ### 2026-10-01 A relaunch stays signed in to Google
 
-- **Bug** (found by release QA, 2026-10-01; present since v0.0.10). After every relaunch the
+- **Bug** (found by release QA, 2026-10-01; present since v0.0.6, commit 76c8fb0). After every relaunch the
   calendar showed an empty week with no error: no events, no tasks, no calendar colours, and the
   School Bag task could not read the school calendar. The login screen was skipped, because the
   "signed in?" check found the saved tokens, but the Google connection itself had none: every
@@ -1713,22 +1713,29 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
 - **Now.** The saved tokens are loaded once, on the first Google call or "signed in?" check, which
   always comes after the app is ready. "Signed in?" answers from the same credentials the Google
   calls use, so the two cannot disagree: saved tokens that cannot be decrypted, are not JSON, or
-  hold no access or refresh token show "Sign in with Google" instead of an empty week. A check
-  that came before the app is ready would fail with an error instead of answering "signed out".
-  A read of the token file that fails (held by another program) is tried again by the next call.
-  Sign-in, the token refresh (it still keeps the saved refresh token) and sign-out work as before.
+  hold neither a refresh token nor an access token that is still valid for more than 5 minutes
+  show "Sign in with Google" instead of an empty week. A check that came before the app is ready
+  would fail with an error instead of answering "signed out". A read of the token file that fails
+  (held by another program) is tried again by the next call in the main process (the calendar
+  screen does not re-check yet: a follow-up). Sign-in, the token refresh (it still keeps the
+  refresh token) and sign-out work as before.
 - Tests: `electron/auth_app_ready.test.ts` fakes Electron's Windows `safeStorage` (unusable before
   ready) and uses the real Google OAuth client: importing `auth.ts` touches no `safeStorage`
   method, a relaunch with saved tokens (fresh or expired access token) reaches Google, the
-  negative and before-ready cases, sign-in, refresh and sign-out. 8 of 15 were red before the
-  fix, with the production error among them; a 16th case (a failed read is retried) was red
-  against the first version of the fix. Registered in `rule-registry.test.ts`.
+  negative and before-ready cases, sign-in, refresh and sign-out. 9 of its first 16 cases were
+  red before the fix, with the production error among them. `src/__tests__/auth-ready-boundary.test.ts`
+  reads the source: no file under `electron/` may read `authService` or `safeStorage` at module
+  scope (red on a module-scope call added to `main.ts`). Registered in `rule-registry.test.ts`.
 - Built app, on a copy of the QA profile (signed in with a test account). The pre-fix build
   reproduced it: "signed in", 0 events, the strict read and the calendar list failed, and the
   main process logged the error. The fixed build, relaunched three times: no error logged, the
   calendar list and a strict one-year read (11 events) answered every time, and the expired access
   token was refreshed with the store still encrypted.
-- Not changed: `saveTokens` still writes the tokens unencrypted when `safeStorage` reports no
-  encryption (Linux without a keyring) or when encrypting throws. On Windows the first happens
-  only before ready, and nothing can save before ready now: sign-in arrives over IPC, and a refresh
-  needs credentials, which now exist only after ready.
+- **Saving the tokens** (review of PR 186). The save now runs on every hourly token refresh, so
+  its failure paths were fixed too. A write of the token file that fails (antivirus or a backup
+  holding it) leaves the file as it was and the tokens in memory until the next save; it used to
+  fall back to writing them unencrypted. The tokens are written unencrypted only when `safeStorage`
+  reports no encryption (Linux without a keyring) or encrypting itself throws. The kept refresh
+  token comes from the Google client, not from re-reading the file. A failed save can no longer
+  discard a token Google just granted, or turn a successful sign-in into "Authentication failed".
+  Sign-out clears the Google client before the file. Tests: `electron/auth_token_lifecycle.test.ts`.
