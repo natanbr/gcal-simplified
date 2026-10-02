@@ -197,6 +197,15 @@ describe('Google credentials and the app-ready lifecycle', () => {
         expect(await authorization(authService)).toBe('Bearer stored-access');
     });
 
+    it('an access token valid for an hour signs in without a refresh token', async () => {
+        storeEncrypted(JSON.stringify({ access_token: 'stored-access', expiry_date: Date.now() + HOUR }));
+        const authService = await relaunch();
+        appReady();
+
+        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authorization(authService)).toBe('Bearer stored-access');
+    });
+
     it.each([
         ['ciphertext this machine cannot decrypt', () => {
             fake.storeData.set('tokens', Buffer.from('a blob from another machine').toString('base64'));
@@ -210,6 +219,10 @@ describe('Google credentials and the app-ready lifecycle', () => {
             fake.storeData.set('tokens', { scope: 'calendar' });
             fake.storeData.set('isEncrypted', false);
         }],
+        // An access token alone signs in only while the client will still send it.
+        ['an expired access token and no refresh token', () => storeEncrypted(JSON.stringify({ access_token: 'a', expiry_date: Date.now() - HOUR }))],
+        ['an access token inside the library\'s 5-minute refresh margin and no refresh token', () => storeEncrypted(JSON.stringify({ access_token: 'a', expiry_date: Date.now() + 2 * 60 * 1000 }))],
+        ['an access token with no expiry and no refresh token', () => storeEncrypted(JSON.stringify({ access_token: 'a' }))],
     ])('%s: not signed in, and the client holds no credentials', async (_case, seed) => {
         seed();
         const authService = await relaunch();
