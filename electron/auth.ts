@@ -44,8 +44,15 @@ export class AuthService {
         // restart. (It was once credited with the "sign in again every few days"
         // symptom; the more likely cause was the credentials never loading on a
         // relaunch, fixed 2026-10-01: see ensureCredentialsLoaded.)
-        this.oauth2Client.on('tokens', (refreshed) => {
-            this.saveTokens(refreshed);
+        // It runs inside the library's synchronous emit, before the library
+        // installs the tokens, so a store error must not escape it: that would
+        // throw away a grant Google already made.
+        this.oauth2Client.on('tokens', (granted) => {
+            try {
+                this.saveTokens(granted);
+            } catch (error) {
+                console.error('Failed to save the Google tokens; they stay in memory until the next save', error);
+            }
         });
     }
 
@@ -59,8 +66,8 @@ export class AuthService {
      * said "signed in": an empty week with no error. Before ready this throws,
      * because answering "signed out" would be a lie.
      *
-     * Sign-in, the tokens listener and sign-out write the client and the store
-     * together, so a first load that runs after one of them reads what it wrote.
+     * Sign-in and sign-out mark the credentials loaded: a save can fail and leave
+     * the store behind the client, and a later first load must not overwrite them.
      */
     private ensureCredentialsLoaded(): void {
         if (this.credentialsLoaded) return;
@@ -83,31 +90,28 @@ export class AuthService {
      * and every refresh response omits it, so writing the response verbatim
      * destroys the only long-lived credential we have — and the next start finds
      * an access token that is already expired with nothing to renew it from.
+     * The kept one comes from the client, which still holds the previous set
+     * when the library emits 'tokens' (as its own refresh does), never from a
+     * re-read of the store, which can fail and lose it.
+     *
+     * Plain text only when this platform has no encryption (Linux without a
+     * keyring) or encrypting throws. A failed write throws and leaves the file as
+     * it was: falling back to plain text there wrote the refresh token to disk
+     * unencrypted.
      */
-    private saveTokens(tokens: Credentials) {
-        if (!tokens.refresh_token) {
-            const existing = this.loadTokens();
-            if (existing?.refresh_token) {
-                tokens = { ...existing, ...tokens, refresh_token: existing.refresh_token };
-            }
-        }
+    private saveTokens(granted: Credentials) {
+        const refreshToken = granted.refresh_token ?? this.oauth2Client.credentials.refresh_token;
+        const tokens = refreshToken ? { ...granted, refresh_token: refreshToken } : granted;
+        store.set(this.encrypted(tokens) ?? { tokens, isEncrypted: false });
+    }
 
-        if (safeStorage.isEncryptionAvailable()) {
-            try {
-                const json = JSON.stringify(tokens);
-                const buffer = safeStorage.encryptString(json);
-                store.set('tokens', buffer.toString('base64')); // Store as base64 string
-                store.set('isEncrypted', true);
-            } catch (error) {
-                console.error('Failed to encrypt tokens', error);
-                // Fallback to unencrypted
-                store.set('tokens', tokens);
-                store.set('isEncrypted', false);
-            }
-        } else {
-            // Fallback for systems without safeStorage support
-            store.set('tokens', tokens);
-            store.set('isEncrypted', false);
+    private encrypted(tokens: Credentials): AuthStore | null {
+        if (!safeStorage.isEncryptionAvailable()) return null;
+        try {
+            return { tokens: safeStorage.encryptString(JSON.stringify(tokens)).toString('base64'), isEncrypted: true };
+        } catch (error) {
+            console.error('Failed to encrypt tokens', error);
+            return null;
         }
     }
 
@@ -204,8 +208,9 @@ export class AuthService {
                             code: code,
                             redirect_uri: redirectUri
                         });
+                        // getToken already saved them, through the 'tokens' listener.
                         this.oauth2Client.setCredentials(tokens);
-                        this.saveTokens(tokens); // Persist securely
+                        this.credentialsLoaded = true;
 
                         res.setHeader('Content-Type', 'text/html; charset=utf-8');
                         res.end('<h1>Authentication successful!</h1><p>You can close this window.</p><script>window.close()</script>');
@@ -272,9 +277,11 @@ export class AuthService {
     }
 
     logout() {
+        // The client first: a store delete that throws must not leave it signed in.
+        this.oauth2Client.setCredentials({});
+        this.credentialsLoaded = true;
         store.delete('tokens');
         store.delete('isEncrypted');
-        this.oauth2Client.setCredentials({});
     }
 }
 
