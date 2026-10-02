@@ -19,36 +19,36 @@ export const StandardShapesTray = memo(function StandardShapesTray({
     onStartDrag,
 }: StandardShapesTrayProps) {
     return (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', width: '100%', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', gap: 24, background: 'rgba(255,255,255,0.01)', border: '1.5px dashed rgba(255,255,255,0.06)', borderRadius: 20, padding: 12, alignItems: 'center' }}>
-                {standardShapes.map((shape, idx) => {
-                    return (
-                        <div 
-                            key={shape ? shape.id : `empty-${idx}`} 
-                            style={{ 
-                                width: 200,
-                                height: 200,
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center', 
-                                position: 'relative',
-                                background: 'rgba(255,255,255,0.005)',
-                                border: '1.5px dashed rgba(255,255,255,0.05)',
-                                borderRadius: 16,
-                            }}
-                        >
-                            {shape ? (
-                                <ShapeItem
-                                    shape={shape}
-                                    cellSize={TRAY_CELL_SIZE}
-                                    isTransparent={activeDragSlot?.slotType === 'standard' && activeDragSlot?.slotIndex === idx}
-                                    onPointerDown={(e) => onStartDrag(e, shape, 'standard', idx, TRAY_CELL_SIZE)}
-                                />
-                            ) : null}
-                        </div>
-                    );
-                })}
-            </div>
+        // Layout (a row under the board, or two rows beside it) lives in mc.css.
+        <div className="mc-blocks-tray" style={{ background: 'rgba(255,255,255,0.01)', border: '1.5px dashed rgba(255,255,255,0.06)', borderRadius: 20 }}>
+            {standardShapes.map((shape, idx) => {
+                return (
+                    <div
+                        key={shape ? shape.id : `empty-${idx}`}
+                        style={{
+                            // Fixed, so a deal never moves the slots: 200 holds a 1x5 bar at 36 px cells.
+                            width: 200,
+                            height: 200,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            position: 'relative',
+                            background: 'rgba(255,255,255,0.005)',
+                            border: '1.5px dashed rgba(255,255,255,0.05)',
+                            borderRadius: 16,
+                        }}
+                    >
+                        {shape ? (
+                            <ShapeItem
+                                shape={shape}
+                                cellSize={TRAY_CELL_SIZE}
+                                isTransparent={activeDragSlot?.slotType === 'standard' && activeDragSlot?.slotIndex === idx}
+                                onPointerDown={(e) => onStartDrag(e, shape, 'standard', idx, TRAY_CELL_SIZE)}
+                            />
+                        ) : null}
+                    </div>
+                );
+            })}
         </div>
     );
 });
