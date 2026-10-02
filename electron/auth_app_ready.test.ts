@@ -63,7 +63,9 @@ vi.mock('electron-store', () => ({
             if (error) throw error;
             return fake.storeData.get(key);
         };
-        set = (key: string, value: unknown) => { fake.storeData.set(key, value); };
+        set = (values: Record<string, unknown>) => {
+            for (const [key, value] of Object.entries(values)) fake.storeData.set(key, value);
+        };
         delete = (key: string) => { fake.storeData.delete(key); };
     },
 }));
