@@ -64,20 +64,35 @@ export async function gotoMC(page: Page): Promise<void> {
     );
 }
 
+export interface LaunchMCOptions {
+    /** Extra Chromium/Electron switches, e.g. `--force-device-scale-factor=1.5`. */
+    readonly args?: readonly string[];
+    /** Window content size in CSS px, applied before Mission Control loads. */
+    readonly contentSize?: readonly [number, number];
+}
+
 /**
  * Launch Electron against an isolated profile and return the first window,
  * already in MC mode. The caller owns `userDataDir` and must remove it after
  * closing the app — `mcTest` does both.
  */
-export async function launchMC(userDataDir: string): Promise<{ app: ElectronApplication; page: Page }> {
+export async function launchMC(
+    userDataDir: string,
+    options: LaunchMCOptions = {},
+): Promise<{ app: ElectronApplication; page: Page }> {
     const app = await launchApp({
-        args: [ELECTRON_MAIN, userDataArg(userDataDir)],
+        args: [ELECTRON_MAIN, userDataArg(userDataDir), ...(options.args ?? [])],
         timeout: 60_000,
         env: { ...process.env, NODE_ENV: 'development' },
     });
     try {
         const page = await app.firstWindow();
         await page.waitForLoadState('domcontentloaded');
+        if (options.contentSize) {
+            await app.evaluate(({ BrowserWindow }, [width, height]) => {
+                BrowserWindow.getAllWindows()[0].setContentSize(width, height);
+            }, options.contentSize);
+        }
         await gotoMC(page);
         return { app, page };
     } catch (err) {
