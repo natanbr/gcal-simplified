@@ -3,9 +3,9 @@
 // QR code and "Regenerate Keys".
 // ------------------------------------------------------------
 // Reads settings:get once when the tab is shown and draws the QR code from THAT
-// read only, never from Mission Control's state: that is loaded from
-// localStorage and may still hold a pairing the main process has replaced (the
-// leaked v1 key, in a room nobody joins). settings:get hands out a room and key
+// read only: config.json is the pairing's one home, and Mission Control's state
+// keeps no copy (store/pairingRenewal.ts). The pairing lives in this panel's own
+// useState and is never dispatched. settings:get hands out a room and key
 // only for a pairing marked for protocol v2 (electron/settings-dialog.ts), and
 // readPairing checks the marker again. With none there is no QR code, and the
 // panel says it is waiting to save a new pairing. The notice shows while an

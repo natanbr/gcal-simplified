@@ -134,7 +134,8 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // NEW on 2026-09-24 at 302 (was 300): the SETTLE_GAME_TOKEN_CAP union member
     // and its one-line doc comment. Split candidate: MCAction into its own module.
     // 302 → 304 on 2026-09-29: the END_STALE_MISSION_RUN member and its doc comment.
-    'src/mission-control/types.ts': 304,
+    // 304 → 302 on 2026-10-03: MCSettings no longer declares a copy of the remote pairing.
+    'src/mission-control/types.ts': 302,
 };
 
 interface Measured {

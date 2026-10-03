@@ -1,19 +1,35 @@
 // ============================================================
 // Mission Control — the remote pairing, as the renderer sees it.
 // ------------------------------------------------------------
-// The main process (electron/remote-pairing.ts) replaces a leaked v1 pairing
-// once, by itself, and keeps `remotePairingRenewedAt` in config.json until the
-// phone has sent one verified message. Until then the phone is in the old room
-// and does nothing. The Remote tab shows a notice (RemotePairingPanel) and the
-// activity log gets one line, so the parent learns it without a console.
-// "Already logged" is `settings.remotePairingRenewalLogged` in Mission Control
-// state, not a search of the log: a CLEAR or 200 newer lines would bring it back.
+// The pairing (room id and key) is the main process's: config.json, written by
+// electron/remote-pairing.ts. Mission Control's state keeps no copy of it. The
+// Remote tab reads settings:get when it is shown (RemotePairingPanel), and the
+// phone payload never carries it. Up to v0.0.43 mc-state-v5.settings held a
+// copy, possibly the leaked v1 key, in plain localStorage: hydration drops it
+// (withoutPairingCopy), so the first save after a load writes a blob without it.
+//
+// The main process replaces a leaked v1 pairing once, by itself, and keeps
+// `remotePairingRenewedAt` in config.json until the phone has sent one verified
+// message. Until then the phone is in the old room and does nothing. The Remote
+// tab shows a notice and the activity log gets one line, so the parent learns
+// it without a console. "Already logged" is `settings.remotePairingRenewalLogged`
+// in Mission Control state, not a search of the log: a CLEAR or 200 newer lines
+// would bring it back.
 // ============================================================
 
 import type { ActivityLogEntry, MCSettings } from '../types';
-import { readPairing } from '../utils/pairingUrl';
 
 export const PAIRING_RENEWED_LOG_MESSAGE = 'Remote re-paired for security: scan the QR code again (⚙️ → 📱 Remote)';
+
+/** The pairing fields v0.0.43 and earlier saved in mc-state-v5.settings. Read nowhere; dropped at load. */
+export const RETIRED_PAIRING_FIELDS = ['remoteRoomId', 'remoteKey'] as const;
+
+/** A saved settings object without the pairing copy an older build kept in it. */
+export function withoutPairingCopy(saved: Partial<MCSettings>): Partial<MCSettings> {
+    const kept = { ...saved };
+    for (const field of RETIRED_PAIRING_FIELDS) Reflect.deleteProperty(kept, field);
+    return kept;
+}
 
 /** A readable ISO time, or nothing: an unreadable one would render as "Invalid Date". */
 const isoTime = (value: unknown): string | undefined =>
@@ -52,23 +68,8 @@ export function pairingRenewedLogEntry(config: unknown, logs: readonly ActivityL
     };
 }
 
-/**
- * What the mount-time settings:get changes in Mission Control's settings, or
- * null for nothing: the room and key of a v2 pairing, or clearing them when
- * none is handed out (a leaked v1 key must not linger in mc-state-v5), and the
- * "already logged" marker for a pending renewal.
- */
-export function remotePairingSettings(config: unknown, current: MCSettings): Partial<MCSettings> | null {
-    const patch: Partial<MCSettings> = {};
-    const pairing = readPairing(config);
-    if (pairing && (pairing.roomId !== current.remoteRoomId || pairing.remoteKey !== current.remoteKey)) {
-        patch.remoteRoomId = pairing.roomId;
-        patch.remoteKey = pairing.remoteKey;
-    } else if (!pairing && (current.remoteRoomId !== undefined || current.remoteKey !== undefined)) {
-        patch.remoteRoomId = undefined;
-        patch.remoteKey = undefined;
-    }
+/** The renewal time to save as "already logged", or null when nothing is pending or it is saved already. */
+export function renewalToMark(config: unknown, loggedMarker: string | undefined): string | null {
     const renewedAt = pendingRenewalAt(config);
-    if (renewedAt && renewedAt !== current.remotePairingRenewalLogged) patch.remotePairingRenewalLogged = renewedAt;
-    return Object.keys(patch).length > 0 ? patch : null;
+    return renewedAt && renewedAt !== loggedMarker ? renewedAt : null;
 }

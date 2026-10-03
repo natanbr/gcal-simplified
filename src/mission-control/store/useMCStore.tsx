@@ -21,7 +21,7 @@ import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
 import { deriveMissionWindow, hydrateMissionTimes, sanitizeMissionTimes } from './hhmm';
 import { isStaleIncompleteRun } from './staleMissionRun';
-import { renewalLoggedMarker } from './pairingRenewal';
+import { renewalLoggedMarker, withoutPairingCopy } from './pairingRenewal';
 import { REWARD_MAP } from '../rewardCatalogue';
 
 export { selectTotalWealth };
@@ -73,7 +73,8 @@ export function loadPersistedState(): MCState {
         });
 
         // The renewal-logged marker is kept only as a readable time: garbage reads as "not logged".
-        const { remotePairingRenewalLogged: savedMarker, ...savedSettings } = parsed.settings ?? {};
+        // The pairing copy v0.0.43 and earlier saved here is dropped: config.json is its one home.
+        const { remotePairingRenewalLogged: savedMarker, ...savedSettings } = withoutPairingCopy(parsed.settings ?? {});
         const marker = renewalLoggedMarker(savedMarker);
         const settings = sanitizeMissionTimes({ ...DEFAULT_SETTINGS, ...savedSettings, ...(marker ? { remotePairingRenewalLogged: marker } : {}) });
         return {

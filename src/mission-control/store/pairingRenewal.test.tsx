@@ -1,15 +1,14 @@
 // ============================================================
 // The one-time activity-log line for an automatic pairing renewal, and the
-// pairing Mission Control state keeps from settings:get.
+// "already logged" marker Mission Control state keeps for it.
 // ------------------------------------------------------------
 // A hand-built ADD_LOG (it describes no action, so createLogEntry never
 // derives it), dispatched from the provider's existing mount-time settings:get.
 // "Already logged" is a marker in Mission Control state (settings
 // .remotePairingRenewalLogged = the renewal time it logged), not a search of
 // the 200-entry log: after CLEAR, or 200 newer lines, the search came up empty
-// and the line came back at every start, into the audit trail too. The same
-// read sets the state's room and key when a v2 pairing is handed out and
-// clears them when none is, so a leaked v1 key does not linger in mc-state-v5.
+// and the line came back at every start, into the audit trail too. The pairing
+// itself never enters Mission Control state: pairingCopy.test.tsx.
 // settings:get throws while the settings file cannot be read: then nothing
 // changes and there is no unhandled rejection.
 // ============================================================
@@ -17,7 +16,7 @@
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
-import { pendingRenewalAt, pairingRenewedLogEntry, renewalLoggedMarker, PAIRING_RENEWED_LOG_MESSAGE } from './pairingRenewal';
+import { pendingRenewalAt, pairingRenewedLogEntry, renewalLoggedMarker, renewalToMark, PAIRING_RENEWED_LOG_MESSAGE } from './pairingRenewal';
 import { MCStoreProvider } from './MCStoreProvider';
 import { useMCState, useMCDispatch, STORAGE_KEY, loadPersistedState } from './useMCStore';
 import { initialState } from './mcReducer';
@@ -40,7 +39,7 @@ function Probe() {
     return (
         <>
             <output data-testid="ids">{activityLogs.map(l => l.id).join(',')}</output>
-            <output data-testid="pairing">{`${mc.remoteRoomId ?? '-'}|${mc.remoteKey ?? '-'}|${mc.remotePairingRenewalLogged ?? '-'}`}</output>
+            <output data-testid="marker">{mc.remotePairingRenewalLogged ?? '-'}</output>
             <button onClick={() => dispatch({ type: 'CLEAR_LOGS' })}>clear logs</button>
         </>
     );
@@ -48,7 +47,7 @@ function Probe() {
 
 const linesFor = (renewedAt: string) => screen.getByTestId('ids').textContent!.split(',').filter(id => id === `pairing-renewed-${renewedAt}`).length;
 const renewalLines = () => linesFor(RENEWED_AT);
-const pairing = () => screen.getByTestId('pairing').textContent;
+const marker = () => screen.getByTestId('marker').textContent;
 
 async function mountProvider() {
     render(<MCStoreProvider><Probe /></MCStoreProvider>);
@@ -106,6 +105,17 @@ describe('pairingRenewedLogEntry', () => {
     });
 });
 
+describe('renewalToMark', () => {
+    it('is the pending renewal time until that time is the marker, and null with nothing pending', () => {
+        expect(renewalToMark({ ...V2, remotePairingRenewedAt: RENEWED_AT }, undefined)).toBe(RENEWED_AT);
+        expect(renewalToMark({ remotePairingRenewedAt: LATER }, RENEWED_AT)).toBe(LATER);
+        expect(renewalToMark({ remotePairingRenewedAt: RENEWED_AT }, RENEWED_AT)).toBeNull();
+        for (const config of [V2, {}, { remotePairingRenewedAt: 'soon' }, null]) {
+            expect(renewalToMark(config, undefined), JSON.stringify(config)).toBeNull();
+        }
+    });
+});
+
 describe('the "already logged" marker in mc-state-v5', () => {
     it('hydrates a valid renewal time and reads anything else as "not logged"', () => {
         expect(renewalLoggedMarker(RENEWED_AT)).toBe(RENEWED_AT);
@@ -124,7 +134,7 @@ describe('MCStoreProvider — the renewal line on the activity log', () => {
         settings = { ...V2, remotePairingRenewedAt: RENEWED_AT };
         await mountProvider();
         expect(renewalLines()).toBe(1);
-        expect(pairing()).toBe(`room-v2|key-v2|${RENEWED_AT}`);
+        expect(marker()).toBe(RENEWED_AT);
     });
 
     it('is not added again after CLEAR and a restart; a later renewal is added exactly once', async () => {
@@ -184,41 +194,8 @@ describe('MCStoreProvider — the renewal line on the activity log', () => {
             settings = value;
             await mountProvider();
             expect(renewalLines()).toBe(0);
+            expect(marker()).toBe('-');
             cleanup();
         }
-    });
-});
-
-describe('MCStoreProvider — the pairing Mission Control state keeps', () => {
-    const savedWith = (remote: Record<string, string>) => localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        ...initialState, _migrationVersion: 1, settings: { ...initialState.settings, ...remote },
-    }));
-
-    it('is cleared when settings:get hands out none, and set again by a later v2 read', async () => {
-        savedWith({ remoteRoomId: 'room-v1', remoteKey: 'key-v1' });
-        settings = { calendarIds: [] }; // no v2 pairing: settings-dialog.ts leaves room and key out
-        await mountProvider();
-        expect(pairing()).toBe('-|-|-');
-        await persistAndQuit();
-        expect(localStorage.getItem(STORAGE_KEY), 'the leaked key lingers in mc-state-v5').not.toContain('key-v1');
-
-        settings = V2;
-        await mountProvider();
-        expect(pairing()).toBe('room-v2|key-v2|-');
-    });
-
-    it('ignores an unmarked room and key even if one is handed out', async () => {
-        savedWith({ remoteRoomId: 'room-v1', remoteKey: 'key-v1' });
-        settings = { remoteRoomId: 'room-v1', remoteKey: 'key-v1' };
-        await mountProvider();
-        expect(pairing()).toBe('-|-|-');
-    });
-
-    it('is left alone when settings:get rejects', async () => {
-        savedWith({ remoteRoomId: 'room-v2', remoteKey: 'key-v2' });
-        settingsError = new Error('busy');
-        await mountProvider();
-        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
-        expect(pairing()).toBe('room-v2|key-v2|-');
     });
 });

@@ -11,7 +11,7 @@ import { staleIncompleteRunPhases } from './staleMissionRun';
 import { gameTokensOverCap } from './moodGauge';
 import { pendingFrom } from './pendingState';
 import { useSchoolCalendarSync } from './useSchoolCalendarSync';
-import { pairingRenewedLogEntry, remotePairingSettings } from './pairingRenewal';
+import { pairingRenewedLogEntry, renewalToMark } from './pairingRenewal';
 
 /** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
@@ -78,8 +78,8 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     const settingsRef = useRef(state.settings);
     settingsRef.current = state.settings;
 
-    // Once per start: the pairing from Electron's store (store/pairingRenewal.ts): its room and key,
-    // cleared when settings:get hands out no v2 pairing, and an automatic renewal logged once.
+    // Once per start: an automatic pairing renewal, logged once (store/pairingRenewal.ts). Only the
+    // renewal time is kept: the pairing itself stays in Electron's store, never in this state.
     useEffect(() => {
         if (window.ipcRenderer) {
             window.ipcRenderer.invoke('settings:get')
@@ -87,12 +87,13 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
                     if (!config) return;
                     // Both dispatched raw, like the heartbeat: neither logs an action, so the
                     // shield-lock re-check CLAUDE.md asks of hand-built entries does not apply.
-                    const renewalLine = pairingRenewedLogEntry(config, logsRef.current, settingsRef.current.remotePairingRenewalLogged);
+                    const loggedMarker = settingsRef.current.remotePairingRenewalLogged;
+                    const renewalLine = pairingRenewedLogEntry(config, logsRef.current, loggedMarker);
                     if (renewalLine) dispatch({ type: 'ADD_LOG', log: renewalLine });
-                    const pairing = remotePairingSettings(config, settingsRef.current);
-                    if (pairing) dispatch({ type: 'SET_SETTINGS', settings: pairing });
+                    const renewedAt = renewalToMark(config, loggedMarker);
+                    if (renewedAt) dispatch({ type: 'SET_SETTINGS', settings: { remotePairingRenewalLogged: renewedAt } });
                 })
-                .catch(() => { /* settings file busy or unreadable: the pairing keys stay as they were, and no renewal line is logged */ });
+                .catch(() => { /* settings file busy or unreadable: no renewal line is logged */ });
         }
     }, []);
 

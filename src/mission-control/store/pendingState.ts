@@ -16,7 +16,7 @@
 //
 // Known limit, no worse than before: raw dispatches (the 60 s heartbeat, and the
 // provider's mount-time settings:get: the pairing-renewal ADD_LOG and the
-// SET_SETTINGS that saves the pairing and the renewal-logged marker) are not
+// SET_SETTINGS that saves the renewal-logged marker) are not
 // queued, and a render at a higher priority that skips queued lower-priority
 // updates resets to a state without them.
 // ⚠️  Internal to src/mission-control/ only.

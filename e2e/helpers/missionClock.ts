@@ -142,10 +142,10 @@ function seedInPage({ key, kind }: { key: string; kind: FailingState }): void {
         const minutes = Math.min(30, minutesLeft - 1);
         const startsAt = hhmm(now);
         const endsAt = hhmm(new Date(now.getTime() + minutes * 60_000));
-        // The scheduler reads missions[].startsAt/endsAt, but SET_SETTINGS
-        // re-derives them from settings, and the store dispatches it at mount
-        // when the profile has remote pairing keys. Write both, or the window
-        // is gone a moment after the app loads.
+        // The scheduler reads missions[].startsAt/endsAt, but the store
+        // re-derives them from settings at every load (deriveMissionWindow in
+        // loadPersistedState), and SET_SETTINGS does again on a settings save.
+        // Write both, or the window is gone the moment the app loads.
         state['activeMission'] = 'none';
         state['lastCompletedOrFailedMorningDate'] = null;
         state['lastCompletedOrFailedEveningDate'] = null;

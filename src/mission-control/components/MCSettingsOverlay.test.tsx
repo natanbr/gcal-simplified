@@ -12,6 +12,7 @@ import { MCStoreProvider } from '../store/MCStoreProvider';
 import { useMCState } from '../store/useMCStore.tsx';
 import { MCSettingsOverlay } from './MCSettingsOverlay';
 import { DEFAULT_SETTINGS } from '../types';
+import { pairingBridge, settle, shownUrl, openRemoteTab, regenerateKeys } from './pairingTestKit';
 
 // ── Framer Motion mock ───────────────────────────────────────────────────────
 vi.mock('framer-motion', async () => {
@@ -287,56 +288,54 @@ describe('MCSettingsOverlay — reward costs', () => {
 
 describe('MCSettingsOverlay — regenerate pairing keys', () => {
     const OLD_PAIRING = 'room=room-old&key=key-old';
+    const bridge = pairingBridge();
 
-    /** Seeds the current pairing where the Remote tab reads it, a fresh settings:get (a v2 one, as
-     *  settings-dialog.ts hands out), and routes IPC to `answers` (unlisted channels resolve `{}`). */
-    function pairedWith(answers: Record<string, () => Promise<unknown>>) {
-        const current = { remoteRoomId: 'room-old', remoteKey: 'key-old', remotePairingVersion: 2 };
-        const routes: Record<string, () => Promise<unknown>> = { 'settings:get': () => Promise.resolve(current), ...answers };
-        window.ipcRenderer = {
-            invoke: vi.fn((channel: string) => (routes[channel] ?? (() => Promise.resolve({})))()),
-            on: vi.fn(() => () => {}),
-        };
+    /** settings:get hands out a v2 pairing, as settings-dialog.ts does; remote:regenerate answers `answer`. */
+    function pairedWith(answer: unknown) {
+        bridge.install();
+        bridge.settings = { remoteRoomId: 'room-old', remoteKey: 'key-old', remotePairingVersion: 2 };
+        bridge.regenerate = () => Promise.resolve(answer);
     }
-    async function openRemoteTab() {
-        await renderAndOpen();
-        await act(async () => { fireEvent.click(screen.getByText('📱 Remote')); });
-        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
-    }
-    const pairingUrl = () => (screen.queryByTitle('Click to copy URL') as HTMLInputElement | null)?.value ?? null;
 
     afterEach(() => { delete window.ipcRenderer; });
 
     it('keeps the current keys and says so when the new keys could not be saved', async () => {
-        pairedWith({ 'remote:regenerate': () => Promise.resolve({ ok: false, reason: 'locked', code: 'EBUSY', file: 'C:\\settings-file.json' }) });
+        pairedWith({ ok: false, reason: 'locked', code: 'EBUSY', file: 'C:\\settings-file.json' });
         await openRemoteTab();
 
-        await act(async () => { fireEvent.click(screen.getByText(/Regenerate Keys/)); });
+        await regenerateKeys();
 
         expect(screen.getByRole('alert')).toHaveTextContent(/^Keys not changed: the settings file is busy or could not be written\. The current QR code still works/);
-        expect(pairingUrl()).toContain(OLD_PAIRING);
+        expect(shownUrl()).toContain(OLD_PAIRING);
     });
 
     it('shows the new keys when they were saved', async () => {
-        pairedWith({ 'remote:regenerate': () => Promise.resolve({ ok: true, roomId: 'room-new', remoteKey: 'key-new' }) });
+        pairedWith({ ok: true, roomId: 'room-new', remoteKey: 'key-new' });
         await openRemoteTab();
 
-        await act(async () => { fireEvent.click(screen.getByText(/Regenerate Keys/)); });
+        await regenerateKeys();
 
-        expect(pairingUrl()).toContain('room=room-new&key=key-new');
+        expect(shownUrl()).toContain('room=room-new&key=key-new');
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
     // settings:get rejects while another program holds the settings file. The
-    // provider's key sync and the Remote tab must swallow that (it used to be an
-    // unhandled rejection), and the tab must not fall back to the pairing
-    // Mission Control state holds: it may be the one the main process replaced.
-    it('shows no QR code, never the stored pairing, when the settings file cannot be read', async () => {
-        localStorage.setItem('mc-state-v5', JSON.stringify({ settings: { remoteRoomId: 'room-old', remoteKey: 'key-old' } }));
-        pairedWith({ 'settings:get': () => Promise.reject(new Error('settings file is busy')) });
-        await openRemoteTab();
+    // provider's start-up read and the Remote tab's read must both swallow that
+    // (it used to be an unhandled rejection), and the tab then draws nothing.
+    it('shows no QR code, and leaves no unhandled rejection, when the settings file cannot be read', async () => {
+        pairedWith(undefined);
+        bridge.settingsError = new Error('settings file is busy');
+        const unhandled = vi.fn();
+        process.on('unhandledRejection', unhandled);
+        try {
+            await openRemoteTab();
+            await settle(); // unhandledRejection fires after the microtask queue drains
+        } finally {
+            process.off('unhandledRejection', unhandled);
+        }
 
-        expect(pairingUrl()).toBeNull();
+        expect(shownUrl()).toBeNull();
         expect(screen.getByText(/Remote is not paired yet/)).toBeInTheDocument();
+        expect(unhandled).not.toHaveBeenCalled();
     });
 });
