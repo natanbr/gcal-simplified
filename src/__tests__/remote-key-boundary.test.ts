@@ -20,20 +20,34 @@
 //        too; write the call inline so the guard can see it.
 //  (iii) Mission Control's state keeps no copy of the pairing (2026-10-03). Up
 //        to v0.0.43 it kept one in mc-state-v5.settings, in plain localStorage.
-//        In renderer code the pairing fields are named only by the files that
-//        read the main process's answer (settings:get, remote:regenerate) and
-//        draw it, and none of those can reach the store; plus the one
-//        declaration of the fields hydration drops from an old blob. A field
-//        added back to MCSettings, or a SET_SETTINGS patch naming one, fails
-//        here. A spread of the whole settings:get answer into the state names
-//        no field: pairingCopy.test.tsx catches that one by value.
+//        In renderer code (src/, test kits excluded):
+//          - the field names remoteRoomId, remoteKey and remotePairingVersion
+//            (as an identifier, or inside a string or template literal) appear
+//            only in the files that read the main process's answer and draw it
+//            (PAIRING_READERS), plus the one RETIRED_PAIRING_FIELDS declaration
+//            hydration drops from an old blob;
+//          - those readers name none of dispatch, useMCDispatch, useMCStore,
+//            MCStoreProvider, MCContext, localStorage or 'SET_SETTINGS';
+//          - utils/pairingUrl and utils/regeneratePairing, which turn the answer
+//            into a pairing, are imported only by RemotePairingPanel.tsx.
+//        A field added back to MCSettings, a SET_SETTINGS patch naming one, or a
+//        store file calling readPairing fails here. What it cannot see: code
+//        that copies the answer without naming a field or importing those
+//        modules (a spread of the whole settings:get answer, a key built from
+//        pieces). pairingCopy.test.tsx checks the saved blob by value for the
+//        paths that exist; a new path is a review matter.
+//        Parsed with the TypeScript compiler, not a comment stripper:
+//        stripComments reads an apostrophe in JSX text as a string opener and
+//        misread five files from there to their end (review of PR 188).
 //
 // verifiedRedBy (proven 2026-09-28, part iii 2026-10-03): see the rule-registry
 // entry 'The remote pairing key is never on the wire'.
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { productionSources, readSource, stripComments, toRepoPath } from './helpers/sourceFiles';
+import ts from 'typescript';
+import { posix } from 'node:path';
+import { productionSources, readSource, toRepoPath } from './helpers/sourceFiles';
 
 const PAIRING_URL_BUILDER = 'src/mission-control/utils/pairingUrl.ts';
 const KEY_IN_URL = /vercel\.app\/[?#]|[?&#]key=/;
@@ -71,34 +85,73 @@ function lineOf(src: string, index: number): number {
     return src.slice(0, index).split('\n').length;
 }
 
-/** The pairing as config.json stores it. `roomId` alone is too common a name to scan for. */
-const PAIRING_FIELD = /\b(?:remoteRoomId|remoteKey|remotePairingVersion)\b/;
-/** They read the main process's answer and draw it; none of them may reach Mission Control's store. */
-const PAIRING_READERS = new Set([
-    'src/mission-control/utils/pairingUrl.ts', // readPairing: the settings:get answer
-    'src/mission-control/utils/regeneratePairing.ts', // the remote:regenerate answer
-    'src/mission-control/components/RemotePairingPanel.tsx', // the QR code, in its own useState
-]);
-const STORE_ACCESS = /\bdispatch\b|\buseMCDispatch\b|\buseMCStore\b|\bSET_SETTINGS\b|\blocalStorage\b/;
-/** The one declaration naming the fields hydration drops from a blob v0.0.43 or earlier saved. */
-const RETIRED_COPY = { file: 'src/mission-control/store/pairingRenewal.ts', line: /^export const RETIRED_PAIRING_FIELDS = \[/ };
-
-/** Renderer code with comments removed: a comment may describe the pairing. */
-const RENDERER = productionSources(['src'])
-    .map(file => ({ rel: toRepoPath(file), lines: stripComments(readSource(file)).split(/\r?\n/) }));
-
-/** Every line of `files` that matches `pattern`, as `path:line  code`. */
-function linesMatching(files: typeof RENDERER, pattern: RegExp): Array<{ at: string; line: string }> {
-    return files.flatMap(({ rel, lines }) => lines
-        .map((line, i) => ({ at: `${rel}:${i + 1}`, line }))
-        .filter(({ line }) => pattern.test(line)));
-}
-
 const broadcasts = SOURCES.flatMap(({ rel, src }) =>
     [...src.matchAll(BROADCAST_TYPE)].map(match => ({
         where: `${rel}:${lineOf(src, match.index)}`,
         object: enclosingObject(src, match.index),
     })));
+
+// ── (iii) ────────────────────────────────────────────────────────────────────
+
+/** The pairing as config.json stores it. `roomId` alone is too common a name to scan for. */
+const PAIRING_FIELDS = new Set(['remoteRoomId', 'remoteKey', 'remotePairingVersion']);
+const PAIRING_FIELD_IN_TEXT = /\b(?:remoteRoomId|remoteKey|remotePairingVersion)\b/;
+/** They read the main process's answer and draw it; none of them may name the store. */
+const PAIRING_READERS = new Set([
+    'src/mission-control/utils/pairingUrl.ts', // readPairing: the settings:get answer
+    'src/mission-control/utils/regeneratePairing.ts', // the remote:regenerate answer
+    'src/mission-control/components/RemotePairingPanel.tsx', // the QR code, in its own useState
+]);
+const STORE_NAMES = new Set(['dispatch', 'useMCDispatch', 'useMCStore', 'MCStoreProvider', 'MCContext', 'localStorage']);
+/** The modules that turn the answer into a pairing, and the one file that may import them. */
+const PAIRING_MODULES = new Set(['src/mission-control/utils/pairingUrl', 'src/mission-control/utils/regeneratePairing']);
+const PAIRING_MODULE_IMPORTERS = new Set(['src/mission-control/components/RemotePairingPanel.tsx']);
+/** The declaration naming the fields hydration drops from a blob v0.0.43 or earlier saved. */
+const RETIRED_COPY = { file: 'src/mission-control/store/pairingRenewal.ts', name: 'RETIRED_PAIRING_FIELDS' };
+
+interface Hit { at: string; text: string }
+interface Scan { pairing: Hit[]; store: Hit[]; imports: Hit[] }
+
+const isTextLiteral = (node: ts.Node): node is ts.StringLiteralLike | ts.TemplateLiteralToken =>
+    ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node);
+
+/** Repo path of a relative import, without its extension; null for a package. */
+function importedModule(fromFile: string, specifier: string): string | null {
+    if (!specifier.startsWith('.')) return null;
+    return posix.normalize(posix.join(posix.dirname(fromFile), specifier)).replace(/\.(tsx?|jsx?)$/, '').replace(/\/index$/, '');
+}
+
+/** What a file names of the pairing and the store, and what it imports, from its syntax tree. */
+function scan(rel: string, src: string): Scan {
+    const kind = rel.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+    const file = ts.createSourceFile(rel, src, ts.ScriptTarget.Latest, true, kind);
+    const hit = (node: ts.Node, text: string): Hit =>
+        ({ at: `${rel}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`, text });
+    const out: Scan = { pairing: [], store: [], imports: [] };
+    const visit = (node: ts.Node): void => {
+        if (rel === RETIRED_COPY.file && ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === RETIRED_COPY.name) return;
+        if (ts.isIdentifier(node)) {
+            if (PAIRING_FIELDS.has(node.text)) out.pairing.push(hit(node, node.text));
+            if (STORE_NAMES.has(node.text)) out.store.push(hit(node, node.text));
+        } else if (isTextLiteral(node)) {
+            if (PAIRING_FIELD_IN_TEXT.test(node.text)) out.pairing.push(hit(node, `'${node.text}'`));
+            if (node.text === 'SET_SETTINGS') out.store.push(hit(node, `'${node.text}'`));
+        }
+        const specifier = (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) ? node.moduleSpecifier
+            : ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword ? node.arguments[0]
+                : undefined;
+        if (specifier && ts.isStringLiteral(specifier)) {
+            const target = importedModule(rel, specifier.text);
+            if (target) out.imports.push(hit(specifier, target));
+        }
+        ts.forEachChild(node, visit);
+    };
+    visit(file);
+    return out;
+}
+
+const RENDERER = SOURCES.filter(({ rel }) => rel.startsWith('src/')).map(({ rel, src }) => ({ rel, ...scan(rel, src) }));
+const show = (hits: Hit[]) => hits.map(({ at, text }) => `  ${at}  ${text}`);
 
 describe('remote pairing key boundary', () => {
     it('(i) only the pairing-URL builder may put a key into a URL', () => {
@@ -131,16 +184,23 @@ describe('remote pairing key boundary', () => {
         ).toEqual([]);
     });
 
-    it('(iii) Mission Control state keeps no copy of the pairing: only its readers name it, and they cannot reach the store', () => {
-        const naming = linesMatching(RENDERER, PAIRING_FIELD);
+    it('(iii) the scan reads names in code and literals, never in comments or JSX text', () => {
+        const found = scan('probe.tsx', [
+            "const V = () => <p>It's the remoteKey</p>;",
+            '// remoteKey in a comment',
+            "const k = { remoteKey: 1 }; const s = 'settings.remoteRoomId';",
+            'dispatch(x); /* localStorage */',
+        ].join('\n'));
+        expect(found.pairing.map(({ at }) => at)).toEqual(['probe.tsx:3', 'probe.tsx:3']);
+        expect(found.store.map(({ text }) => text)).toEqual(['dispatch']);
+    });
+
+    it('(iii) Mission Control state keeps no copy of the pairing: only its readers name it, and they name no store', () => {
         // Vacuity: readPairing names all three fields, or a rename would pass by matching nothing.
-        expect(naming.some(({ at }) => at.startsWith('src/mission-control/utils/pairingUrl.ts:'))).toBe(true);
+        expect(RENDERER.find(({ rel }) => rel === PAIRING_URL_BUILDER)?.pairing.length).toBeGreaterThanOrEqual(3);
         expect(RENDERER.filter(({ rel }) => PAIRING_READERS.has(rel)), 'a pairing reader was renamed or removed').toHaveLength(PAIRING_READERS.size);
 
-        const elsewhere = naming
-            .filter(({ at }) => !PAIRING_READERS.has(at.slice(0, at.lastIndexOf(':'))))
-            .filter(({ at, line }) => !(at.startsWith(`${RETIRED_COPY.file}:`) && RETIRED_COPY.line.test(line)))
-            .map(({ at, line }) => `  ${at}  ${line.trim()}`);
+        const elsewhere = show(RENDERER.filter(({ rel }) => !PAIRING_READERS.has(rel)).flatMap(({ pairing }) => pairing));
         expect(
             elsewhere,
             `The remote pairing is named outside the files that read it from the main process.\n` +
@@ -149,12 +209,26 @@ describe('remote pairing key boundary', () => {
             elsewhere.join('\n'),
         ).toEqual([]);
 
-        const readersReachingStore = linesMatching(RENDERER.filter(({ rel }) => PAIRING_READERS.has(rel)), STORE_ACCESS)
-            .map(({ at, line }) => `  ${at}  ${line.trim()}`);
+        const readersNamingStore = show(RENDERER.filter(({ rel }) => PAIRING_READERS.has(rel)).flatMap(({ store }) => store));
         expect(
-            readersReachingStore,
-            `A file that reads the pairing reaches Mission Control's store, so it could save the pairing there:\n` +
-            readersReachingStore.join('\n'),
+            readersNamingStore,
+            `A file that reads the pairing names Mission Control's store, so it could save the pairing there:\n` +
+            readersNamingStore.join('\n'),
+        ).toEqual([]);
+    });
+
+    it('(iii) only RemotePairingPanel.tsx imports the modules that turn the settings:get answer into a pairing', () => {
+        const importers = RENDERER.flatMap(({ rel, imports }) => imports
+            .filter(({ text }) => PAIRING_MODULES.has(text))
+            .map(found => ({ rel, found })));
+        // Vacuity: the panel's own import must be found, or a resolver change would pass by matching nothing.
+        expect(importers.some(({ rel }) => PAIRING_MODULE_IMPORTERS.has(rel))).toBe(true);
+
+        const others = show(importers.filter(({ rel }) => !PAIRING_MODULE_IMPORTERS.has(rel)).map(({ found }) => found));
+        expect(
+            others,
+            `readPairing / regeneratePairing imported outside RemotePairingPanel.tsx. A store file that reads the\n` +
+            `pairing can save it into mc-state-v5 under any field name. Draw it, never keep it:\n${others.join('\n')}`,
         ).toEqual([]);
     });
 });
