@@ -296,11 +296,13 @@ describe('design system separation', () => {
         ).toEqual([]);
     });
 
-    it('keeps the mc.css stylesheet out of the calendar app', () => {
+    it('keeps the Mission Control stylesheets out of the calendar app', () => {
         const violations: string[] = [];
 
+        // `mc[.-]` covers mc.css and its siblings (mc-short-screens.css); a plain
+        // `mc\.css` let the second sheet into the calendar unnoticed.
         for (const absolute of productionSources(['src/components', 'src/features', 'src/hooks'])) {
-            if (/styles\/mc\.css|mc-root/.test(readSource(absolute))) {
+            if (/styles\/mc[.-]|mc-root/.test(readSource(absolute))) {
                 violations.push(`  ${toRepoPath(absolute)}`);
             }
         }
