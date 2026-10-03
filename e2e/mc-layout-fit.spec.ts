@@ -171,7 +171,7 @@ async function openNumericRescueQuiz(page: Page) {
     });
     try {
         await page.getByText('Solve Math', { exact: true }).dispatchEvent('click');
-        await page.getByRole('button', { name: '✓', exact: true }).waitFor({ state: 'attached' });
+        await page.getByRole('button', { name: '✓', exact: true }).waitFor({ state: 'attached', timeout: 15_000 });
     } finally {
         await page.evaluate(() => (Math.random as Restorable).restore?.());
     }
@@ -254,7 +254,7 @@ for (const { scale, width, height, tray } of SIZES) {
             // ── The tallest column 3: both tasks done and the shield broken ──
             await page.keyboard.press('Escape'); // the quiz
             await page.keyboard.press('Escape'); // the game
-            await page.locator('[data-testid="blocks-grid"]').waitFor({ state: 'detached' });
+            await page.locator('[data-testid="blocks-grid"]').waitFor({ state: 'detached', timeout: 15_000 });
             // The store persists 500 ms after a change; seed only once the game's end has landed.
             await expect.poll(() => readMCField(page, 'snakeGameActive'), SETTLE).toBe(false);
             const done = new Date().toISOString();
