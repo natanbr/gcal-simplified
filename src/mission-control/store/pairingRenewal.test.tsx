@@ -1,6 +1,6 @@
 // ============================================================
 // The one-time activity-log line for an automatic pairing renewal, and the
-// pairing Mission Control state keeps from settings:get.
+// "already logged" marker Mission Control state keeps for it.
 // ------------------------------------------------------------
 // A hand-built ADD_LOG (it describes no action, so createLogEntry never
 // derives it), dispatched from the provider's existing mount-time settings:get.

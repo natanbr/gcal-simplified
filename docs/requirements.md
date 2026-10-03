@@ -1786,19 +1786,20 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
 
 ### 2026-10-03 Mission Control's saved state no longer keeps a copy of the remote pairing
 
-- **Was.** Up to v0.0.43 Mission Control copied the phone pairing (room id and key) from
-  `settings:get` into its own settings at every start and saved it in `mc-state-v5`, in plain
-  localStorage, beside `config.json`, which already holds it. Since remote protocol v2 nothing read
-  that copy: the Remote tab draws its QR code from its own `settings:get` read, and the phone
-  payload carries no settings. While a renewal could not be saved, or when the settings file could
-  not be read at start-up, the copy was the leaked v1 key.
+- **Was.** Up to v0.0.43 Mission Control kept a copy of the phone pairing (room id and key) in its
+  own settings, saved in `mc-state-v5`, in plain localStorage, beside `config.json`, which already
+  holds it. The start-up `settings:get` read refreshed the copy when the pairing had changed, and
+  cleared it when the read handed out no v2 pairing. So it was a second copy of the current key,
+  and a v1 key saved before v0.0.43 stayed in it only while that read kept failing (a settings file
+  another program held at every start). Since remote protocol v2 nothing read the copy: the Remote
+  tab draws its QR code from its own `settings:get` read, and the phone payload carries no settings.
 - **Now.** The pairing exists only in `config.json`. Loading the state drops `remoteRoomId` and
   `remoteKey` from a saved settings object (every other setting and the renewal-logged marker are
   kept), so the next save writes a blob without them, whatever `settings:get` answers: a v2 pairing,
   none, an error, or no Electron bridge at all. Nothing puts them back: not the start-up read, not a
   renewal, not "Regenerate Keys", not a Settings save, not a restart. The start-up read now saves
-  only the renewal-logged marker, so a paired profile with no pending renewal makes one store write
-  fewer per start.
+  only the renewal-logged marker of a new renewal. On a steady profile neither version saves
+  anything at start-up; the old one also saved once on the first start after the pairing changed.
 - **Unchanged.** The QR code, the re-pairing notice and the one-time renewal log line behave as
   before. `remotePairingRenewalLogged` stays in Mission Control state: it is this machine's
   bookkeeping (which renewal was logged), not the pairing.
@@ -1806,6 +1807,10 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   loads without them, and after a start, a renewal, "Regenerate Keys" with a Settings save, and a
   restart the saved blob holds neither the field names nor the values; the Remote tab still draws
   the v2 pairing and the notice). Structural: `src/__tests__/remote-key-boundary.test.ts` part (iii),
-  in renderer code only the files that read `settings:get` / `remote:regenerate` name the pairing
-  fields, and none of them can reach the store. Release QA 3.12.7 now expects an upgrade from
-  v0.0.43 or earlier to lose the two fields.
+  read with the TypeScript parser: in renderer code the pairing field names appear only in the three
+  files that read `settings:get` / `remote:regenerate` and draw the answer; those name none of the
+  store's dispatch, hooks, `SET_SETTINGS` or localStorage; and only `RemotePairingPanel.tsx` imports
+  `readPairing` / `regeneratePairing`. It sees names and imports, not data: a copy made without
+  naming a field or importing those modules (a spread of the whole `settings:get` answer) passes it,
+  which is why the saved blob is also checked by value. Release QA 3.12.7 now expects an upgrade
+  from v0.0.43 or earlier to lose the two fields.

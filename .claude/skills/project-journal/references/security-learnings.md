@@ -199,13 +199,18 @@ the grant. When a fix revives a code path, review that path as new code.
 ## 2026-10-03 — Moving a secret's home does not delete its old copies
 
 **Learning:** PR 180 made `config.json` the only owner of the remote pairing and stopped the Remote
-tab drawing Mission Control's copy, but the copy stayed: the start-up `settings:get` read still
-wrote room and key into `mc-state-v5.settings` (plain localStorage) on every start, "kept in sync"
-for no reader. On a profile whose renewal could not be saved it was the leaked v1 key. Guards that
-pin the readers (the QR, the broadcast projection) cannot see a copy that nobody reads.
+tab drawing Mission Control's copy, but the copy stayed: the start-up `settings:get` read kept room
+and key in `mc-state-v5.settings` (plain localStorage), refreshed when the pairing changed, "kept in
+sync" for no reader. It was a second copy of the current key; PR 180 did clear it whenever the read
+handed out no v2 pairing, so the v1 key an older build saved there lingered only while that read
+kept failing. Guards that pin the readers (the QR, the broadcast projection) cannot see a copy that
+nobody reads.
 **Action:** when ownership of a secret moves, list every place a copy is *stored*, not only where
 it is read, and remove the copies: drop the field from the type (tsc then refuses a literal write),
 drop it at hydration so the next save writes it out (`withoutPairingCopy` in
-`store/pairingRenewal.ts`), and guard both the names (`remote-key-boundary.test.ts` part iii) and
-the saved blob by value (`pairingCopy.test.tsx`), because a spread of the whole answer names no
-field.
+`store/pairingRenewal.ts`), and guard both the names and the imports of the modules that read it
+(`remote-key-boundary.test.ts` part iii, on the TypeScript parser) and the saved blob by value
+(`pairingCopy.test.tsx`), because a spread of the whole answer names no field. Two traps from the
+review: a framer-motion mock that renders `motion.div` as a plain div never calls
+`onAnimationStart`, where the Settings overlay resets its draft, so a draft filled from the answer
+there stayed green; and an "it was saved" check on a blob the test seeded itself can never fail.
