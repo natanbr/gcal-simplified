@@ -882,16 +882,23 @@ there, suspect the code before the window.
 is `100vh` with `overflow: hidden`. Neither ever scrolls, so content that does not fit is simply
 cut, silently. On the child's real screen (1920x1080 at 150 % = 1280x720 CSS px) the tray showed
 13–41 % of each shape and Phone Games was off screen, since at least v0.0.42, with every unit test
-green: jsdom has no layout. Two traps found while fixing it. (1) The privilege row was
+green: jsdom has no layout. Three traps found while fixing it. (1) The privilege row was
 `flexWrap: 'wrap'`, so a width problem (5 cards need 335 px, the column had 323) became a height
 problem in another place. (2) The E2E window is never shown, and a hidden Electron window draws
 about **2 frames a second** whatever you pass (`setBackgroundThrottling(false)`,
 `--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`: all 2 fps, measured).
 Every Playwright actionability wait and every `mouse.move` step waits for a frame, so a spec with
-five clicks and a 12-step drag took 47–60 s per test and timed out.
-**Action:** Check a fit at the real target sizes in the built app: `--force-device-scale-factor`
-plus `setContentSize`, and a "visible fraction" clipped by the viewport and every non-`visible`
-overflow ancestor (`e2e/mc-layout-fit.spec.ts`). Switch layouts with a CSS media query on the
-height (`mc.css`, "Short screens"), not a resize listener. In a hidden-window spec whose subject is
-layout, `dispatchEvent('click')` and use few pointer steps; wait for an animation to settle by
-comparing `getBoundingClientRect().width` with `offsetWidth`, not with a guessed threshold.
+five clicks and a 12-step drag took 47–60 s per test and timed out. (3) In that window a Framer
+entrance holds its first frame for about 2 s, then jumps to the end: the column-3 cards sat at
+`translateY(10px)` and measured 55 % visible where the settled card is 72 %. A "has it stopped
+moving" poll passes during the hold, and comparing `getBoundingClientRect().width` with
+`offsetWidth` (my first fix) cannot see a translate at all, so the Settings Save button was being
+measured ~41 px above where it rests.
+**Action:** Check a fit at the real target sizes in the built app: `launchMC(dir, { args:
+['--force-device-scale-factor=…'], contentSize })`, and a "visible fraction" clipped by the
+viewport and every non-`visible` overflow ancestor (`e2e/mc-layout-fit.spec.ts`). Switch layouts
+with a CSS media query (`styles/mc-short-screens.css`, thresholds measured and stated there once),
+not a resize listener, and put both the base and the short-screen rules of a switched element in
+classes: an inline style beats the media query. In a hidden-window spec whose subject is layout,
+`dispatchEvent('click')` and use few pointer steps, and before measuring wait until **no ancestor
+of the element has a computed `transform` other than `none`** (the spec's `settled`).

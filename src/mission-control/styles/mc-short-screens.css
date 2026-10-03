@@ -1,0 +1,89 @@
+/* ============================================================
+   Mission Control — Short screens
+   ⚠️  Imported ONLY from src/mission-control/MissionControl.tsx, after mc.css.
+
+   The child plays fullscreen on a 1920x1080 panel at 150 % scaling, which is
+   1280x720 CSS px. Every Mission Control view is one screen tall with
+   overflow: hidden, so whatever does not fit is cut, silently (release QA
+   3.13.1, v0.0.43). The thresholds below are the one place these numbers live;
+   each was measured in the built app (e2e/mc-layout-fit.spec.ts sizes), not
+   summed from declared sizes. Cells and keys stay finger-sized.
+
+   Defaults live in the components as var() fallbacks; this file only says
+   what changes on a short screen. The Space Rescue layout classes are the
+   exception: their base and short-screen rules sit together here, so no
+   inline style can silently beat the media query.
+   ============================================================ */
+
+/* ---- Main view, column 3 ------------------------------------------------
+   At 720 px tall column 3 (Recycling, Activity, Mood Gauge, Shield,
+   Privileges) needed 107 px more than it had. Measured with these values at
+   1280x720: 58 px to spare, 12 px with both tasks done and the shield broken
+   (the tallest column 3). Applies at 800 px tall or less (800 included). */
+@media (height <= 800px) {
+  .mc-root {
+    --mc-stage-pad-y: 8px;
+    --mc-col3-gap: 4px;
+    --mc-card-pad: 10px 14px 8px;
+    --mc-card-gap: 6px;
+    --mc-gauge-gap: 3px;
+    --mc-gauge-pad-y: 8px;
+  }
+}
+
+/* ---- Quiz card (Space Rescue's rescue quiz; Snake and Fruit Merge too) ----
+   The card is 715 px tall with 93 px keys; inside Space Rescue it has the
+   game stage (screen height - 195) plus 24 px, so at 1280x720 (550 px) the
+   bottom key row was 37 % cut. Below 880 px tall: 72 px keys (108 device px
+   at 150 %, about 19 mm on a 15.6-inch 1080p panel) and tighter vertical
+   spacing make the card 544 px, measured. */
+@media (height < 880px) {
+  .mc-root {
+    --mc-numpad-width: 236px; /* 3 keys of 72 px + 2 gaps of 10 px */
+    --mc-quiz-card-pad: 16px 36px 20px; /* sides unchanged: the title must wrap clear of the ✕ */
+    --mc-quiz-card-margin: 8px;
+    --mc-quiz-card-gap: 8px;
+    --mc-quiz-question-pad: 6px;
+  }
+}
+
+/* ---- Space Rescue: the tray under the board, or beside it ----------------
+   Stacked needs a screen at least 869 px tall: 195 px above the game stage
+   plus a 674 px board column (board 432, gap 16, tray box). Beside needs at
+   least 1268 px wide: its row spans 1157 px and the stage is 96vw - 60 px.
+   So below 880 px tall (11 px of margin) and from 1268 px wide the tray moves
+   beside the board in two rows (2 + 1); a short AND narrow screen keeps the
+   stack, which is what it had before. The board's wrapper must keep
+   shrink-wrapping the board in both: the ghost overlay is positioned against
+   it (BlocksCanvas.tsx). */
+.mc-blocks-stage {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 28px;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.mc-blocks-board-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+}
+.mc-blocks-tray {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.01);
+  border: 1.5px dashed rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+}
+@media (height < 880px) and (width >= 1268px) {
+  .mc-blocks-stage { gap: 20px; }
+  .mc-blocks-board-col { flex-direction: row; align-items: flex-start; gap: 20px; }
+  .mc-blocks-tray { display: grid; grid-template-columns: repeat(2, auto); gap: 12px; padding: 8px; }
+  .mc-blocks-tray > :nth-child(3) { grid-column: 1 / -1; justify-self: center; }
+}
