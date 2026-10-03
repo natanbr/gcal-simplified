@@ -56,11 +56,13 @@ const SEALED_PAYLOAD = /\bpayload\s*:\s*sealRemoteMessage\(/;
 
 /** Test kits live beside production code but are test support (CLAUDE.md → Testing → Fixtures). */
 const KIT_NAME = /(test-?kit|fixtures?)\.tsx?$/i;
+/** Test-only by location, as test-kit-boundary.test.ts reads it: global setup and the guards' helpers. */
+const TEST_ONLY_DIR = /^src\/test\/|\/__tests__\//;
 
 // Read once: every case scans the same files.
 const SOURCES = productionSources(['src', 'electron'])
     .map(file => ({ rel: toRepoPath(file), src: readSource(file) }))
-    .filter(({ rel }) => !KIT_NAME.test(rel));
+    .filter(({ rel }) => !KIT_NAME.test(rel) && !TEST_ONLY_DIR.test(rel));
 
 /** The object literal enclosing `index`: back to its unmatched `{`, forward to the matching `}`. */
 function enclosingObject(src: string, index: number): string {
@@ -103,7 +105,9 @@ const PAIRING_READERS = new Set([
     'src/mission-control/components/RemotePairingPanel.tsx', // the QR code, in its own useState
 ]);
 const STORE_NAMES = new Set(['dispatch', 'useMCDispatch', 'useMCStore', 'MCStoreProvider', 'MCContext', 'localStorage']);
-/** The modules that turn the answer into a pairing, and the one file that may import them. */
+/** The modules that turn the answer into a pairing, and the one file that may import them. The
+ *  whole module is fenced, a type-only import included. Splitting the panel into several files
+ *  means adding each new file to BOTH this list and PAIRING_READERS. */
 const PAIRING_MODULES = new Set(['src/mission-control/utils/pairingUrl', 'src/mission-control/utils/regeneratePairing']);
 const PAIRING_MODULE_IMPORTERS = new Set(['src/mission-control/components/RemotePairingPanel.tsx']);
 /** The declaration naming the fields hydration drops from a blob v0.0.43 or earlier saved. */
@@ -227,8 +231,10 @@ describe('remote pairing key boundary', () => {
         const others = show(importers.filter(({ rel }) => !PAIRING_MODULE_IMPORTERS.has(rel)).map(({ found }) => found));
         expect(
             others,
-            `readPairing / regeneratePairing imported outside RemotePairingPanel.tsx. A store file that reads the\n` +
-            `pairing can save it into mc-state-v5 under any field name. Draw it, never keep it:\n${others.join('\n')}`,
+            `A pairing module (named after each file below) is imported outside RemotePairingPanel.tsx. The\n` +
+            `whole module is fenced, a type-only import included: a store file that reads the pairing can save\n` +
+            `it into mc-state-v5 under any field name. Draw it, never keep it. If the panel was split into\n` +
+            `several files, add each one to PAIRING_MODULE_IMPORTERS and PAIRING_READERS:\n${others.join('\n')}`,
         ).toEqual([]);
     });
 });

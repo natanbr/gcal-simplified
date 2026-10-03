@@ -1797,9 +1797,10 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   `remoteKey` from a saved settings object (every other setting and the renewal-logged marker are
   kept), so the next save writes a blob without them, whatever `settings:get` answers: a v2 pairing,
   none, an error, or no Electron bridge at all. Nothing puts them back: not the start-up read, not a
-  renewal, not "Regenerate Keys", not a Settings save, not a restart. The start-up read now saves
-  only the renewal-logged marker of a new renewal. On a steady profile neither version saves
-  anything at start-up; the old one also saved once on the first start after the pairing changed.
+  renewal, not "Regenerate Keys", not a Settings save, not a restart. The start-up `settings:get`
+  read now saves only the renewal-logged marker of a new renewal. On a steady profile that read
+  saves nothing in either version; the old one also saved the pairing once on the first start after
+  it changed. (The store's own save, about 500 ms after every start, is unchanged.)
 - **Unchanged.** The QR code, the re-pairing notice and the one-time renewal log line behave as
   before. `remotePairingRenewalLogged` stays in Mission Control state: it is this machine's
   bookkeeping (which renewal was logged), not the pairing.
