@@ -26,6 +26,7 @@ const TEST_SUPPORT = [
     'src/mission-control/games/blocks/dragTestKit.ts',
     'src/mission-control/games/quiz/quizTestKit.ts',
     'src/mission-control/hooks/schedulerTestKit.ts',
+    'src/mission-control/components/pairingTestKit.tsx',
 ];
 
 /** Test-only by location: global setup, and the guards' own helpers. */

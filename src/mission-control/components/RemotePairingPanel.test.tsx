@@ -2,9 +2,9 @@
 // The Remote tab draws its QR code from a fresh settings:get read, and only
 // for a pairing made for signed messages.
 // ------------------------------------------------------------
-// It used to draw the QR from Mission Control's state, which is copied from
-// settings:get once at start-up and kept in localStorage. When the first v2
-// start could not save the renewal (a locked settings file), a later retry
+// It used to draw the QR from a copy of the pairing Mission Control kept in
+// its saved state (that copy is gone since 2026-10-03: pairingCopy.test.tsx).
+// When the first v2 start could not save the renewal (a locked settings file), a later retry
 // renewed and joined a new room while the tab still showed the old room and
 // the LEAKED v1 key under "Scan this QR code again". Now the tab reads
 // settings:get when it is shown; settings:get hands out a room and key only
@@ -20,10 +20,9 @@ import '@testing-library/jest-dom';
 import { RemotePairingPanel, REPAIRED_NOTICE, NOT_PAIRED_TEXT } from './RemotePairingPanel';
 import { MCStoreProvider } from '../store/MCStoreProvider';
 import { MCSettingsOverlay } from './MCSettingsOverlay';
-import { STORAGE_KEY } from '../store/useMCStore';
-import { initialState } from '../store/mcReducer';
 import { buildPairingUrl } from '../utils/pairingUrl';
 import { REGENERATE_FAILED_MESSAGE, REGENERATE_FAILED_UNPAIRED_MESSAGE } from '../utils/regeneratePairing';
+import { pairingBridge, settle, shownUrl, openRemoteTab, regenerateKeys } from './pairingTestKit';
 
 vi.mock('framer-motion', async () => {
     const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion');
@@ -41,26 +40,12 @@ vi.mock('framer-motion', async () => {
 const RENEWED_AT = '2026-09-28T09:00:00.000Z';
 const FRESH = { remoteRoomId: 'room-fresh', remoteKey: 'key-fresh', remotePairingVersion: 2 };
 const REFUSED = { ok: false, reason: 'locked', code: 'EBUSY', file: 'C:\\settings-file.json' };
-let settings: Record<string, unknown> = {};
-let settingsError: Error | null = null;
-let regenerate: () => Promise<unknown> = () => Promise.resolve(REFUSED);
-const invoke = vi.fn<NonNullable<Window['ipcRenderer']>['invoke']>((channel: string) => {
-    if (channel === 'remote:regenerate') return regenerate();
-    if (channel !== 'settings:get') return Promise.resolve(undefined);
-    return settingsError ? Promise.reject(settingsError) : Promise.resolve(settings);
-});
-
-/** Let the settings:get promise resolve and React commit what it set. */
-const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
-/** The pairing URL the tab shows (the QR code's content, copyable), or null when it shows none. */
-const shownUrl = () => (screen.queryByTitle('Click to copy URL') as HTMLInputElement | null)?.value ?? null;
+const bridge = pairingBridge();
 
 beforeEach(() => {
-    invoke.mockClear();
-    settingsError = null;
-    regenerate = () => Promise.resolve(REFUSED);
+    bridge.install();
+    bridge.regenerate = () => Promise.resolve(REFUSED);
     localStorage.clear();
-    window.ipcRenderer = { invoke, on: vi.fn(() => vi.fn()) };
 });
 
 afterEach(() => {
@@ -71,10 +56,10 @@ afterEach(() => {
 
 describe('RemotePairingPanel — the QR code', () => {
     it('shows exactly the pairing of the fresh read, with the notice while a renewal is unanswered', async () => {
-        settings = { ...FRESH, remotePairingRenewedAt: RENEWED_AT };
+        bridge.settings = { ...FRESH, remotePairingRenewedAt: RENEWED_AT };
         render(<RemotePairingPanel />);
         await settle();
-        expect(invoke).toHaveBeenCalledWith('settings:get');
+        expect(bridge.invoke).toHaveBeenCalledWith('settings:get');
         expect(shownUrl()).toBe(buildPairingUrl('room-fresh', 'key-fresh'));
         expect(screen.getByText(REPAIRED_NOTICE)).toBeInTheDocument();
         expect(screen.getByText('Remote Control Pairing')).toBeInTheDocument();
@@ -83,7 +68,7 @@ describe('RemotePairingPanel — the QR code', () => {
 
     it('shows no notice when there is no pending renewal (or a malformed one)', async () => {
         for (const pending of [undefined, '', 42, 'not a date']) {
-            settings = { ...FRESH, remotePairingRenewedAt: pending };
+            bridge.settings = { ...FRESH, remotePairingRenewedAt: pending };
             render(<RemotePairingPanel />);
             await settle();
             expect(shownUrl()).toBe(buildPairingUrl('room-fresh', 'key-fresh'));
@@ -94,7 +79,7 @@ describe('RemotePairingPanel — the QR code', () => {
 
     it('shows no QR code for an unmarked pairing (the leaked v1 one) or none, and says it is waiting', async () => {
         for (const read of [{ remoteRoomId: 'room-v1', remoteKey: 'key-v1' }, { remoteRoomId: 'room-v1', remoteKey: 'key-v1', remotePairingVersion: 1 }, {}]) {
-            settings = { ...read, remotePairingRenewedAt: RENEWED_AT };
+            bridge.settings = { ...read, remotePairingRenewedAt: RENEWED_AT };
             const { container } = render(<RemotePairingPanel />);
             await settle();
             expect(shownUrl()).toBeNull();
@@ -108,7 +93,7 @@ describe('RemotePairingPanel — the QR code', () => {
 
     it('shows no QR code, and leaves no unhandled rejection, when settings:get rejects', async () => {
         // settings:get throws while the settings file cannot be read (settings-dialog.ts).
-        settingsError = new Error('Settings could not be loaded: the settings file is in use by another program (antivirus or a backup). Try again in a moment.');
+        bridge.settingsError = new Error('Settings could not be loaded: the settings file is in use by another program (antivirus or a backup). Try again in a moment.');
         const unhandled = vi.fn();
         process.on('unhandledRejection', unhandled);
         try {
@@ -117,7 +102,7 @@ describe('RemotePairingPanel — the QR code', () => {
         } finally {
             process.off('unhandledRejection', unhandled);
         }
-        expect(invoke).toHaveBeenCalledWith('settings:get');
+        expect(bridge.invoke).toHaveBeenCalledWith('settings:get');
         expect(screen.getByText('Remote Control Pairing')).toBeInTheDocument();
         expect(shownUrl()).toBeNull();
         expect(screen.getByText(NOT_PAIRED_TEXT)).toBeInTheDocument();
@@ -134,11 +119,9 @@ describe('RemotePairingPanel — the QR code', () => {
 });
 
 describe('RemotePairingPanel — Regenerate Keys', () => {
-    const regenerateKeys = () => act(async () => { fireEvent.click(screen.getByText(/Regenerate Keys/)); });
-
     it('shows the new pairing when it was saved', async () => {
-        settings = FRESH;
-        regenerate = () => Promise.resolve({ ok: true, roomId: 'room-new', remoteKey: 'key-new' });
+        bridge.settings = FRESH;
+        bridge.regenerate = () => Promise.resolve({ ok: true, roomId: 'room-new', remoteKey: 'key-new' });
         render(<RemotePairingPanel />);
         await settle();
         await regenerateKeys();
@@ -147,7 +130,7 @@ describe('RemotePairingPanel — Regenerate Keys', () => {
     });
 
     it('keeps the QR code and says it still works when a refused save leaves a v2 pairing', async () => {
-        settings = FRESH;
+        bridge.settings = FRESH;
         render(<RemotePairingPanel />);
         await settle();
         await regenerateKeys();
@@ -156,7 +139,7 @@ describe('RemotePairingPanel — Regenerate Keys', () => {
     });
 
     it('says remote control stays offline when no v2 pairing exists and the save is refused', async () => {
-        settings = { remoteRoomId: 'room-v1', remoteKey: 'key-v1' };
+        bridge.settings = { remoteRoomId: 'room-v1', remoteKey: 'key-v1' };
         render(<RemotePairingPanel />);
         await settle();
         await regenerateKeys();
@@ -166,19 +149,8 @@ describe('RemotePairingPanel — Regenerate Keys', () => {
 });
 
 describe('MCSettingsOverlay — ⚙️ → 📱 Remote', () => {
-    const openRemoteTab = async () => {
-        render(<MCStoreProvider><MCSettingsOverlay open onClose={vi.fn()} /></MCStoreProvider>);
-        await settle();
-        await act(async () => { fireEvent.click(screen.getByText('📱 Remote')); });
-        await settle();
-    };
-    /** Mission Control state saved by an older start: the pairing it held then. */
-    const staleState = () => localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        ...initialState, _migrationVersion: 1, settings: { ...initialState.settings, remoteRoomId: 'room-stale', remoteKey: 'key-stale' },
-    }));
-
     it('shows the notice on the Remote tab', async () => {
-        settings = { ...FRESH, remotePairingRenewedAt: RENEWED_AT };
+        bridge.settings = { ...FRESH, remotePairingRenewedAt: RENEWED_AT };
         render(<MCStoreProvider><MCSettingsOverlay open onClose={vi.fn()} /></MCStoreProvider>);
         await settle();
         expect(screen.queryByText(REPAIRED_NOTICE)).not.toBeInTheDocument();
@@ -187,21 +159,17 @@ describe('MCSettingsOverlay — ⚙️ → 📱 Remote', () => {
         expect(await screen.findByText(REPAIRED_NOTICE)).toBeInTheDocument();
     });
 
-    it('draws the fresh read, never the pairing Mission Control state still holds', async () => {
-        staleState();
-        settings = FRESH;
+    it('draws the v2 pairing of the fresh read', async () => {
+        bridge.settings = FRESH;
         await openRemoteTab();
         expect(shownUrl()).toBe(buildPairingUrl('room-fresh', 'key-fresh'));
-        expect(document.body.innerHTML).not.toContain('key-stale');
     });
 
-    it('draws no QR code at all when the fresh read has no v2 pairing, whatever the state holds', async () => {
-        staleState();
-        settings = { remoteRoomId: 'room-v1', remoteKey: 'key-v1' };
+    it('draws no QR code for an unmarked (v1) pairing, only the waiting text', async () => {
+        bridge.settings = { remoteRoomId: 'room-v1', remoteKey: 'key-v1' };
         await openRemoteTab();
         expect(shownUrl()).toBeNull();
         expect(screen.getByText(NOT_PAIRED_TEXT)).toBeInTheDocument();
-        expect(document.body.innerHTML).not.toContain('key-stale');
         expect(document.body.innerHTML).not.toContain('key-v1');
     });
 });
