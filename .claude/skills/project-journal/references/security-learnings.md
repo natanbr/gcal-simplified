@@ -195,3 +195,17 @@ save in the `'tokens'` listener had been unreachable on a relaunched Windows ses
 every hour, a failed write fell back to plain text, the kept refresh token came from a store
 re-read that could fail, and a store error thrown inside the library's synchronous emit discarded
 the grant. When a fix revives a code path, review that path as new code.
+
+## 2026-10-03 — Moving a secret's home does not delete its old copies
+
+**Learning:** PR 180 made `config.json` the only owner of the remote pairing and stopped the Remote
+tab drawing Mission Control's copy, but the copy stayed: the start-up `settings:get` read still
+wrote room and key into `mc-state-v5.settings` (plain localStorage) on every start, "kept in sync"
+for no reader. On a profile whose renewal could not be saved it was the leaked v1 key. Guards that
+pin the readers (the QR, the broadcast projection) cannot see a copy that nobody reads.
+**Action:** when ownership of a secret moves, list every place a copy is *stored*, not only where
+it is read, and remove the copies: drop the field from the type (tsc then refuses a literal write),
+drop it at hydration so the next save writes it out (`withoutPairingCopy` in
+`store/pairingRenewal.ts`), and guard both the names (`remote-key-boundary.test.ts` part iii) and
+the saved blob by value (`pairingCopy.test.tsx`), because a spread of the whole answer names no
+field.
