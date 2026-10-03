@@ -110,9 +110,7 @@ export interface MCSettings {
     creamTaskSchedule?: 'morning' | 'evening' | 'both';
     /** Custom token costs and enablement state for rewards */
     rewardConfigs?: Record<string, { enabled: boolean; targetCount: number }>;
-    /** Remote Control Pairing (room, secret key), from settings:get: v2 pairings only (store/pairingRenewal.ts). */
-    remoteRoomId?: string;
-    remoteKey?: string;
+    /** No remote pairing here: config.json holds it, and the Remote tab reads settings:get (store/pairingRenewal.ts). */
     remotePairingRenewalLogged?: string; // the renewal time whose log line was written: never re-added, never sent to the phone
     /** Minutes of inactivity before auto-returning to Calendar view (0 = disabled). */
     autoReturnMins?: number;

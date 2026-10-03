@@ -1,12 +1,12 @@
 // ============================================================
 // The phone payload never carries the pairing
 // ------------------------------------------------------------
-// The pairing key and room id also live in Mission Control's own state
-// (settings.remoteKey / settings.remoteRoomId, copied from settings:get at
-// mount so the Remote tab can draw the QR code). The broadcast payload is an
-// explicit projection, and the channel is public: one careless spread of
-// `settings` would put the key back on the wire inside every signed
-// state-update, where a signature hides nothing. The same goes for the
+// Mission Control's state no longer keeps the pairing (hydration drops the copy
+// v0.0.43 and earlier saved in settings: pairingCopy.test.tsx). This still runs
+// the broadcast on a state that holds one, because the payload must be an
+// explicit projection on its own: the channel is public, and one careless
+// spread of `settings` would put whatever they hold on the wire inside every
+// signed state-update, where a signature hides nothing. The same goes for the
 // renewal-logged marker (settings.remotePairingRenewalLogged): it is
 // bookkeeping of this machine, not state the phone draws.
 // ============================================================
@@ -22,7 +22,9 @@ const KEY = 'q7Lk2mPz9XwR4tYb8NcV';
 const invoke = vi.fn<NonNullable<Window['ipcRenderer']>['invoke']>(() => Promise.resolve(undefined));
 
 const LOGGED_MARKER = '2026-09-28T09:00:00.000Z';
-const paired: MCState = { ...initialState, settings: { ...initialState.settings, remoteRoomId: ROOM, remoteKey: KEY, remotePairingRenewalLogged: LOGGED_MARKER } };
+/** The copy an old build saved, as it would sit in the settings if anything ever kept it again. */
+const oldPairingCopy = { remoteRoomId: ROOM, remoteKey: KEY };
+const paired: MCState = { ...initialState, settings: { ...initialState.settings, ...oldPairingCopy, remotePairingRenewalLogged: LOGGED_MARKER } };
 
 beforeEach(() => {
     vi.useFakeTimers();

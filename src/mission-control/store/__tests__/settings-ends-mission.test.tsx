@@ -77,7 +77,7 @@ describe('SET_SETTINGS that ends nothing writes no such line', () => {
         ['the OTHER mission\'s start time', { morningStartsAt: '05:15' }],
         ['the running mission\'s duration', { eveningDurationMins: 45 }],
         ['the running mission\'s start time, unchanged', { eveningStartsAt: initialState.settings.eveningStartsAt }],
-        ['the remote keys the provider syncs at startup', { remoteRoomId: 'room', remoteKey: 'key' }],
+        ['the renewal marker the provider saves at startup', { remotePairingRenewalLogged: '2026-09-28T09:00:00.000Z' }],
         // The reducer keeps the stored time for these, so nothing was rescheduled.
         ['the running mission\'s start time, cleared', { eveningStartsAt: '' }],
         ['the running mission\'s start time, malformed', { eveningStartsAt: '999:00' }],
