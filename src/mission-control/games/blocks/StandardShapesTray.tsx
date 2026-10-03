@@ -19,8 +19,9 @@ export const StandardShapesTray = memo(function StandardShapesTray({
     onStartDrag,
 }: StandardShapesTrayProps) {
     return (
-        // Layout (a row under the board, or two rows beside it) lives in mc.css.
-        <div className="mc-blocks-tray" style={{ background: 'rgba(255,255,255,0.01)', border: '1.5px dashed rgba(255,255,255,0.06)', borderRadius: 20 }}>
+        // A row under the board, or two rows beside it: styles/mc-short-screens.css. No inline
+        // style here, so nothing can beat the media query.
+        <div className="mc-blocks-tray">
             {standardShapes.map((shape, idx) => {
                 return (
                     <div

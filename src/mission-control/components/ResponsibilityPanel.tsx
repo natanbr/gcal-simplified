@@ -73,11 +73,11 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                     ? '2px solid rgba(247,201,72,0.6)'
                     : '1.5px solid rgba(160,150,230,0.25)',
                 borderRadius: 18,
-                padding: 'var(--mc-card-pad)',
+                padding: 'var(--mc-card-pad, 14px 14px 12px)',
                 display: 'grid',
                 gridTemplateColumns: '1fr auto',
                 gridTemplateRows: 'auto auto',
-                gap: 'var(--mc-card-gap) 14px',
+                gap: 'var(--mc-card-gap, 10px) 14px',
                 alignItems: 'center',
                 boxShadow: isComplete
                     ? '0 4px 16px rgba(247,201,72,0.2), var(--mc-depth-shadow)'
@@ -315,7 +315,7 @@ export function ResponsibilityPanel() {
     const state = useMCState();
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--mc-card-gap)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--mc-col3-gap, 6px)' }}>
             {state.responsibilities.map(task => (
                 <ResponsibilityCard key={task.id} task={task} />
             ))}

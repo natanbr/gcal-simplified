@@ -111,10 +111,11 @@ export function BlocksCanvas({
     }
 
     return (
-        <div className="mc-blocks-stage" style={{ display: 'flex', alignItems: 'stretch', width: '100%', height: '100%', justifyContent: 'center', position: 'relative' }}>
+        // Layout lives in styles/mc-short-screens.css, with no inline style that could beat its
+        // media query: the tray goes beside the board on a short, wide screen.
+        <div className="mc-blocks-stage">
             <Altimeter altitude={gameState.altitude} />
 
-            {/* Layout in mc.css: the tray goes beside the board on a short screen. */}
             <div className="mc-blocks-board-col">
                 {import.meta.env.DEV && (
                     <PerformanceHUD

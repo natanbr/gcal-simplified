@@ -84,7 +84,7 @@ export function NumericPanel({ question, feedback, onDirty, onSubmit }: NumericP
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 14,
-                padding: '24px 0',
+                padding: 'var(--mc-quiz-question-pad, 24px) 0',
                 flexWrap: 'nowrap',
             }}>
                 {/* Question text e.g. "14 + 2 =" */}
@@ -151,7 +151,9 @@ export function NumericPanel({ question, feedback, onDirty, onSubmit }: NumericP
                 gridTemplateColumns: 'repeat(3, 1fr)',
                 gap: 10,
                 width: '100%',
-                maxWidth: 300,
+                // Keys are square and fill a third each: this width IS the key size. A short
+                // screen narrows it (styles/mc-short-screens.css).
+                maxWidth: 'var(--mc-numpad-width, 300px)',
             }}>
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
                     <NumpadButton key={d} label={d} onClick={() => handleDigit(d)} />

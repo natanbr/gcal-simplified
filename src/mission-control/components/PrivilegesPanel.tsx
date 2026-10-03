@@ -34,10 +34,10 @@ export function PrivilegesPanel({ interactive = false }: { interactive?: boolean
                 background: 'rgba(255,255,255,0.85)',
                 border: '1.5px solid rgba(160,150,230,0.3)',
                 borderRadius: 18,
-                padding: 'var(--mc-card-pad)',
+                padding: 'var(--mc-card-pad, 14px 14px 12px)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 'var(--mc-card-gap)',
+                gap: 'var(--mc-card-gap, 10px)',
                 boxShadow: 'var(--mc-depth-shadow)',
                 position: 'relative',
             }}
@@ -117,9 +117,9 @@ export function PrivilegesPanel({ interactive = false }: { interactive?: boolean
                 )}
             </div>
 
-            {/* Privilege Buttons Row: one row, the cards narrow instead. At 1280 px wide a
-                wrapped second row put Phone Games below the screen edge (`.mc-root` clips). */}
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'nowrap' }}>
+            {/* Privilege Buttons Row: one row, the cards narrow instead. Do not let it wrap:
+                at 1280 px wide a second row put Phone Games below the screen edge (`.mc-root` clips). */}
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                 {privileges.map(p => (
                     <PrivilegeCardButton key={p.id} p={p} interactive={interactive} />
                 ))}

@@ -4,7 +4,7 @@
 //
 // ⚠️  ISOLATION CONTRACT:
 //   - Does NOT import from parent app (../components, ../hooks, etc.)
-//   - CSS: imports ./styles/mc.css (isolated to this module)
+//   - CSS: imports ./styles/mc.css and ./styles/mc-short-screens.css (isolated to this module)
 //   - State: uses MCStoreProvider (provided by App.tsx — do not re-wrap here)
 // ============================================================
 
@@ -31,6 +31,7 @@ import { RemoteStatusProvider } from './contexts/RemoteStatusContext';
 import { useQuickGameSession } from './hooks/useQuickGameSession';
 import { useQuizEngine } from './hooks/useQuizEngine';
 import './styles/mc.css';
+import './styles/mc-short-screens.css';
 
 // ── Inner layout (needs access to store) ──────────────────────────────────────
 interface MCLayoutProps {
@@ -174,7 +175,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           flex: 1,
           display: 'flex',
           gap: 14,
-          padding: 'var(--mc-stage-pad-y) 18px',
+          padding: 'var(--mc-stage-pad-y, 14px) 18px',
           overflow: 'hidden',
           alignItems: 'stretch',
         }}
@@ -231,8 +232,8 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
           </div>
           {/* Column 3: Responsibilities. Four cards, and `.mc-root` is
               overflow:hidden, so whatever does not fit is simply gone: the gaps
-              and card padding tighten on a short screen (mc.css). */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--mc-col3-gap)', minWidth: 0 }}>
+              and card padding tighten on a short screen (mc-short-screens.css). */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--mc-col3-gap, 6px)', minWidth: 0 }}>
             <ResponsibilityPanel />
             <GameTokenPanel />
             <ShieldPanel />
