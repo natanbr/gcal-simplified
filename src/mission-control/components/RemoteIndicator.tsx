@@ -5,14 +5,40 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
+import { useEffect, useRef, useState } from 'react';
 import { useRemoteStatus } from '../contexts/RemoteStatusContext';
+
+/**
+ * A status change replays the pulse (3 x 2 s, mc.css 9) only if the last one
+ * started this long ago. A remote that keeps reconnecting (Supabase retries
+ * about every 10 s) would otherwise pulse most of the time, and a pulsing dot
+ * costs about a fifth of a CPU core while it runs. The colour still changes at
+ * once. 30 s caps the pulse at a fifth of the time under any flapping.
+ */
+export const REMOTE_PULSE_GAP_MS = 30_000;
+
+/** A new key whenever the dot should pulse again. Mounting the dot is a pulse. */
+function usePulseKey(status: string): number {
+    const [pulseKey, setPulseKey] = useState(0);
+    const lastPulseAt = useRef<number | null>(null);
+    useEffect(() => {
+        const now = Date.now();
+        if (lastPulseAt.current !== null && now - lastPulseAt.current < REMOTE_PULSE_GAP_MS) return;
+        if (lastPulseAt.current !== null) setPulseKey(k => k + 1);
+        lastPulseAt.current = now;
+    }, [status]);
+    return pulseKey;
+}
 
 export function RemoteIndicator() {
     const status = useRemoteStatus();
     const isOnline = status === 'online';
+    const pulseKey = usePulseKey(status);
+    const label = isOnline ? 'Remote: connected' : 'Remote: offline';
 
     return (
         <div
+            title={label}
             style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -26,20 +52,24 @@ export function RemoteIndicator() {
                 color: 'var(--mc-text-muted)',
             }}
         >
-            {/* The colour is the status. `key` remounts the dot on every status
-                change so its finite pulse (mc.css, 9) plays again. It must never
-                loop: a loop here cost 20-25 % of one CPU core for as long as
-                Mission Control was open (docs/performance.md, 2026-10-04). */}
+            {/* Connected: a filled green dot. Offline: a hollow red ring, so the
+                two differ in shape, not only in colour. The pulse is finite and
+                must never loop: a loop here cost 20-25 % of one CPU core for as
+                long as Mission Control was open (docs/performance.md, 2026-10-04). */}
             <span
-                key={status}
+                key={pulseKey}
+                role="img"
+                aria-label={label}
                 data-testid="mc-remote-dot"
                 data-status={status}
                 className="mc-anim-remote-pulse"
                 style={{
                     width: 8,
                     height: 8,
+                    boxSizing: 'border-box',
                     borderRadius: '50%',
-                    backgroundColor: isOnline ? 'var(--mc-green)' : 'var(--mc-red)',
+                    backgroundColor: isOnline ? 'var(--mc-green)' : 'transparent',
+                    border: isOnline ? 'none' : '2px solid var(--mc-red)',
                     boxShadow: isOnline ? '0 0 8px var(--mc-green)' : 'none',
                 }}
             />
