@@ -1,6 +1,14 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  // Tests are not part of the page: a class name written in a test string
+  // (a guard's sample, say) would otherwise ship its CSS in production.
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+    "!./src/**/*.test.{ts,tsx}",
+    "!./src/**/__tests__/**",
+    "!./src/test/**",
+  ],
   darkMode: 'class',
   theme: {
     extend: {

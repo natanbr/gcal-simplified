@@ -66,10 +66,11 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: 'make applyBehaviorSync return a new object on a no-op tick',
     },
     {
-        rule: 'No repeat: Infinity / CSS infinite animation in the always-mounted tree',
+        rule: 'Nothing loops on an idle view (the Calendar, or a Mission Control screen the display sits on: the main view in any state, a running mission\'s overlay or pill): rendering those screens catches a CSS, Tailwind or inline-style loop; Mission Control\'s stylesheets hold no infinite; every loop in src/ is registered with when it is on screen, its count pinned, idle budget 0. A JavaScript loop (Framer, WAAPI, requestAnimationFrame) is defended only by the hand-set onIdleView of its registry entry, and a custom animate-* utility from tailwind.config.js is not recognised',
         source: 'CLAUDE.md → Performance → 3',
-        status: 'manual',
-        defence: 'Reviewed by the perf-sentinel subagent. Currently zero occurrences in the always-mounted tree; a guard would need to model the mount graph to know which components are always-mounted.',
+        status: 'guarded',
+        guard: ['src/__tests__/infinite-animation-registry.test.ts', 'src/__tests__/idle-calendar-animations.test.tsx', 'src/mission-control/__tests__/idle-animations.test.tsx', 'src/mission-control/components/RemoteIndicator.test.tsx'],
+        verifiedRedBy: "proven 2026-10-04, each reverted. Round 1: the Remote dot's rule back to `infinite` in mc.css: the registry (found 1, registered none), RemoteIndicator's finite-count case and the idle render all red; a Tailwind looping class on the Remote chip plus a second `repeat: Infinity` in Altimeter.tsx: the registry red for both (found 2, registered 1) and the render red for the class. Round 2 (review of PR 189): Dashboard's `animate-sync-bar` applied unconditionally: only idle-calendar-animations red (the registry stays green, the count did not change), which is the hole the review found. Each Mission Control idle screen red alone: `.mc-anim-pedestal-complete` looping (a goal ready to redeem, plus the stylesheet case), `.mc-anim-icon-complete` looping (a responsibility DONE, plus the stylesheet case), a Tailwind looping class on the bank-locked row (the shield broken, plus the registry), on a suspended card's hazard stripe (a privilege suspended) and on the mission pill (minimized to the pill, plus the registry). The Logs dot and the finger wag back to `infinite`: the stylesheet case, both 10 s cases and the registry red. The Remote dot keyed by `Math.random()`: the gap, flapping and parent re-render cases red; keyed by its status (round 1): the gap case and the flapping case red, 120 pulses in 120 s against 4. Round 3: the pulse gap read from `Date.now()`: the wall-clock-set-back case red; `CHEAT_TRAP_SHOW_MS` 5000 → 6000: both trap-duration cases red (12 s needed, 10.5 and 10.2 s played). Against cb2d1f2 the finite-count case is red for the right reason; the cases that look the dot up by `data-testid` are red only because it did not exist yet.",
     },
     {
         rule: 'Every setInterval/setTimeout/subscription is cleared in its effect cleanup',
@@ -559,13 +560,15 @@ describe('rule registry', () => {
         // was immediately taken by the root-config clause it had been hiding. That
         // clause closed on 2026-09-23 — npm run tsc now compiles vite.config.ts,
         // vitest.config.ts and playwright.config.ts — so the cap is 6.
+        // 2026-10-04: the infinite-animation rule (Performance → 3) got a guard,
+        // the infinite-animation registry, which leaves 5 unenforced: the cap is 5.
 
         expect(
             unenforced.length,
             `${unenforced.length} of ${REGISTRY.length} rules have no automated guard:\n  ` +
             unenforced.map(r => r.rule).join('\n  ') +
             `\n\nIf you added a rule without a guard, raise this number deliberately.`
-        ).toBeLessThanOrEqual(6);
+        ).toBeLessThanOrEqual(5);
     });
 
     it('covers a meaningful share of the rulebook', () => {

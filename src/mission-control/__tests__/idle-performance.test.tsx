@@ -44,8 +44,11 @@ function makeWrapper(state: MCState, dispatch = vi.fn()) {
 describe('idle perf — mission scheduler is gated', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => {
-        vi.useRealTimers();
+        // Spies first: a spy on setTimeout/setInterval taken under fake timers
+        // restores the FAKE one, so restoring it after useRealTimers() left any
+        // later test in this file on a stale fake clock (a waitFor there hangs).
         vi.restoreAllMocks();
+        vi.useRealTimers();
     });
 
     it('creates NO polling setInterval while no mission is active (Calendar idle)', () => {
@@ -77,8 +80,9 @@ describe('idle perf — mission scheduler is gated', () => {
 describe('idle perf — mission scheduler arms nothing between fires', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => {
-        vi.useRealTimers();
+        // Spies first, as above.
         vi.restoreAllMocks();
+        vi.useRealTimers();
     });
 
     function timersArmedOver10s(state: MCState, now: Date): number {
@@ -196,3 +200,7 @@ describe('idle perf — behavior heartbeat is churn-free when idle', () => {
         }
     });
 });
+
+// ── 3. Looping animations on the idle screens ─────────────────────────────────
+// Rendered in idle-animations.test.tsx (Mission Control's idle screens) and
+// src/__tests__/idle-calendar-animations.test.tsx (the Calendar).

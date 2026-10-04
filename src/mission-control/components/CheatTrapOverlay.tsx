@@ -1,6 +1,13 @@
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
+/** One showing of the trap. MissionControl.tsx shows it on a cheat attempt and
+ *  once more while the flag is still set, then clears the flag. */
+export const CHEAT_TRAP_SHOW_MS = 5000;
+/** The longest the trap and the Logs dot stay on screen for one cheat attempt.
+ *  Their animations in mc.css must last at least this long, then stop. */
+export const CHEAT_TRAP_TOTAL_MS = 2 * CHEAT_TRAP_SHOW_MS;
+
 interface CheatTrapOverlayProps {
   show: boolean;
 }
