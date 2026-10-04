@@ -263,4 +263,6 @@ rendered in `idle-performance.test.tsx`. Two traps met on the way: a `tail -F` o
 process appends to locks it on Windows (the runner's `Add-Content` failed; `appendFileSync` would
 have thrown), and a `vi.spyOn(global, 'setTimeout')` taken under fake timers restores the FAKE one
 if `vi.restoreAllMocks()` runs after `vi.useRealTimers()`: restore spies first, or a later test's
-`waitFor` hangs on a dead clock.
+`waitFor` hangs on a dead clock. And Tailwind's `content` glob (`./src/**/*.{js,ts,jsx,tsx}`) scans
+test files: a Tailwind class name written in a test string ships that class and its `@keyframes` in
+the production CSS. Describe a class in test prose; don't spell it.
