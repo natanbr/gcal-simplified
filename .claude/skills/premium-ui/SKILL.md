@@ -45,7 +45,7 @@ These are not stylistic preferences; violating them shows up as the fan spinning
 - **`will-change: transform` is a loan, not a gift.** Apply it to genuinely complex moving elements and remove it when the animation ends, or you leak GPU memory.
 - **Respect `prefers-reduced-motion`.** Wrap non-essential motion in `@media (prefers-reduced-motion: no-preference)`. Accessibility is not a tradeoff against polish.
 
-`perf-sentinel` enforces all of this, and `src/__tests__/timer-registry.test.ts`, `src/__tests__/infinite-animation-registry.test.ts` plus `idle-performance.test.tsx` fail the build for the worst violations.
+`perf-sentinel` enforces all of this, and `src/__tests__/timer-registry.test.ts`, `src/__tests__/infinite-animation-registry.test.ts`, the idle-screen renders (`idle-calendar-animations.test.tsx`, `idle-animations.test.tsx`) plus `idle-performance.test.tsx` fail the build for the worst violations.
 
 ---
 

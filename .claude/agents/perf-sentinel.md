@@ -51,9 +51,11 @@ Every `setInterval`, `setTimeout`, subscription, `requestAnimationFrame`, and ev
 
 ## Verification
 
-The two guards run in `npm run test:unit`:
+The guards run in `npm run test:unit`:
 - `src/__tests__/timer-registry.test.ts`
 - `src/mission-control/__tests__/idle-performance.test.tsx`
+- `src/__tests__/infinite-animation-registry.test.ts` (every loop registered, none on an idle view)
+- `src/__tests__/idle-calendar-animations.test.tsx` and `src/mission-control/__tests__/idle-animations.test.tsx` (the idle screens render nothing that loops)
 
 There is also a live HUD at the app root (`src/components/PerformanceHud.tsx`) showing FPS / worst-frame JANK / heap MB, on both views and during games. If you are assessing a real regression rather than reading a diff, ask for those numbers — JANK is the clearest "did the UI hitch" signal. It can be disabled with `localStorage.setItem('perf-hud','off')`.
 

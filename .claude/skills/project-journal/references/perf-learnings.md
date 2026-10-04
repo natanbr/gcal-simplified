@@ -254,15 +254,20 @@ cost 12.9 %. A `backdrop-filter` ancestor (`.mc-brow`) adds a second render pass
 40 % while on screen. Measured with `cumulativeCPUUsage` deltas on the built app (`percentCPUUsage` on
 this Electron is a share of the whole 12-thread machine); the harness, survey and traces are
 described in `docs/performance.md` → 2026-10-04.
-**Action:** Nothing loops on an idle view (the Calendar, Mission Control's main view). Ambient
-motion plays a few iterations on a change and stops: a finite count, replayed by a React `key`
-remount (`RemoteIndicator` keys the dot on the status). "Move it to CSS" fixes a loop's main-thread
-cost while something is happening, never a loop on an idle screen. Every loop in `src/` is pinned in
-`src/__tests__/infinite-animation-registry.test.ts` (idle budget 0) and the idle main view is
-rendered in `idle-performance.test.tsx`. Two traps met on the way: a `tail -F` on a file another
-process appends to locks it on Windows (the runner's `Add-Content` failed; `appendFileSync` would
-have thrown), and a `vi.spyOn(global, 'setTimeout')` taken under fake timers restores the FAKE one
-if `vi.restoreAllMocks()` runs after `vi.useRealTimers()`: restore spies first, or a later test's
-`waitFor` hangs on a dead clock. And Tailwind's `content` glob (`./src/**/*.{js,ts,jsx,tsx}`) scans
-test files: a Tailwind class name written in a test string ships that class and its `@keyframes` in
-the production CSS. Describe a class in test prose; don't spell it.
+**Action:** Nothing loops on an idle view (the Calendar, any Mission Control screen the display
+sits on). Ambient motion plays a few iterations on a change and stops: a finite count, replayed by
+a React `key` remount, and rate-limited when the change can repeat (`RemoteIndicator` replays its
+pulse only 30 s after the last one: a flapping remote kept a "pulse on every change" dot pulsing
+nearly all the time). "Move it to CSS" fixes a loop's main-thread cost while something is
+happening, never a loop on an idle screen. Every loop in `src/` is pinned in
+`src/__tests__/infinite-animation-registry.test.ts` (idle budget 0, read with the TypeScript
+parser), and the idle screens are rendered: `idle-calendar-animations.test.tsx` (the real `App`)
+and `idle-animations.test.tsx` (ten Mission Control states). A registry of occurrences alone is not
+a guard for "not on an idle view": making the Calendar's sync bar always animate kept it green,
+because the count did not change. Render the screen. Traps met on the way: a `tail -F` on a file
+another process appends to locks it on Windows (the runner's `Add-Content` failed;
+`appendFileSync` would have thrown); a `vi.spyOn(global, 'setTimeout')` taken under fake timers
+restores the FAKE one if `vi.restoreAllMocks()` runs after `vi.useRealTimers()`: restore spies
+first, or a later test's `waitFor` hangs on a dead clock; and Tailwind's `content` glob scanned test
+files, so a class named in a test string shipped its CSS (five rules, `.animate-ping` and its
+keyframes among them in round 1). `tailwind.config.js` now excludes tests.

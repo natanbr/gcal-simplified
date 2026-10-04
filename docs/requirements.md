@@ -104,7 +104,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Task Lists**: Toggle visibility of specific Task Lists.
   - **Auto-Refresh**: Data refreshes every 5 minutes.
 - **Remote Control (Mission Control)**:
-  - **Remote indicator** (the "Remote" chip in Mission Control's top bar): a green dot while the phone remote's channel is connected, red while offline. The dot pulses 3 times (6 s) when the status changes, and on opening Mission Control, then stands still. It never loops: a looping pulse cost 20-25 % of one CPU core for as long as Mission Control was open (2026-10-04).
+  - **Remote indicator** (the "Remote" chip in Mission Control's top bar): a filled green dot while the phone remote's channel is connected, a hollow red ring while offline, labelled "Remote: connected" / "Remote: offline" (tooltip and screen reader). The dot pulses 3 times (6 s) when Mission Control opens and when the status changes, then stands still; a change less than 30 s after the last pulse started changes the colour without pulsing again, so a remote that keeps reconnecting does not keep it pulsing. It never loops: a looping pulse cost 20-25 % of one CPU core for as long as Mission Control was open (2026-10-04).
   - **Secure Bridge**: Established via Supabase Realtime (Broadcast) and Electron IPC.
   - **Main Process Isolation**: All Supabase connections and key validations are restricted to the Main process.
   - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing. The key never travels on the channel, because anyone who knows the room id can join it; it is only used to sign.
@@ -1825,18 +1825,28 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   for as long as the view was open and the remote was connected. A loop makes the app draw a new
   frame 59 times a second, even for an 8 px dot; the dot sits in the top bar, whose background blur
   is redrawn with every frame.
-- **Now.** The dot is green while the remote is connected and red while it is offline, as before.
-  It pulses 3 times (6 s) when the status changes, and when Mission Control opens, then stands
-  still at full brightness. While connected it used to pulse forever; while offline it never pulsed.
+- **Now.** Connected is a filled green dot, offline a hollow red ring (it used to be a red dot: the
+  two now differ in shape, not only colour), and the chip says "Remote: connected" / "Remote:
+  offline" as a tooltip and to a screen reader. The dot pulses 3 times (6 s) when Mission Control
+  opens and when the status changes, then stands still at full brightness. A change less than 30 s
+  after the last pulse started changes the colour at once but does not pulse again, so a remote
+  that keeps reconnecting pulses at most a fifth of the time. While connected it used to pulse
+  forever; while offline it never pulsed.
+- **The cheat trap's two animations stop too.** The red dot on Logs (1.5 s pulse) and the wagging
+  finger (0.6 s) looped for as long as they were on screen; they now play for 10.5 s and 10.2 s,
+  longer than the trap is shown (about 10 s), and stop. Mission Control's stylesheets hold no
+  `infinite` any more.
 - **Measured** on the built app, 5 minutes idle at 1280x720 / 150 % (method and the full survey of
   every loop in `docs/performance.md`): Mission Control's main view 24.4 % → 0.49 % of one core;
   the Calendar 0.19 % → 0.19 %.
-- **Unchanged.** The red dot on Logs and the cheat-trap finger still loop, but only while a cheat
-  attempt is on screen (about 10 s at most).
-- Tests: `src/mission-control/components/RemoteIndicator.test.tsx` (green / red, a finite pulse in
-  `mc.css`, a new dot element on each status change and the same one when nothing changed).
+- Tests: `src/mission-control/components/RemoteIndicator.test.tsx` (dot and ring with their labels,
+  a finite pulse in `mc.css`, a new dot when the status changes after 30 s, the same dot inside the
+  30 s and when the parent re-renders, 4 pulses in 2 minutes of a remote flapping every second).
   Guards: `src/__tests__/infinite-animation-registry.test.ts` registers every looping animation in
-  `src/` with when it is on screen, pins its count per file and allows none on an idle view; the
-  render case in `src/mission-control/__tests__/idle-performance.test.tsx` renders Mission
-  Control's idle main view with the remote online and fails if anything on it loops. The unused
-  Vite template stylesheet `src/App.css` (a looping logo spin, imported nowhere) is deleted.
+  `src/` with when it is on screen, pins its count per file and allows none on an idle view;
+  `src/__tests__/idle-calendar-animations.test.tsx` renders the idle Calendar (the real `App`) and
+  `src/mission-control/__tests__/idle-animations.test.tsx` renders ten idle Mission Control screens
+  (a goal ready, a responsibility DONE, the shield broken, a privilege suspended, a mission running
+  or minimized, …) with the remote online, and both fail if anything on screen loops. The unused
+  Vite template stylesheet `src/App.css` (a looping logo spin, imported nowhere) is deleted, and
+  Tailwind no longer scans test files, so a class named in a test does not ship its CSS.
