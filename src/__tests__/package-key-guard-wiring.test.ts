@@ -98,13 +98,19 @@ describe('package key guard — wiring', () => {
     });
 
     it('/release checks the QA\'d build for an admin key before the version bump', () => {
+        // Only the Pre-flight section counts: the frontmatter's allowed-tools names
+        // both the build and the check, and satisfied an indexOf over the whole file.
         const release = readFileSync(join(repoRoot, '.claude/commands/release.md'), 'utf8');
-        const check = release.indexOf(GUARD_COMMAND);
-        const firstBuild = release.indexOf('npx vite build');
+        const start = release.indexOf('\n## Pre-flight');
         const bump = release.indexOf('\n## Release');
+        expect(start, 'release.md needs a "## Pre-flight" section before "## Release"').toBeGreaterThan(-1);
+        expect(bump).toBeGreaterThan(start);
 
-        expect(check, `release.md never runs ${GUARD_COMMAND}`).toBeGreaterThan(-1);
-        expect(check, 'the check must read a build, so it comes after the first one').toBeGreaterThan(firstBuild);
-        expect(check, 'the check must come before the bump tags and pushes').toBeLessThan(bump);
+        const preflight = release.slice(start, bump);
+        expect(preflight, 'the pre-flight no longer builds what it QAs').toContain('npx vite build');
+        const check = preflight.indexOf(GUARD_COMMAND);
+        expect(check, `the pre-flight never runs ${GUARD_COMMAND}`).toBeGreaterThan(-1);
+        expect(check, 'the check must read the build made for QA, so it comes after it')
+            .toBeGreaterThan(preflight.indexOf('npx vite build'));
     });
 });
