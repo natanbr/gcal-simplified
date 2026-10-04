@@ -1,39 +1,15 @@
-import { app, shell, safeStorage } from 'electron';
+import { app, shell } from 'electron';
 import { google } from 'googleapis';
-import Store from 'electron-store';
 import http from 'http';
 import { AddressInfo } from 'net';
 import { OAuth2Client, Credentials } from 'google-auth-library';
 import crypto from 'node:crypto';
-
-interface AuthStore {
-    tokens?: Credentials | string;
-    isEncrypted?: boolean;
-}
-
-const store = new Store<AuthStore>({ name: 'auth-store' });
+import { canAuthorize, clearStoredTokens, readStoredTokens, writeStoredTokens } from './auth-token-store';
 
 const SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks.readonly'
 ];
-
-/** google-auth-library's eagerRefreshThresholdMillis: an access token this close to expiry is refreshed, not sent. */
-const REFRESH_MARGIN_MS = 5 * 60 * 1000;
-
-/**
- * Whether these credentials can authorize a Google call: a refresh token, or an
- * access token the client will still send. An expired access token with no
- * refresh token is not a sign-in (every call fails "No refresh token is set."),
- * and neither is a parsed `42`, `null` or `{}`.
- */
-function canAuthorize(value: unknown): value is Credentials {
-    if (typeof value !== 'object' || value === null) return false;
-    if ('refresh_token' in value && typeof value.refresh_token === 'string' && value.refresh_token !== '') return true;
-    return 'access_token' in value && typeof value.access_token === 'string' && value.access_token !== ''
-        && 'expiry_date' in value && typeof value.expiry_date === 'number'
-        && value.expiry_date > Date.now() + REFRESH_MARGIN_MS;
-}
 
 export class AuthService {
     private oauth2Client: OAuth2Client;
@@ -84,7 +60,7 @@ export class AuthService {
         if (!app.isReady()) {
             throw new Error('Google credentials were requested before the app is ready; safeStorage cannot decrypt them yet.');
         }
-        const tokens = this.loadTokens();
+        const tokens = readStoredTokens();
         // Set only once the read returned: a store read that throws (the file
         // held by antivirus or a backup) is retried by the next call instead of
         // answering "signed out" until a restart.
@@ -103,49 +79,11 @@ export class AuthService {
      * The kept one comes from the client, which still holds the previous set
      * when the library emits 'tokens' (as its own refresh does), never from a
      * re-read of the store, which can fail and lose it.
-     *
-     * Plain text only when this platform has no encryption (Linux without a
-     * keyring) or encrypting throws. A failed write throws and leaves the file as
-     * it was: falling back to plain text there wrote the refresh token to disk
-     * unencrypted.
      */
     private saveTokens(granted: Credentials) {
         const refreshToken = granted.refresh_token ?? this.oauth2Client.credentials.refresh_token;
         const tokens = refreshToken ? { ...granted, refresh_token: refreshToken } : granted;
-        store.set(this.encrypted(tokens) ?? { tokens, isEncrypted: false });
-    }
-
-    private encrypted(tokens: Credentials): AuthStore | null {
-        if (!safeStorage.isEncryptionAvailable()) return null;
-        try {
-            return { tokens: safeStorage.encryptString(JSON.stringify(tokens)).toString('base64'), isEncrypted: true };
-        } catch (error) {
-            console.error('Failed to encrypt tokens', error);
-            return null;
-        }
-    }
-
-    private loadTokens(): Credentials | null {
-        const stored = store.get('tokens');
-        const isEncrypted = store.get('isEncrypted');
-
-        if (!stored) return null;
-
-        if (isEncrypted && typeof stored === 'string' && safeStorage.isEncryptionAvailable()) {
-            try {
-                const buffer = Buffer.from(stored, 'base64');
-                const parsed: unknown = JSON.parse(safeStorage.decryptString(buffer));
-                return canAuthorize(parsed) ? parsed : null;
-            } catch (e) {
-                console.error('Failed to decrypt tokens', e);
-                return null;
-            }
-        } else if (typeof stored === 'object') {
-            // Unencrypted object (legacy or fallback)
-            return canAuthorize(stored) ? stored : null;
-        }
-
-        return null;
+        writeStoredTokens(tokens);
     }
 
     getAuthClient() {
@@ -290,8 +228,7 @@ export class AuthService {
         // The client first: a store delete that throws must not leave it signed in.
         this.oauth2Client.setCredentials({});
         this.credentialsLoaded = true;
-        store.delete('tokens');
-        store.delete('isEncrypted');
+        clearStoredTokens();
     }
 }
 
