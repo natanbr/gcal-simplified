@@ -10,17 +10,11 @@
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import React from 'react';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { mcReducer, initialState, MAX_GAME_TOKENS, PROGRESS_PER_TOKEN } from '../store/mcReducer';
 import { useMissionScheduler } from '../hooks/useMissionScheduler';
 import { MCContext } from '../store/useMCStore';
-import { MissionControl } from '../MissionControl';
-import { DragLayer } from '../components/DragLayer';
-import { INFINITE_TAILWIND_CLASS, infiniteCssRules } from './infiniteAnimations';
 import type { MCState } from '../types';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -51,8 +45,8 @@ describe('idle perf — mission scheduler is gated', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => {
         // Spies first: a spy on setTimeout/setInterval taken under fake timers
-        // restores the FAKE one, so restoring it after useRealTimers() left later
-        // tests (section 3 needs real timers) on a stale fake clock.
+        // restores the FAKE one, so restoring it after useRealTimers() left any
+        // later test in this file on a stale fake clock (a waitFor there hangs).
         vi.restoreAllMocks();
         vi.useRealTimers();
     });
@@ -207,46 +201,6 @@ describe('idle perf — behavior heartbeat is churn-free when idle', () => {
     });
 });
 
-// ── 3. Mission Control's idle main view runs no looping animation ─────────────
-// A loop draws a frame every vsync for as long as it is on screen, compositor-
-// driven or not. The Remote dot's 2 s pulse (8 px, transform + opacity) cost
-// 20-25 % of one CPU core on the child's screen, 1280x720 at scale 1.5, for as
-// long as Mission Control was open (2026-10-04). The registry
-// (src/__tests__/infinite-animation-registry.test.ts) pins every loop in the
-// code; this renders the real view and looks at what is actually on it.
-describe('idle perf — Mission Control main view runs no looping animation', () => {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const mcCss = ['mc.css', 'mc-short-screens.css']
-        .map(file => readFileSync(resolve(here, '..', 'styles', file), 'utf8'))
-        .join('\n');
-
-    afterEach(() => { delete window.ipcRenderer; });
-
-    it('remote online, no mission, no game: no element matches a looping rule, class or inline style', async () => {
-        window.ipcRenderer = {
-            invoke: vi.fn(async (channel: string) => (channel === 'remote:get-status' ? true : null)),
-            on: vi.fn(() => () => {}),
-        };
-        const idle: MCState = { ...initialState, activeMission: 'none', snakeGameActive: false, hasUnreviewedCheatAttempt: false };
-        render(
-            <MCContext.Provider value={{ state: idle, dispatch: vi.fn() }}>
-                <DragLayer><MissionControl onBackToCalendar={() => {}} /></DragLayer>
-            </MCContext.Provider>,
-        );
-        await waitFor(() => expect(screen.getByTestId('mc-remote-dot')).toHaveAttribute('data-status', 'online'));
-
-        const tailwindLoop = new RegExp(INFINITE_TAILWIND_CLASS.source);
-        const describeEl = (el: Element) => `<${el.tagName.toLowerCase()} class="${el.getAttribute('class') ?? ''}">`;
-        const looping = [
-            ...infiniteCssRules(mcCss).flatMap(rule =>
-                [...document.querySelectorAll(rule.selector)].map(el => `${rule.declaration} on ${describeEl(el)}`)),
-            ...[...document.querySelectorAll('[class]')]
-                .filter(el => tailwindLoop.test(el.getAttribute('class') ?? ''))
-                .map(el => `Tailwind loop on ${describeEl(el)}`),
-            ...[...document.querySelectorAll('[style]')]
-                .filter(el => /\binfinite\b/.test(el.getAttribute('style') ?? ''))
-                .map(el => `inline loop on ${describeEl(el)}`),
-        ];
-        expect(looping, 'looping animations on the idle Mission Control main view').toEqual([]);
-    });
-});
+// ── 3. Looping animations on the idle screens ─────────────────────────────────
+// Rendered in idle-animations.test.tsx (Mission Control's idle screens) and
+// src/__tests__/idle-calendar-animations.test.tsx (the Calendar).
