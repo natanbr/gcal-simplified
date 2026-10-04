@@ -104,4 +104,4 @@ Generic, pure functions used across multiple domains.
 * **Unit Tests**: `npm run test:unit` (Vitest)
 * **E2E Tests**: `npm run test:run` (Playwright — requires built Electron app; runs sequentially because some specs share the real userData)
 * **Coverage**: `npx vitest run --coverage` (requires `@vitest/coverage-v8@3.2.4`)
-* **Release**: `npm run release` — bumps patch, builds, publishes to GitHub Releases (see `/release` workflow)
+* **Release**: `npm run release` — builds, checks the build for an admin Supabase key (`scripts/package-key-guard.js`), bumps patch, rebuilds, publishes to GitHub Releases (see `/release` workflow, which adds the QA pass)

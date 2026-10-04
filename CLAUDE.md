@@ -29,7 +29,7 @@ npx vitest run src/path/to/file.test.ts  # Run a single unit test file
 npx vitest run --coverage                # Coverage (v8)
 
 # Release
-npm run release          # Bump + build + publish in one go; use /release, which splits it into gated steps
+npm run release          # Build + key check + bump + rebuild + publish in one go; use /release, which splits it into gated steps
 ```
 
 **Definition of Done** for any code change — all four, no exceptions:
@@ -228,7 +228,7 @@ Guards that enforce the above (fail `npm run test:unit`): `src/__tests__/timer-r
 - [docs/requirements.md](docs/requirements.md) — living spec + dated changelog. One copy, one `# ` heading, changelog in date order. It was accidentally triplicated for months and the three copies drifted apart; `src/__tests__/docs-integrity.test.ts` now fails if a second copy appears.
 - [docs/test-coverage-plan.md](docs/test-coverage-plan.md) — phased coverage plan (counts are stale)
 - [docs/mission-control.md](docs/mission-control.md), `docs/tasks/*` — feature briefs and ADRs
-- [docs/release-qa-plan.md](docs/release-qa-plan.md) — pre-release QA: how to run it, must-do list, go/no-go, known bugs; the full catalogue by area is [docs/release-qa-checklist.md](docs/release-qa-checklist.md) (`/release` step 5)
+- [docs/release-qa-plan.md](docs/release-qa-plan.md) — pre-release QA: how to run it, must-do list, go/no-go, known bugs; the full catalogue by area is [docs/release-qa-checklist.md](docs/release-qa-checklist.md) (`/release` step 6)
 
 Update `docs/requirements.md` when shipped behavior changes. Don't let the spec drift.
 
@@ -246,4 +246,4 @@ The project's own commands, review subagents and skills live under `.claude/`; t
 - **No WIP commits.** Don't commit unfinished work.
 - Conventional commit format: `feat:`, `fix:`, `docs:`, `perf:`, `refactor:`, `test:`. The message explains *why*.
 - Publishing needs a GitHub token. `/release` hands the gh CLI's token to the publish step alone; a `GH_TOKEN` in `.env` is only a fallback, and it has expired before. The pre-release QA pass, token handling and partial-failure recovery live in `/release`.
-- **No admin key in a package** (`scripts/package-key-guard.js`): `vite.config.ts` writes `VITE_SUPABASE_ANON_KEY` into `main.js`, and the app needs only a public key there (legacy `anon` JWT or `sb_publishable_…`, for Realtime). electron-builder's `beforePack` hook reads every file in `dist/` and `dist-electron/` and refuses a JWT whose `role` is `service_role` or an `sb_secret_` key, printing at most 4 characters of it. It reads the build, not `.env` (a stale `dist-electron` ships the key of the build that made it), and it is deliberately not in `vite build`, so local E2E and QA build with whatever `.env` holds. Its `PACKAGED_ROOTS` must match `files` in `electron-builder.json5`; `npm run build`, `npm run release` and `/release`'s publish command carry no `-c`/`--config`, `--projectDir` or `--prepackaged`, each of which can skip the hook; `/release` runs `node scripts/package-key-guard.js` on the QA'd build before the bump. Guarded by `src/__tests__/package-key-guard-wiring.test.ts`.
+- **No admin key in a package** (`scripts/package-key-guard.js`): `vite.config.ts` writes `VITE_SUPABASE_ANON_KEY` into `main.js`, and the app needs only the publishable key there (`sb_publishable_…`, for Realtime; a legacy `anon` JWT passes the guard but stops working when the legacy JWT secret is rotated). electron-builder's `beforePack` hook reads every file electron-builder packs from `dist/` and `dist-electron/` (under its `appDir`) and refuses a JWT whose `role` is `service_role` or an `sb_secret_` key, printing at most 4 characters of it; it also refuses a `files` list (top or platform level) that packs anything else or has no folder in it, any `extraResources`/`extraFiles`, an empty build, and a file too large to read. It reads the build, not `.env` (a stale `dist-electron` ships the key of the build that made it), and it is deliberately not in `vite build`, so local E2E and QA build with whatever `.env` holds. Every packaging command is pinned to run it: `npm run build`, `npm run release` and `/release`'s publish command go through electron-builder's own parser and `Packager` in the guard test, which fails on any flag that unsets the hook or swaps the config, the project or the packing step. Anything that tags or pushes runs `node scripts/package-key-guard.js` first (`npm run release`: build, check, bump and push, rebuild, publish; `/release` step 5, before the QA pass). The guard is plain JavaScript, like `scripts/clean-tests.js`: neither tsc nor ESLint checks it, and only its exports are kept in step with `scripts/package-key-guard.d.ts`. Guarded by `src/__tests__/package-key-guard-wiring.test.ts`.
