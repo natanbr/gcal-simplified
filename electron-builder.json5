@@ -8,6 +8,11 @@
     output: "release/${version}",
   },
   files: ["dist", "dist-electron"],
+  // Refuses to package an admin Supabase key (a service_role JWT or an
+  // sb_secret_ key) found in those folders. It reads only them: a new entry in
+  // `files` must be added to its PACKAGED_ROOTS, or it refuses everything.
+  // Guarded by src/__tests__/package-key-guard-wiring.test.ts.
+  beforePack: "./scripts/package-key-guard.mjs",
   mac: {
     target: ["dmg"],
     artifactName: "${productName}-Mac-${version}-Installer.${ext}",

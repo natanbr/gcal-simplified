@@ -1,6 +1,6 @@
 ---
 description: Pre-flight checks, GitHub token check, patch version bump, build and publish to GitHub Releases
-allowed-tools: Read, Bash(npm run test:unit), Bash(npm run test:run), Bash(npm run test:clean), Bash(npm run lint), Bash(npm run tsc), Bash(npx tsc), Bash(npx vite build), Bash(git status:*), Bash(git log:*), Bash(git branch:*), Bash(node -e:*), Bash(npm version patch)
+allowed-tools: Read, Bash(npm run test:unit), Bash(npm run test:run), Bash(npm run test:clean), Bash(npm run lint), Bash(npm run tsc), Bash(npx tsc), Bash(npx vite build), Bash(git status:*), Bash(git log:*), Bash(git branch:*), Bash(node -e:*), Bash(node scripts/package-key-guard.mjs), Bash(npm version patch)
 ---
 
 Cut a release.
@@ -31,9 +31,11 @@ The time of day no longer matters: every launch goes through `e2e/helpers/launch
 
 **5. Release QA pass, before the bump** — run [`docs/release-qa-plan.md`](../../docs/release-qa-plan.md) (catalogue: [`docs/release-qa-checklist.md`](../../docs/release-qa-checklist.md)) on that same build: its must-do list, both profiles (fresh and upgrade), and every changed area. Start a separate Claude session or subagent for the `[claude]` items. Record the run log only in a private location outside this repo, which is public. **Go/no-go:** any rule on the plan's blocking list (section 5, G1–G13, with its idle thresholds and its rule for a blocker that already shipped) stops the release. Everything else is logged as a follow-up and does not block.
 
-**6. Clean artifacts** — `npm run test:clean`.
+**6. No admin key in the build** — `node scripts/package-key-guard.mjs`, on the build you just QA'd. It reads `dist/` and `dist-electron/` and fails if either holds a Supabase `service_role` JWT or an `sb_secret_` key (`vite.config.ts` writes `VITE_SUPABASE_ANON_KEY` from `.env` into `main.js`). The publish step runs the same check as electron-builder's `beforePack` hook, but by then the bump has tagged and pushed, so a bad key must be found here. If it fails, follow its message: a publishable (`sb_publishable_…`) or legacy anon key in `.env`, then delete `dist` and `dist-electron` and go back to step 4.
 
-**7. Check the GitHub token before the bump, not after.** Discovering a bad token *after* the bump has tagged and pushed leaves the repo in a half-released state (see recovery below). The publish step takes its token from the GitHub CLI's own sign-in:
+**7. Clean artifacts** — `npm run test:clean`.
+
+**8. Check the GitHub token before the bump, not after.** Discovering a bad token *after* the bump has tagged and pushed leaves the repo in a half-released state (see recovery below). The publish step takes its token from the GitHub CLI's own sign-in:
 
 ```powershell
 & "C:\Program Files\GitHub CLI\gh.exe" auth status
@@ -55,7 +57,7 @@ The GitHub token goes to the publish step only: the bump and the build run witho
    $t = & "C:\Program Files\GitHub CLI\gh.exe" auth token; if (-not $t) { throw "gh is not signed in: stop, do not publish" }; $env:GH_TOKEN = $t.Trim(); node -r dotenv/config node_modules/electron-builder/cli.js --publish always
    ```
 
-   It must be one invocation. Environment variables do not persist between tool calls, and `dotenv` does not override a variable that is already set, so the gh token only beats a stale `.env` value when both run in the same process. The `throw` keeps an empty gh token from falling back to that stale value. The publish command is deliberately not in `allowed-tools`. electron-builder uploads the installer to GitHub Releases.
+   It must be one invocation. Environment variables do not persist between tool calls, and `dotenv` does not override a variable that is already set, so the gh token only beats a stale `.env` value when both run in the same process. The `throw` keeps an empty gh token from falling back to that stale value. The publish command is deliberately not in `allowed-tools`. electron-builder uploads the installer to GitHub Releases. Its `beforePack` hook (`scripts/package-key-guard.mjs`) re-checks the rebuilt files for an admin Supabase key and stops the publish before anything is packed; run the command exactly as written, because a config override or a prepackaged app skips that hook.
 
 One leak this ordering cannot close: `vite.config.ts` reads every `.env` key (`loadEnv(mode, cwd, '')`), so a `GH_TOKEN` kept in `.env` still reaches the build process's memory, though only four named keys reach the bundle. With the gh token there is no reason to keep one in `.env`.
 
@@ -65,7 +67,7 @@ If the publish step fails *after* the bump has tagged and pushed:
 
 **Do not re-run the bump** (`npm version patch`, `npm run version-tag` or `npm run release`): `npm version patch` fails on the existing tag and you end up debugging the wrong problem.
 
-Fix the cause (usually the token: step 7), then re-run step 2 if `dist-electron/` is missing or older than the bump, and step 3 exactly as written above, prefix and all.
+Fix the cause (usually the token: step 8), then re-run step 2 if `dist-electron/` is missing or older than the bump, and step 3 exactly as written above, prefix and all. If the key guard refused, put a public key in `.env` as step 6 says and always re-run step 2: the build on disk holds the admin key.
 
 ## After
 
