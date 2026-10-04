@@ -107,6 +107,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Remote indicator** (the "Remote" chip in Mission Control's top bar): a filled green dot while the phone remote's channel is connected, a hollow red ring while offline, labelled "Remote: connected" / "Remote: offline" (tooltip and screen reader). The dot pulses 3 times (6 s) when Mission Control opens and when the status changes, then stands still; a change less than 30 s after the last pulse started changes the colour without pulsing again, so a remote that keeps reconnecting does not keep it pulsing. It never loops: a looping pulse cost 20-25 % of one CPU core for as long as Mission Control was open (2026-10-04).
   - **Secure Bridge**: Established via Supabase Realtime (Broadcast) and Electron IPC.
   - **Main Process Isolation**: All Supabase connections and key validations are restricted to the Main process.
+  - **Only a public Supabase key in the package (2026-10-04)**: the bridge needs only the project's publishable key (`sb_publishable_…`), which `vite.config.ts` writes into `dist-electron/main.js`; a legacy `anon` JWT also works until the legacy JWT secret is rotated. Packaging refuses an admin key: a JWT whose `role` is `service_role`, or an `sb_secret_…` key, anywhere in `dist/` or `dist-electron/` (`scripts/package-key-guard.js`, electron-builder's `beforePack` hook).
   - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing. The key never travels on the channel, because anyone who knows the room id can join it; it is only used to sign.
   - **Signed messages (remote protocol v2, 2026-09-28)**: every message in both directions (the phone's actions and its sync request, the desktop's state updates) is `{ v: 2, body, sig }`: `body` is a JSON string and `sig` an HMAC-SHA256 of the event name and the body, keyed with the pairing key (`electron/remote-auth.ts`). The desktop checks the signature before anything else, then requires a message id and a timestamp within 60 seconds of its own clock, then drops a message id it has already seen. A v1 message (the key in plain text) is refused even when the key is right, with the log line "Rejected unsigned action (protocol v1): the phone was paired from an old QR code. Scan the current one (MC settings → Remote)." The phone never switches protocol on its own: a pairing from a `#room=…&key=…&v=2` QR code speaks only v2, an old `?room=…&key=…` link only v1. The room id is logged as an 8-character prefix only. A signature that is not 43 characters (base64url HMAC-SHA256) or a body over 64 KB is refused before any HMAC is computed; the largest real message, a state-update, is about 10 KB.
   - **Integrity, not confidentiality**: v2 stops anyone without the key from sending actions; it does not hide the state. Anyone who knows the room id can still read every state-update: the last 20 activity-log lines, the missions and their tasks, privileges and token counts.
@@ -1850,3 +1851,41 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   or minimized, …) with the remote online, and both fail if anything on screen loops. The unused
   Vite template stylesheet `src/App.css` (a looping logo spin, imported nowhere) is deleted, and
   Tailwind no longer scans test files, so a class named in a test does not ship its CSS.
+
+### 2026-10-04 Packaging refuses an admin Supabase key
+
+- **Why.** The desktop app uses Supabase only for the phone remote's Realtime channel, which needs
+  only the project's publishable key (`sb_publishable_…`). `vite.config.ts` writes
+  `VITE_SUPABASE_ANON_KEY` into `dist-electron/main.js`, so anyone with the installer can read
+  whatever key the build had. An admin key (a `service_role` JWT or an `sb_secret_…` key) bypasses
+  every Supabase control.
+- **Now.** electron-builder's `beforePack` hook (`scripts/package-key-guard.js`) reads every file it
+  is about to pack from `dist/` and `dist-electron/` and refuses an admin key, including one split
+  across joined string literals, written with escaped dots, or stored as UTF-16. Its message names
+  the file and the key's role, prints at most the key's first 4 characters, and says what to do:
+  set `VITE_SUPABASE_ANON_KEY` to the publishable key (Supabase dashboard → Project Settings → API
+  Keys) wherever the build reads it (`.env`, `.env.local`, `.env.production`,
+  `.env.production.local`, or the environment), delete `dist` and `dist-electron`, rebuild with
+  `npx vite build`; and an admin key that was ever packaged into an installer must be revoked or
+  rotated in the Supabase dashboard, and any installer holding it withdrawn. A legacy `anon` JWT
+  still passes, but is not recommended: it stops working when the legacy JWT secret is rotated. It
+  reads the build, not `.env`, so a build left over from an earlier `.env` is refused too.
+- **It also refuses** what it cannot vouch for: no build to read; a `files` list, at the config or
+  the platform level, that packs anything besides those two folders, has no folder in it (only
+  exclusions, which pack the whole project), re-includes with `!!` or climbs out with `..`;
+  `extraResources` or `extraFiles`; and a file over 256 MB, which it does not read.
+- **Where it runs.** Every package electron-builder makes from this config: `npm run build`,
+  `npm run release` and `/release`'s publish command. Anything that tags or pushes checks the build
+  first: `npm run release` now builds, checks, bumps and pushes, rebuilds and publishes (it used to
+  tag before it built), and `/release` runs `node scripts/package-key-guard.js` as pre-flight step
+  5, before the QA pass, and passes only on its success line. `vite build` is unchanged, so local
+  E2E and QA builds work whatever `.env` holds.
+- Tests: `src/__tests__/package-key-guard.test.ts` (public keys package; an admin key is refused
+  with what to do and without the key; the config and platform-level refusals; `appDir`; a stale
+  `dist-electron` refused though `.env` is clean; the command, with and without its `.js`) and
+  `src/__tests__/package-key-guard-detection.test.ts` (split, escaped, UTF-16, other JWT headers,
+  source maps, oversized files, and no false positive on public keys or random data). Guard:
+  `src/__tests__/package-key-guard-wiring.test.ts` runs each packaging command's arguments through
+  electron-builder's own parser and `Packager` and requires the hook it resolves to be this guard
+  and to refuse, pins `files`, pins the order of `npm run release` and of `/release`'s pre-flight,
+  and keeps `scripts/package-key-guard.d.ts` in step with the script's exports.
