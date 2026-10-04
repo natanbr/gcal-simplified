@@ -15,12 +15,15 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { repoRoot } from './helpers/sourceFiles';
 import {
     minifiedBundle, projectFactory, secretWindows,
-    syntheticJwt, syntheticPublishableKey, syntheticSecretKey,
+    syntheticJwt, syntheticPublishableKey, syntheticSecretKey, viteBuild as build,
 } from './helpers/syntheticKeys';
-import { beforePack, findAdminKeys, scanProject, PACKAGED_ROOTS } from '../../scripts/package-key-guard.js';
+import {
+    beforePack, findAdminKeys, invokedDirectly, scanProject, PACKAGED_ROOTS, type PackContext,
+} from '../../scripts/package-key-guard.js';
 
 const SERVICE_ROLE = syntheticJwt('service_role');
 const ANON = syntheticJwt('anon');
@@ -30,19 +33,26 @@ const PUBLISHABLE = syntheticPublishableKey();
 const projects = projectFactory();
 afterEach(() => projects.cleanup());
 
-/** A build as `npx vite build` leaves it: the renderer in dist/, the main process in dist-electron/. */
-const build = (mainJs: string, rendererJs = 'console.log("renderer")') => ({
-    'dist/index.html': '<!doctype html><script src="./assets/index-abc123.js"></script>',
-    'dist/assets/index-abc123.js': rendererJs,
-    'dist-electron/main.js': mainJs,
-    'dist-electron/preload.mjs': 'const{contextBridge}=require("electron");',
+interface Overrides {
+    /** More top-level config (extraResources, extraFiles). */
+    config?: Record<string, unknown>;
+    /** The platform level electron-builder merges in (win, mac or linux). */
+    platform?: Record<string, unknown>;
+    /** Where electron-builder takes `files` from, when not the project folder. */
+    appDir?: string;
+}
+
+const contextFor = (projectDir: string, files: unknown = [...PACKAGED_ROOTS], overrides: Overrides = {}): PackContext => ({
+    packager: {
+        projectDir,
+        info: { appDir: overrides.appDir ?? projectDir },
+        config: { files, ...overrides.config },
+        platformSpecificBuildOptions: overrides.platform ?? {},
+    },
 });
 
-const contextFor = (projectDir: string, files: unknown = [...PACKAGED_ROOTS]) =>
-    ({ packager: { projectDir, config: { files } } });
-
-async function refusal(projectDir: string, files?: unknown): Promise<string> {
-    const outcome = await beforePack(contextFor(projectDir, files)).then(
+async function refusal(projectDir: string, files?: unknown, overrides?: Overrides): Promise<string> {
+    const outcome = await beforePack(contextFor(projectDir, files, overrides)).then(
         () => 'packaged',
         (error: unknown) => (error instanceof Error ? error.message : String(error)),
     );
@@ -103,13 +113,24 @@ describe('package key guard — negative: an admin key anywhere in the package i
         expect(findAdminKeys(`a="x${SECRET}"`)).toEqual([{ kind: 'sb_secret', prefix: SECRET.slice(0, 4) }]);
     });
 
-    it('says what to do: a publishable or anon key in .env, then rebuild', async () => {
+    it('says what to do: the publishable key wherever the build reads it, a clean rebuild, and revoking a key that shipped', async () => {
         const dir = projects.make(build(minifiedBundle(SERVICE_ROLE)));
         const message = await refusal(dir);
         expect(message).toContain('VITE_SUPABASE_ANON_KEY');
         expect(message).toContain('sb_publishable_');
         expect(message).toContain('Project Settings → API Keys');
+        // vite's loadEnv reads all four files in production mode, and the environment over them.
+        for (const source of ['.env,', '.env.local', '.env.production,', '.env.production.local', 'environment']) {
+            expect(message).toContain(source);
+        }
         expect(message).toContain('npx vite build');
+        expect(message).toMatch(/revoke or rotate/);
+        expect(message).toMatch(/withdraw/);
+    });
+
+    it('recommends only the publishable key: a legacy anon JWT stops working when the legacy JWT secret is rotated', async () => {
+        const dir = projects.make(build(minifiedBundle(SERVICE_ROLE)));
+        expect(await refusal(dir)).not.toMatch(/anon key|anon JWT/i);
     });
 
     it('prints no part of either key beyond a 4-character prefix', async () => {
@@ -123,10 +144,37 @@ describe('package key guard — negative: an admin key anywhere in the package i
         ['a folder it does not read', ['dist', 'dist-electron', 'public'], 'public'],
         ['the same, in the form electron-builder hands the hook', [{ filter: ['dist', 'dist-electron', 'public'] }], 'public'],
         ['files copied from elsewhere', [{ filter: ['dist', 'dist-electron'] }, { from: 'assets', to: 'assets' }], 'assets'],
+        ['a file set with only a source', [{ filter: [...PACKAGED_ROOTS] }, { from: 'assets', filter: ['**/*'] }], 'assets'],
+        ['a file set with only a destination', [{ filter: [...PACKAGED_ROOTS] }, { to: 'extra', filter: ['dist'] }], 'extra'],
         ['no files list, so electron-builder packs the whole project', [], 'whole project'],
+        ['only exclusions (-c.files=\'!**/*.map\'), which packs the whole project', [{ filter: ['!**/*.map'] }], 'whole project'],
+        ['a double negation, which includes again', ['dist', 'dist-electron', '!!.env'], '!!.env'],
+        ['a pattern that climbs out with ..', ['dist', 'dist-electron', '!x/../.env'], '!x/../.env'],
     ])('refuses a config that packages %s', async (_label, files, named) => {
         const dir = projects.make(build(minifiedBundle(ANON)));
         expect(await refusal(dir, files)).toContain(named);
+    });
+
+    it.each([
+        ['platform-level files', { platform: { files: ['src'] } }, 'src'],
+        ['platform-level extraResources', { platform: { extraResources: ['assets'] } }, 'extraResources'],
+        ['platform-level extraFiles', { platform: { extraFiles: [{ from: 'bin' }] } }, 'extraFiles'],
+        ['top-level extraResources', { config: { extraResources: 'assets' } }, 'extraResources'],
+        ['top-level extraFiles', { config: { extraFiles: ['bin'] } }, 'extraFiles'],
+    ])('refuses %s, which add files the guard does not read', async (_label, overrides, named) => {
+        const dir = projects.make(build(minifiedBundle(ANON)));
+        expect(await refusal(dir, undefined, overrides)).toContain(named);
+    });
+
+    it('reads the folder electron-builder takes the files from (appDir), not the project folder', async () => {
+        const project = projects.make(build(minifiedBundle(ANON)));
+        const app = projects.make(build(minifiedBundle(SERVICE_ROLE)));
+        expect(await refusal(project, undefined, { appDir: app })).toContain('dist-electron/main.js');
+    });
+
+    it('reads a packaged root that is a file, not a folder', async () => {
+        const dir = projects.make({ 'dist/index.html': '<!doctype html>', 'dist-electron': minifiedBundle(SERVICE_ROLE) });
+        expect(await refusal(dir)).toContain('dist-electron: a JWT with role "service_role"');
     });
 
     it('accepts the normalized form of the files it reads', async () => {
@@ -158,9 +206,9 @@ describe('package key guard — lifecycle: what is on disk is what ships', () =>
 
 describe('package key guard — the command /release runs before the bump', () => {
     const SCRIPT = join(repoRoot, 'scripts/package-key-guard.js');
-    const run = (cwd: string) => spawnSync(process.execPath, [SCRIPT], { cwd, encoding: 'utf8' });
+    const run = (cwd: string, script = SCRIPT) => spawnSync(process.execPath, [script], { cwd, encoding: 'utf8' });
 
-    it('exits 1 on a stale admin key and 0 once the build is clean, printing no key', () => {
+    it('exits 1 on a stale admin key, and 0 with its success line once the build is clean, printing no key', () => {
         const dir = projects.make(build(minifiedBundle(SERVICE_ROLE)));
         const refused = run(dir);
         expect(refused.status).toBe(1);
@@ -170,10 +218,26 @@ describe('package key guard — the command /release runs before the bump', () =
         projects.write(dir, 'dist-electron/main.js', minifiedBundle(ANON));
         const passed = run(dir);
         expect(passed.status, passed.stderr).toBe(0);
+        // /release step 5 requires this line: an exit 0 without it means the check never ran.
+        expect(passed.stdout).toMatch(/^No admin Supabase key in dist, dist-electron \(\d+ files read\)\./);
+    });
+
+    it('runs when named without its .js extension', () => {
+        const dir = projects.make(build(minifiedBundle(SERVICE_ROLE)));
+        expect(run(dir, SCRIPT.replace(/\.js$/, '')).status).toBe(1);
     });
 
     it('exits 1 when run where there is no build', () => {
         const dir = projects.make({ 'package.json': '{}' });
         expect(run(dir).status).toBe(1);
+    });
+
+    it('knows it was run directly from the entry path Node was given, by its real path', () => {
+        const url = pathToFileURL(SCRIPT).href;
+        expect(invokedDirectly(url, SCRIPT)).toBe(true);
+        expect(invokedDirectly(url, SCRIPT.replace(/\.js$/, ''))).toBe(true);
+        expect(invokedDirectly(url, join(repoRoot, 'scripts/clean-tests.js'))).toBe(false);
+        expect(invokedDirectly(url, join(repoRoot, 'node_modules/electron-builder/cli.js'))).toBe(false);
+        expect(invokedDirectly(url, undefined)).toBe(false);
     });
 });
