@@ -107,6 +107,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Remote indicator** (the "Remote" chip in Mission Control's top bar): a filled green dot while the phone remote's channel is connected, a hollow red ring while offline, labelled "Remote: connected" / "Remote: offline" (tooltip and screen reader). The dot pulses 3 times (6 s) when Mission Control opens and when the status changes, then stands still; a change less than 30 s after the last pulse started changes the colour without pulsing again, so a remote that keeps reconnecting does not keep it pulsing. It never loops: a looping pulse cost 20-25 % of one CPU core for as long as Mission Control was open (2026-10-04).
   - **Secure Bridge**: Established via Supabase Realtime (Broadcast) and Electron IPC.
   - **Main Process Isolation**: All Supabase connections and key validations are restricted to the Main process.
+  - **Only a public Supabase key in the package (2026-10-04)**: the bridge needs the project's public key (the legacy `anon` JWT or an `sb_publishable_…` key), which `vite.config.ts` writes from `.env` into `dist-electron/main.js`. Packaging refuses an admin key: a JWT whose `role` is `service_role`, or an `sb_secret_…` key, anywhere in `dist/` or `dist-electron/` (`scripts/package-key-guard.js`, electron-builder's `beforePack` hook).
   - **Shared Secret Pairing**: Uses a 20-character secret key and unique Room ID for secure mobile pairing. The key never travels on the channel, because anyone who knows the room id can join it; it is only used to sign.
   - **Signed messages (remote protocol v2, 2026-09-28)**: every message in both directions (the phone's actions and its sync request, the desktop's state updates) is `{ v: 2, body, sig }`: `body` is a JSON string and `sig` an HMAC-SHA256 of the event name and the body, keyed with the pairing key (`electron/remote-auth.ts`). The desktop checks the signature before anything else, then requires a message id and a timestamp within 60 seconds of its own clock, then drops a message id it has already seen. A v1 message (the key in plain text) is refused even when the key is right, with the log line "Rejected unsigned action (protocol v1): the phone was paired from an old QR code. Scan the current one (MC settings → Remote)." The phone never switches protocol on its own: a pairing from a `#room=…&key=…&v=2` QR code speaks only v2, an old `?room=…&key=…` link only v1. The room id is logged as an 8-character prefix only. A signature that is not 43 characters (base64url HMAC-SHA256) or a body over 64 KB is refused before any HMAC is computed; the largest real message, a state-update, is about 10 KB.
   - **Integrity, not confidentiality**: v2 stops anyone without the key from sending actions; it does not hide the state. Anyone who knows the room id can still read every state-update: the last 20 activity-log lines, the missions and their tasks, privileges and token counts.
@@ -1850,3 +1851,31 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   or minimized, …) with the remote online, and both fail if anything on screen loops. The unused
   Vite template stylesheet `src/App.css` (a looping logo spin, imported nowhere) is deleted, and
   Tailwind no longer scans test files, so a class named in a test does not ship its CSS.
+
+### 2026-10-04 Packaging refuses an admin Supabase key
+
+- **Why.** The desktop app uses Supabase only for the phone remote's Realtime channel, which needs
+  the project's public key: the legacy `anon` JWT or an `sb_publishable_…` key. `vite.config.ts`
+  writes `VITE_SUPABASE_ANON_KEY` from `.env` into `dist-electron/main.js`, so anyone with the
+  installer can read whatever key `.env` held at build time. An admin key (a `service_role` JWT or
+  an `sb_secret_…` key) bypasses every Supabase control.
+- **Now.** electron-builder's `beforePack` hook (`scripts/package-key-guard.js`) reads every file
+  in `dist/` and `dist-electron/` before anything is packed and refuses an admin key. Its message
+  names the file and the key's role, prints at most the key's first 4 characters, and says what
+  to do: put the publishable or anon key (Supabase dashboard → Project Settings → API Keys) in
+  `.env`, delete `dist` and `dist-electron`, rebuild with `npx vite build`. It reads the build,
+  not `.env`, so a build left over from an earlier `.env` is refused too. A public key, or no key
+  at all, packages as before. It also refuses when there is no build to read, and when the
+  electron-builder config packages a folder it does not read.
+- **Where it runs.** Every packaging path: `npm run build`, `npx electron-builder` and `/release`'s
+  publish command. `/release` also runs `node scripts/package-key-guard.js` as pre-flight step 6,
+  on the QA'd build, before the version bump tags and pushes. `vite build` is unchanged, so local
+  E2E and QA builds work whatever `.env` holds.
+- Tests: `src/__tests__/package-key-guard.test.ts` (anon, publishable and no key package; a
+  `service_role` JWT or an `sb_secret_` key anywhere in the package is refused, including inside a
+  longer string of a minified bundle; the message never holds the key; a stale `dist-electron` is
+  refused though `.env` is clean; the command `/release` runs). Guard:
+  `src/__tests__/package-key-guard-wiring.test.ts` asks electron-builder's own config loader and
+  hook resolver for the hook and runs it, pins `files` to the folders the guard reads, and fails
+  if `npm run build`, `npm run release` or `/release` gain a flag that skips the hook or if the
+  pre-flight check leaves the Pre-flight section.
