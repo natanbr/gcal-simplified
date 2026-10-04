@@ -66,10 +66,11 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: 'make applyBehaviorSync return a new object on a no-op tick',
     },
     {
-        rule: 'No repeat: Infinity / CSS infinite animation in the always-mounted tree',
+        rule: 'Nothing loops on an idle view (the Calendar, or Mission Control\'s main view with no mission or game): every infinite animation in src/ is registered with when it is on screen, its count pinned, idle budget 0',
         source: 'CLAUDE.md → Performance → 3',
-        status: 'manual',
-        defence: 'Reviewed by the perf-sentinel subagent. Currently zero occurrences in the always-mounted tree; a guard would need to model the mount graph to know which components are always-mounted.',
+        status: 'guarded',
+        guard: ['src/__tests__/infinite-animation-registry.test.ts', 'src/mission-control/__tests__/idle-performance.test.tsx', 'src/mission-control/components/RemoteIndicator.test.tsx'],
+        verifiedRedBy: "proven 2026-10-04, each reverted. The Remote dot's rule back to `infinite` in mc.css: the registry (`.mc-anim-remote-pulse` found 1, registered none), RemoteIndicator's finite-count case and the idle render (`mc-remote-pulse … infinite on <span class=\"mc-anim-remote-pulse\">`) all red. `.mc-notification-dot` rendered without its cheat-attempt condition: only the idle render red (a registered loop, used on the idle view), which is what the render half is for. `className=\"animate-ping\"` on the Remote chip plus a second `repeat: Infinity` in Altimeter.tsx: the registry red for both (unregistered; found 2, registered 1) and the idle render red for the Tailwind loop. Against cb2d1f2's RemoteIndicator and mc.css the finite-count case is red for the right reason; the other RemoteIndicator cases and the idle render are red only because `data-testid=\"mc-remote-dot\"` did not exist yet.",
     },
     {
         rule: 'Every setInterval/setTimeout/subscription is cleared in its effect cleanup',
@@ -559,13 +560,15 @@ describe('rule registry', () => {
         // was immediately taken by the root-config clause it had been hiding. That
         // clause closed on 2026-09-23 — npm run tsc now compiles vite.config.ts,
         // vitest.config.ts and playwright.config.ts — so the cap is 6.
+        // 2026-10-04: the infinite-animation rule (Performance → 3) got a guard,
+        // the infinite-animation registry, which leaves 5 unenforced: the cap is 5.
 
         expect(
             unenforced.length,
             `${unenforced.length} of ${REGISTRY.length} rules have no automated guard:\n  ` +
             unenforced.map(r => r.rule).join('\n  ') +
             `\n\nIf you added a rule without a guard, raise this number deliberately.`
-        ).toBeLessThanOrEqual(6);
+        ).toBeLessThanOrEqual(5);
     });
 
     it('covers a meaningful share of the rulebook', () => {
