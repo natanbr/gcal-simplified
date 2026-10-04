@@ -1,5 +1,7 @@
 // ============================================================
-// Package key guard: no package made from this config holds an admin Supabase key.
+// Package key guard: no package made from this config holds an admin Supabase key
+// in dist/ or dist-electron/. (electron-builder also packs package.json and the
+// production node_modules, which this guard does not read.)
 // ------------------------------------------------------------
 // vite.config.ts writes VITE_SUPABASE_ANON_KEY into dist-electron/main.js. The
 // desktop app needs only the project's publishable key there (Realtime
@@ -48,7 +50,7 @@ function roleOf(payloadSegment) {
 }
 
 /** The text as written, and as it reads with string literals joined (`"ab" + "cd"`)
- *  and escaped dots (`\.`, `\x2e`, `.`) written plainly. Each is scanned. */
+ *  and escaped dots (`\.`, `\x2e`, `\u002e`) written plainly. Each is scanned. */
 function readings(text) {
     const joined = text
         .replace(/["'`]\s*\+\s*["'`]/g, '')
