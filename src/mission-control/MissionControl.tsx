@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ActivityLogView } from './components/ActivityLogView';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
-import { CheatTrapOverlay } from './components/CheatTrapOverlay';
+import { CHEAT_TRAP_SHOW_MS, CheatTrapOverlay } from './components/CheatTrapOverlay';
 import { GameTokenPanel } from './components/GameTokenPanel';
 import { GlobalBank } from './components/GlobalBank';
 import { GoalPedestal } from './components/GoalPedestal';
@@ -80,7 +80,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       cheatTimerRef.current = setTimeout(() => {
         setShowCheatTrap(false);
         dispatch({ type: 'CLEAR_CHEAT_FLAG' });
-      }, 5000);
+      }, CHEAT_TRAP_SHOW_MS);
     }
   }, [state.hasUnreviewedCheatAttempt, dispatch, showCheatTrap]);
 
@@ -90,7 +90,7 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
     if (cheatTimerRef.current) clearTimeout(cheatTimerRef.current);
     cheatTimerRef.current = setTimeout(() => {
       setShowCheatTrap(false);
-    }, 5000);
+    }, CHEAT_TRAP_SHOW_MS);
   }, [dispatch]);
 
   return (

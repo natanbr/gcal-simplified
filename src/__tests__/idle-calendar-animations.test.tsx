@@ -8,9 +8,14 @@
 // (2026-10-04, docs/performance.md); the Calendar idles at 0.2 %.
 //
 // This renders the real App on the Calendar view, signed in, with its data
-// loaded and nothing syncing, and fails if anything on screen loops, against
-// every stylesheet in src/ (index.css and Mission Control's, which the App
-// bundle applies to the whole window).
+// loaded and nothing syncing, and fails if a CSS, Tailwind or inline-style
+// loop is on screen, against every stylesheet in src/ (index.css and Mission
+// Control's, which the App bundle applies to the whole window).
+// Blind spots: a loop driven by JavaScript (Framer `repeat: Infinity`, WAAPI,
+// requestAnimationFrame) leaves nothing in the DOM to see; for those,
+// `onIdleView` in infinite-animation-registry.test.ts, set by hand, is the only
+// defence. A custom `animate-*` utility added in tailwind.config.js is not
+// recognised as a loop either.
 // Mission Control's idle screens: src/mission-control/__tests__/idle-animations.test.tsx.
 // ============================================================
 

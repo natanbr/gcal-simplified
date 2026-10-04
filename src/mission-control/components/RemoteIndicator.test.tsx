@@ -39,13 +39,21 @@ async function renderConnected() {
 }
 
 const dot = () => screen.getByTestId('mc-remote-dot');
-const at = (ms: number) => vi.setSystemTime(new Date(2026, 9, 4, 12, 0, 0, 0).getTime() + ms);
+const NOON = new Date(2026, 9, 4, 12, 0, 0, 0).getTime();
+let elapsed = 0;
+/** Moves the fake monotonic clock (performance.now) and the wall clock to `ms` after the start. */
+const at = (ms: number) => {
+    vi.advanceTimersByTime(ms - elapsed);
+    vi.setSystemTime(NOON + ms);
+    elapsed = ms;
+};
 
 describe('RemoteIndicator — status at a glance, no loop', () => {
     beforeEach(() => {
         pushStatus = null;
-        vi.useFakeTimers({ toFake: ['Date'] });
-        at(0);
+        elapsed = 0;
+        vi.useFakeTimers({ toFake: ['performance', 'Date'] });
+        vi.setSystemTime(NOON);
     });
     afterEach(() => {
         vi.useRealTimers();
@@ -86,6 +94,15 @@ describe('RemoteIndicator — status at a glance, no loop', () => {
         at(2 * REMOTE_PULSE_GAP_MS);
         act(() => pushStatus?.(true));
         expect(dot()).not.toBe(dropped);
+    });
+
+    it('keeps pulsing on changes after the wall clock is set back an hour (the gap runs on monotonic time)', async () => {
+        await renderConnected();
+        const first = dot();
+        vi.setSystemTime(NOON - 3_600_000);
+        vi.advanceTimersByTime(REMOTE_PULSE_GAP_MS);
+        act(() => pushStatus?.(false));
+        expect(dot(), 'a new element plays the pulse again').not.toBe(first);
     });
 
     it('changes the colour but does not restart the pulse inside the gap', async () => {

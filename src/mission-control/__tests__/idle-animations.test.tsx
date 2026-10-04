@@ -8,9 +8,15 @@
 //
 // The registry (src/__tests__/infinite-animation-registry.test.ts) pins every
 // loop in the code. This file renders the screens the child's display sits on
-// for minutes or hours and fails if anything on them loops, against every
-// stylesheet the Mission Control tree can apply: src/mission-control/styles/
-// and src/index.css, which main.tsx imports for the whole app.
+// for minutes or hours and fails if a CSS, Tailwind or inline-style loop is on
+// them, against every stylesheet the Mission Control tree can apply:
+// src/mission-control/styles/ and src/index.css, which main.tsx imports.
+// Blind spots: a loop driven by JavaScript (Framer `repeat: Infinity`, WAAPI,
+// requestAnimationFrame) leaves nothing in the DOM to see, and jsdom does not
+// show Framer's frame loop either (probed 2026-10-04: no requestAnimationFrame
+// call even with a Framer infinite span on screen). For those, `onIdleView` in
+// the registry, set by hand, is the only defence. A custom `animate-*` utility
+// added in tailwind.config.js is not recognised as a loop either.
 // The Calendar's idle view: src/__tests__/idle-calendar-animations.test.tsx.
 // ============================================================
 
@@ -24,6 +30,7 @@ import { MISSED_LOCK_THRESHOLD } from '../store/missionStreak';
 import { MCContext } from '../store/useMCStore';
 import { MissionControl } from '../MissionControl';
 import { MissionOverlay } from '../components/MissionOverlay';
+import { CHEAT_TRAP_TOTAL_MS } from '../components/CheatTrapOverlay';
 import { DragLayer } from '../components/DragLayer';
 import { animationDeclarationOf, infiniteCssRules, loopingOnScreen, stylesheetsUnder } from './infiniteAnimations';
 import type { MCState } from '../types';
@@ -38,18 +45,18 @@ describe('Mission Control stylesheets — nothing loops forever', () => {
     });
 
     // The cheat trap is the one moment these play: MissionControl.tsx shows it
-    // for 5 s, re-shows it once while the flag is set and clears the flag, about
-    // 10 s in all. Each must last that long and then stop.
+    // for CHEAT_TRAP_SHOW_MS, re-shows it once while the flag is set and clears
+    // the flag, CHEAT_TRAP_TOTAL_MS in all. Each must last that long and then stop.
     it.each([
         ['.mc-notification-dot', 'mc-dot-pulse'],
         ['.mc-anim-finger-wag', 'mc-finger-wag'],
-    ])('%s plays for the whole cheat trap (10 s or more), then stops', (selector, keyframes) => {
+    ])(`%s plays for the whole cheat trap (${CHEAT_TRAP_TOTAL_MS / 1000} s or more), then stops`, (selector, keyframes) => {
         const declaration = animationDeclarationOf(mcStyles, selector) ?? '';
         const parts = declaration.match(/^(\S+)\s+([\d.]+)s\s+\S+\s+(\d+)(?:\s+forwards)?$/);
         expect(parts, `${selector}: "${declaration}" is not "<name> <seconds>s <easing> <count>"`).not.toBeNull();
         const [, name, seconds, count] = parts as RegExpMatchArray;
         expect(name).toBe(keyframes);
-        expect(Number(seconds) * Number(count)).toBeGreaterThanOrEqual(10);
+        expect(Number(seconds) * Number(count) * 1000).toBeGreaterThanOrEqual(CHEAT_TRAP_TOTAL_MS);
     });
 });
 

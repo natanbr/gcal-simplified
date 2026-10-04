@@ -17,12 +17,15 @@ import { useRemoteStatus } from '../contexts/RemoteStatusContext';
  */
 export const REMOTE_PULSE_GAP_MS = 30_000;
 
-/** A new key whenever the dot should pulse again. Mounting the dot is a pulse. */
+/**
+ * A new key whenever the dot should pulse again. Mounting the dot is a pulse.
+ * Monotonic time: a wall clock stepped backwards would stop the pulses.
+ */
 function usePulseKey(status: string): number {
     const [pulseKey, setPulseKey] = useState(0);
     const lastPulseAt = useRef<number | null>(null);
     useEffect(() => {
-        const now = Date.now();
+        const now = performance.now();
         if (lastPulseAt.current !== null && now - lastPulseAt.current < REMOTE_PULSE_GAP_MS) return;
         if (lastPulseAt.current !== null) setPulseKey(k => k + 1);
         lastPulseAt.current = now;
