@@ -13,7 +13,7 @@
 // .env holds. It reads the files about to be packaged, never .env, because a
 // stale dist-electron ships the key of the build that made it.
 //
-// `node scripts/package-key-guard.mjs` runs the same check on the build in the
+// `node scripts/package-key-guard.js` runs the same check on the build in the
 // current folder (/release runs it before the version bump).
 //
 // It never prints a key: at most its first 4 characters.
@@ -104,9 +104,9 @@ function problemWith(projectDir) {
             'An admin key bypasses every Supabase control, and anyone with the installer can read it.',
             'The desktop app needs only a public key, for Realtime.',
             "Fix: in .env, set VITE_SUPABASE_ANON_KEY to the project's publishable key (sb_publishable_…) or its",
-            'legacy anon key (Supabase dashboard → Project Settings → API Keys). Then delete dist and dist-electron',
-            '(vite build does not empty them) and rebuild with `npx vite build`. If .env already holds a public key,',
-            'this build is stale: the same rebuild replaces it.',
+            'legacy anon key (Supabase dashboard → Project Settings → API Keys). Then delete dist and dist-electron,',
+            'so no file from an earlier build survives, and rebuild with `npx vite build`. If .env already holds a',
+            'public key, this build is stale: the same rebuild replaces it.',
         ].join('\n'),
     };
 }
@@ -132,7 +132,7 @@ export async function beforePack(context) {
         throw new Error(
             `Refusing to package: electron-builder's "files" packages ${unscanned.join(', ') || 'the whole project (no files list)'}, ` +
             `which this guard does not read. It reads only ${PACKAGED_ROOTS.join(', ')}: ` +
-            'add the folder to PACKAGED_ROOTS in scripts/package-key-guard.mjs.',
+            'add the folder to PACKAGED_ROOTS in scripts/package-key-guard.js.',
         );
     }
     const { problem } = problemWith(projectDir);

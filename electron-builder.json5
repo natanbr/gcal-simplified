@@ -12,7 +12,7 @@
   // sb_secret_ key) found in those folders. It reads only them: a new entry in
   // `files` must be added to its PACKAGED_ROOTS, or it refuses everything.
   // Guarded by src/__tests__/package-key-guard-wiring.test.ts.
-  beforePack: "./scripts/package-key-guard.mjs",
+  beforePack: "./scripts/package-key-guard.js",
   mac: {
     target: ["dmg"],
     artifactName: "${productName}-Mac-${version}-Installer.${ext}",

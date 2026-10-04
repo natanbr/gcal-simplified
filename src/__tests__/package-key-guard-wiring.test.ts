@@ -20,10 +20,10 @@ import { getConfig } from 'app-builder-lib/out/util/config/config';
 import { resolveFunction } from 'app-builder-lib/out/util/resolve';
 import { repoRoot } from './helpers/sourceFiles';
 import { minifiedBundle, projectFactory, syntheticJwt } from './helpers/syntheticKeys';
-import { PACKAGED_ROOTS, type PackContext } from '../../scripts/package-key-guard.mjs';
+import { PACKAGED_ROOTS, type PackContext } from '../../scripts/package-key-guard.js';
 
-const GUARD = join(repoRoot, 'scripts/package-key-guard.mjs');
-const GUARD_COMMAND = 'node scripts/package-key-guard.mjs';
+const GUARD = join(repoRoot, 'scripts/package-key-guard.js');
+const GUARD_COMMAND = 'node scripts/package-key-guard.js';
 
 /** Flags that replace the config, the project, or the packing step itself. */
 const BYPASS = /(?:^|\s)(?:-c(?=[\s.=]|$)|--config\b|--prepackaged\b|--pd\b|--projectDir\b|--project\b)/;

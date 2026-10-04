@@ -20,7 +20,7 @@ import {
     minifiedBundle, projectFactory, secretWindows,
     syntheticJwt, syntheticPublishableKey, syntheticSecretKey,
 } from './helpers/syntheticKeys';
-import { beforePack, findAdminKeys, scanProject, PACKAGED_ROOTS } from '../../scripts/package-key-guard.mjs';
+import { beforePack, findAdminKeys, scanProject, PACKAGED_ROOTS } from '../../scripts/package-key-guard.js';
 
 const SERVICE_ROLE = syntheticJwt('service_role');
 const ANON = syntheticJwt('anon');
@@ -157,7 +157,7 @@ describe('package key guard — lifecycle: what is on disk is what ships', () =>
 });
 
 describe('package key guard — the command /release runs before the bump', () => {
-    const SCRIPT = join(repoRoot, 'scripts/package-key-guard.mjs');
+    const SCRIPT = join(repoRoot, 'scripts/package-key-guard.js');
     const run = (cwd: string) => spawnSync(process.execPath, [SCRIPT], { cwd, encoding: 'utf8' });
 
     it('exits 1 on a stale admin key and 0 once the build is clean, printing no key', () => {

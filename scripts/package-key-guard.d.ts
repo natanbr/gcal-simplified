@@ -1,6 +1,8 @@
-// Types for package-key-guard.mjs, which stays plain JavaScript because
+// Types for package-key-guard.js, which stays plain JavaScript because
 // electron-builder loads its beforePack hook with require()/import(), not
-// through a TypeScript loader. Only the tests import these.
+// through a TypeScript loader. Only the tests import these. It is .js + .d.ts,
+// not .mjs + .d.mts: `npm run lint` (--ext ts,tsx) never reads a .d.mts, and
+// type-laundering-guard.test.ts refuses one for that reason.
 
 export interface AdminKey {
     /** The JWT's `role` claim, or `sb_secret` for a new-style secret key. */
