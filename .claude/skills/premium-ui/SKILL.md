@@ -39,13 +39,13 @@ Designing a Mission Control component like a calendar component (or vice versa) 
 These are not stylistic preferences; violating them shows up as the fan spinning on an idle screen.
 
 - **Animate only `transform` and `opacity`.** Animating `width`, `height`, `top`, `margin` forces layout on every frame. This project already shipped that bug once — a "Syncing…" bar animating `width` forever.
-- **No infinite loops in the always-mounted tree.** No `repeat: Infinity` in Framer, no `... infinite` in CSS, anywhere that stays mounted on the Calendar view. And note: fading a wrapper to `opacity: 0` does **not** stop a CSS keyframe loop. The element must unmount, or the animation class must come off.
+- **No infinite loops on an idle view.** No `repeat: Infinity` in Framer, no `... infinite` in CSS, anywhere that stays mounted on the Calendar view or sits on Mission Control's main view. And note: fading a wrapper to `opacity: 0` does **not** stop a CSS keyframe loop. The element must unmount, or the animation class must come off.
 - **In Framer, put infinite transitions inside a conditional `animate` object**, never on the top-level `transition` prop — the top-level form runs a 60fps loop even when visually static.
-- **Long-running or ambient animation belongs in CSS `@keyframes`**, not Framer, so the compositor thread owns it instead of the main thread.
+- **CSS `@keyframes` keep the main thread out of it, not the frame.** A looping `transform`/`opacity` pulse on an 8 px dot cost 20-25 % of one core on the child's screen (2026-10-04): every vsync the compositor draws, viz aggregates and the GPU presents. Ambient motion plays a few times on a change and stops (the Remote dot: 3 pulses, replayed by a `key` remount); a loop must be registered in `infinite-animation-registry.test.ts`.
 - **`will-change: transform` is a loan, not a gift.** Apply it to genuinely complex moving elements and remove it when the animation ends, or you leak GPU memory.
 - **Respect `prefers-reduced-motion`.** Wrap non-essential motion in `@media (prefers-reduced-motion: no-preference)`. Accessibility is not a tradeoff against polish.
 
-`perf-sentinel` enforces all of this, and `src/__tests__/timer-registry.test.ts` plus `idle-performance.test.tsx` fail the build for the worst violations.
+`perf-sentinel` enforces all of this, and `src/__tests__/timer-registry.test.ts`, `src/__tests__/infinite-animation-registry.test.ts` plus `idle-performance.test.tsx` fail the build for the worst violations.
 
 ---
 

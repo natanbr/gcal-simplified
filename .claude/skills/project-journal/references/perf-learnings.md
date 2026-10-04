@@ -21,6 +21,10 @@ Real regressions found in `gcal-simplified` and the pattern that fixed each one.
 **Learning:** `framer-motion` `repeat: Infinity` executes JS and layout work on the main thread continuously, degrading React performance — noticeably on slower machines.
 
 **Action:** Move long-running or infinite animations to pure CSS `@keyframes` + classes so the browser can offload them to the compositor thread. Remember the class must be *removed* (or the element unmounted) when inactive — fading to `opacity: 0` does not stop the loop.
+*(Correction 2026-10-04: offloading removes the main-thread work, not the frame. A CSS loop left
+running on an idle view still cost 20-25 % of one core — see the 2026-10-04 entry. "Move it to CSS"
+is the fix for a loop that must exist while something happens, never a licence to loop on an idle
+screen.)*
 
 ## 2026-03-11 — Don't reallocate Dates in hot loops
 
@@ -235,3 +239,28 @@ and on `auth:success`. No timer, so `timer-registry.test.ts` does not see it; it
 call per mount across ordinary dispatches. Known and accepted: at launch it duplicates the Calendar
 view's first fetch (different range, `ApiService` shares no in-flight request) — once per launch, no
 idle cost.
+
+## 2026-10-04 — A compositor-driven loop is not free: it costs a frame every vsync
+
+**Learning:** `mc-remote-pulse` (the Remote dot, 8 px, `transform` + `opacity`, `infinite`) kept
+Mission Control's idle main view at 19.5-25 % of one core on the child's screen (1280x720 at
+150 %), against 0.4 % with the dot still. Its comment said a CSS loop is "compositor-driven" and
+therefore safe, which is half true: the trace shows no per-frame main-thread work, but 59 frames a
+second, each drawn by the renderer's compositor, drawn again by viz and presented by the GPU process
+(80 % of the bill). The property and the layer did not matter: opacity-only and `will-change` stayed
+at 25-27 %, and the cheapest loop measured, opacity-only on a promoted layer outside any blur, still
+cost 12.9 %. A `backdrop-filter` ancestor (`.mc-brow`) adds a second render pass to every frame:
+25.4 % with it, 18.4 % with only that blur removed. The cheat-trap finger over its blur overlay cost
+40 % while on screen. Measured with `cumulativeCPUUsage` deltas on the built app (`percentCPUUsage` on
+this Electron is a share of the whole 12-thread machine); the harness, survey and traces are
+described in `docs/performance.md` → 2026-10-04.
+**Action:** Nothing loops on an idle view (the Calendar, Mission Control's main view). Ambient
+motion plays a few iterations on a change and stops: a finite count, replayed by a React `key`
+remount (`RemoteIndicator` keys the dot on the status). "Move it to CSS" fixes a loop's main-thread
+cost while something is happening, never a loop on an idle screen. Every loop in `src/` is pinned in
+`src/__tests__/infinite-animation-registry.test.ts` (idle budget 0) and the idle main view is
+rendered in `idle-performance.test.tsx`. Two traps met on the way: a `tail -F` on a file another
+process appends to locks it on Windows (the runner's `Add-Content` failed; `appendFileSync` would
+have thrown), and a `vi.spyOn(global, 'setTimeout')` taken under fake timers restores the FAKE one
+if `vi.restoreAllMocks()` runs after `vi.useRealTimers()`: restore spies first, or a later test's
+`waitFor` hangs on a dead clock.

@@ -29,9 +29,10 @@ The idle-Calendar cap is **4 and all 4 slots are taken** (Dashboard 5min refresh
 Trace where the code mounts. Anything in the always-mounted tree above runs while the user is idle. Make it cheap, gate it, or move it.
 
 **3. Infinite animation?**
-No `repeat: Infinity` (Framer Motion) or `... infinite` (CSS) anywhere in the always-mounted tree. Two specific failure modes this project has already shipped:
+No `repeat: Infinity` (Framer Motion) or `... infinite` (CSS) anywhere in the always-mounted tree, nor on Mission Control's main view while it sits idle (the child's screen). Three specific failure modes this project has already shipped:
 - Fading a wrapper to `opacity: 0` does **not** stop a CSS keyframe loop. The element must unmount or drop the animation class.
 - Animating `width`/`height`/`top`/`margin` drives layout on every frame. Only `transform` and `opacity` are composited.
+- "Composited" is not free. A looping 8 px `transform`/`opacity` pulse (the Remote dot) cost 20-25 % of one core on the child's screen (2026-10-04): no main-thread work, but a full frame every vsync through the compositor, viz and the GPU present. Prefer a finite count replayed on a change. Every loop is pinned in `src/__tests__/infinite-animation-registry.test.ts`.
 For Framer specifically: put an infinite transition inside a conditional `animate` object, never on the top-level `transition` prop — the top-level form runs the 60fps loop even when visually static.
 
 **4. Store write cadence?**
