@@ -26,8 +26,15 @@ export function RemoteIndicator() {
                 color: 'var(--mc-text-muted)',
             }}
         >
+            {/* The colour is the status. `key` remounts the dot on every status
+                change so its finite pulse (mc.css, 9) plays again. It must never
+                loop: a loop here cost 20-25 % of one CPU core for as long as
+                Mission Control was open (docs/performance.md, 2026-10-04). */}
             <span
-                className={isOnline ? 'mc-anim-remote-pulse' : ''}
+                key={status}
+                data-testid="mc-remote-dot"
+                data-status={status}
+                className="mc-anim-remote-pulse"
                 style={{
                     width: 8,
                     height: 8,
