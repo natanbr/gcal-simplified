@@ -192,21 +192,16 @@ export class AuthService {
                     }
 
                     if (code) {
-                        // Exchange code for tokens
-                        const { tokens } = await this.oauth2Client.getToken({
-                            code: code,
-                            redirect_uri: redirectUri
-                        });
-                        // getToken already saved them, through the 'tokens' listener.
-                        this.oauth2Client.setCredentials(tokens);
-                        this.credentialsLoaded = true;
+                        // On a client of its own: a read still refreshing the saved
+                        // grant on the current client can land after this exchange,
+                        // refused or with the old account's token, and must not touch it.
+                        const client = this.newClient();
+                        const { tokens } = await client.getToken({ code, redirect_uri: redirectUri });
+                        this.signedIn(client, tokens);
 
                         res.setHeader('Content-Type', 'text/html; charset=utf-8');
                         res.end('<h1>Authentication successful!</h1><p>You can close this window.</p><script>window.close()</script>');
-
-                        // Notify via IPC (we'll assume the caller handles the IPC reply)
-                        // Or better, we resolve the promise and the main process sends the event
-                        resolve();
+                        resolve(); // main.ts then sends auth:success
                         server.close();
                     }
                 } catch (e) {
@@ -263,6 +258,24 @@ export class AuthService {
         return authPromise.finally(() => {
             this.isAuthInProgress = false;
         });
+    }
+
+    /**
+     * Makes `client` the sign-in and retires the one before it. Saved here, not
+     * by the 'tokens' listener (the exchange ran before the client was current).
+     * A failed save does not undo the sign-in; the next refresh saves again.
+     */
+    private signedIn(client: GoogleOAuthClient, tokens: Credentials): void {
+        client.setCredentials(tokens);
+        const previous = this.oauth2Client;
+        this.oauth2Client = client;
+        this.credentialsLoaded = true;
+        previous.retire();
+        try {
+            this.saveTokens(tokens);
+        } catch (error) {
+            console.error('Failed to save the Google tokens; they stay in memory until the next save', error);
+        }
     }
 
     logout() {

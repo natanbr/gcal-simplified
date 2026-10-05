@@ -200,3 +200,32 @@ describe('a refresh still in flight when the user clicks Reconnect', () => {
         expect(readStored(fake)).toMatchObject({ access_token: 'new-access', refresh_token: 'new-refresh' });
     });
 });
+
+describe('a sign-in while a read is still refreshing the saved grant', () => {
+    beforeEach(() => kit.resetAuthFakes(fake));
+
+    it.each([
+        ['Google then refuses the saved grant', REVOKED, 400],
+        ['the saved grant\'s refresh then succeeds', { access_token: 'old-account-access', expires_in: 3600 }, 200],
+    ] as const)('%s: the new sign-in stands', async (_case, body, status) => {
+        storeEncrypted(JSON.stringify(expiredSession()));
+        const late = kit.googleAnswersLater(fake);
+        const authService = await relaunch();
+        appReady();
+        const signedOut = vi.fn();
+        authService.onSignedOut(signedOut);
+        // The school calendar's read, started while Sign in was on screen (a held token file, say).
+        const pending = authorization(authService).catch((error: unknown) => error);
+        await vi.waitFor(() => expect(fake.tokenEndpoint).toHaveBeenCalledTimes(1));
+        googleAnswers(fake, { access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600 });
+
+        await kit.signIn(fake, authService);
+        late.answer(body, status);
+        await pending;
+
+        expect(signedOut).not.toHaveBeenCalled();
+        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authorization(authService)).toBe('Bearer new-access');
+        expect(readStored(fake)).toMatchObject({ access_token: 'new-access', refresh_token: 'new-refresh' });
+    });
+});
