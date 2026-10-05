@@ -934,7 +934,12 @@ second attempt at the *same* occurrence), so the start that names the occurrence
 which during a run still holds its start stamp. The same review found a refusal predicate that left an
 action out on a premise ("the phone only sends plain Reset for the running mission") that the phone's
 own code contradicts: it picks the phase from a broadcast that may be stale.
-**Action:** A date that identifies an occurrence is derived from the occurrence (`occurrenceDay`), and
-every reader compares against the *occurrence's* day, not `today`; test it with a window that crosses
-midnight and an outcome after it. When a refusal excludes an action "because the client never sends
-it that way", read the client's code for where it gets the target, and assume it can be stale.
+**Action:** A date that identifies an occurrence is decided when the run STARTS and stored on it
+(`occurrenceDate`), never re-derived at the outcome: the first fix re-derived it from the window at
+the outcome, and review found three ways the window or the start moved under it (a Settings save
+mid-run, the scheduler's 5 min late-fire tolerance, a DST night). Every reader compares against the
+*occurrence's* day, not `today` (`outcome-date-boundary.test.ts`). Likewise a limit measured "from
+the run" (the +/- cap) takes the run's own stored length, not the current Settings. And an end that
+was only noticed late (the app closed) is stamped at its due end, or the next window reads as run.
+When a refusal excludes an action "because the client never sends it that way", read the client's
+code for where it gets the target, and assume it can be stale.

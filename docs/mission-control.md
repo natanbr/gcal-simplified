@@ -114,7 +114,7 @@ Default costs; the source of truth is `REWARDS` in `src/mission-control/rewardCa
   - _Bug fixed (2025-03-06): old `remainingSecs/total` formula caused the bar to jump in the wrong direction after a reduce-time action._
 - **Long-press gesture (600ms)** to adjust remaining time while mission is active:
   - Long-press the **left half** of the bar → subtract 5 minutes
-  - Long-press the **right half** of the bar → add 5 minutes, up to the mission's own length + 60 min
+  - Long-press the **right half** of the bar → add 5 minutes, up to the run's length at its start + 60 min
     (`store/missionEndAdjust.ts`, shared with the phone's +/-; a press past it is refused, unlogged)
   - The bar cursor shows `pointer` when `onAdjust` is set.
 

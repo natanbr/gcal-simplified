@@ -124,8 +124,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Rollout of v2**: the v2 desktop works only with an `mc-remote` build that speaks protocol v2. The phone app deploys first (old pairings keep working with the installed v1 desktop; a scan of the new QR code gives a v2 pairing), then the desktop release. **The first start of the v2 desktop renews the pairing by itself, once** (a pairing without `remotePairingVersion: 2` gets a new room id and key before the renderer can read it, and the log says "Pairing renewed for signed messages (protocol v2): scan the QR code again on the phone."), because the old key was sent in plain text for months and a signature keyed with it proves nothing. **The phone must re-scan the QR code after the update**; until then it is in the old room and does nothing. The parent is told where they look, not in a console: until the phone's first verified message the Remote tab (⚙️ → 📱 Remote) shows "Remote was re-paired for security. Scan this QR code again on the phone.", and the activity log gets one line, "Remote re-paired for security: scan the QR code again (⚙️ → 📱 Remote)" (source `system`, once per renewal: Mission Control state remembers which renewal it logged, `settings.remotePairingRenewalLogged`, so neither a restart nor CLEAR nor 200 newer lines bring it back; a later renewal gets its own line). A brand-new install and a manual "Regenerate Keys" show neither.
   - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
   - **Only the phone can stop a mission (decided 2026-09-24)**: the phone's Stop sends `CANCEL_MISSION`, which stays on `REMOTE_ALLOWED_ACTIONS`. The desktop has no stop gesture: "— Minimize" only minimizes, a short tap and a long hold alike, because a stop sticks for the rest of the window without moving the shield, so a hold let the child end a mission. "↺ Reset" and its 2 s hold are unchanged (not decided yet). One desktop path still ends a mission: saving a new start time for the **running** mission in MC Settings ends it (no miss, the shield does not move). That is kept, and logged as "⏹️ Morning/Evening mission ended: its start time was changed in Settings", attributed 👤 (open decision for Nathan, PR 170; it used to be silent).
-  - **A Stop, a Reset or a time adjustment for a mission that is not running is refused (2026-09-28; plain Reset and time adjustment 2026-10-05)**: a phone Stop naming the other phase (a stale second tap), a Reset hold that fires after its mission ended, a phone Reset (tasks only) or +/- that lands after its mission ended or names the other phase changes nothing and writes no log line. The phone draws each card from the last broadcast, so its buttons can name a mission that has just ended; a plain Reset used to set that mission active again with nothing running (hidden on the desktop, never expiring, saved across a restart), and a +/- for it wrote "⏱️ Mission time adjusted" for nothing.
-  - **A mission can be made at most 60 min longer than its own length (2026-10-05)**: the phone's +1 / +5 / +10 and the overlay's +5 bar hold may take a run up to its window's length (Settings → Duration) + 60 min, so a 60-min evening up to 120 min. A press that would go past that is refused whole (not clamped): nothing changes and no line is written, so the phone's countdown simply does not move. Shortening is always allowed, down to the 1-minute floor; a −5 at the floor changes nothing and writes no line. A full Reset restarts the run at its window's length, so the 60 min are available again. Before, there was no ceiling: one stale or tampered payload (`deltaMinutes: 1e9`) made a mission that never ended, blocking every other mission and the quick-game window, saved across a restart.
+  - **A Stop, a Reset or a time adjustment for a mission that is not running is refused (2026-09-28; plain Reset and time adjustment 2026-10-05)**: a phone Stop naming the other phase (a stale second tap), a Reset hold that fires after its mission ended, a phone Reset (tasks only) or +/- that lands after its mission ended or names the other phase changes nothing and writes no log line. The phone draws each card from the last broadcast, so its buttons can name a mission that has just ended; a plain Reset used to set that mission active again with nothing running (hidden on the desktop, never expiring, saved across a restart), and a +/- for it wrote "⏱️ Mission time adjusted" for nothing. **Known gap**: the same stale card's whining toggle and task taps are NOT refused (a tap right after a Stop can re-mark the ended evening's whining, or count a cream application twice); refusing them is a product call, not made yet.
+  - **A mission can be made at most 60 min longer than its own length (2026-10-05)**: the phone's +1 / +5 / +10 and the overlay's +5 bar hold may take a run up to its length when it started (its window's length, Settings → Duration, at the start or the last full Reset; a Settings save during the run does not move it) + 60 min, so a 60-min evening up to 120 min, compared in whole seconds. A press that would go past that is refused whole (not clamped): nothing changes and no line is written, so the phone's countdown simply does not move. Shortening is always allowed, down to the 1-minute floor; a press that changes nothing (−5 at the floor) or a minus press that would lengthen a run shorter than the floor (the 10-second test run) is refused and writes no line. The line names the move that really happened: −10 on a 5-min run is "(-4m)", a move of less than a whole minute is named in seconds ("(-10s)"). A full Reset restarts the run at its window's length, so the 60 min are available again. Before, there was no ceiling: one stale or tampered payload (`deltaMinutes: 1e9`) made a mission that never ended, blocking every other mission and the quick-game window, saved across a restart.
   - **Shield −1 / +1 buttons (shipped in mc-remote 2026-09-28)**: the phone's Shield card has "−1 shield" and "+1 shield". They send `ADJUST_SHIELD` with `delta: -1` / `delta: 1`, which the desktop accepts (allowlist, validator, reducer). Details under Mission Streak Shield → Parent-adjustable shields.
   - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
   - **Global Listener**: The remote action listener is registered globally in the application shell. This guarantees that remote commands are processed continuously, even when viewing the calendar or when the mission overlay is active.
@@ -175,13 +175,13 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
         - **Unique Shape Instances & Jump-Back Prevention**: All generated shape instances are assigned unique IDs upon selection in `useBlocksGame.ts`, avoiding React key collisions. The slots in the tray are rendered transparent during dragging and unmounted upon successful placement, resolving the used shape "jump-back" visual glitch and ensuring proper state resets.
 
 - **Mission scheduling (morning / evening windows)**:
-  - The scheduler starts each window's mission **once per occurrence**. It leaves an occurrence alone once it ended today (completed or failed), or once the mission **ran at any point since the window's start time**: it is running now, or it started or ended at or after that time, whoever started it (the scheduler, ▶ Start, or the phone).
+  - The scheduler starts each window's mission **once per occurrence**. It leaves an occurrence alone once that occurrence concluded (completed or failed; an outcome is dated by the day its occurrence started, recorded when the run starts, see "A mission duration must be a real length" below), or once the mission **ran at any point since the window's start time**: it is running now, or it started or ended at or after that time, whoever started it (the scheduler, ▶ Start, or the phone).
   - **A stopped mission stays stopped for the rest of its window (fixed 2026-09-22)**. A stop (the phone's Stop, the only stop control since 2026-09-24; a settings save that moves the running mission's start time also ends it, logged) is not a miss (the shield does not move) and not a conclusion (a stopped morning does not open the quick-game window). It still counts as the occurrence having run, so the scheduler does not start it again, including after a relaunch inside the same window. This holds for a mission started by hand *before* its window, still running when the window opens, and stopped inside it (closed 2026-09-23). ▶ Start and the phone's Start still start it by hand. The next day's occurrence starts as normal.
   - A stop covers only the occurrences its run overlapped. Moving that phase's start time to later makes a new occurrence, and it starts at the new time. A mission started by hand *before* its window and stopped before the window opens does not cancel the scheduled one (completing or failing it early still does: that is today's outcome). Moving it to a start at or before the run's stop (or, for a running mission, before now) makes an occurrence that run already covers: it is not started again (open decision for Nathan, PR 170; before this fix a running mission moved earlier restarted at once).
-  - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load.
+  - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load. A run that ended unnoticed (the app was closed or the machine slept past its end, or an earlier day's stuck run is ended at load) is stamped as ended at its due end (start + duration), not when it was noticed, so a launch inside the same phase's next window still starts that window's mission (2026-10-05).
   - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
   - **A mission start time must be a real time (fixed 2026-09-24).** Settings → "Auto-trigger at" cannot be saved empty: Save is disabled, the empty field is outlined, and the footer names the empty time and its tab ("Set the Morning auto-trigger time (🕒 Missions Time tab) to save.") until both times are filled in. `SET_SETTINGS` also ignores a start time that is not `HH:MM` (it keeps the stored one and does not stop a running mission), a profile saved empty by an older version loads with the default time (06:00 / 19:00) and a window re-derived from its duration, and the log gets one system line saying which time was reset and why ("🔧 Mission settings repaired at startup: the evening start time was empty, reset to 19:00", 2026-10-05; it used to be silent), and the scheduler arms nothing for a time that is not a real `HH:MM`.
-  - **A mission duration must be a real length (2026-09-26).** At least one second and less than 24 h (the 10-second test step counts; the duration slider starts at 5 min, so it cannot offer 0). `SET_SETTINGS` keeps the stored duration for anything else, and a profile holding one (JSON saves NaN as `null`) loads with the default (30 / 60 min), named in the same startup line ("the evening duration could not be read, reset to 60 min"). At load the mission window is always re-derived from the settings, never trusted from the saved copy, and a mission saved running with no readable duration gets its window's length, so it can end. If that run's window closed before today, it is ended just after load instead (a logged system action, so it reaches the audit trail), with no outcome (no miss, no conclusion date, like a Stop) and one system log line ("Evening mission from <date> ended at startup: its saved record was incomplete"); ending it on the first tick would charge a miss (a shield segment) for a data bug. Every reader of an entered time (scheduler, mood gauge, quick-game window) uses the same strict `HH:MM` rule and does nothing with a time it cannot read; a mission end past midnight (`24:30`) is read as 00:30 the next day, so a launch or a late timer inside such a window *before midnight* still starts it; after midnight the scheduler aims at that evening's next occurrence and does not start it (an older limit, unchanged). An outcome is dated by the day its window started (2026-10-05): an evening that ends after midnight, finished or timed out, marks the evening that began before midnight as done, not the next day's, so the next evening still starts; a run started after midnight inside the previous evening's window (a late timer, ▶ Start or the phone) belongs to that evening too. The phone's "Done Today" badge follows the same date, so after an evening that ended at 00:15 it reads "Inactive" until that night's evening.
+  - **A mission duration must be a real length (2026-09-26).** At least one second and less than 24 h (the 10-second test step counts; the duration slider starts at 5 min, so it cannot offer 0). `SET_SETTINGS` keeps the stored duration for anything else, and a profile holding one (JSON saves NaN as `null`) loads with the default (30 / 60 min), named in the same startup line ("the evening duration could not be read, reset to 60 min"). At load the mission window is always re-derived from the settings, never trusted from the saved copy, and a mission saved running with no readable duration gets its window's length, so it can end (named in the same startup line since 2026-10-05: "the running evening mission had no length, set to its window's 60 min"). If that run's window closed before today, it is ended just after load instead (a logged system action, so it reaches the audit trail), with no outcome (no miss, no conclusion date, like a Stop) and one system log line ("Evening mission from <date> ended at startup: its saved record was incomplete"); ending it on the first tick would charge a miss (a shield segment) for a data bug. Every reader of an entered time (scheduler, mood gauge, quick-game window) uses the same strict `HH:MM` rule and does nothing with a time it cannot read; a mission end past midnight (`24:30`) is read as 00:30 the next day, so a launch inside such a window *before midnight* starts it, and a late timer (the machine slept) still starts it while the window is open, before or after midnight; a relaunch or the resume re-arm *after* midnight aims at that evening's next occurrence and does not start the open one (an older limit, unchanged). **An outcome is dated by the day its occurrence started (2026-10-05)**, and that day is decided when the run starts and stored on it: the scheduler names the occurrence it starts (a late fire after midnight is still last night's); a start by hand or from the phone belongs to the **nearest** occurrence of its phase, measured in real time, an exact tie going to the upcoming one (decided for Nathan by the review of PR 193, reversible): an evening at 19:00 started at 00:20 is the evening before, a morning at 06:00 started at 05:50 is today's, and a morning started by hand after 18:00 is the NEXT morning's (that morning then does not start, and its games open at midnight). A full Reset keeps the day. So an evening that ends after midnight, finished or timed out, marks the evening that began before midnight as done, not the next day's, and the next evening still starts; a Settings save during the run does not move it. The phone's "Done Today" badge follows the same date, so after an evening that ended at 00:15 it reads "Inactive" until that night's evening. A morning run left from an earlier day concludes that day, not today, so today's games stay shut until today's morning concludes (the quick-game rule below).
 
 - **School Bag task — school days only (added 2026-09-27)**:
   - Owner's rule: organizing the bag for school is a task in both routines, only on school days — not on holidays or Pro-D days. Read from the calendar when one is connected; otherwise Monday to Friday.
@@ -2058,27 +2058,58 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   *next* day's evening done, and that evening never started: no start, no miss, no log line. Any
   outcome after midnight did the same (an evening started by hand at 23:50, or stretched past
   midnight with the phone's +).
-- **Now** an outcome is dated by the day its occurrence's window started (`store/occurrenceDay.ts`):
-  the day the run started, or the day before when it started after midnight inside the previous
-  evening's window (a late timer, ▶ Start or the phone at 00:10 for a 23:30–00:30 evening). A full
-  Reset is a second attempt at the same occurrence and does not move the date. The scheduler compares
-  an occurrence with its own start day, so a 23:30 timer that fires after midnight (the machine
-  slept) is judged against the evening that began before midnight: one already finished is not
-  started a second time and gets no "skipped" line. The miss still costs one shield, and the next
-  night's miss costs another.
+- **Now** an outcome is dated by the day its occurrence started, and that day is decided when the
+  run **starts** and stored on it (`occurrenceDate`, `store/occurrenceDay.ts`; the outcome writes it).
+  The scheduler names the occurrence it starts, so a late timer at 00:10 for a 23:30 evening is that
+  night's. A start by hand or from the phone belongs to the **nearest** occurrence of its phase,
+  measured in real time, an exact tie going to the upcoming one (decided for Nathan by the review of
+  PR 193, reversible): the default evening started at 00:20 is the evening before (as the school bag
+  already treats it), the 06:00 morning started at 05:50 is today's, and **a morning started by hand
+  after 18:00 is the next morning's**: that morning then does not start, and its games open at
+  midnight. A full Reset is a second attempt at the same occurrence and keeps the day. Deciding at
+  the start (the first version re-derived the day at the outcome) keeps the day right when Settings
+  saves a new duration during the run, when the scheduler starts a run up to 5 min late (the 10 s
+  test evening at 23:58 started at 00:02), and on a DST night. The scheduler compares an occurrence
+  with its own start day, so a 23:30 timer that fires after midnight (the machine slept) is judged
+  against the evening that began before midnight: one already finished is not started a second time
+  and gets no "skipped" line. The miss still costs one shield, and the next night's miss costs
+  another.
+- **A run that ended unnoticed is stamped at its due end** (`store/missionActivity.ts`). A morning
+  left running on Monday (the app quit at 06:10) and expired by the tick on Tuesday at 06:15 had its
+  end stamped then, so Tuesday's morning read as run: no morning, no "skipped" line, games shut all
+  day. Its end is now Monday 06:34, and Tuesday's morning starts. The same holds for an earlier day's
+  stuck run ended at load.
+- **A timeout after a stop charges nothing.** The overlay's timer stays mounted for its ~575 ms exit
+  animation, so a phone Stop just before "Time's up" let it record a miss for the stopped mission
+  (shield −1, no line). Only a running mission times out now (older bug).
 - **Visible on the phone**: "Done Today" compares the same date with the phone's today, so after an
   evening that ended at 00:15 the card reads "Inactive" until that night's evening runs (before, it
   read "Done Today" and that evening never came).
-- **Not changed**: a relaunch or resume *after* midnight inside an overnight window still aims at the
-  next occurrence and does not start the open one (an older limit). An evening started by hand before
-  its window and finished before it opens still counts as that day's evening.
+- **Quick games**: a morning run left from an earlier day now concludes that day, not today, so
+  today's games stay shut until today's morning concludes, as the quick-game rule says (before, the
+  late expiry opened them).
+- **The day of the update** (also for the release notes): a date the previous version saved for an
+  outcome recorded after midnight, or for an evening left running and recorded missed at the next
+  morning's launch, still names that later day. If the update is installed on that day, that
+  evening is skipped once, with nothing logged; from the next night on it works.
+- **Not changed**: a relaunch or the resume re-arm *after* midnight inside an overnight window still
+  aims at the next occurrence and does not start the open one (an older limit; a late timer does
+  start it). An evening started by hand before its window and finished before it opens still counts
+  as that day's evening.
 - Tests: `store/__tests__/mcReducer.occurrence-day.test.ts` (completion, timeout, a run started after
   midnight in the window, a full Reset at 00:40, two nights in a row, the morning, a daytime evening
-  finished after midnight, a run started after the window closed, a clock set back) and new cases in
-  `hooks/useMissionScheduler.overnight.test.tsx` (a timeout at 00:40 then the next 23:30 evening with
-  both misses counted, a relaunch inside the next evening's window, a relaunch at 00:10 mid-run, a late
-  timer after midnight for an evening finished early). Red before the fix: 8 reducer and 5 scheduler
-  cases.
+  finished after midnight, the nearest rule with its tie at 07:00, the scheduler's named day, a phone
+  that names a day, a Settings save mid-run, a run saved before the field existed, a clock set back),
+  new cases in `hooks/useMissionScheduler.overnight.test.tsx` (a timeout at 00:40 then the next 23:30
+  evening with both misses counted, a relaunch inside the next evening's window, a relaunch at 00:10
+  mid-run, a late timer after midnight for an evening finished early or not started, the 10 s evening
+  started 4 min late), `hooks/useMissionScheduler.next-window.test.tsx` (Monday's morning ended
+  during Tuesday's at 05:50, 06:15 and 07:00; yesterday's stuck evening ended at a 19:10 launch),
+  `persistence-time.test.ts` (the stored day and base length survive a restart, garbage does not),
+  `mcReducer.mission-stop.test.ts` (a timeout after the stop) and the structural
+  `__tests__/outcome-date-boundary.test.ts` (one writer of the outcome dates, two comparing readers).
+  Red before the fix: 8 reducer and 5 scheduler cases; in review round 1, 10 reducer, 1 scheduler,
+  2 next-window and 1 stop case before the fix, the 3 hydration cases by mutation (dropping the check).
 
 ### 2026-10-05 Phone mission buttons: a stale Reset or +/- is refused, and +/- has a ceiling
 
@@ -2091,19 +2122,26 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   nothing changes. A plain Reset still writes no log line, accepted or refused (unchanged).
 - **+/- for a mission that is not running** is refused too. The desktop already ignored it, but the
   log wrote "⏱️ Mission time adjusted (+5m)" for nothing; now neither moves.
-- **A ceiling for +/-.** A run may last at most its own length (its window, Settings → Duration) +
-  60 min (`MAX_MISSION_EXTENSION_MINS`, `store/missionEndAdjust.ts`). A press past it is refused
-  whole, not clamped, so the log never names a move that did not happen; the phone's countdown just
-  does not move. Shortening is always allowed (a run saved longer before this change can still be
-  shortened), and a −5 at the 1-minute floor now changes nothing and writes no line. Why "own length
-  + 60": it is measured from the run, so the reducer stays pure (no clock) and a run started by hand
-  outside its window gets the same room as one the scheduler started; it gives the 10-second test
-  duration a sane ceiling where a multiple of the length would not; and an hour is six presses of the
-  phone's +10. A full Reset restarts at the window's length, so the hour is available again. The
-  phone's +1e9 (finite, so the payload validator lets it through) used to make a mission that never
-  ended. The same rule covers the overlay's +5 bar hold.
+- **Not covered (known gap)**: the same stale card's whining toggle and task taps are not refused; a
+  tap right after a Stop can re-mark the ended evening's whining or count a cream application twice.
+  Refusing them is a product call.
+- **A ceiling for +/-.** A run may last at most its length when it started (or was last fully reset;
+  `baseDurationMins`, stored on the run, so a Settings save during it does not move the ceiling) +
+  60 min (`MAX_MISSION_EXTENSION_MINS`, `store/missionEndAdjust.ts`), compared in whole seconds (the
+  10 s test window's float tail stopped a 10 s evening at 00:00 one press short). A press past it is
+  refused whole, not clamped; the phone's countdown just does not move. Shortening is always allowed
+  (a run saved longer before this change can still be shortened). Refused too, with no line: a press
+  that changes nothing (−5 at the 1-minute floor) and a minus press that would lengthen a run
+  shorter than the floor (−1 on the 10 s test run used to make it a minute). The line names the move
+  that really happened: −10 on a 5-min run is "(-4m)", a move of less than a whole minute is named in
+  seconds ("(-10s)"). Why "own length + 60": it is measured from the run, so the reducer stays pure
+  (no clock) and a run started by hand outside its window gets the same room as one the scheduler
+  started; it gives the 10-second test duration a sane ceiling where a multiple of the length would
+  not; and an hour is six presses of the phone's +10. A full Reset restarts at the window's length,
+  so the hour is available again. The phone's +1e9 (finite, so the payload validator lets it through)
+  used to make a mission that never ended. The same rule covers the overlay's +5 bar hold.
 - One predicate for each refusal, asked by the reducer and the log alike: `isStaleMissionAction`
-  (which mission) and `adjustedMissionDuration` (how far). The phone app needs no change.
+  (which mission) and `adjustedMissionEnd` (how far, and the line). The phone app needs no change.
 - Tests: new cases in `store/__tests__/mcReducer.stale-mission-action.test.ts` (plain Reset and +/-
   with nothing running, for the other mission, for a mission stuck active; the predicate per action
   type), `hooks/useMissionScheduler.stale-phone.test.tsx` (over the real remote channel: a Reset after
@@ -2111,25 +2149,34 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   expired) and `store/__tests__/mcReducer.mission-end-cap.test.ts` (inside the cap, exactly at it,
   past it, refused whole, +1e9 by reducer and over the remote channel, the 1-minute floor, a run saved
   over the cap, the 10-second duration, a full Reset, a relaunch at the cap, and both files asking the
-  one decision). The old case "does not cover the plain RESET_MISSION" pinned the bug and was turned
-  round. Red before the fix: 8 stale-action, 3 phone and 10 cap cases.
+  one decision), plus in review round 1: the 10 s evening at 00:00 (+5 ×12) and 00:05 (+10 ×6), the
+  refused lengthening minus, the real move in the line (−4m, −9m, −10s), a Settings save mid-run in
+  both directions, a run saved before the base length existed, and a burst (the expiry tick and a
+  phone +10 before one render) that writes no line. The old case "does not cover the plain
+  RESET_MISSION" pinned the bug and was turned round. Red before the fix: 8 stale-action, 3 phone and
+  10 cap cases; in review round 1, 10 cap cases.
 
-### 2026-10-05 A mission time repaired at startup says so in the log
+### 2026-10-05 A mission time or run length repaired at startup says so in the log
 
 - **The bug.** A profile saved by v0.0.42 with a cleared "Auto-trigger at" field holds `''`, and a
   NaN duration saves as `null`. Load resets either to the default (06:00 / 19:00, 30 / 60 min) so
-  the mission runs at all, but silently: the child's evening could move to 19:00 with no line and
-  no attribution (CLAUDE.md → Attribution).
-- **Now** the repair still happens in hydration (the first screen must already have a real time and
-  window), and just after load the log gets one line, source `system` (💻), naming every field it
-  reset and why: "🔧 Mission settings repaired at startup: the evening start time was empty, reset to
-  19:00" (or "could not be read" for any other unreadable time, "was not a real length" for a
-  duration of 0, a negative one or a day or more, "could not be read" for a `null` duration). The
-  line reaches the audit trail, like the game-token settle's. A field absent from an older blob is a
+  the mission runs at all, and gives a mission saved running with no readable duration its window's
+  length, which decides when the child's run ends. Both silently: the child's evening could move to
+  19:00 with no line and no attribution (CLAUDE.md → Attribution).
+- **Now** the repairs still happen in hydration (the first screen must already have a real time,
+  window and length), and just after load the log gets one line, source `system` (💻), naming
+  everything they changed and why: "🔧 Mission settings repaired at startup: the evening start time
+  was empty, reset to 19:00" (or "could not be read" for any other unreadable time, "was not a real
+  length" for a duration of 0, a negative one or a day or more, "could not be read" for a `null`
+  duration, "the running evening mission had no length, set to its window's 60 min"). What changed
+  is read from the repairs' own before and after, not from a second copy of their rules. The line
+  reaches the audit trail, like the game-token settle's. A field absent from an older blob is a
   plain default, not a repair, and gets no line; a relaunch after the repair was saved writes no
   second line. It is written while the shield is broken too: it records a repair, not an action the
   lock refuses.
 - Tests: `store/missionTimeRepair.test.tsx` (the line in the app and in the audit trail, several
-  fields in one line, StrictMode, three profiles with nothing to repair, a relaunch, a broken shield,
-  and which saved values count as empty, unreadable or unreal). Red before the fix: the 6 launch
-  cases with something to repair.
+  fields in one line, a running mission with no length, StrictMode with the once-only guard proven
+  by a spy, three profiles with nothing to repair, a relaunch, a broken shield, which saved values
+  count as empty, unreadable or unreal, and garbage in every settings key reporting exactly what the
+  sanitizer changed). Red before the fix: the 6 launch cases with something to repair; in review
+  round 1, the running-mission case and the once-only guard by mutation (dropping each).

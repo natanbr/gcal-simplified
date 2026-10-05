@@ -205,7 +205,10 @@ describe('a time adjustment for a mission that is not running', () => {
     });
 });
 
-describe('the predicate covers every mission action a stale phone card can send', () => {
+// What it covers: the Stop, both Resets and +/-. NOT covered, a known gap (a
+// product call, review of PR 193): the same stale card's whining toggle and task
+// taps (TOGGLE_WHINING, COMPLETE_TASK), which still change an ended mission.
+describe('the predicate covers the Stop, both Resets and +/- from a stale phone card', () => {
     it.each(['CANCEL_MISSION', 'RESET_MISSION', 'RESET_MISSION_WITH_TIMER', 'ADJUST_MISSION_END'] as const)(
         '%s naming the other mission while one runs is stale', (type) => {
             const action = (type === 'ADJUST_MISSION_END'

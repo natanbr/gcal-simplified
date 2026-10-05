@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { initialState } from './mcReducer';
+import { initialState, mcReducer } from './mcReducer';
 import { isQuickGameWindowOpen } from './gameWindow';
-import type { MCState } from '../types';
+import type { MCAction, MCState } from '../types';
 
 // Defaults: morning 06:00 for 30 min, evening 19:00 for 60 min.
 const local = (hhmm: string) => `2026-09-02T${hhmm}:00`;
@@ -89,5 +89,37 @@ describe('isQuickGameWindowOpen — the gap between the two missions', () => {
             settings: { ...initialState.settings, morningStartsAt: '14:00', eveningStartsAt: '08:00' },
         });
         expect(isQuickGameWindowOpen(overnight, local('15:00'))).toBe(false);
+    });
+});
+
+// An outcome is dated by the day its occurrence started (2026-10-05). A morning
+// left running on Monday and expired on Tuesday concludes MONDAY, so Tuesday's
+// games stay shut until Tuesday's own morning concludes, as the literal rule
+// above says. Dating it by the expiry used to open them (review of PR 193, V2).
+describe('isQuickGameWindowOpen — a morning from an earlier day', () => {
+    const monday = (hhmm: string) => `2026-09-01T${hhmm}:00`;
+
+    function mondayMorningExpiredOnTuesday(): MCState {
+        const actions: MCAction[] = [
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning', origin: 'scheduler', timestamp: monday('06:00') },
+            { type: 'MARK_MISSION_TIMEOUT', missionPhase: 'morning', origin: 'scheduler', timestamp: local('06:10') },
+            { type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler', timestamp: local('06:10') },
+        ];
+        return actions.reduce(mcReducer, state());
+    }
+
+    it('does not open Tuesday’s games', () => {
+        const s = mondayMorningExpiredOnTuesday();
+        expect(s.lastCompletedOrFailedMorningDate, 'precondition: dated Monday').toBe('2026-09-01');
+        expect(isQuickGameWindowOpen(s, local('10:00'))).toBe(false);
+    });
+
+    it('guard: Tuesday’s own morning, once concluded, opens them', () => {
+        const tuesday: MCAction[] = [
+            { type: 'SET_ACTIVE_MISSION', phase: 'morning', origin: 'scheduler', timestamp: local('06:12') },
+            { type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'morning', bonusTokens: 2, timestamp: local('06:30') },
+        ];
+        const s = tuesday.reduce(mcReducer, mondayMorningExpiredOnTuesday());
+        expect(isQuickGameWindowOpen(s, local('10:00'))).toBe(true);
     });
 });
