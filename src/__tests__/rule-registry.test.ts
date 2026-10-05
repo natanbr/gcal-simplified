@@ -275,6 +275,17 @@ const REGISTRY: Rule[] = [
         defence: 'The behavioural half is useMissionScheduler.stop.test.tsx and useMissionScheduler.early-start.test.tsx, which drive the real reducer through a stop in both windows, a mission started before its window and stopped inside it, a relaunch and a rollover. Their no-timer cases go red on their own if the arm-time checks in schedulePhase are dropped (20 timers in 10 s).',
     },
     {
+        rule: 'A mission outcome is dated by the day its occurrence\'s window started, never by the clock at the outcome: occurrenceDay writes lastCompletedOrFailed*Date from the run\'s start, and the scheduler compares an occurrence with its own start day',
+        source: 'CLAUDE.md → Conventions → A mission re-trigger clears loggedTimeoutAt',
+        status: 'guarded',
+        guard: [
+            'src/mission-control/store/__tests__/mcReducer.occurrence-day.test.ts',
+            'src/mission-control/hooks/useMissionScheduler.overnight.test.tsx',
+        ],
+        verifiedRedBy: "date the outcome by the outcome instant again (`new Date(nowIso).toLocaleDateString('sv')` in missionStreak.ts's outcomeDatePatch) — 11 cases red: 8 reducer cases (completion, timeout, a run started after midnight in the window, a full Reset at 00:40, two nights, a daytime evening finished after midnight, the morning twice) and 3 scheduler cases (a timeout at 00:40 then the next 23:30 evening, a relaunch inside the next window, a relaunch at 00:10 mid-run); compare with today in occurrenceHandled — the 2 late-timer cases go red (a second start at 00:25, a \"skipped\" line at 00:35); read only startedAt in occurrenceDay — the full-Reset case goes red; drop the previous-day shift — the run started at 00:10 goes red (all proven 2026-10-05).",
+        defence: 'The run\'s start is lastActiveAt, because during a run that is the start stamp (its one writer stamps the start and the end, activity-stamp-boundary.test.ts); startedAt is only the fallback, since a full Reset moves it. A relaunch AFTER midnight inside an overnight window still aims at the next occurrence and does not start the open one (an older limit, documented in requirements).',
+    },
+    {
         rule: 'Only the phone stops a mission: no desktop gesture dispatches CANCEL_MISSION, "— Minimize" only minimizes, a settings save that ends the running mission is logged, and a Stop or full Reset naming a mission that is not running is refused',
         source: 'CLAUDE.md → Conventions → Only the phone stops a mission',
         status: 'guarded',

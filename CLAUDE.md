@@ -112,6 +112,11 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   only writer) and **never** cleared, because the scheduler reads it to know the occurrence already
   ran. A stop records no outcome (not a miss, not a conclusion), so clearing it beside `startedAt`
   restarts a stopped mission instantly (2026-09-22). Guarded by `activity-stamp-boundary.test.ts`.
+  An outcome (completion or miss) is dated by the day its occurrence's window **started**, never by the
+  clock at the outcome: `occurrenceDay` (`store/occurrenceDay.ts`) writes `lastCompletedOrFailed*Date`
+  from the run's start, and the scheduler compares an occurrence with its own start day. Dated by the
+  clock, an evening ending at 00:30 marked the next day's evening done, and it never started.
+  Guarded by `mcReducer.occurrence-day.test.ts` and `useMissionScheduler.overnight.test.tsx`.
 - **Only the phone stops a mission**: no desktop *gesture* dispatches `CANCEL_MISSION` (a stop sticks for the
   window and spares the shield, so a desktop gesture let the child end one); "— Minimize" only minimizes.
   The phone's Stop reaches it through `REMOTE_ALLOWED_ACTIONS`. Guarded by `action-literal-boundary.test.ts`.

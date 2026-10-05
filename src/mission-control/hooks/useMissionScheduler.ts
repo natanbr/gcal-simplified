@@ -45,8 +45,10 @@ function nextOccurrence(mins: number): Date {
 
 /**
  * True when the occurrence of `phase` starting at `occurrenceStart` needs no
- * scheduler start: it ended today (completed or failed), or the mission ran at
- * some point since its start time — it is running now, or it last started or
+ * scheduler start: it concluded (completed or failed; the outcome is dated by
+ * the day its window started, store/occurrenceDay.ts, so a timer firing after
+ * midnight is judged against the evening that began before it), or the mission
+ * ran at some point since its start time — it is running now, or it last started or
  * ended at or after that time. The run is what covers a STOP, which records no
  * outcome: a stop is not a miss (the shield) and not a conclusion (the
  * quick-game window). Without it a stopped mission was restarted 8 ms later.
@@ -54,10 +56,10 @@ function nextOccurrence(mins: number): Date {
  * trusting it would skip every occurrence, silently, until the clock caught up.
  */
 function occurrenceHandled(s: MCState, phase: MissionPhase, occurrenceStart: Date): boolean {
-    const todayStr = getLocalDateString();
+    const occurrenceDate = getLocalDateString(occurrenceStart);
     const concluded =
-        phase === 'morning' ? s.lastCompletedOrFailedMorningDate === todayStr
-        : phase === 'evening' ? s.lastCompletedOrFailedEveningDate === todayStr
+        phase === 'morning' ? s.lastCompletedOrFailedMorningDate === occurrenceDate
+        : phase === 'evening' ? s.lastCompletedOrFailedEveningDate === occurrenceDate
         : false;
     const stamp = s.missions.find(m => m.phase === phase)?.lastActiveAt;
     const activeAt = stamp === undefined ? Number.NaN : Date.parse(stamp);

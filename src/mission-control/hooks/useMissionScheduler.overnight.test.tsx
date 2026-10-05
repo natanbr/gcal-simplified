@@ -11,6 +11,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initialState, mcReducer } from '../store/mcReducer';
+import { getLocalDateString } from '../store/behaviorSync';
+import { STORAGE_KEY, loadPersistedState } from '../store/useMCStore';
 import { at, jumpTo, renderLiveScheduler, startLogs, step } from './schedulerTestKit';
 import type { MCState } from '../types';
 
@@ -21,7 +23,25 @@ function lateEvening(): MCState {
     return s;
 }
 
+/** The same, without the morning: a 06:00 morning would run in the middle of a day-long jump. */
+function lateEveningOnly(): MCState {
+    const s = lateEvening();
+    return { ...s, missions: s.missions.filter(m => m.phase === 'evening') };
+}
+
 const skippedLogs = (s: MCState) => s.activityLogs.filter(l => l.message.startsWith('Evening mission skipped')).length;
+
+/** Moves past `when` with a render between timer callbacks, so the 15 s expiry tick sees the run. */
+function crossing(when: Date) {
+    jumpTo(new Date(when.getTime() - 60_000));
+    step(90_000);
+}
+
+/** The app is closed: what it saved is what the next launch loads. */
+function saveAndClose(harness: { live: { state: MCState }; unmount: () => void }) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(harness.live.state));
+    harness.unmount();
+}
 
 describe('an evening window that crosses midnight', () => {
     beforeEach(() => { vi.useFakeTimers(); });
@@ -54,6 +74,126 @@ describe('an evening window that crosses midnight', () => {
 
         expect(live.state.activeMission).toBe('evening');
         expect(skippedLogs(live.state), 'logged as skipped').toBe(0);
+        unmount();
+    });
+});
+
+// An outcome after midnight used to be dated by the clock, so the next day's
+// evening counted as done and never started: no start, no miss, no line. The
+// outcome is now dated by the day its occurrence began, and the scheduler
+// compares an occurrence with its own start day (store/occurrenceDay.ts).
+describe('an overnight evening that ends after midnight leaves the next evening alone', () => {
+    beforeEach(() => { vi.useFakeTimers(); localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.removeItem(STORAGE_KEY); });
+
+    it('timed out at 00:40, the next evening still starts at 23:30, and both misses count', () => {
+        const launch = at(23, 40);
+        const firstEnd = at(0, 40, 1); // 60 min after the 23:40 start
+        const nextStart = at(23, 30, 1);
+        const secondEnd = at(0, 30, 2);
+        vi.setSystemTime(launch);
+        const { live, unmount } = renderLiveScheduler(lateEveningOnly());
+        step(100);
+        expect(live.state.activeMission, 'precondition: tonight’s evening runs').toBe('evening');
+
+        crossing(firstEnd);
+        expect(live.state.activeMission).toBe('none');
+        expect(live.state.missedMissionStreak).toBe(1);
+        expect(live.state.lastCompletedOrFailedEveningDate, 'dated the night it began').toBe(getLocalDateString(launch));
+
+        jumpTo(new Date(nextStart.getTime() - 1000));
+        step(2_000);
+        expect(live.state.activeMission, 'the next evening was taken as already done').toBe('evening');
+        expect(startLogs(live.state, 'evening')).toBe(2);
+
+        crossing(secondEnd);
+        expect(live.state.missedMissionStreak, 'the second night’s miss counts too').toBe(2);
+        unmount();
+    });
+
+    it('finished at 00:15, then relaunched inside the next evening’s window, that evening starts', () => {
+        const launch = at(23, 40);
+        const finished = at(0, 15, 1);
+        const nextEvening = at(23, 40, 1);
+        vi.setSystemTime(launch);
+        const first = renderLiveScheduler(lateEveningOnly());
+        step(100);
+        jumpTo(finished);
+        first.dispatch({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'evening', bonusTokens: 2 });
+        step(1_000);
+        expect(first.live.state.activeMission, 'precondition: completed').toBe('none');
+        saveAndClose(first);
+
+        vi.setSystemTime(nextEvening);
+        const relaunched = renderLiveScheduler(loadPersistedState());
+        step(1_000);
+        expect(relaunched.live.state.activeMission).toBe('evening');
+        relaunched.unmount();
+    });
+
+    it('relaunched at 00:10 with the run still going, it ends at 00:40 and the next evening starts', () => {
+        const launch = at(23, 40);
+        const relaunch = at(0, 10, 1);
+        const end = at(0, 40, 1);
+        const nextStart = at(23, 30, 1);
+        vi.setSystemTime(launch);
+        const first = renderLiveScheduler(lateEveningOnly());
+        step(100);
+        saveAndClose(first);
+
+        vi.setSystemTime(relaunch);
+        // Hydration puts the default morning back; drop it again, for the same reason as above.
+        const loaded = loadPersistedState();
+        const { live, unmount } = renderLiveScheduler({ ...loaded, missions: loaded.missions.filter(m => m.phase === 'evening') });
+        step(100);
+        expect(live.state.activeMission, 'precondition: the saved run resumes').toBe('evening');
+        crossing(end);
+        expect(live.state.activeMission).toBe('none');
+        expect(live.state.lastCompletedOrFailedEveningDate).toBe(getLocalDateString(launch));
+
+        jumpTo(new Date(nextStart.getTime() - 1000));
+        step(2_000);
+        expect(live.state.activeMission).toBe('evening');
+        unmount();
+    });
+});
+
+// The reader's half: a timer armed for 23:30 that fires after midnight (the
+// machine slept, and the resume's re-arm had not run yet) belongs to the
+// evening that began before midnight, so it is judged against THAT day.
+describe('a late timer after midnight, for an evening already finished before its window', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+    /** Started by hand at 23:00 and finished at 23:20: tonight is done. The 23:30 timer is armed. */
+    function finishedEarly() {
+        vi.setSystemTime(at(23, 0));
+        const harness = renderLiveScheduler(lateEveningOnly());
+        harness.dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'local' });
+        jumpTo(at(23, 20));
+        harness.dispatch({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'evening', bonusTokens: 2 });
+        step(1_000);
+        expect(harness.live.state.activeMission, 'precondition: finished').toBe('none');
+        return harness;
+    }
+
+    it('firing inside the window (about 00:25) does not start it a second time', () => {
+        const { live, unmount } = finishedEarly();
+        // vi.setSystemTime keeps the timer's remaining ~10 min, so it fires at about 00:25.
+        vi.setSystemTime(at(0, 15, 1));
+        step(11 * 60_000);
+
+        expect(live.state.activeMission).toBe('none');
+        expect(startLogs(live.state, 'evening')).toBe(1);
+        unmount();
+    });
+
+    it('firing after the window (about 00:35) logs no "skipped" line for an evening that ran', () => {
+        const { live, unmount } = finishedEarly();
+        vi.setSystemTime(at(0, 25, 1));
+        step(11 * 60_000);
+
+        expect(skippedLogs(live.state)).toBe(0);
         unmount();
     });
 });
