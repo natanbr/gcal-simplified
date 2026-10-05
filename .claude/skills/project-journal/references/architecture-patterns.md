@@ -902,3 +902,20 @@ not a resize listener, and put both the base and the short-screen rules of a swi
 classes: an inline style beats the media query. In a hidden-window spec whose subject is layout,
 `dispatchEvent('click')` and use few pointer steps, and before measuring wait until **no ancestor
 of the element has a computed `transform` other than `none`** (the spec's `settled`).
+
+## 2026-10-05 — A request shaped by a setting waits for it; "empty while loading" is not "first load"
+
+**Learning:** The Dashboard asked for the month's events before it had read the saved settings that
+decide the week start, so the first request used the hook's `'sunday'` default while the week on
+screen used `'today'` (two defaults for the same `undefined`). The settings then changed the cache
+key, the miss emptied the event list, and the full-screen spinner was keyed on `loading &&
+events.length === 0`: it covered the week twice per launch and on every Next Week into a new month.
+Nobody saw it while the Google reads failed quietly (until PR 186). The settings were also read last,
+in one `try` with tasks and weather, so a weather failure left them unread (S1): one cause, two bugs.
+**Action:** Read the configuration before any request it shapes, and gate on "answered", not
+"succeeded" (a busy `config.json` must still reach the week). Give each optional read its own
+`catch`. Key a full-screen loader on "nothing shown yet" (a flag the first settled answer sets), never
+on an empty list: an empty calendar is a valid answer. A cache miss keeps the previous state on
+screen, and once the controls stay usable during a load, only the visible period's answer may
+change the screen (`visibleKeyRef` in `useCalendarData.ts`). Tests:
+`src/components/__tests__/Dashboard.loading.test.tsx` records every screen with a MutationObserver.

@@ -239,7 +239,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **Visibility**: When navigating between weeks or refreshing data, a more prominent loading indicator should be visible.
 - **Progress Bar**: Implement a Framer Motion-based progress bar (skeleton or linear loader).
 - **Status Text**: Display small text indicating the current loading status (e.g., "Fetching Schedule...", "Updating Weather...") next to or under the date range title in the header.
-- **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched.
+- **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched. The full-screen "Syncing with Google..." shows only until the first week can be shown; after that a period not loaded yet keeps the calendar and its known events on screen with the header indicator (2026-10-05).
 
 ## Technical Context
 
@@ -1974,3 +1974,42 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
 - Not changed: an access token saved without a refresh token (left by builds before v0.0.41, or by
   the Reconnect race fixed here) that expires mid-session still fails quietly until the next
   launch, which shows Sign in.
+
+### 2026-10-05 The calendar no longer flashes the full-screen spinner at launch and on Next Week
+
+- **Bug** (found by the review of PR 186; there since the month cache, hidden until v0.0.43 because
+  the Google reads failed quietly). "Syncing with Google..." replaced the whole calendar twice at
+  every launch, and again on the first Next Week or Previous Week into a month not loaded yet. The
+  Dashboard asked for the events before it had read the saved settings, so the first request was
+  for a Sunday week (the hook's default) while the week on screen started on the saved day. When the
+  settings arrived, the request for the right week missed the cache, and a miss emptied the event
+  list; an empty list while loading was what put the spinner up. A week start changed in Settings did
+  the same, and so did any Next Week into an empty month.
+- **Same cause, bug S1** (`docs/release-qa-plan.md`). The settings were read last, after tasks and
+  weather, in one `try`: a weather or tasks failure at launch (offline, for one) showed "Failed to
+  load calendar data." although the events had loaded, and left the saved settings unread for the
+  session (week start, active hours, theme).
+- **Now.** The Dashboard reads the settings first and asks for the events once, for the saved week
+  start. Tasks and weather follow, and each one's failure is only logged, as the 5-minute refresh
+  already did: no calendar error, no weather pill. The full-screen spinner shows only until the
+  first week can be shown (an answer or a failure). After that, a period not loaded yet keeps the
+  calendar and the events already known on screen, with the header's small indicator and
+  "Fetching Events..."; a cached one shows at once with "Refreshing...". An answer for a period the
+  user has already left is cached but no longer replaces the one on screen: the arrows stay usable
+  while a month loads, so a slow answer could otherwise land on the wrong week. Saving Settings and
+  a reconnect read the settings again and refetch the visible period even when nothing in it
+  changed. No new timer; a launch makes one events request instead of two.
+- Tests: `src/components/__tests__/Dashboard.loading.test.tsx` (clock fixed on Wednesday 2026-10-28,
+  saved week start Monday: settings before events, one request for the Monday grid, every screen
+  recorded and the spinner never back; an empty calendar; offline; a weather failure; Next Week into
+  November with the answer held; Previous Week from the cache; the week start changed through the
+  real Settings dialog; a reconnect) and `src/hooks/useCalendarData.test.ts` (a miss keeps the events
+  on screen, a late answer for a period left behind, `hasLoaded`). All but the reconnect case were red
+  before the fix. Guards: `Dashboard.test.tsx` (a busy settings file), `idle-calendar-animations`,
+  `timer-registry`.
+- Built app (`dist-electron` rebuilt from empty, throwaway profile seeded with `weekStartDay:
+  'monday'`, the mocked Dashboard with a 700 ms events answer, the DOM sampled every 50 ms and every
+  change recorded, Sunday 2026-10-04 ~21:00, so Next Week crossed from September into October).
+  Before: launch spinner → week → spinner → week (29 of 76 samples), two events requests; Next
+  Week week → spinner → week (13 of 83). After: launch spinner → week (14 of 78, one phase), one
+  request; Next Week week → week with the header indicator → week (0 of 81).
