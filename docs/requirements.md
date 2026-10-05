@@ -1997,7 +1997,9 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   - Events are requested and cached per month, from a week before the month to two weeks after it,
     whatever the week start (`fetchRangeOf` in `useCalendarData.ts`). The week view follows the
     month of its first day, the month view the month shown. Next Week inside a month, a midnight
-    in "today" mode and a changed week start send no request.
+    in "today" mode and a changed week start do not change the range: only a new month, a Save
+    or a reconnect sends a request (a midnight or a week start that moves the week's first day
+    into another month is a new month).
   - The week start is resolved once (`config.weekStartDay ?? 'today'`, as `electron/store.ts`
     defaults it), and the week and month helpers take it without a default of their own, so a
     settings file that is busy at launch shows and fetches the same days.
