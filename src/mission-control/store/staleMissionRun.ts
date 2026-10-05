@@ -5,9 +5,10 @@
 // never ended: the expiry check skips a null duration. Hydration gives a run
 // from today its window's length (hhmm.ts hydrateMissionTimes), so it ends
 // normally. A run whose window closed before today must not: its first tick
-// would charge a miss dated on the launch day (a shield segment for a data
-// bug) and mark today's occurrence concluded, so that day's mission never
-// started. Hydration leaves it as saved; END_STALE_MISSION_RUN, dispatched once
+// would charge a miss, a shield segment for a data bug. (Until 2026-10-05 that
+// miss was also dated on the launch day, so that day's mission never started;
+// an outcome is now dated by its own occurrence, occurrenceDay.ts.)
+// Hydration leaves it as saved; END_STALE_MISSION_RUN, dispatched once
 // after load (useStaleMissionRunEnd), ends it with no outcome, like a Stop.
 // The reducer and createLogEntry both ask isStaleIncompleteRun, so a replay or
 // a second dispatch changes nothing and writes no line.
