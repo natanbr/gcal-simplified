@@ -113,7 +113,9 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   (`stampMissionActivity`, derived from the `activeMission` transition in the reducer wrapper, its
   only writer) and **never** cleared, because the scheduler reads it to know the occurrence already
   ran. A stop records no outcome (not a miss, not a conclusion), so clearing it beside `startedAt`
-  restarts a stopped mission instantly (2026-09-22). Guarded by `activity-stamp-boundary.test.ts`.
+  restarts a stopped mission instantly (2026-09-22). An end noticed late (the app was closed, or a stale
+  run ended at load) is stamped at the run's **due** end, or the same phase's next window reads as run.
+  Guarded by `activity-stamp-boundary.test.ts`.
   An outcome (completion or miss) is dated by the day its **occurrence** started, never by the clock
   at the outcome, and that day is decided when the run **starts** and stored on it (`occurrenceDate`,
   `store/occurrenceDay.ts`): the scheduler names the occurrence it starts; a start by hand or from the

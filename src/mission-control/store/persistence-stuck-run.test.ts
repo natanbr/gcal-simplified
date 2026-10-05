@@ -122,7 +122,9 @@ describe('END_STALE_MISSION_RUN — ends an earlier day’s stuck run with no ou
         expect(mission(next, 'evening').startedAt).toBeUndefined();
         expect(next.missedMissionStreak, 'a miss charged for a data bug').toBe(0);
         expect(next.lastCompletedOrFailedEveningDate, 'recorded as a conclusion').toBeNull();
-        expect(mission(next, 'evening').lastActiveAt).toBe(new Date().toISOString());
+        // Its end is stamped at its due end (yesterday 19:00 + the 60-min window), not at
+        // this launch: a launch inside the next evening's window must not read that one as run.
+        expect(mission(next, 'evening').lastActiveAt).toBe(at(20, 0, -1).toISOString());
         const line = createLogEntry(endRun('evening'), loaded);
         expect(line?.message).toMatch(/^Evening mission from \d{4}-\d{2}-\d{2} ended at startup: its saved record was incomplete$/);
     });
