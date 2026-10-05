@@ -144,4 +144,15 @@ describe('Google credentials and the app-ready lifecycle', () => {
         expect(authService.isAuthenticated()).toBe(true);
         expect(await authorization(authService)).toBe('Bearer stored-access');
     });
+
+    it('a token file held at launch stops neither the import nor the next call', async () => {
+        storeEncrypted(JSON.stringify(stored()));
+        fake.storeOpenError.next = Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+
+        const authService = await relaunch(); // the store opens on first use, after ready
+        appReady();
+
+        expect(() => authService.isAuthenticated()).toThrow('EBUSY');
+        expect(authService.isAuthenticated()).toBe(true);
+    });
 });
