@@ -214,3 +214,29 @@ drop it at hydration so the next save writes it out (`withoutPairingCopy` in
 review: a framer-motion mock that renders `motion.div` as a plain div never calls
 `onAnimationStart`, where the Settings overlay resets its draft, so a draft filled from the answer
 there stayed green; and an "it was saved" check on a blob the test seeded itself can never fail.
+
+## 2026-10-04 — A credential the server refused is still a credential to the client
+
+**Learning:** google-auth-library keeps its credentials when Google answers `invalid_grant` (access
+revoked, or the 7-day expiry while the consent screen is in Testing mode), so "signed in?",
+answered from the client since 2026-10-01, said yes over an empty week. And its refresh installs
+the result on the client *after* emitting `'tokens'`, with whatever refresh token the client holds
+then: a refresh in flight across a sign-out (Reconnect) put an access-only token back on the
+client for an hour. Ignoring the event protected the file, not the client. Separately,
+electron-store parses its file in its constructor, so a module-scope store made a corrupt
+`auth-store.json` stop every launch before the single-instance lock, with no window.
+**Action:** the refusal is classified at the library's one refresh request
+(`GoogleOAuthClient.refreshTokenNoCache` in `electron/auth-client.ts`, `override`, so a rename is a
+tsc error), from the response body's error code, not the message; only `invalid_grant` signs out,
+as `logout()` does, and the window gets `auth:signed-out`. One OAuth client per sign-in: a sign-out
+replaces it and empties the old one, and callbacks from a client that is no longer current are
+ignored. Stores open on first use; an unparseable file is moved aside, logged by a fixed phrase.
+Pattern: when a library owns mutable state on an object and may still have async work running
+against it, "clear the state" loses the race; replace the object. Guards:
+`electron/auth_session.test.ts`, `electron/auth_store_corrupt.test.ts`,
+`src/__tests__/auth-ready-boundary.test.ts`.
+**Testing notes:** in the built app gaxios fetches through node-fetch (cached after first use), so
+patching `globalThis.fetch` does nothing; patch `node:https`'s `request` before `main.js` runs, with
+`-r <file>` in Playwright's launch `args` (it deletes `NODE_OPTIONS`). A test that times out only
+under a loaded suite may be paying Vite's cold transform of the module it imports first (~90 ms
+alone, seconds when every worker queues on the transform server): import once at the top level.

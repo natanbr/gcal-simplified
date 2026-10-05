@@ -287,9 +287,12 @@ pass, and update this table when it merges.
 - **Q5** Sleeping through a window: the wake-up re-arm may cancel the timer before "⏭️ … skipped"
   is written (3.12.3).
 - **Q6** A Windows clock jump has no specified behaviour (3.12.4).
-- **Q7** A revoked Google grant leaves a small red "Failed to load …" in the header and never
-  returns to "Sign in with Google", because a stored token counts as signed in (`auth:check`). Is
-  "Reconnect Account" in Settings enough of a way out (3.3.13)?
+- **Q7** (resolved 2026-10-04) A revoked Google grant used to leave a signed-in, empty week (holidays
+  only, no error): google-auth-library keeps its credentials when Google refuses the refresh token, so
+  `auth:check` kept answering yes, and the data reads turn every failure into an empty list. Google
+  refusing the refresh token (`invalid_grant`) now signs out: the token file is cleared, the window
+  gets `auth:signed-out` and shows "Sign in with Google" without a relaunch, and a relaunch starts
+  there (3.3.13). Offline or a Google outage still keeps the sign-in.
 
 **Doc drift to fix in a docs change:** `docs/performance.md` says the Perf HUD is always on (it is
 opt-in, 3.4.2); the spec says the day-header weather covers the current week only (it covers 16

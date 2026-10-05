@@ -98,6 +98,10 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - Stays signed in across relaunches: the saved (encrypted) tokens are loaded once the app is
     ready, and "signed in?" answers from the same credentials the Google calls use. Saved tokens
     that cannot be read show the Sign in screen, never an empty week.
+  - Google refusing the saved sign-in (access revoked, or the refresh token expired) signs the app
+    out and shows the Sign in screen, without a relaunch. Offline or a Google outage keeps the
+    sign-in. A token file that cannot be parsed is moved aside and shows Sign in; it never stops
+    the app from starting.
 - **Settings**:
   - **Active Hours**: Configurable Start and End times (0-23h).
   - **Calendars**: Toggle visibility of specific Google Calendars.
@@ -1889,3 +1893,52 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   electron-builder's own parser and `Packager` and requires the hook it resolves to be this guard
   and to refuse, pins `files`, pins the order of `npm run release` and of `/release`'s pre-flight,
   and keeps `scripts/package-key-guard.d.ts` in step with the script's exports.
+
+### 2026-10-04 Google ending the sign-in shows Sign in
+
+- **Bug.** When Google refuses the saved sign-in (access revoked at myaccount.google.com, or the
+  refresh token's 7-day expiry while the OAuth consent screen is in Testing mode), the calendar
+  showed an empty week, or holidays only, with no error. The Google client kept the refused
+  credentials, so "signed in?" kept answering yes, and the data reads turn every failure into an
+  empty list. The only way out was Settings → Reconnect Account, and every relaunch repeated it.
+- **Now.** Google refusing the refresh token (`invalid_grant`) signs the app out as Sign out does:
+  the token file is cleared and the calendar shows "Sign in with Google" without a relaunch; a
+  relaunch starts there and does not ask Google again. Nothing else signs out: offline, a Google
+  outage (5xx) or a misconfigured app keep the sign-in and the week as before. A sign-out the parent
+  asked for (Reconnect) is not reported this way, so Settings stays open while the consent page is.
+- **Reconnect while a token refresh is in flight.** A refresh still running when Reconnect was
+  clicked landed after the sign-out and signed the old account back in for an hour (an access token
+  with no way to renew it), or, after the new sign-in, replaced the new account's access token. A
+  sign-out now replaces the Google client; whatever is still in flight on the old one is ignored
+  and sends nothing more to Google.
+- **A "signed in?" check that fails** (the token file held for a moment by antivirus or a backup)
+  is asked again after 1, 2 and 4 s before the calendar shows Sign in. It used to show Sign in at
+  once and never ask again (the follow-up named in the 2026-10-01 entry).
+- **A corrupt token file no longer stops the app.** `auth-store.json` was opened while the app was
+  starting, before the single-instance check and before any window, and an empty, truncated or
+  NUL-filled file (power loss, a disk fault) stopped every launch with no window until someone
+  deleted it. It now opens on first use; content that can never be read is moved aside to
+  `auth-store.json.corrupt-<time>` and the app shows Sign in. A held file is tried again by the
+  next call. A byte-order mark (a hand repair in PowerShell 5.1) is read, as in `config.json`.
+- Tests: `electron/auth_session.test.ts` (sign-in, sign-out, a revoke mid-session and before a
+  relaunch, one notice per refresh and none for Reconnect, offline / 503 / `invalid_client` /
+  `invalid_request` keep the sign-in, the refresh racing Reconnect, a read still holding the old
+  client), `electron/auth_store_corrupt.test.ts` (the real electron-store in a throwaway folder),
+  `electron/main_signed_out.test.ts`, `src/components/CalendarApp.test.tsx`. Each new case was red
+  before its fix; the negatives were proven by treating every failure as a refusal.
+  `src/__tests__/auth-ready-boundary.test.ts` now also follows renamed imports, immediately invoked
+  functions, helpers and constructors run on import, and flags a store opened on import (the old
+  version missed the original bug's shape). The first case of `electron/auth_app_ready.test.ts`
+  timed out twice under a loaded suite: it waited for Vite to transform `auth.ts`, which now
+  happens at collection (88 ms → 5 ms). `auth.ts` and its suite were split under 300 lines
+  (`auth-token-store.ts`, `auth-client.ts`; `auth_session.test.ts`, `authTestKit.ts`).
+- Built app, on throwaway profiles, with Google's token endpoint stubbed inside the main process:
+  a revoked grant → the Dashboard ("Syncing with Google...") gave way to "Sign in with Google", one
+  request to the token endpoint, the main process logged the sign-out, and the token file no longer
+  held a refresh token; a relaunch showed Sign in with no request to Google. A 503 outage → 12
+  requests (the library retries), the Dashboard stayed and the refresh token stayed. An empty, a
+  truncated and a NUL-filled `auth-store.json` → a window opened on Sign in each time and the file
+  was moved aside.
+- Not changed: an access token saved without a refresh token (left by builds before v0.0.41, or by
+  the Reconnect race fixed here) that expires mid-session still fails quietly until the next
+  launch, which shows Sign in.
