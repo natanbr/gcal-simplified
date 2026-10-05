@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { startOfMonth, startOfWeek, addDays } from 'date-fns';
-import { AppEvent, SerializedAppEvent } from '../types';
+import { AppEvent, SerializedAppEvent, UserConfig } from '../types';
 
 interface CacheEntry {
     events: AppEvent[];
@@ -16,11 +16,15 @@ export function useCalendarData() {
     const [isEventsLoading, setIsEventsLoading] = useState(false);
     const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // True once the first answer (events or a failure) is in: until then there is no week to show.
+    const [hasLoaded, setHasLoaded] = useState(false);
 
     // Prevents duplicate concurrent fetches for the same month
     const fetchingMonthsRef = useRef<Set<string>>(new Set());
+    // The period on screen. Only its answer may change what is shown; any other answer is just cached.
+    const visibleKeyRef = useRef<string | null>(null);
 
-    const fetchEventsForMonth = useCallback(async (date: Date, weekStartDayStr: string = 'sunday') => {
+    const fetchEventsForMonth = useCallback(async (date: Date, weekStartDayStr: UserConfig['weekStartDay']) => {
         // Find the visible grid for this month
         const weekStartDay = weekStartDayStr === 'monday' ? 1
             : weekStartDayStr === 'today' ? date.getDay()
@@ -33,6 +37,7 @@ export function useCalendarData() {
         const gridEnd = addDays(gridStart, 41);
 
         const cacheKey = `${date.getFullYear()}-${date.getMonth()}-${weekStartDay}`;
+        visibleKeyRef.current = cacheKey;
 
         setError(null);
 
@@ -41,10 +46,12 @@ export function useCalendarData() {
         if (hasCache) {
             // Serve from cache immediately
             setEvents(eventCacheRef.current[cacheKey].events);
+            setIsEventsLoading(false);
             setIsBackgroundLoading(true);
         } else {
+            // The events already on screen stay until this answer replaces them
+            // (requirements → Enhanced Loading Indicator: the user sees the previous state).
             setIsEventsLoading(true);
-            setEvents([]); // Clear while loading new initial data
         }
 
         // Avoid concurrent fetches for the same key
@@ -75,19 +82,22 @@ export function useCalendarData() {
 
             eventCacheRef.current[cacheKey] = newCacheEntry;
 
-            setEvents(hydratedEvents);
+            if (visibleKeyRef.current === cacheKey) setEvents(hydratedEvents);
         } catch (err) {
             console.error("Failed to fetch events", err);
-            setError("Failed to load calendar events.");
+            if (visibleKeyRef.current === cacheKey) setError("Failed to load calendar events.");
         } finally {
-            setIsEventsLoading(false);
-            setIsBackgroundLoading(false);
             fetchingMonthsRef.current.delete(cacheKey);
+            if (visibleKeyRef.current === cacheKey) {
+                setIsEventsLoading(false);
+                setIsBackgroundLoading(false);
+                setHasLoaded(true);
+            }
         }
     }, []);
 
     // Force a full background refresh of the current visible data
-    const refreshEvents = useCallback((date: Date, weekStartDayStr: string = 'sunday') => {
+    const refreshEvents = useCallback((date: Date, weekStartDayStr: UserConfig['weekStartDay']) => {
         // Since our logic currently always fetches, just calling fetchEventsForMonth does the job.
         return fetchEventsForMonth(date, weekStartDayStr);
     }, [fetchEventsForMonth]);
@@ -97,6 +107,7 @@ export function useCalendarData() {
         isEventsLoading,
         isBackgroundLoading,
         error,
+        hasLoaded,
         fetchEventsForMonth,
         refreshEvents
     };
