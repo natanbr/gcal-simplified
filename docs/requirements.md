@@ -99,9 +99,11 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     ready, and "signed in?" answers from the same credentials the Google calls use. Saved tokens
     that cannot be read show the Sign in screen, never an empty week.
   - Google refusing the saved sign-in (access revoked, or the refresh token expired) signs the app
-    out and shows the Sign in screen, without a relaunch. Offline or a Google outage keeps the
-    sign-in. A token file that cannot be parsed is moved aside and shows Sign in; it never stops
-    the app from starting.
+    out and shows the Sign in screen, without a relaunch, on the first Google read that fails.
+    Offline or a Google outage does not sign out. A token file that cannot be parsed is moved
+    aside and shows Sign in; it never stops the app from starting, and the moved-aside copy is
+    deleted on the next sign-in or sign-out. A token file held for a moment by another program
+    is read again for up to about 15 s before the app shows Sign in.
 - **Settings**:
   - **Active Hours**: Configurable Start and End times (0-23h).
   - **Calendars**: Toggle visibility of specific Google Calendars.
@@ -1903,40 +1905,60 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   empty list. The only way out was Settings → Reconnect Account, and every relaunch repeated it.
 - **Now.** Google refusing the refresh token (`invalid_grant`) signs the app out as Sign out does:
   the token file is cleared and the calendar shows "Sign in with Google" without a relaunch; a
-  relaunch starts there and does not ask Google again. Nothing else signs out: offline, a Google
-  outage (5xx) or a misconfigured app keep the sign-in and the week as before. A sign-out the parent
-  asked for (Reconnect) is not reported this way, so Settings stays open while the consent page is.
-- **Reconnect while a token refresh is in flight.** A refresh still running when Reconnect was
-  clicked landed after the sign-out and signed the old account back in for an hour (an access token
-  with no way to renew it), or, after the new sign-in, replaced the new account's access token. A
-  sign-out now replaces the Google client; whatever is still in flight on the old one is ignored
-  and sends nothing more to Google.
-- **A "signed in?" check that fails** (the token file held for a moment by antivirus or a backup)
-  is asked again after 1, 2 and 4 s before the calendar shows Sign in. It used to show Sign in at
+  relaunch starts there and does not ask Google again. A revoke that also kills the access token
+  before it expires is found on the first read that Google answers 401: the client asks for a new
+  token once and retries once (`forceRefreshOnFailure`), never in a loop. Nothing else signs out:
+  offline, a Google outage (5xx) or a misconfigured app do not (the week may show holidays only
+  until the connection is back, as before). A sign-out the parent asked for (Reconnect) is not
+  reported this way, so Settings stays open while the consent page is.
+- **Reconnect or Sign in while a token refresh is in flight.** A refresh still running when
+  Reconnect was clicked landed after the sign-out and signed the old account back in for an hour
+  (an access token with no way to renew it), or, after the new sign-in, replaced the new account's
+  access token; a sign-in started from the Sign in screen while a read refreshed the saved, revoked
+  grant could be signed out right after it succeeded. Now one Google client per sign-in: a sign-in
+  exchanges the code on a new client, and a sign-out retires the old one, so a refresh in flight
+  on it fails instead of landing, and a read still holding it stops instead of reaching Google as
+  the old account (a request already sent still completes).
+- **A token file held by another program** (antivirus, a backup) is read again by the main process
+  after 0.5, 1, 2, 4 and 8 s before "signed in?" answers; any other failure answers at once. The
+  calendar asks once and shows Sign in for whatever failure is left. It used to show Sign in at
   once and never ask again (the follow-up named in the 2026-10-01 entry).
 - **A corrupt token file no longer stops the app.** `auth-store.json` was opened while the app was
   starting, before the single-instance check and before any window, and an empty, truncated or
   NUL-filled file (power loss, a disk fault) stopped every launch with no window until someone
-  deleted it. It now opens on first use; content that can never be read is moved aside to
-  `auth-store.json.corrupt-<time>` and the app shows Sign in. A held file is tried again by the
-  next call. A byte-order mark (a hand repair in PowerShell 5.1) is read, as in `config.json`.
-- Tests: `electron/auth_session.test.ts` (sign-in, sign-out, a revoke mid-session and before a
-  relaunch, one notice per refresh and none for Reconnect, offline / 503 / `invalid_client` /
-  `invalid_request` keep the sign-in, the refresh racing Reconnect, a read still holding the old
-  client), `electron/auth_store_corrupt.test.ts` (the real electron-store in a throwaway folder),
-  `electron/main_auth.test.ts`, `src/components/CalendarApp.test.tsx`. Each new case was red
-  before its fix; the negatives were proven by treating every failure as a refusal.
-  `src/__tests__/auth-ready-boundary.test.ts` now also follows renamed imports, immediately invoked
-  functions, helpers and constructors run on import, and flags a store opened on import (the old
-  version missed the original bug's shape). The first case of `electron/auth_app_ready.test.ts`
+  deleted it. It now opens on first use; content that can never be read, found by any read or
+  write, is moved aside to `auth-store.json.corrupt-<time>` and the app shows Sign in. The
+  moved-aside copies are deleted on the next successful save and on every sign-out: a copy of a
+  token file has no recovery value and may hold a refresh token (`config.json`'s copies are kept).
+  A byte-order mark (a hand repair in PowerShell 5.1) is read, as in `config.json`.
+- **No token text in the logs.** gaxios keeps a failed refresh's request body, refresh token
+  included, in its error, and a JSON parse message quotes the text it could not parse; the main
+  process logged both objects. Every such line is now a fixed phrase with the error's status,
+  code or name (`electron/log-safe.ts`).
+- Tests: `electron/auth_session.test.ts` (sign-in, sign-out, a revoke mid-session, before a
+  relaunch and behind a still-valid access token, one notice per refresh and none for Reconnect,
+  offline / 503 / `invalid_client` / `invalid_request` keep the sign-in, a 403 refreshes at most
+  once, the refresh racing Reconnect and a sign-in, a read still holding the old client),
+  `electron/auth_store_corrupt.test.ts` (the real electron-store in a throwaway folder: a damaged
+  file at launch and after it was opened, both copy deletions, the exact log line),
+  `electron/api_error_logging.test.ts`, `electron/held-file.test.ts`, `electron/main_auth.test.ts`,
+  `src/components/CalendarApp.test.tsx`. Each new case was red before its fix; the negatives were
+  proven by treating every failure as a refusal. `src/__tests__/auth-ready-boundary.test.ts`
+  (walker in `src/__tests__/helpers/importTimeReads.ts`) follows renamed and whole imports, IIFEs,
+  helpers, class expressions, constructors and what they reach through `this.`, static parts and
+  instance fields, aliases, and electron-store however imported, with one probe per shape (28);
+  its header lists what it does not follow. The first case of `electron/auth_app_ready.test.ts`
   timed out twice under a loaded suite: it waited for Vite to transform `auth.ts`, which now
   happens at collection (88 ms → 5 ms). `auth.ts` and its suite were split under 300 lines
   (`auth-token-store.ts`, `auth-client.ts`; `auth_session.test.ts`, `authTestKit.ts`).
-- Built app, on throwaway profiles, with Google's token endpoint stubbed inside the main process:
-  a revoked grant → the Dashboard ("Syncing with Google...") gave way to "Sign in with Google", one
-  request to the token endpoint, the main process logged the sign-out, and the token file no longer
-  held a refresh token; a relaunch showed Sign in with no request to Google. A 503 outage → 12
-  requests (the library retries), the Dashboard stayed and the refresh token stayed. An empty, a
+- Built app, on throwaway profiles, with every `googleapis.com` request answered by a stub inside
+  the main process (no real Google traffic): a revoked grant behind an expired token → the
+  Dashboard ("Syncing with Google...") gave way to "Sign in with Google", one token request, the
+  sign-out logged, the token file without its refresh token; a relaunch showed Sign in with no
+  request to Google. A revoke behind a still-valid token (the API answering 401) → Sign in after
+  one token request. A 503 outage → 12 token requests (the library retries), the Dashboard and
+  the refresh token stayed. No main-process log line held the seeded refresh token. The token
+  file held exclusively for 9 s at launch → the Dashboard after 11 s, not Sign in. An empty, a
   truncated and a NUL-filled `auth-store.json` → a window opened on Sign in each time and the file
   was moved aside.
 - Not changed: an access token saved without a refresh token (left by builds before v0.0.41, or by

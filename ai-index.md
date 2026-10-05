@@ -63,7 +63,9 @@ reaches the main process only through the preload bridge.
   in electron-store (`auth-store`), opened on first use by `auth-token-store.ts` (an unparseable
   file is moved aside). `auth-client.ts` is the OAuth client: Google refusing the refresh token
   (`invalid_grant`) signs out and `main.ts` sends `auth:signed-out`, which `src/components/CalendarApp.tsx`
-  turns into the login screen.
+  turns into the login screen. `held-file.ts` reads a token file held by another program again
+  before `auth:check` answers; `log-safe.ts` (`errorSummary`) is how an error from Google or the
+  token file is logged, never as the object.
 * `remote-bridge.ts`: Supabase Realtime pairing and action relay. Cryptographic pairing: UUID room
   ID + 15-byte random key; broadcasts on channel `remote-control:{roomId}`; state sync debounced at
   1s; remote actions are dispatched with `isRemote: true`. The companion web app lives in a

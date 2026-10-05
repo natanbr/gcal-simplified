@@ -240,3 +240,12 @@ patching `globalThis.fetch` does nothing; patch `node:https`'s `request` before 
 `-r <file>` in Playwright's launch `args` (it deletes `NODE_OPTIONS`). A test that times out only
 under a loaded suite may be paying Vite's cold transform of the module it imports first (~90 ms
 alone, seconds when every worker queues on the transform server): import once at the top level.
+**Review round (PR 191):** replacing the client was not enough either: emptying the old one was
+undone by its own in-flight refresh, so a read holding it still reached Google as the signed-out
+account. The old client is now *retired* (a refresh that lands on it throws before the library can
+install it), and a sign-in exchanges the code on a new client too, or a read refreshing the saved
+grant during the consent page could sign the parent out right after signing in. The library also
+refreshes after a 401 only when told to (`forceRefreshOnFailure`), so without it a revoke that
+killed a still-valid access token went unnoticed for up to an hour. And gaxios keeps a failed
+refresh's request body, refresh token included, in its error object, which `api.ts` logged:
+log errors through `errorSummary` (`electron/log-safe.ts`), never as objects.
