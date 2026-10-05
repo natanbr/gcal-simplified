@@ -28,7 +28,11 @@ export class GoogleOAuthClient extends google.auth.OAuth2 {
     private retired = false;
 
     constructor(clientId: string | undefined, clientSecret: string | undefined, onRefusedGrant: () => void) {
-        super(clientId, clientSecret);
+        // forceRefreshOnFailure: a revoke can kill the access token before it
+        // expires, and without it a 401 on a token that has an expiry_date never
+        // refreshes, so the refusal above would surface only up to an hour later.
+        // The library refreshes and retries once per 401/403, never in a loop.
+        super({ clientId, clientSecret, forceRefreshOnFailure: true });
         this.onRefusedGrant = onRefusedGrant;
     }
 

@@ -28,7 +28,7 @@
 
 import { expect, vi } from 'vitest';
 import http from 'node:http';
-import type { Credentials, OAuth2Client } from 'google-auth-library';
+import type { Credentials, OAuth2Client, OAuth2ClientOptions } from 'google-auth-library';
 
 export const HOUR = 60 * 60 * 1000;
 export const NO_CREDENTIALS = 'No access, refresh token, API key or refresh handler callback is set';
@@ -103,8 +103,8 @@ export function electronStoreModule(fake: AuthFakes) {
 
 export function googleapisModule(fake: AuthFakes) {
     class OAuth2 extends fake.RealOAuth2Client {
-        constructor(clientId?: string, clientSecret?: string) {
-            super({ clientId, clientSecret, transporterOptions: { fetchImplementation: fake.tokenEndpoint } });
+        constructor(options?: OAuth2ClientOptions) {
+            super({ ...options, transporterOptions: { fetchImplementation: fake.tokenEndpoint } });
         }
     }
     return { google: { auth: { OAuth2 } } };
@@ -160,7 +160,7 @@ export const expiredSession = (): Credentials => ({ ...stored(), access_token: '
 /** What Google's token endpoint answers for a revoked grant, or a refresh token past its 7 days in Testing mode. */
 export const REVOKED = { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' };
 
-function googleResponse(body: Record<string, unknown>, status: number): Response {
+export function googleResponse(body: Record<string, unknown>, status: number): Response {
     return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
 

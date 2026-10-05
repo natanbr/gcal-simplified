@@ -201,6 +201,49 @@ describe('a refresh still in flight when the user clicks Reconnect', () => {
     });
 });
 
+describe('a revoke that also kills the access token before it expires', () => {
+    beforeEach(() => kit.resetAuthFakes(fake));
+
+    const CALENDAR_LIST = 'https://www.googleapis.com/calendar/v3/users/me/calendarList';
+    const isTokenRequest = (input: unknown) => String(input).includes('oauth2.googleapis.com/token');
+    const calls = (which: (input: unknown) => boolean) => fake.tokenEndpoint.mock.calls.filter(([input]) => which(input)).length;
+
+    /** Google's token endpoint and the Calendar API answer separately. */
+    function googleRoutes(token: [number, Record<string, unknown>], api: [number, Record<string, unknown>]): void {
+        fake.tokenEndpoint.mockImplementation(async input => {
+            const [status, body] = isTokenRequest(input) ? token : api;
+            return kit.googleResponse(body, status);
+        });
+    }
+
+    it('the first 401 asks for a new token, and the refusal signs out', async () => {
+        storeEncrypted(JSON.stringify(stored())); // still valid for an hour
+        googleRoutes([400, REVOKED], [401, { error: { code: 401, message: 'Invalid Credentials' } }]);
+        const authService = await relaunch();
+        appReady();
+
+        await expect(authService.getAuthClient().request({ url: CALENDAR_LIST })).rejects.toBeInstanceOf(Error);
+
+        expect(authService.isAuthenticated()).toBe(false);
+        expect(fake.storeData.has('tokens')).toBe(false);
+        expect(calls(isTokenRequest)).toBe(1);
+    });
+
+    it('a 403 with a valid grant refreshes at most once, retries at most once, and keeps the sign-in', async () => {
+        storeEncrypted(JSON.stringify(stored()));
+        googleRoutes([200, { access_token: 'refreshed-access', expires_in: 3600 }], [403, { error: { code: 403, message: 'Rate Limit Exceeded' } }]);
+        const authService = await relaunch();
+        appReady();
+
+        await expect(authService.getAuthClient().request({ url: CALENDAR_LIST })).rejects.toMatchObject({ status: 403 });
+
+        expect(authService.isAuthenticated()).toBe(true);
+        expect(readStored(fake).refresh_token).toBe('stored-refresh');
+        expect(calls(isTokenRequest)).toBeLessThanOrEqual(1);
+        expect(calls(input => !isTokenRequest(input))).toBeLessThanOrEqual(2);
+    });
+});
+
 describe('a sign-in while a read is still refreshing the saved grant', () => {
     beforeEach(() => kit.resetAuthFakes(fake));
 
