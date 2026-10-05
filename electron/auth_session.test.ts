@@ -258,14 +258,16 @@ describe('a sign-in while a read is still refreshing the saved grant', () => {
         const signedOut = vi.fn();
         authService.onSignedOut(signedOut);
         // The school calendar's read, started while Sign in was on screen (a held token file, say).
-        const pending = authorization(authService).catch((error: unknown) => error);
+        const held = authService.getAuthClient();
+        const pending = held.getRequestHeaders().then(headers => headers.get('authorization'), (error: unknown) => error);
         await vi.waitFor(() => expect(fake.tokenEndpoint).toHaveBeenCalledTimes(1));
         googleAnswers(fake, { access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600 });
 
         await kit.signIn(fake, authService);
         late.answer(body, status);
-        await pending;
 
+        expect(await pending).toBeInstanceOf(Error); // the client the sign-in replaced is retired
+        expect(held.credentials).toEqual({});
         expect(signedOut).not.toHaveBeenCalled();
         expect(authService.isAuthenticated()).toBe(true);
         expect(await authorization(authService)).toBe('Bearer new-access');
