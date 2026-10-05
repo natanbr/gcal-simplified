@@ -59,6 +59,8 @@ export async function createAuthFakes() {
         },
         /** When set, the next store read throws it (a file held by antivirus or a backup). */
         storeReadError: { next: null as Error | null },
+        /** The same, for the read electron-store makes when it is created. */
+        storeOpenError: { next: null as Error | null },
         openExternal: vi.fn(),
         /** Google's token endpoint (code exchange and refresh). */
         tokenEndpoint: vi.fn<typeof fetch>(),
@@ -79,6 +81,11 @@ export function electronModule(fake: AuthFakes) {
 export function electronStoreModule(fake: AuthFakes) {
     return {
         default: class FakeStore {
+            constructor() {
+                const error = fake.storeOpenError.next;
+                fake.storeOpenError.next = null;
+                if (error) throw error;
+            }
             get = (key: string) => {
                 const error = fake.storeReadError.next;
                 fake.storeReadError.next = null;
@@ -106,6 +113,7 @@ export function googleapisModule(fake: AuthFakes) {
 export function resetAuthFakes(fake: AuthFakes): void {
     fake.storeData.clear();
     fake.storeReadError.next = null;
+    fake.storeOpenError.next = null;
     fake.app.ready = false;
     vi.clearAllMocks();
     fake.tokenEndpoint.mockRejectedValue(new Error('this test expected no call to Google'));
@@ -144,11 +152,25 @@ export async function relaunch(fake: AuthFakes) {
 
 export type Service = Awaited<ReturnType<typeof relaunch>>;
 
+/** A saved session whose access token has expired, so the first Google call refreshes it. */
+export const expiredSession = (): Credentials => ({ ...stored(), access_token: 'expired-access', expiry_date: Date.now() - HOUR });
+
+/** What Google's token endpoint answers for a revoked grant, or a refresh token past its 7 days in Testing mode. */
+export const REVOKED = { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' };
+
+function googleResponse(body: Record<string, unknown>, status: number): Response {
+    return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+}
+
 export function googleAnswers(fake: AuthFakes, body: Record<string, unknown>, status = 200): void {
-    fake.tokenEndpoint.mockImplementation(async () => new Response(JSON.stringify(body), {
-        status,
-        headers: { 'content-type': 'application/json' },
-    }));
+    fake.tokenEndpoint.mockImplementation(async () => googleResponse(body, status));
+}
+
+/** The next call to Google waits until the test answers it (a refresh still in flight). */
+export function googleAnswersLater(fake: AuthFakes): { answer(body: Record<string, unknown>): void } {
+    let respond: (response: Response) => void = () => { throw new Error('Google was never asked'); };
+    fake.tokenEndpoint.mockImplementationOnce(() => new Promise<Response>(resolve => { respond = resolve; }));
+    return { answer: body => respond(googleResponse(body, 200)) };
 }
 
 function get(url: URL): Promise<void> {

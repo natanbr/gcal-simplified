@@ -1,10 +1,10 @@
 import { app, shell } from 'electron';
-import { google } from 'googleapis';
 import http from 'http';
 import { AddressInfo } from 'net';
 import { OAuth2Client, Credentials } from 'google-auth-library';
 import crypto from 'node:crypto';
 import { canAuthorize, clearStoredTokens, readStoredTokens, writeStoredTokens } from './auth-token-store';
+import { GoogleOAuthClient } from './auth-client';
 
 const SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
@@ -15,31 +15,72 @@ export class AuthService {
     private oauth2Client: OAuth2Client;
     private isAuthInProgress: boolean = false;
     private credentialsLoaded = false;
+    private readonly signedOutListeners = new Set<() => void>();
 
     constructor() {
-        // These will be loaded from env vars or a separate config file
-        // For now, we expect them to be available in process.env
-        this.oauth2Client = new google.auth.OAuth2(
+        this.oauth2Client = this.newClient();
+    }
+
+    /**
+     * One client per sign-in: a sign-out, or Google refusing the grant, replaces
+     * it, and a client that is no longer current is ignored. A token refresh
+     * still in flight when the user clicks Reconnect then lands on a client
+     * nobody uses. Ignoring its 'tokens' event alone would not do: the library
+     * installs the refresh on its client after the event, with the refresh token
+     * it finds there (none, after a sign-out), so the old account came back for
+     * an hour on an access token that could not be renewed.
+     */
+    private newClient(): OAuth2Client {
+        const client: OAuth2Client = new GoogleOAuthClient(
             process.env.GOOGLE_CLIENT_ID,
-            process.env.GOOGLE_CLIENT_SECRET
+            process.env.GOOGLE_CLIENT_SECRET,
+            () => this.refused(client),
         );
 
         // google-auth-library refreshes the access token in memory and never
         // tells the store about it. This listener persists every refresh, so the
         // stored blob stays current and a rotated refresh_token survives a
-        // restart. (It was once credited with the "sign in again every few days"
-        // symptom; the more likely cause was the credentials never loading on a
-        // relaunch, fixed 2026-10-01: see ensureCredentialsLoaded.)
-        // It runs inside the library's synchronous emit, before the library
-        // installs the tokens, so a store error must not escape it: that would
-        // throw away a grant Google already made.
-        this.oauth2Client.on('tokens', (granted) => {
+        // restart. It runs inside the library's synchronous emit, before the
+        // library installs the tokens, so a store error must not escape it: that
+        // would throw away a grant Google already made.
+        client.on('tokens', (granted) => {
+            if (client !== this.oauth2Client) return;
             try {
                 this.saveTokens(granted);
             } catch (error) {
                 console.error('Failed to save the Google tokens; they stay in memory until the next save', error);
             }
         });
+        return client;
+    }
+
+    /**
+     * Google refused the saved refresh token (revoked, or expired): signed out,
+     * exactly as logout() leaves it, and the listeners (the window) are told, so
+     * the parent sees Sign in instead of an empty week. Never throws: it runs
+     * inside the library's refresh, whose own error must reach the caller.
+     */
+    private refused(client: OAuth2Client): void {
+        if (client !== this.oauth2Client) return;
+        console.warn('[auth] Google refused the saved sign-in (revoked or expired); signing out.');
+        try {
+            this.logout();
+        } catch (error) {
+            console.error('[auth] Could not clear the saved Google tokens; the next launch will be refused again', error);
+        }
+        for (const listener of this.signedOutListeners) {
+            try {
+                listener();
+            } catch (error) {
+                console.error('[auth] A signed-out listener failed', error);
+            }
+        }
+    }
+
+    /** Told when Google ends the sign-in, never for a sign-out the user asked for. Returns the unsubscribe. */
+    onSignedOut(listener: () => void): () => void {
+        this.signedOutListeners.add(listener);
+        return () => { this.signedOutListeners.delete(listener); };
     }
 
     /**
@@ -226,7 +267,7 @@ export class AuthService {
 
     logout() {
         // The client first: a store delete that throws must not leave it signed in.
-        this.oauth2Client.setCredentials({});
+        this.oauth2Client = this.newClient();
         this.credentialsLoaded = true;
         clearStoredTokens();
     }

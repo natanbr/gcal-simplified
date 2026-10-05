@@ -27,6 +27,7 @@ export const ALLOWED_INVOKE_CHANNELS = [
 
 export const ALLOWED_ON_CHANNELS = [
   'auth:success',
+  'auth:signed-out',
   'main-process-message',
   'update:available',
   'update:not-available',

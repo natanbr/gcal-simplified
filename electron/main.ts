@@ -133,6 +133,9 @@ function registerIpcHandlers(): void {
     return authService.isAuthenticated();
   });
 
+  // Google refused the saved sign-in (revoked, or expired): show Sign in, not an empty week.
+  authService.onSignedOut(() => win?.webContents.send('auth:signed-out'));
+
   // Data Handlers
   ipcMain.handle('data:events', async (_, timeMin?: string, timeMax?: string, options?: unknown) => {
     let start: Date;
