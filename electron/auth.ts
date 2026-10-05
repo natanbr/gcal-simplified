@@ -267,7 +267,11 @@ export class AuthService {
 
     logout() {
         // The client first: a store delete that throws must not leave it signed in.
+        const previous = this.oauth2Client;
         this.oauth2Client = this.newClient();
+        // A read still holding it (api.ts keeps one across calendarList and
+        // events.list) must not send the old account's tokens to Google again.
+        previous.setCredentials({});
         this.credentialsLoaded = true;
         clearStoredTokens();
     }

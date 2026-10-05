@@ -112,6 +112,19 @@ describe('Google refusing the refresh token signs out', () => {
         expect(fake.tokenEndpoint).toHaveBeenCalledTimes(1);
     });
 
+    it('a call still holding the client from before is not sent to Google again', async () => {
+        storeEncrypted(JSON.stringify(expiredSession()));
+        googleAnswers(fake, REVOKED, 400);
+        const authService = await relaunch();
+        appReady();
+        const heldByAnEventsRead = authService.getAuthClient(); // api.ts keeps it across calendarList and events.list
+
+        await expect(heldByAnEventsRead.getRequestHeaders()).rejects.toMatchObject({ status: 400 });
+        await expect(heldByAnEventsRead.getRequestHeaders()).rejects.toThrow(NO_CREDENTIALS);
+
+        expect(fake.tokenEndpoint).toHaveBeenCalledTimes(1);
+    });
+
     it('a sign-out the user asked for (Reconnect) is not reported as one', async () => {
         storeEncrypted(JSON.stringify(stored()));
         const authService = await relaunch();
