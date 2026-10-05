@@ -227,11 +227,14 @@ describe('OAuth token lifecycle', () => {
             mocks.storeData.set('isEncrypted', false);
             const service = new AuthService();
             expect(service.isAuthenticated()).toBe(true);
+            // The client a read in flight already holds (api.ts keeps it across calls), not only its replacement.
+            const heldByARead = service.getAuthClient();
             mocks.storeInstance.delete.mockImplementationOnce(() => { throw EPERM(); });
 
             expect(() => service.logout()).toThrow('EPERM');
 
             expect(service.isAuthenticated()).toBe(false);
+            expect(heldByARead.credentials).toEqual({});
         });
     });
 

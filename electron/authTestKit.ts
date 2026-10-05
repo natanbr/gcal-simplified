@@ -116,6 +116,8 @@ export function resetAuthFakes(fake: AuthFakes): void {
     fake.storeOpenError.next = null;
     fake.app.ready = false;
     vi.clearAllMocks();
+    // mockReset, not only clear: a one-time answer a test queued and never used must not reach the next test.
+    fake.tokenEndpoint.mockReset();
     fake.tokenEndpoint.mockRejectedValue(new Error('this test expected no call to Google'));
 }
 
@@ -167,10 +169,10 @@ export function googleAnswers(fake: AuthFakes, body: Record<string, unknown>, st
 }
 
 /** The next call to Google waits until the test answers it (a refresh still in flight). */
-export function googleAnswersLater(fake: AuthFakes): { answer(body: Record<string, unknown>): void } {
+export function googleAnswersLater(fake: AuthFakes): { answer(body: Record<string, unknown>, status?: number): void } {
     let respond: (response: Response) => void = () => { throw new Error('Google was never asked'); };
     fake.tokenEndpoint.mockImplementationOnce(() => new Promise<Response>(resolve => { respond = resolve; }));
-    return { answer: body => respond(googleResponse(body, 200)) };
+    return { answer: (body, status = 200) => respond(googleResponse(body, status)) };
 }
 
 function get(url: URL): Promise<void> {

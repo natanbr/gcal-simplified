@@ -1,7 +1,7 @@
 import { app, shell } from 'electron';
 import http from 'http';
 import { AddressInfo } from 'net';
-import { OAuth2Client, Credentials } from 'google-auth-library';
+import type { Credentials } from 'google-auth-library';
 import crypto from 'node:crypto';
 import { canAuthorize, clearStoredTokens, readStoredTokens, writeStoredTokens } from './auth-token-store';
 import { GoogleOAuthClient } from './auth-client';
@@ -12,7 +12,7 @@ const SCOPES = [
 ];
 
 export class AuthService {
-    private oauth2Client: OAuth2Client;
+    private oauth2Client: GoogleOAuthClient;
     private isAuthInProgress: boolean = false;
     private credentialsLoaded = false;
     private readonly signedOutListeners = new Set<() => void>();
@@ -30,8 +30,8 @@ export class AuthService {
      * it finds there (none, after a sign-out), so the old account came back for
      * an hour on an access token that could not be renewed.
      */
-    private newClient(): OAuth2Client {
-        const client: OAuth2Client = new GoogleOAuthClient(
+    private newClient(): GoogleOAuthClient {
+        const client: GoogleOAuthClient = new GoogleOAuthClient(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
             () => this.refused(client),
@@ -60,7 +60,7 @@ export class AuthService {
      * the parent sees Sign in instead of an empty week. Never throws: it runs
      * inside the library's refresh, whose own error must reach the caller.
      */
-    private refused(client: OAuth2Client): void {
+    private refused(client: GoogleOAuthClient): void {
         if (client !== this.oauth2Client) return;
         console.warn('[auth] Google refused the saved sign-in (revoked or expired); signing out.');
         try {
@@ -270,8 +270,8 @@ export class AuthService {
         const previous = this.oauth2Client;
         this.oauth2Client = this.newClient();
         // A read still holding it (api.ts keeps one across calendarList and
-        // events.list) must not send the old account's tokens to Google again.
-        previous.setCredentials({});
+        // events.list) must not reach Google as the old account.
+        previous.retire();
         this.credentialsLoaded = true;
         clearStoredTokens();
     }

@@ -161,37 +161,41 @@ describe('Google refusing the refresh token signs out', () => {
 describe('a refresh still in flight when the user clicks Reconnect', () => {
     beforeEach(() => kit.resetAuthFakes(fake));
 
+    /** A read (like api.ts's getEvents) that took the client and is waiting on its refresh. */
     async function refreshInFlight() {
         storeEncrypted(JSON.stringify(expiredSession()));
         const late = kit.googleAnswersLater(fake);
         const authService = await relaunch();
         appReady();
-        const pending = authorization(authService).catch(() => null);
+        const held = authService.getAuthClient();
+        const pending = held.getRequestHeaders().then(headers => headers.get('authorization'), (error: unknown) => error);
         await vi.waitFor(() => expect(fake.tokenEndpoint).toHaveBeenCalledTimes(1));
-        return { authService, late, pending };
+        return { authService, late, held, pending };
     }
 
     it('lands after the sign-out without signing the old account back in', async () => {
-        const { authService, late, pending } = await refreshInFlight();
+        const { authService, late, held, pending } = await refreshInFlight();
 
         authService.logout();
         late.answer({ access_token: 'late-access', expires_in: 3600 });
-        await pending;
 
+        expect(await pending).toBeInstanceOf(Error); // the read stops instead of reaching Google as the old account
+        expect(held.credentials).toEqual({});
         expect(fake.storeData.has('tokens')).toBe(false);
         expect(authService.isAuthenticated()).toBe(false);
         await expect(authorization(authService)).rejects.toThrow(NO_CREDENTIALS);
     });
 
     it('lands after the new sign-in without replacing the new account', async () => {
-        const { authService, late, pending } = await refreshInFlight();
+        const { authService, late, held, pending } = await refreshInFlight();
 
         authService.logout();
         googleAnswers(fake, { access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600 });
         await kit.signIn(fake, authService);
         late.answer({ access_token: 'old-account-access', expires_in: 3600 });
-        await pending;
 
+        expect(await pending).toBeInstanceOf(Error);
+        expect(held.credentials).toEqual({});
         expect(await authorization(authService)).toBe('Bearer new-access');
         expect(readStored(fake)).toMatchObject({ access_token: 'new-access', refresh_token: 'new-refresh' });
     });

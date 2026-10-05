@@ -25,18 +25,33 @@ export function isRefusedGrant(error: unknown): boolean {
  */
 export class GoogleOAuthClient extends google.auth.OAuth2 {
     private readonly onRefusedGrant: () => void;
+    private retired = false;
 
     constructor(clientId: string | undefined, clientSecret: string | undefined, onRefusedGrant: () => void) {
         super(clientId, clientSecret);
         this.onRefusedGrant = onRefusedGrant;
     }
 
+    /**
+     * Signed out: emptied, and a refresh still in flight is dropped. Emptying
+     * alone is not enough: the library installs a refresh's result on the client
+     * after its await, so a read holding this client would otherwise reach
+     * Google as the signed-out account.
+     */
+    retire(): void {
+        this.retired = true;
+        this.setCredentials({});
+    }
+
     protected override async refreshTokenNoCache(refreshToken?: string | null) {
+        let refreshed;
         try {
-            return await super.refreshTokenNoCache(refreshToken);
+            refreshed = await super.refreshTokenNoCache(refreshToken);
         } catch (error) {
             if (isRefusedGrant(error)) this.onRefusedGrant();
             throw error;
         }
+        if (this.retired) throw new Error('Signed out of Google while this token refresh was running.');
+        return refreshed;
     }
 }
