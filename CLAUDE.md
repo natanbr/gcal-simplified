@@ -119,8 +119,9 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   An outcome (completion or miss) is dated by the day its **occurrence** started, never by the clock
   at the outcome, and that day is decided when the run **starts** and stored on it (`occurrenceDate`,
   `store/occurrenceDay.ts`): the scheduler names the occurrence it starts; a start by hand or from the
-  phone belongs to the nearest occurrence of its phase (an exact tie: the upcoming one); a full Reset
-  keeps it. The outcome writes it into `lastCompletedOrFailed*Date`, and the scheduler compares an
+  phone never belongs to a future day's occurrence (at or after today's window start: today's; before
+  it: the nearer of today's start ahead and the previous occurrence's end behind, a tie: today; inside
+  the previous window: that one; all in real time); a full Reset keeps it. The outcome writes it into `lastCompletedOrFailed*Date`, and the scheduler compares an
   occurrence with its own start day. Dated by the clock, an evening ending at 00:30 marked the next
   day's evening done, and it never started; re-derived at the outcome, a Settings save mid-run or a
   late start moved it again. Guarded by `mcReducer.occurrence-day.test.ts`,

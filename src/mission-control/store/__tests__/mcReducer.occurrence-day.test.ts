@@ -9,8 +9,8 @@
 //
 // The date is now decided when the run STARTS and stored on it: the day the
 // scheduler names for the occurrence it starts, or for a start by hand or from
-// the phone the NEAREST occurrence of its phase (a tie goes to the upcoming
-// one). Re-deriving it at the outcome failed when the window changed mid-run (a
+// the phone never a future day's occurrence (the rule below, with its tie).
+// Re-deriving it at the outcome failed when the window changed mid-run (a
 // duration-only Settings save) or the run began minutes off its window (the
 // scheduler's 5 min late-fire tolerance). A full Reset is a second attempt at
 // the same occurrence and keeps the day. A run saved before the field existed
@@ -124,20 +124,72 @@ describe('the morning follows the same rule', () => {
 });
 
 // Decided for Nathan by the review of PR 193 (reversible): a start by hand or
-// from the phone belongs to the NEAREST occurrence of its phase, in real time;
-// an exact tie goes to the upcoming one. It agrees with the school bag, which
-// already treats an evening started after midnight as the night before.
-describe('a start by hand or from the phone belongs to the nearest occurrence', () => {
-    it('the default evening started at 00:20 is the evening before, so tonight’s still runs', () => {
+// from the phone NEVER belongs to a future day's occurrence. At or after today's
+// window start it is today's (a make-up, a late start). Before it, it is
+// whichever is nearer in real time: today's start ahead (an early start) or the
+// END of the previous occurrence behind (a late make-up), a tie going to today;
+// inside the previous occurrence's window (an overnight tail) it is that one.
+// The first version took the nearest occurrence of either day, so a morning
+// made up at 19:30 cancelled tomorrow's morning and opened games at midnight.
+describe('a start by hand or from the phone never belongs to a future day', () => {
+    it('a morning made up at 19:30 is today’s, and tomorrow’s morning still runs', () => {
+        const s = replay(initialState, start('morning', at(D, '19:30'), 'local'), complete('morning', at(D, '19:50')));
+        expect(s.lastCompletedOrFailedMorningDate).toBe(D);
+    });
+
+    it('a morning started by hand at 23:00 is still today’s', () => {
+        const s = replay(initialState, start('morning', at(D, '23:00'), 'remote'), complete('morning', at(D, '23:20')));
+        expect(s.lastCompletedOrFailedMorningDate).toBe(D);
+    });
+
+    it('the morning started at 05:50 is today’s 06:00 morning (10 min ahead vs ~23 h since)', () => {
+        const s = replay(initialState, start('morning', at(D, '05:50'), 'local'), complete('morning', at(D, '06:10')));
+        expect(s.lastCompletedOrFailedMorningDate).toBe(D);
+    });
+
+    it('a morning started at 00:20 is today’s (5 h 40 ahead vs 17 h 50 since yesterday’s 06:30 end)', () => {
+        expect(replay(initialState, start('morning', at(NEXT, '00:20'), 'local')).missions[0].occurrenceDate).toBe(NEXT);
+    });
+
+    it('an evening started late at 21:00 is today’s', () => {
+        expect(evening(replay(initialState, start('evening', at(D, '21:00'), 'local'))).occurrenceDate).toBe(D);
+    });
+
+    it('an evening started early at 14:00 is today’s (5 h ahead vs 18 h since yesterday’s 20:00 end)', () => {
+        expect(evening(replay(initialState, start('evening', at(D, '14:00'), 'local'))).occurrenceDate).toBe(D);
+    });
+
+    it('the default evening started at 00:20 is yesterday’s (4 h 20 since its end vs 18 h 40 ahead), so tonight’s still runs', () => {
         const s = replay(initialState, start('evening', at(NEXT, '00:20'), 'local'), complete('evening', at(NEXT, '00:40')));
         expect(evening(s).occurrenceDate).toBe(D);
         expect(s.lastCompletedOrFailedEveningDate).toBe(D);
     });
 
-    it('a late evening started after its window closed (00:40) is still the one before', () => {
-        // 70 min after last night's 23:30, 22 h 50 before tonight's.
+    it('a start at 00:10 inside last night’s 23:30–00:30 window is last night’s', () => {
+        expect(evening(replay(lateEvening, start('evening', at(NEXT, '00:10'), 'local'))).occurrenceDate).toBe(D);
+    });
+
+    it('a start at 00:40, just after that window closed, is still last night’s (10 min since vs 22 h 50 ahead)', () => {
         const s = replay(lateEvening, start('evening', at(NEXT, '00:40'), 'local'), complete('evening', at(NEXT, '00:50')));
         expect(s.lastCompletedOrFailedEveningDate).toBe(D);
+    });
+
+    // 19:00–20:00: yesterday's end and today's start are 23 h apart, so 07:30 is exactly halfway.
+    it.each([
+        ['07:29', D],
+        ['07:30', NEXT], // a tie: today
+        ['07:31', NEXT],
+    ])('a 19:00–20:00 evening started at %s belongs to %s', (hhmm, day) => {
+        expect(evening(replay(initialState, start('evening', at(NEXT, hhmm), 'local'))).occurrenceDate).toBe(day);
+    });
+
+    // The 10 s test duration: yesterday's end is 19:00:10, so halfway is 07:00:05.
+    it.each([
+        ['06:59', D],
+        ['07:01', NEXT],
+    ])('a 10 s evening at 19:00 started at %s belongs to %s', (hhmm, day) => {
+        const tenSeconds = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 1 / 6 } });
+        expect(evening(replay(tenSeconds, start('evening', at(NEXT, hhmm), 'local'))).occurrenceDate).toBe(day);
     });
 
     it('a full Reset keeps the day its run started with', () => {
@@ -148,25 +200,6 @@ describe('a start by hand or from the phone belongs to the nearest occurrence', 
             complete('evening', at(NEXT, '00:50')),
         );
         expect(s.lastCompletedOrFailedEveningDate).toBe(D);
-    });
-
-    it('the morning started at 05:50 is today’s 06:00 morning (an early start, as before)', () => {
-        const s = replay(initialState, start('morning', at(D, '05:50'), 'local'), complete('morning', at(D, '06:10')));
-        expect(s.lastCompletedOrFailedMorningDate).toBe(D);
-    });
-
-    it('the morning started by hand after 18:00 is TOMORROW’s morning (the rule’s consequence)', () => {
-        const s = replay(initialState, start('morning', at(D, '20:00'), 'remote'), complete('morning', at(D, '20:20')));
-        expect(s.lastCompletedOrFailedMorningDate).toBe(NEXT);
-    });
-
-    it.each([
-        ['06:59', D],
-        ['07:00', NEXT], // exactly 12 h from both evenings: the upcoming one
-        ['07:01', NEXT],
-    ])('a 19:00 evening started at %s belongs to %s', (hhmm, day) => {
-        const s = replay(initialState, start('evening', at(NEXT, hhmm), 'local'));
-        expect(evening(s).occurrenceDate).toBe(day);
     });
 
     it('a Settings save that shortens the window mid-run does not move the run to the next day', () => {
@@ -183,12 +216,12 @@ describe('a start by hand or from the phone belongs to the nearest occurrence', 
 });
 
 describe('the scheduler names the occurrence it starts', () => {
-    it('its day is stored and written, even where the nearest rule would say otherwise', () => {
+    it('its day is stored and written, even where the hand-start rule would say otherwise', () => {
         const s = replay(initialState, start('evening', at(NEXT, '19:00'), 'scheduler', '2026-09-28'), complete('evening', at(NEXT, '19:30')));
         expect(s.lastCompletedOrFailedEveningDate).toBe('2026-09-28');
     });
 
-    it('a phone start carrying a day is not trusted: the nearest rule decides', () => {
+    it('a phone start carrying a day is not trusted: the hand-start rule decides', () => {
         const s = replay(initialState, start('evening', at(NEXT, '19:00'), 'remote', '2026-09-28'));
         expect(evening(s).occurrenceDate).toBe(NEXT);
     });

@@ -383,7 +383,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                     return {
                         ...m,
                         ...freshAttempt(m, state.settings, now),
-                        occurrenceDate: startedOccurrenceDate(m, action, now),
+                        occurrenceDate: startedOccurrenceDate(m, state.settings, action, now),
                         tasks: withSchoolBag(m.tasks, m.phase, bagDue).map(t => ({ ...t, completed: false, locked: false })),
                     };
                 }),
