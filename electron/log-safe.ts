@@ -13,13 +13,15 @@ export function errorSummary(error: unknown): string {
     // The token endpoint answers { error: 'invalid_grant' }; an API, { error: { errors: [{ reason }] } }.
     const reasons = field(body, 'errors');
     const reason = typeof body === 'string' ? body : Array.isArray(reasons) ? field(reasons[0], 'reason') : undefined;
+    const named = name(error);
     const parts = [
-        name(error),
+        // A gaxios error and an fs error are both plain `Error`s: the name tells nothing there.
+        named === 'Error' ? null : named,
         typeof status === 'number' ? `status ${status}` : null,
         (typeof code === 'string' || typeof code === 'number') && String(code) !== String(status) && SHORT_CODE.test(String(code)) ? String(code) : null,
         typeof reason === 'string' && REASON.test(reason) ? reason : null,
     ].filter((part): part is string => part !== null);
-    return parts.length > 0 ? parts.join(' ') : 'unknown error';
+    return parts.length > 0 ? parts.join(' ') : named ?? 'unknown error';
 }
 
 function name(error: unknown): string | null {

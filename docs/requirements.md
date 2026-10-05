@@ -1934,13 +1934,16 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
 - **No token text in the logs.** gaxios keeps a failed refresh's request body, refresh token
   included, in its error, and a JSON parse message quotes the text it could not parse; the main
   process logged both objects, and Electron itself logs the error a rejected IPC handler throws.
-  Every such line is now a fixed phrase with the error's name, status, code and Google's reason
-  (`errorSummary` in `electron/log-safe.ts`), and every `data:`/`auth:` handler rejects with a
-  rebuilt error (`ipcSafe`), so the window still learns what failed and the log gets no request.
-- Tests: `electron/auth_session.test.ts` (sign-in, sign-out, a revoke mid-session, before a
-  relaunch and behind a still-valid access token, one notice per refresh and none for Reconnect,
-  offline / 503 / `invalid_client` / `invalid_request` keep the sign-in, a 403 refreshes at most
-  once, the refresh racing Reconnect and a sign-in, a read still holding the old client),
+  Every such line is now a fixed phrase with the error's status, code, Google's reason, and its
+  name unless it is the plain `Error` (`errorSummary` in `electron/log-safe.ts`), and every
+  `data:`/`auth:` handler rejects with a rebuilt error (`ipcSafe`), so the window still learns
+  what failed and the log gets no request.
+- Tests: `electron/auth_session.test.ts` (sign-in, sign-out, a revoke mid-session and before a
+  relaunch, one notice per refresh and none for Reconnect, offline / 503 / `invalid_client` /
+  `invalid_request` keep the sign-in, the refresh racing Reconnect and a sign-in, a read still
+  holding the old client), `electron/auth_unauthorized.test.ts` (a revoke behind a still-valid
+  access token, a 401 retried once and never in a loop, a token-endpoint 401 asked once, a 403
+  never refreshing, with or without an expiry),
   `electron/auth_store_corrupt.test.ts` (the real electron-store in a throwaway folder: a damaged
   file at launch and after it was opened, both copy deletions, the exact log line),
   `electron/api_error_logging.test.ts`, `electron/auth_logging.test.ts`, `electron/log-safe.test.ts`,

@@ -12,6 +12,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { format, inspect } from 'node:util';
+import { realGoogleError } from './authTestKit';
 
 const mocks = vi.hoisted(() => {
     const send = vi.fn();
@@ -78,12 +79,9 @@ const authCheck = () => () => handlerFor('auth:check')();
 
 /** A gaxios error as a failed refresh leaves it: the request body, refresh token included, in its config. */
 const SEED = 'SEEDED-REFRESH-TOKEN-0123';
-const googleError = () => Object.assign(new Error('request to https://oauth2.googleapis.com/token failed'), {
-    name: 'GaxiosError',
-    status: 503,
-    config: { url: 'https://oauth2.googleapis.com/token', method: 'POST', data: new URLSearchParams({ refresh_token: SEED, grant_type: 'refresh_token' }) },
-    response: { status: 503, data: { error: 'backend_error' } },
-});
+/** A real gaxios error from a refresh Google answered 503: its request body holds the refresh token. */
+const refreshFailure = await realGoogleError({ status: 503, body: { error: 'backend_error' } }, { refresh_token: SEED, grant_type: 'refresh_token' });
+const googleError = () => refreshFailure;
 
 describe('main.ts and the Google sign-in', () => {
     afterEach(() => {

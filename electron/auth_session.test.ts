@@ -201,65 +201,6 @@ describe('a refresh still in flight when the user clicks Reconnect', () => {
     });
 });
 
-describe('a revoke that also kills the access token before it expires', () => {
-    beforeEach(() => kit.resetAuthFakes(fake));
-
-    const CALENDAR_LIST = 'https://www.googleapis.com/calendar/v3/users/me/calendarList';
-    const isTokenRequest = (input: unknown) => String(input).includes('oauth2.googleapis.com/token');
-    const calls = (which: (input: unknown) => boolean) => fake.tokenEndpoint.mock.calls.filter(([input]) => which(input)).length;
-
-    /** Google's token endpoint and the Calendar API answer separately. */
-    function googleRoutes(token: [number, Record<string, unknown>], api: [number, Record<string, unknown>]): void {
-        fake.tokenEndpoint.mockImplementation(async input => {
-            const [status, body] = isTokenRequest(input) ? token : api;
-            return kit.googleResponse(body, status);
-        });
-    }
-
-    it('the first 401 asks for a new token, and the refusal signs out', async () => {
-        storeEncrypted(JSON.stringify(stored())); // still valid for an hour
-        googleRoutes([400, REVOKED], [401, { error: { code: 401, message: 'Invalid Credentials' } }]);
-        const authService = await relaunch();
-        appReady();
-
-        await expect(authService.getAuthClient().request({ url: CALENDAR_LIST })).rejects.toBeInstanceOf(Error);
-
-        expect(authService.isAuthenticated()).toBe(false);
-        expect(fake.storeData.has('tokens')).toBe(false);
-        expect(calls(isTokenRequest)).toBe(1);
-    });
-
-    it('a 401 with a valid grant refreshes once, retries once with the new token, and keeps the sign-in', async () => {
-        storeEncrypted(JSON.stringify(stored()));
-        googleRoutes([200, { access_token: 'refreshed-access', expires_in: 3600 }], [200, { items: [] }]);
-        fake.tokenEndpoint.mockImplementationOnce(async () => kit.googleResponse({ error: { code: 401 } }, 401)); // the first read only
-        const authService = await relaunch();
-        appReady();
-
-        await expect(authService.getAuthClient().request({ url: CALENDAR_LIST })).resolves.toMatchObject({ status: 200 });
-
-        expect(calls(isTokenRequest)).toBe(1);
-        const apiCalls = fake.tokenEndpoint.mock.calls.filter(([input]) => !isTokenRequest(input));
-        expect(apiCalls).toHaveLength(2); // gaxios redacts the failed request's headers in place, so only the retry's is readable
-        expect(new Headers(apiCalls[1][1]?.headers).get('authorization')).toBe('Bearer refreshed-access');
-        expect(authService.isAuthenticated()).toBe(true);
-        expect(readStored(fake)).toMatchObject({ access_token: 'refreshed-access', refresh_token: 'stored-refresh' });
-    });
-
-    it('a 403 (a quota, a scope left unchecked) asks for no new token: it would on every poll', async () => {
-        storeEncrypted(JSON.stringify(stored()));
-        googleRoutes([200, { access_token: 'refreshed-access', expires_in: 3600 }], [403, { error: { code: 403, message: 'Rate Limit Exceeded' } }]);
-        const authService = await relaunch();
-        appReady();
-
-        await expect(authService.getAuthClient().request({ url: CALENDAR_LIST })).rejects.toMatchObject({ status: 403 });
-
-        expect(calls(isTokenRequest)).toBe(0);
-        expect(calls(input => !isTokenRequest(input))).toBe(1);
-        expect(authService.isAuthenticated()).toBe(true);
-    });
-});
-
 describe('a sign-in while a read is still refreshing the saved grant', () => {
     beforeEach(() => kit.resetAuthFakes(fake));
 

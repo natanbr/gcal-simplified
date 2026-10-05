@@ -54,8 +54,10 @@ export class GoogleOAuthClient extends google.auth.OAuth2 {
             return await super.requestAsync<T>(opts, true); // true: the library's own refresh-and-retry stays off
         } catch (error) {
             const status = field(error, 'status') ?? field(field(error, 'response'), 'status');
+            // A 401 from the token endpoint itself (invalid_client) is not an access token refused: asking again cannot help.
+            const fromTokenEndpoint = String(field(field(error, 'config'), 'url')) === this.endpoints.oauth2TokenUrl.toString();
             // A stream body cannot be sent twice; the library skips those too.
-            if (reAuthRetried || status !== 401 || !this.credentials.refresh_token || opts.data instanceof Readable) throw error;
+            if (reAuthRetried || status !== 401 || fromTokenEndpoint || !this.credentials.refresh_token || opts.data instanceof Readable) throw error;
             await this.refreshAccessToken();
             return super.requestAsync<T>(opts, true);
         }

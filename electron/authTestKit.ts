@@ -179,6 +179,24 @@ export function googleAnswers(fake: AuthFakes, body: Record<string, unknown>, st
     fake.tokenEndpoint.mockImplementation(async () => googleResponse(body, status));
 }
 
+/**
+ * A real gaxios error, raised by google-auth-library's own transport: the
+ * answer is `failure` (a status and body, or a network error), and the request
+ * carried `sent` as its body, the way a refresh carries its refresh token.
+ */
+export async function realGoogleError(
+    failure: { status: number; body: Record<string, unknown> } | Error, sent: Record<string, string> = {},
+): Promise<unknown> {
+    const { OAuth2Client } = await import('google-auth-library');
+    const fetchImplementation = async () => {
+        if (failure instanceof Error) throw failure;
+        return googleResponse(failure.body, failure.status);
+    };
+    const client = new OAuth2Client({ transporterOptions: { fetchImplementation } });
+    return client.transporter.request({ url: 'https://oauth2.googleapis.com/token', method: 'POST', data: new URLSearchParams(sent), retry: false })
+        .then(() => { throw new Error('expected Google to fail'); }, (error: unknown) => error);
+}
+
 /** The next call to Google waits until the test answers it (a refresh still in flight). */
 export function googleAnswersLater(fake: AuthFakes): { answer(body: Record<string, unknown>, status?: number): void } {
     let respond: (response: Response) => void = () => { throw new Error('Google was never asked'); };
