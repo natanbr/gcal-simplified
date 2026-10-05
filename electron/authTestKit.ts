@@ -62,6 +62,8 @@ export async function createAuthFakes() {
         storeReadError: { next: null as Error | null },
         /** The same, for the read electron-store makes when it is created. */
         storeOpenError: { next: null as Error | null },
+        /** The same, for the next set or delete. */
+        storeWriteError: { next: null as Error | null },
         openExternal: vi.fn(),
         /** Google's token endpoint (code exchange and refresh). */
         tokenEndpoint: vi.fn<typeof fetch>(),
@@ -78,26 +80,33 @@ export function electronModule(fake: AuthFakes) {
     };
 }
 
+/** Throws the error a test queued in `slot`, once. */
+function throwQueued(slot: { next: Error | null }): void {
+    const error = slot.next;
+    slot.next = null;
+    if (error) throw error;
+}
+
 /** electron-store's two forms of set: set(key, value) and set({ key: value }). */
 export function electronStoreModule(fake: AuthFakes) {
     return {
         default: class FakeStore {
             constructor() {
-                const error = fake.storeOpenError.next;
-                fake.storeOpenError.next = null;
-                if (error) throw error;
+                throwQueued(fake.storeOpenError);
             }
             get = (key: string) => {
-                const error = fake.storeReadError.next;
-                fake.storeReadError.next = null;
-                if (error) throw error;
+                throwQueued(fake.storeReadError);
                 return fake.storeData.get(key);
             };
             set = (keyOrValues: string | Record<string, unknown>, value?: unknown) => {
+                throwQueued(fake.storeWriteError);
                 const entries = typeof keyOrValues === 'string' ? [[keyOrValues, value] as const] : Object.entries(keyOrValues);
                 for (const [key, entry] of entries) fake.storeData.set(key, entry);
             };
-            delete = (key: string) => { fake.storeData.delete(key); };
+            delete = (key: string) => {
+                throwQueued(fake.storeWriteError);
+                fake.storeData.delete(key);
+            };
         },
     };
 }
@@ -115,6 +124,7 @@ export function resetAuthFakes(fake: AuthFakes): void {
     fake.storeData.clear();
     fake.storeReadError.next = null;
     fake.storeOpenError.next = null;
+    fake.storeWriteError.next = null;
     fake.app.ready = false;
     vi.clearAllMocks();
     // mockReset, not only clear: a one-time answer a test queued and never used must not reach the next test.
