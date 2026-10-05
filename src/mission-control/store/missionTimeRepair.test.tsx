@@ -7,11 +7,16 @@
 // child's evening moved to 19:00 with no line and no attribution, which is what
 // CLAUDE.md → Attribution calls a bug.
 //
-// The repair itself stays in hydration (the first render must already have a
-// real time and window). What it changed is handed to the provider, which
-// writes one hand-built `system` line just after load, so it reaches the audit
-// trail (a line written inside loadPersistedState would not: useAuditTrail
-// treats every loaded entry as already written).
+// The same holds for the sibling repair: a mission saved RUNNING with no
+// readable duration is given its window's length, which decides when the
+// child's run ends.
+//
+// The repairs stay in hydration (the first render must already have a real
+// time, window and length). What they changed, read from their own before and
+// after, is handed to the provider, which writes one hand-built `system` line
+// just after load, so it reaches the audit trail (a line written inside
+// loadPersistedState would not: useAuditTrail treats every loaded entry as
+// already written).
 //
 // Each launch test seeds the persisted blob and mounts the real store.
 // ============================================================
@@ -23,9 +28,20 @@ import { MCStoreProvider } from './MCStoreProvider';
 import { STORAGE_KEY, useMCState } from './useMCStore';
 import { initialState } from './mcReducer';
 import { isEconomyLocked } from './missionStreak';
-import { missionTimeRepairs, type MissionTimeRepair } from './missionTimeRepair';
+import { sanitizeMissionTimes } from './hhmm';
+import { missionTimeRepairLogEntry, settingRepairs } from './missionTimeRepair';
 import { DEFAULT_SETTINGS } from '../types';
 import type { MCSettings, MCState } from '../types';
+
+// The real builder, wrapped so the StrictMode case can see how often the
+// provider's effect built the line. Counting lines in the log is not enough:
+// with the clock frozen both runs build the same id, and ADD_LOG drops a replay
+// of the newest entry, so a missing ref guard would still show one line.
+vi.mock('./missionTimeRepair', async importOriginal => {
+    const actual = await importOriginal<typeof import('./missionTimeRepair')>();
+    return { ...actual, missionTimeRepairLogEntry: vi.fn(actual.missionTimeRepairLogEntry) };
+});
+const buildLine = vi.mocked(missionTimeRepairLogEntry);
 
 const REPAIRED = /^Mission settings repaired at startup/;
 const NOW = new Date(2026, 9, 5, 14, 0);
@@ -75,6 +91,7 @@ beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     invoke.mockClear();
+    buildLine.mockClear();
     seen = [];
     window.ipcRenderer = { invoke, on: vi.fn(() => vi.fn()) };
 });
@@ -115,8 +132,8 @@ describe('a cleared start time at load — happy path', () => {
 
         expect(repairLines().map(l => l.message)).toEqual([
             'Mission settings repaired at startup: the morning start time was empty, reset to 06:00; '
-            + 'the evening start time could not be read, reset to 19:00; '
             + 'the morning duration was not a real length, reset to 30 min; '
+            + 'the evening start time could not be read, reset to 19:00; '
             + 'the evening duration could not be read, reset to 60 min',
         ]);
     });
@@ -127,6 +144,7 @@ describe('a cleared start time at load — happy path', () => {
 
         expect(repairLines()).toHaveLength(1);
         expect(auditedRepairs()).toHaveLength(1);
+        expect(buildLine, 'the ref guard: the second effect run builds nothing').toHaveBeenCalledTimes(1);
     });
 });
 
@@ -166,12 +184,35 @@ describe('a cleared start time at load — lifecycle', () => {
     });
 });
 
-describe('missionTimeRepairs — which saved fields were reset', () => {
-    const repaired = (saved: Partial<MCSettings>): MissionTimeRepair[] =>
-        missionTimeRepairs(saved, { ...DEFAULT_SETTINGS });
+describe('a mission saved running with no length — the sibling repair', () => {
+    it('gets its window’s length, and the startup line says so', async () => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            ...initialState,
+            _migrationVersion: 1,
+            activeMission: 'evening',
+            missions: initialState.missions.map(m => (m.phase === 'evening'
+                ? { ...m, active: true, startedAt: new Date(2026, 9, 5, 13, 50).toISOString(), durationMins: null }
+                : m)),
+        }));
+        await launch();
 
-    it('a field absent from the blob is a default, not a repair', () => {
-        expect(repaired({})).toEqual([]);
+        expect(live.missions.find(m => m.phase === 'evening')?.durationMins).toBe(60);
+        expect(repairLines().map(l => l.message)).toEqual([
+            "Mission settings repaired at startup: the running evening mission had no length, set to its window's 60 min",
+        ]);
+        expect(auditedRepairs()).toHaveLength(1);
+    });
+});
+
+/** What the load's sanitizer does to these saved settings, reported. */
+function reportFor(saved: Record<string, unknown>) {
+    const before = { ...DEFAULT_SETTINGS, ...saved } as MCSettings;
+    return settingRepairs(before, sanitizeMissionTimes(before));
+}
+
+describe('settingRepairs — read from the sanitizer’s own before and after', () => {
+    it('a field absent from the blob takes its default first: not a repair', () => {
+        expect(reportFor({})).toEqual([]);
     });
 
     it.each([
@@ -180,15 +221,27 @@ describe('missionTimeRepairs — which saved fields were reset', () => {
         ['9:00', 'unreadable'],
         ['24:00', 'unreadable'],
     ])('a start time of %j is %s', (value, reason) => {
-        expect(repaired({ eveningStartsAt: value as string })).toEqual([{ field: 'eveningStartsAt', reason, reset: '19:00' }]);
+        expect(reportFor({ eveningStartsAt: value })).toEqual([{ kind: 'setting', field: 'eveningStartsAt', reason, reset: '19:00' }]);
     });
 
     it.each([[0, 'unreal'], [1440, 'unreal'], [-5, 'unreal'], [null, 'unreadable'], ['30', 'unreadable']])(
         'a duration of %j is %s', (value, reason) => {
-            expect(repaired({ morningDurationMins: value as number })).toEqual([{ field: 'morningDurationMins', reason, reset: 30 }]);
+            expect(reportFor({ morningDurationMins: value })).toEqual([{ kind: 'setting', field: 'morningDurationMins', reason, reset: 30 }]);
         });
 
     it('real values are kept and not reported', () => {
-        expect(repaired({ morningStartsAt: '05:45', eveningStartsAt: '23:30', morningDurationMins: 1 / 6, eveningDurationMins: 90 })).toEqual([]);
+        expect(reportFor({ morningStartsAt: '05:45', eveningStartsAt: '23:30', morningDurationMins: 1 / 6, eveningDurationMins: 90 })).toEqual([]);
+    });
+
+    it('structural: garbage in EVERY settings key reports exactly the keys the sanitizer changed', () => {
+        // Nothing keeps a second copy of the sanitizer's rules: whatever it changes,
+        // in any key, now or after a later edit, is what the line names.
+        const garbage = Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map(k => [k, '']));
+        const before = { ...DEFAULT_SETTINGS, ...garbage } as MCSettings;
+        const after = sanitizeMissionTimes(before);
+        const changed = (Object.keys(before) as Array<keyof MCSettings>).filter(k => !Object.is(before[k], after[k]));
+
+        expect(changed.length, 'precondition: the sanitizer changed something').toBeGreaterThan(0);
+        expect(settingRepairs(before, after).map(r => (r.kind === 'setting' ? r.field : r.kind)).sort()).toEqual([...changed].sort());
     });
 });

@@ -21,7 +21,7 @@ import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
 import { deriveMissionWindow, hydrateMissionTimes, isValidDurationMins, sanitizeMissionTimes } from './hhmm';
 import { isDateKey } from './occurrenceDay';
-import { missionTimeRepairs, type MissionTimeRepair } from './missionTimeRepair';
+import { runLengthRepair, settingRepairs, type MissionTimeRepair } from './missionTimeRepair';
 import { isStaleIncompleteRun } from './staleMissionRun';
 import { renewalLoggedMarker, withoutPairingCopy } from './pairingRenewal';
 import { REWARD_MAP } from '../rewardCatalogue';
@@ -84,7 +84,10 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
         // The pairing copy v0.0.43 and earlier saved here is dropped: config.json is its one home.
         const { remotePairingRenewalLogged: savedMarker, ...savedSettings } = withoutPairingCopy(parsed.settings ?? {});
         const marker = renewalLoggedMarker(savedMarker);
-        const settings = sanitizeMissionTimes({ ...DEFAULT_SETTINGS, ...savedSettings, ...(marker ? { remotePairingRenewalLogged: marker } : {}) });
+        const unsanitized = { ...DEFAULT_SETTINGS, ...savedSettings, ...(marker ? { remotePairingRenewalLogged: marker } : {}) };
+        const settings = sanitizeMissionTimes(unsanitized);
+        // What the two repairs below changed, read from their before and after: logged after load.
+        const repairs = settingRepairs(unsanitized, settings);
         const state: MCState = {
             ...initialState,
             ...parsed,
@@ -110,7 +113,10 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                 // A run from an earlier day with no readable duration is left as saved:
                 // useStaleMissionRunEnd ends it after load, logged (staleMissionRun.ts).
                 const derived = deriveMissionWindow(merged, settings);
-                return isStaleIncompleteRun(derived, settings, new Date()) ? derived : hydrateMissionTimes(derived, settings);
+                if (isStaleIncompleteRun(derived, settings, new Date())) return derived;
+                const hydrated = hydrateMissionTimes(derived, settings);
+                repairs.push(...runLengthRepair(derived, hydrated));
+                return hydrated;
             }),
             // Merge responsibilities from defaults so new tasks always appear
             responsibilities: initialState.responsibilities.map(defaultR => {
@@ -152,7 +158,7 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
             schoolCalendar: sanitizeSchoolCalendar(parsed.schoolCalendar),
             _migrationVersion: MIGRATION_VERSION,
         };
-        return { state, missionTimeRepairs: missionTimeRepairs(savedSettings, settings) };
+        return { state, missionTimeRepairs: repairs };
     } catch {
         return { state: initialState, missionTimeRepairs: [] };
     }

@@ -1,80 +1,86 @@
 // ============================================================
-// Mission Control — a mission time repaired at load, and its log line
+// Mission Control — mission times repaired at load, and their log line
 // ------------------------------------------------------------
-// A cleared "Auto-trigger at" field saved as '' (v0.0.42), or a NaN duration
-// (saved as null), is reset to the default at load by sanitizeMissionTimes
-// (hhmm.ts), so the mission runs at all. That repair moved the child's mission
-// with no line and no attribution. The repair stays in hydration (the first
-// render must already have a real time and window); this names what it reset,
-// and MCStoreProvider writes one `system` line after load
-// (useMissionTimeRepairLog), where the audit trail sees it.
+// Hydration repairs what would stop a mission from running or ending: a
+// cleared "Auto-trigger at" field saved as '' (v0.0.42) or a NaN duration
+// (saved as null) becomes the default (sanitizeMissionTimes, hhmm.ts), and a
+// mission saved RUNNING with no readable duration gets its window's length
+// (hydrateMissionTimes). Both moved the child's mission with no line and no
+// attribution. The repairs stay in hydration (the first render must already
+// have a real time, window and length); this names what they changed, read
+// from their own before and after, never from a second copy of their rules,
+// and MCStoreProvider writes one `system` line just after load, where the
+// audit trail sees it.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import type { ActivityLogEntry, MCSettings } from '../types';
-import { isValidDurationMins, isValidHhmm } from './hhmm';
+import type { ActivityLogEntry, MCSettings, Mission } from '../types';
 
-const FIELDS = ['morningStartsAt', 'eveningStartsAt', 'morningDurationMins', 'eveningDurationMins'] as const;
-type MissionTimeField = typeof FIELDS[number];
+type Reason = 'empty' | 'unreadable' | 'unreal';
 
-/** empty: a cleared time ('') · unreadable: not a time or a number (JSON saves NaN as null) · unreal: a number that is no length. */
-export interface MissionTimeRepair {
-    field: MissionTimeField;
-    reason: 'empty' | 'unreadable' | 'unreal';
-    reset: string | number;
-}
+export type MissionTimeRepair =
+    | { kind: 'setting'; field: keyof MCSettings; reason: Reason; reset: unknown }
+    | { kind: 'run'; phase: 'morning' | 'evening'; reset: number };
 
-const LABEL: Record<MissionTimeField, string> = {
+const LABEL: Partial<Record<keyof MCSettings, string>> = {
     morningStartsAt: 'the morning start time',
     eveningStartsAt: 'the evening start time',
     morningDurationMins: 'the morning duration',
     eveningDurationMins: 'the evening duration',
 };
 
-const BECAUSE: Record<MissionTimeRepair['reason'], string> = {
+const BECAUSE: Record<Reason, string> = {
     empty: 'was empty',
     unreadable: 'could not be read',
     unreal: 'was not a real length',
 };
 
-function isStartField(field: MissionTimeField): boolean {
-    return field === 'morningStartsAt' || field === 'eveningStartsAt';
+const isDuration = (field: keyof MCSettings) => field.endsWith('DurationMins');
+
+function reasonFor(field: keyof MCSettings, saved: unknown): Reason {
+    if (saved === '') return 'empty';
+    return isDuration(field) && typeof saved === 'number' && Number.isFinite(saved) ? 'unreal' : 'unreadable';
 }
 
 /**
- * The fields of the SAVED settings that hydration reset, with what it reset them
- * to (read from `repaired`, the settings it produced). A field absent from the
- * blob is not a repair: an older blob simply takes the default, as every new
- * setting does.
+ * Every setting the load's sanitizer changed, from its input (the saved
+ * settings over the defaults) and its output. A field absent from an older
+ * blob takes its default before the sanitizer runs, so it is not a repair.
  */
-export function missionTimeRepairs(saved: Partial<MCSettings>, repaired: MCSettings): MissionTimeRepair[] {
-    return FIELDS.flatMap((field): MissionTimeRepair[] => {
-        if (!(field in saved)) return [];
-        const value: unknown = saved[field];
-        if (isStartField(field) ? isValidHhmm(value) : isValidDurationMins(value)) return [];
-        const reason = value === '' ? 'empty'
-            : typeof value === 'number' && Number.isFinite(value) && !isStartField(field) ? 'unreal'
-            : 'unreadable';
-        return [{ field, reason, reset: repaired[field] }];
-    });
+export function settingRepairs(before: MCSettings, after: MCSettings): MissionTimeRepair[] {
+    const fields = new Set([...Object.keys(before), ...Object.keys(after)]) as Set<keyof MCSettings>;
+    return [...fields]
+        .filter(field => !Object.is(before[field], after[field]))
+        .map(field => ({ kind: 'setting', field, reason: reasonFor(field, before[field]), reset: after[field] }));
+}
+
+/** The length hydration gave a mission saved running without one, or nothing. */
+export function runLengthRepair(before: Mission, after: Mission): MissionTimeRepair[] {
+    const phase = after.phase;
+    if (phase === 'none' || before.durationMins === after.durationMins || after.durationMins === undefined) return [];
+    return [{ kind: 'run', phase, reset: after.durationMins }];
+}
+
+function describe(r: MissionTimeRepair): string {
+    if (r.kind === 'run') return `the running ${r.phase} mission had no length, set to its window's ${r.reset} min`;
+    const reset = isDuration(r.field) ? `${String(r.reset)} min` : String(r.reset);
+    return `${LABEL[r.field] ?? r.field} ${BECAUSE[r.reason]}, reset to ${reset}`;
 }
 
 /**
- * One line for every field reset at this load, or null when nothing was.
- * Built by hand (no action describes it, so createLogEntry never derives it);
- * it logs no action, so the shield lock, which refuses actions, has nothing to
- * re-check. The id is derived from the load instant, so a replay is dropped by
- * ADD_LOG's own de-dup.
+ * One line for everything reset at this load, or null when nothing was. Built
+ * by hand: no action describes it, so createLogEntry never derives it; it logs
+ * no action, so the shield lock, which refuses actions, has nothing to re-check.
+ * Written once: the provider's ref is the guard (ADD_LOG's own de-dup only
+ * drops a replay of the newest entry).
  */
 export function missionTimeRepairLogEntry(repairs: readonly MissionTimeRepair[], instantIso: string): ActivityLogEntry | null {
     if (repairs.length === 0) return null;
-    const parts = repairs.map(r =>
-        `${LABEL[r.field]} ${BECAUSE[r.reason]}, reset to ${isStartField(r.field) ? r.reset : `${r.reset} min`}`);
     return {
         id: `mission-time-repair-${instantIso}`,
         timestamp: instantIso,
         icon: '🔧',
-        message: `Mission settings repaired at startup: ${parts.join('; ')}`,
+        message: `Mission settings repaired at startup: ${repairs.map(describe).join('; ')}`,
         type: 'system',
         colorKey: 'system',
         source: 'system',

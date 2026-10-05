@@ -14,9 +14,10 @@
 // mcReducer only when a log needs the state, so a lone dispatch between renders
 // costs no extra reducer pass; each render starts again from its state.
 //
-// Known limit, no worse than before: raw dispatches (the 60 s heartbeat, and the
+// Known limit, no worse than before: raw dispatches (the 60 s heartbeat, the
 // provider's mount-time settings:get: the pairing-renewal ADD_LOG and the
-// SET_SETTINGS that saves the renewal-logged marker) are not
+// SET_SETTINGS that saves the renewal-logged marker, and its load-time
+// mission-time repair ADD_LOG) are not
 // queued, and a render at a higher priority that skips queued lower-priority
 // updates resets to a state without them.
 // ⚠️  Internal to src/mission-control/ only.

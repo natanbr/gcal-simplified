@@ -101,7 +101,7 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   `useQuickGameSession` (its two game lines, the only ones that log a refusable action), the
   scheduler's skipped-mission line (`useMissionScheduler`), the pairing-renewal line
   (`MCStoreProvider`, built in `store/pairingRenewal.ts`) and the load-time mission-time repair line
-  (`useMissionTimeRepairLog`, built in `store/missionTimeRepair.ts`); `shieldLog` in `missionStreak.ts` is built
+  (`MCStoreProvider`, built in `store/missionTimeRepair.ts`); `shieldLog` in `missionStreak.ts` is built
   by hand inside the reducer. Any new hand-built entry must re-check the same condition before dispatching. And a
   refusal must be refused *before* any optimistic UI commits — the drag handlers return `false` when
   locked so the token springs back, rather than animating a coin away that the reducer then keeps.

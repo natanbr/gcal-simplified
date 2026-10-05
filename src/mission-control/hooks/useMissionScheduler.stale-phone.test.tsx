@@ -10,6 +10,7 @@
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act } from '@testing-library/react';
 import { initialState } from '../store/mcReducer';
 import { STORAGE_KEY, loadPersistedState } from '../store/useMCStore';
 import { at, jumpTo, launchInsideWindow, renderLiveScheduler, step } from './schedulerTestKit';
@@ -56,6 +57,24 @@ describe('a phone tap that lands after its mission ended', () => {
 
         expect(live.state.activeMission).toBe('none');
         expect(evening(live.state)?.active).toBe(false);
+        unmount();
+    });
+
+    it('a +10 in the same burst as the expiry tick, before any render, writes no line', () => {
+        // The tick's MARK and end and the phone's +10 are dispatched before React
+        // renders again. The interceptor builds the +10's line from the state it
+        // applies to (the shared pending state, store/pendingState.ts): ended, so
+        // refused. From the last render's state it would read the run as going.
+        const { live, send, unmount } = launchInsideWindow('evening', { ...initialState }, { ipc: true });
+        jumpTo(at(20, 3, 0, 50));
+        act(() => {
+            vi.advanceTimersByTime(15_000); // the 20:04:00 tick ends the 19:04 run
+            send('remote-control:action', { type: 'ADJUST_MISSION_END', missionPhase: 'evening', deltaMinutes: 10 });
+        });
+        step(1_000);
+
+        expect(live.state.activeMission).toBe('none');
+        expect(adjustLines(live.state)).toBe(0);
         unmount();
     });
 
