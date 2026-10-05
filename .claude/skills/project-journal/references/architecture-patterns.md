@@ -903,19 +903,22 @@ classes: an inline style beats the media query. In a hidden-window spec whose su
 `dispatchEvent('click')` and use few pointer steps, and before measuring wait until **no ancestor
 of the element has a computed `transform` other than `none`** (the spec's `settled`).
 
-## 2026-10-05 — A request shaped by a setting waits for it; "empty while loading" is not "first load"
+## 2026-10-04 — Keep display settings out of the data layer; "empty while loading" is not "first load"
 
-**Learning:** The Dashboard asked for the month's events before it had read the saved settings that
-decide the week start, so the first request used the hook's `'sunday'` default while the week on
-screen used `'today'` (two defaults for the same `undefined`). The settings then changed the cache
-key, the miss emptied the event list, and the full-screen spinner was keyed on `loading &&
-events.length === 0`: it covered the week twice per launch and on every Next Week into a new month.
-Nobody saw it while the Google reads failed quietly (until PR 186). The settings were also read last,
-in one `try` with tasks and weather, so a weather failure left them unread (S1): one cause, two bugs.
-**Action:** Read the configuration before any request it shapes, and gate on "answered", not
-"succeeded" (a busy `config.json` must still reach the week). Give each optional read its own
-`catch`. Key a full-screen loader on "nothing shown yet" (a flag the first settled answer sets), never
-on an empty list: an empty calendar is a valid answer. A cache miss keeps the previous state on
-screen, and once the controls stay usable during a load, only the visible period's answer may
-change the screen (`visibleKeyRef` in `useCalendarData.ts`). Tests:
-`src/components/__tests__/Dashboard.loading.test.tsx` records every screen with a MutationObserver.
+**Learning:** The events request was shaped by the week start, a display setting: its range and cache
+key followed it. The Dashboard asked before it had read the settings, with the hook's `'sunday'`
+default while the week on screen used `'today'` (two defaults for the same `undefined`); the
+settings then changed the key, the miss emptied the event list, and the full-screen spinner, keyed on
+`loading && events.length === 0`, covered the week twice per launch and on Next Week into a new
+month. The same coupling hid two older gaps: the request ended at the start of its last day (Google's
+`timeMax` is exclusive), and in 'today' mode it was aligned on another weekday than the month grid.
+The settings were also read last, in one `try` with tasks and weather (S1). A review then found that
+the in-flight de-dup silently dropped the refetch Save and reconnect relied on.
+**Action:** Request data by a key the display cannot change (a month with margins), and prove
+coverage with a sweep through the same functions the view calls (`useCalendarData.range.test.ts`).
+Resolve an optional setting in one place and take it without defaults downstream. Read the
+configuration before any request it shapes, gate on "answered", not "succeeded", and after Save use
+what was saved instead of reading the file again. Key a full-screen loader on "nothing shown yet",
+never on an empty list. A forced refetch needs its own identity (a generation) in the de-dup and in
+which answer may win; overlapping loads need the same. The caller states the visible period; a hook
+that infers it from the last call lets any other call take over the screen.
