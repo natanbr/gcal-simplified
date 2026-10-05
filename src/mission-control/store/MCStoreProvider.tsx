@@ -1,6 +1,6 @@
 import React, { useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { mcReducer } from './mcReducer';
-import { MCContext, loadPersistedState, STORAGE_KEY } from './useMCStore';
+import { MCContext, loadPersistedStateWithRepairs, STORAGE_KEY } from './useMCStore';
 import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
 import { useRemoteSync } from './useRemoteSync';
 import { useAuditTrail } from './useAuditTrail';
@@ -12,6 +12,8 @@ import { gameTokensOverCap } from './moodGauge';
 import { pendingFrom } from './pendingState';
 import { useSchoolCalendarSync } from './useSchoolCalendarSync';
 import { pairingRenewedLogEntry, renewalToMark } from './pairingRenewal';
+import { useMissionTimeRepairLog } from './useMissionTimeRepairLog';
+import type { MissionTimeRepair } from './missionTimeRepair';
 
 /** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
@@ -29,6 +31,11 @@ function StaleMissionRunEnd(): null {
     return null;
 }
 
+function MissionTimeRepairLog({ repairs }: { repairs: readonly MissionTimeRepair[] }): null {
+    useMissionTimeRepairLog(repairs);
+    return null;
+}
+
 /** Inside the provider, beside SuspensionExpiry: feeds the school-bag decision. */
 function SchoolCalendarSync(): null {
     useSchoolCalendarSync();
@@ -36,7 +43,9 @@ function SchoolCalendarSync(): null {
 }
 
 export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
-    const [state, dispatch] = useReducer(mcReducer, undefined, loadPersistedState);
+    // Read once; the mission times hydration reset are logged just after load (missionTimeRepair.ts).
+    const [loaded] = useState(loadPersistedStateWithRepairs);
+    const [state, dispatch] = useReducer(mcReducer, loaded.state);
     // Every render starts the interceptor's pending state from this render's state.
     const pending = useRef(pendingFrom(state));
     pending.current = pendingFrom(state);
@@ -102,6 +111,7 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
             <SuspensionExpiry />
             {needsSettle && <GameTokenCapSettle />}
             {hasStaleRun && <StaleMissionRunEnd />}
+            {loaded.missionTimeRepairs.length > 0 && <MissionTimeRepairLog repairs={loaded.missionTimeRepairs} />}
             <SchoolCalendarSync />
             {children}
         </MCContext.Provider>

@@ -20,6 +20,7 @@ import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
 import { deriveMissionWindow, hydrateMissionTimes, sanitizeMissionTimes } from './hhmm';
+import { missionTimeRepairs, type MissionTimeRepair } from './missionTimeRepair';
 import { isStaleIncompleteRun } from './staleMissionRun';
 import { renewalLoggedMarker, withoutPairingCopy } from './pairingRenewal';
 import { REWARD_MAP } from '../rewardCatalogue';
@@ -38,9 +39,15 @@ function isPastInstant(value: unknown): value is string {
 }
 
 export function loadPersistedState(): MCState {
+    return loadPersistedStateWithRepairs().state;
+}
+
+/** The loaded state, plus the saved mission times hydration had to reset, which the
+ *  provider logs just after load (missionTimeRepair.ts). */
+export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRepairs: MissionTimeRepair[] } {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return { ...initialState, _migrationVersion: 1 };
+        if (!raw) return { state: { ...initialState, _migrationVersion: 1 }, missionTimeRepairs: [] };
         const parsed = JSON.parse(raw) as Partial<MCState>;
 
         const MIGRATION_VERSION = 1;
@@ -77,7 +84,7 @@ export function loadPersistedState(): MCState {
         const { remotePairingRenewalLogged: savedMarker, ...savedSettings } = withoutPairingCopy(parsed.settings ?? {});
         const marker = renewalLoggedMarker(savedMarker);
         const settings = sanitizeMissionTimes({ ...DEFAULT_SETTINGS, ...savedSettings, ...(marker ? { remotePairingRenewalLogged: marker } : {}) });
-        return {
+        const state: MCState = {
             ...initialState,
             ...parsed,
             // Merge saved settings over defaults (so new settings fields always have values)
@@ -141,8 +148,9 @@ export function loadPersistedState(): MCState {
             schoolCalendar: sanitizeSchoolCalendar(parsed.schoolCalendar),
             _migrationVersion: MIGRATION_VERSION,
         };
+        return { state, missionTimeRepairs: missionTimeRepairs(savedSettings, settings) };
     } catch {
-        return initialState;
+        return { state: initialState, missionTimeRepairs: [] };
     }
 }
 
