@@ -203,7 +203,9 @@ export function applyMissionTimeout(
     nowIso: string,
 ): MCState {
     const mission = state.missions.find(m => m.phase === missionPhase);
-    if (!mission || mission.loggedTimeoutAt) return state;
+    // Only a running mission times out: the overlay's timer, still mounted for its
+    // exit animation, fired after a phone Stop and charged a silent miss.
+    if (!mission || !mission.active || mission.loggedTimeoutAt) return state;
 
     return {
         ...state,
