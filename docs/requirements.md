@@ -1907,7 +1907,7 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   the token file is cleared and the calendar shows "Sign in with Google" without a relaunch; a
   relaunch starts there and does not ask Google again. A revoke that also kills the access token
   before it expires is found on the first read that Google answers 401: the client asks for a new
-  token once and retries once (`forceRefreshOnFailure`), never in a loop. Nothing else signs out:
+  token once and retries once, never in a loop; a 403 (a quota, a scope left unchecked) asks for no new token. Nothing else signs out:
   offline, a Google outage (5xx) or a misconfigured app do not (the week may show holidays only
   until the connection is back, as before). A sign-out the parent asked for (Reconnect) is not
   reported this way, so Settings stays open while the consent page is.
@@ -1933,15 +1933,18 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   A byte-order mark (a hand repair in PowerShell 5.1) is read, as in `config.json`.
 - **No token text in the logs.** gaxios keeps a failed refresh's request body, refresh token
   included, in its error, and a JSON parse message quotes the text it could not parse; the main
-  process logged both objects. Every such line is now a fixed phrase with the error's status,
-  code or name (`electron/log-safe.ts`).
+  process logged both objects, and Electron itself logs the error a rejected IPC handler throws.
+  Every such line is now a fixed phrase with the error's name, status, code and Google's reason
+  (`errorSummary` in `electron/log-safe.ts`), and every `data:`/`auth:` handler rejects with a
+  rebuilt error (`ipcSafe`), so the window still learns what failed and the log gets no request.
 - Tests: `electron/auth_session.test.ts` (sign-in, sign-out, a revoke mid-session, before a
   relaunch and behind a still-valid access token, one notice per refresh and none for Reconnect,
   offline / 503 / `invalid_client` / `invalid_request` keep the sign-in, a 403 refreshes at most
   once, the refresh racing Reconnect and a sign-in, a read still holding the old client),
   `electron/auth_store_corrupt.test.ts` (the real electron-store in a throwaway folder: a damaged
   file at launch and after it was opened, both copy deletions, the exact log line),
-  `electron/api_error_logging.test.ts`, `electron/held-file.test.ts`, `electron/main_auth.test.ts`,
+  `electron/api_error_logging.test.ts`, `electron/auth_logging.test.ts`, `electron/log-safe.test.ts`,
+  `electron/held-file.test.ts`, `electron/main_auth.test.ts` (every `data:`/`auth:` handler),
   `src/components/CalendarApp.test.tsx`. Each new case was red before its fix; the negatives were
   proven by treating every failure as a refusal. `src/__tests__/auth-ready-boundary.test.ts`
   (walker in `src/__tests__/helpers/importTimeReads.ts`) follows renamed and whole imports, IIFEs,
@@ -1960,7 +1963,11 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   the refresh token stayed. No main-process log line held the seeded refresh token. The token
   file held exclusively for 9 s at launch → the Dashboard after 11 s, not Sign in. An empty, a
   truncated and a NUL-filled `auth-store.json` → a window opened on Sign in each time and the file
-  was moved aside.
+  was moved aside. Re-run after the third review round: a 503 outage → 14 token requests and 4 of
+  Electron's "Error occurred in handler" lines (the school calendar's strict read), none with the
+  seeded refresh token, the sign-in kept; a 401 revoke → Sign in after one token request; a 403
+  that kept coming back (rate limit) → 12 API requests, no token request, the sign-in kept, and
+  the log named the reason (`rateLimitExceeded`).
 - Not changed: an access token saved without a refresh token (left by builds before v0.0.41, or by
   the Reconnect race fixed here) that expires mid-session still fails quietly until the next
   launch, which shows Sign in.

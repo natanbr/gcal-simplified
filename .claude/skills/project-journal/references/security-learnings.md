@@ -245,7 +245,10 @@ undone by its own in-flight refresh, so a read holding it still reached Google a
 account. The old client is now *retired* (a refresh that lands on it throws before the library can
 install it), and a sign-in exchanges the code on a new client too, or a read refreshing the saved
 grant during the consent page could sign the parent out right after signing in. The library also
-refreshes after a 401 only when told to (`forceRefreshOnFailure`), so without it a revoke that
-killed a still-valid access token went unnoticed for up to an hour. And gaxios keeps a failed
+refreshes after a 401 only when told to (`forceRefreshOnFailure`, which also refreshes on every
+403, so the client overrides `requestAsync` to refresh on a 401 alone), so without it a revoke
+that killed a still-valid access token went unnoticed for up to an hour. And gaxios keeps a failed
 refresh's request body, refresh token included, in its error object, which `api.ts` logged:
-log errors through `errorSummary` (`electron/log-safe.ts`), never as objects.
+log errors through `errorSummary` (`electron/log-safe.ts`), never as objects. Electron also logs
+the error object of every rejected `ipcMain.handle`, so `data:`/`auth:` handlers reject through
+`ipcSafe`.
