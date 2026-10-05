@@ -1,11 +1,14 @@
 // ============================================================
 // Mission Control — an action for a mission that is not the running one
 // ------------------------------------------------------------
-// Both actions below act on the mission they NAME, not on the running one.
-// CANCEL_MISSION ends whatever runs (`activeMission: 'none'`) but resets only
-// the mission it names. A stale phone Stop naming the other phase (a second tap
-// during the sync delay) hid the running mission's overlay and left it active
-// with its timer, never to expire, while the log said "Mission stopped".
+// Every action below acts on the mission it NAMES, not on the running one, and
+// the phone names it from each card's broadcast `active` flag, which can be
+// stale (a second tap during the sync delay, a tap just after the mission
+// expired). CANCEL_MISSION ends whatever runs (`activeMission: 'none'`) but
+// resets only the mission it names: a stale Stop naming the other phase hid the
+// running mission's overlay and left it active with its timer, never to expire,
+// while the log said "Mission stopped". Both Resets set the mission they name
+// `active: true` whatever runs, which brought an ended mission back hidden.
 //
 // The reducer AND createLogEntry call this one predicate (the
 // isRefusedByShieldLock pattern), so a refused action changes nothing and
@@ -26,10 +29,15 @@ export function isStaleMissionAction(state: MCState, action: MCAction): boolean 
                 return !state.missions.some(m => m.phase === action.missionPhase && m.active);
             }
             return action.missionPhase !== state.activeMission;
-        // Strict: it sets `active: true` whatever runs. The overlay's 2 s Reset hold,
-        // still in progress when its mission ended, made a hidden mission that never expired.
+        // Strict: both Resets set `active: true` whatever runs. The overlay's 2 s Reset
+        // hold, still in progress when its mission ended, made a hidden mission that
+        // never expired; a stale phone Reset (plain) did the same. And the end of a
+        // mission that is not running means nothing, while the log said "Mission time
+        // adjusted" for it. How far a running one's end may move: missionEndAdjust.ts.
         case 'RESET_MISSION_WITH_TIMER':
-            return action.missionPhase !== state.activeMission;
+        case 'RESET_MISSION':
+        case 'ADJUST_MISSION_END':
+            return state.activeMission === 'none' || action.missionPhase !== state.activeMission;
         default:
             return false;
     }

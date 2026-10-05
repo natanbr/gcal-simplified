@@ -67,7 +67,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // SET_SETTINGS derives the mission window through its deriveMissionWindow).
     // 751 → 754 the same day (+3: END_STALE_MISSION_RUN's case and import, which
     // delegates to store/staleMissionRun.ts, written out normally).
-    'src/mission-control/store/mcReducer.ts': 754,
+    // 754 → 748 on 2026-10-05 (ADJUST_MISSION_END delegates to store/missionEndAdjust.ts,
+    // which owns its cap and is shared with the log).
+    'src/mission-control/store/mcReducer.ts': 748,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
@@ -134,7 +136,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 314 → 319 on 2026-09-29 (+5: END_STALE_MISSION_RUN's log line, so the end of
     // an earlier day's stuck run reaches the audit trail; the sentence lives in
     // store/staleMissionRun.ts).
-    'src/mission-control/store/activityLog.ts': 319,
+    // 319 → 321 on 2026-10-05 (+2: ADJUST_MISSION_END asks the reducer's own decision,
+    // store/missionEndAdjust.ts, and its import, so a refused +/- writes no line).
+    'src/mission-control/store/activityLog.ts': 321,
     // NEW on 2026-09-24 at 302 (was 300): the SETTLE_GAME_TOKEN_CAP union member
     // and its one-line doc comment. Split candidate: MCAction into its own module.
     // 302 → 304 on 2026-09-29: the END_STALE_MISSION_RUN member and its doc comment.

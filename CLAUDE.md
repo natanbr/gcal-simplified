@@ -122,8 +122,12 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   The phone's Stop reaches it through `REMOTE_ALLOWED_ACTIONS`. Guarded by `action-literal-boundary.test.ts`.
   One desktop path still ends a mission: saving a new start time for the RUNNING mission in MC Settings
   (`SET_SETTINGS`). That is kept and logged, "⏹️ … mission ended: its start time was changed in Settings"
-  (open decision, PR 170). A Stop or a full Reset naming a mission that is not the running one is refused
-  by the reducer and the log alike (`isStaleMissionAction`, `mcReducer.stale-mission-action.test.ts`).
+  (open decision, PR 170). A Stop, a Reset (plain or full) or a time adjustment naming a mission that is
+  not the running one is refused by the reducer and the log alike (`isStaleMissionAction`,
+  `mcReducer.stale-mission-action.test.ts`): the phone names it from a card that may be stale. And a time
+  adjustment may make a run at most its own length + 60 min (`MAX_MISSION_EXTENSION_MINS`); past that it
+  is refused, not clamped, through `adjustedMissionDuration` (`store/missionEndAdjust.ts`), which the
+  reducer and the log both ask (`mcReducer.mission-end-cap.test.ts`).
 - **Quick-game window**: games open only between the day's missions — `isQuickGameWindowOpen` in
   `gameWindow.ts`, enforced in the `START_GAME` **and** `CONSUME_CASE` reducer cases (they must
   agree, or redeeming at the boundary burns the goal for a game that is then refused), not only at

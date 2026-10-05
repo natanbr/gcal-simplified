@@ -124,7 +124,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Rollout of v2**: the v2 desktop works only with an `mc-remote` build that speaks protocol v2. The phone app deploys first (old pairings keep working with the installed v1 desktop; a scan of the new QR code gives a v2 pairing), then the desktop release. **The first start of the v2 desktop renews the pairing by itself, once** (a pairing without `remotePairingVersion: 2` gets a new room id and key before the renderer can read it, and the log says "Pairing renewed for signed messages (protocol v2): scan the QR code again on the phone."), because the old key was sent in plain text for months and a signature keyed with it proves nothing. **The phone must re-scan the QR code after the update**; until then it is in the old room and does nothing. The parent is told where they look, not in a console: until the phone's first verified message the Remote tab (⚙️ → 📱 Remote) shows "Remote was re-paired for security. Scan this QR code again on the phone.", and the activity log gets one line, "Remote re-paired for security: scan the QR code again (⚙️ → 📱 Remote)" (source `system`, once per renewal: Mission Control state remembers which renewal it logged, `settings.remotePairingRenewalLogged`, so neither a restart nor CLEAR nor 200 newer lines bring it back; a later renewal gets its own line). A brand-new install and a manual "Regenerate Keys" show neither.
   - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
   - **Only the phone can stop a mission (decided 2026-09-24)**: the phone's Stop sends `CANCEL_MISSION`, which stays on `REMOTE_ALLOWED_ACTIONS`. The desktop has no stop gesture: "— Minimize" only minimizes, a short tap and a long hold alike, because a stop sticks for the rest of the window without moving the shield, so a hold let the child end a mission. "↺ Reset" and its 2 s hold are unchanged (not decided yet). One desktop path still ends a mission: saving a new start time for the **running** mission in MC Settings ends it (no miss, the shield does not move). That is kept, and logged as "⏹️ Morning/Evening mission ended: its start time was changed in Settings", attributed 👤 (open decision for Nathan, PR 170; it used to be silent).
-  - **A Stop or a full Reset for a mission that is not running is refused (2026-09-28)**: a phone Stop naming the other phase (a stale second tap) or a Reset hold that fires after its mission ended changes nothing and writes no log line. The phone's plain Reset (tasks only) is unchanged.
+  - **A Stop, a Reset or a time adjustment for a mission that is not running is refused (2026-09-28; plain Reset and time adjustment 2026-10-05)**: a phone Stop naming the other phase (a stale second tap), a Reset hold that fires after its mission ended, a phone Reset (tasks only) or +/- that lands after its mission ended or names the other phase changes nothing and writes no log line. The phone draws each card from the last broadcast, so its buttons can name a mission that has just ended; a plain Reset used to set that mission active again with nothing running (hidden on the desktop, never expiring, saved across a restart), and a +/- for it wrote "⏱️ Mission time adjusted" for nothing.
+  - **A mission can be made at most 60 min longer than its own length (2026-10-05)**: the phone's +1 / +5 / +10 and the overlay's +5 bar hold may take a run up to its window's length (Settings → Duration) + 60 min, so a 60-min evening up to 120 min. A press that would go past that is refused whole (not clamped): nothing changes and no line is written, so the phone's countdown simply does not move. Shortening is always allowed, down to the 1-minute floor; a −5 at the floor changes nothing and writes no line. A full Reset restarts the run at its window's length, so the 60 min are available again. Before, there was no ceiling: one stale or tampered payload (`deltaMinutes: 1e9`) made a mission that never ended, blocking every other mission and the quick-game window, saved across a restart.
   - **Shield −1 / +1 buttons (shipped in mc-remote 2026-09-28)**: the phone's Shield card has "−1 shield" and "+1 shield". They send `ADJUST_SHIELD` with `delta: -1` / `delta: 1`, which the desktop accepts (allowlist, validator, reducer). Details under Mission Streak Shield → Parent-adjustable shields.
   - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
   - **Global Listener**: The remote action listener is registered globally in the application shell. This guarantees that remote commands are processed continuously, even when viewing the calendar or when the mission overlay is active.
@@ -2078,3 +2079,37 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   both misses counted, a relaunch inside the next evening's window, a relaunch at 00:10 mid-run, a late
   timer after midnight for an evening finished early). Red before the fix: 8 reducer and 5 scheduler
   cases.
+
+### 2026-10-05 Phone mission buttons: a stale Reset or +/- is refused, and +/- has a ceiling
+
+- **Plain Reset.** The phone's "Reset" (tasks only, `RESET_MISSION`) was left out of the 2026-09-28
+  refusal on the reasoning that the phone sends it only for the running mission. But the phone picks
+  the mission from its last broadcast, so a tap just after the mission expired, or right behind the
+  phone's own Stop, named a mission that had ended, and the desktop set it active again with nothing
+  running: hidden on the desktop, never expiring (the expiry check follows the running mission),
+  shown as running on the phone, and saved across a restart. It is now refused like the full Reset:
+  nothing changes. A plain Reset still writes no log line, accepted or refused (unchanged).
+- **+/- for a mission that is not running** is refused too. The desktop already ignored it, but the
+  log wrote "⏱️ Mission time adjusted (+5m)" for nothing; now neither moves.
+- **A ceiling for +/-.** A run may last at most its own length (its window, Settings → Duration) +
+  60 min (`MAX_MISSION_EXTENSION_MINS`, `store/missionEndAdjust.ts`). A press past it is refused
+  whole, not clamped, so the log never names a move that did not happen; the phone's countdown just
+  does not move. Shortening is always allowed (a run saved longer before this change can still be
+  shortened), and a −5 at the 1-minute floor now changes nothing and writes no line. Why "own length
+  + 60": it is measured from the run, so the reducer stays pure (no clock) and a run started by hand
+  outside its window gets the same room as one the scheduler started; it gives the 10-second test
+  duration a sane ceiling where a multiple of the length would not; and an hour is six presses of the
+  phone's +10. A full Reset restarts at the window's length, so the hour is available again. The
+  phone's +1e9 (finite, so the payload validator lets it through) used to make a mission that never
+  ended. The same rule covers the overlay's +5 bar hold.
+- One predicate for each refusal, asked by the reducer and the log alike: `isStaleMissionAction`
+  (which mission) and `adjustedMissionDuration` (how far). The phone app needs no change.
+- Tests: new cases in `store/__tests__/mcReducer.stale-mission-action.test.ts` (plain Reset and +/-
+  with nothing running, for the other mission, for a mission stuck active; the predicate per action
+  type), `hooks/useMissionScheduler.stale-phone.test.tsx` (over the real remote channel: a Reset after
+  the evening expired, then a relaunch; a Reset right behind the phone's Stop; a +10 after it
+  expired) and `store/__tests__/mcReducer.mission-end-cap.test.ts` (inside the cap, exactly at it,
+  past it, refused whole, +1e9 by reducer and over the remote channel, the 1-minute floor, a run saved
+  over the cap, the 10-second duration, a full Reset, a relaunch at the cap, and both files asking the
+  one decision). The old case "does not cover the plain RESET_MISSION" pinned the bug and was turned
+  round. Red before the fix: 8 stale-action, 3 phone and 10 cap cases.

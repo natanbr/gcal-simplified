@@ -11,6 +11,7 @@ import { mcReducer, selectTotalWealth } from './mcReducer';
 import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { isStaleMissionAction } from './staleMissionAction';
+import { adjustedMissionDuration } from './missionEndAdjust';
 import { reschedulesRunningMission } from './missionReschedule';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
@@ -230,6 +231,7 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         case 'RESET_MISSION_WITH_TIMER':
             return { id, timestamp: now, icon: '🔄', message: `Mission fully reset (tasks + timer)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'ADJUST_MISSION_END':
+            if (adjustedMissionDuration(state, action) === null) return null; // refused: nothing moved
             return { id, timestamp: now, icon: '⏱️', message: `Mission time adjusted (${action.deltaMinutes > 0 ? '+' : ''}${action.deltaMinutes}m)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'ADD_RESPONSIBILITY_POINT': {
             const resp = state.responsibilities.find(r => r.id === action.taskId);

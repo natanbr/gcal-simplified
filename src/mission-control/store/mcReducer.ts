@@ -28,6 +28,7 @@ import { deriveMissionWindow, missionDurationMins, withoutInvalidMissionTimes } 
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
+import { adjustedMissionDuration } from './missionEndAdjust';
 import { endStaleMissionRun } from './staleMissionRun';
 import { reschedulesRunningMission, startTimeChanged } from './missionReschedule';
 import { CREAM_TASK_ID, syncCreamTask, withSchoolBag } from './routineTasks';
@@ -453,16 +454,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             return applyMissionTimeout(state, action.missionPhase, actionInstant(action));
 
         case 'ADJUST_MISSION_END': {
-            return {
-                ...state,
-                missions: state.missions.map(m => {
-                    if (m.phase !== action.missionPhase) return m;
-                    // Ignore adjustments if mission is not actively running
-                    if (!m.active || !m.startedAt || m.durationMins == null) return m;
-                    
-                    return { ...m, durationMins: Math.max(1, m.durationMins + action.deltaMinutes) };
-                }),
-            };
+            const durationMins = adjustedMissionDuration(state, action); // activityLog.ts mirrors this
+            if (durationMins === null) return state;
+            return { ...state, missions: state.missions.map(m => (m.phase === action.missionPhase ? { ...m, durationMins } : m)) };
         }
 
         case 'CONSUME_CASE': {
