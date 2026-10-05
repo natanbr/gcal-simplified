@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { addDays, addMonths, format, isSameDay, isWeekend } from 'date-fns';
 import { SettingsModal } from '../features/settings/components/SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,12 +7,12 @@ import { EventDetailDrawer } from './EventDetailDrawer';
 import { DayColumn } from './DayColumn';
 import { EventCard } from './EventCard';
 import { MonthlyView } from './MonthlyView';
-import { AppEvent, AppTask, WeatherData, UserConfig } from '../types';
+import { AppEvent } from '../types';
 import { partitionEventsIntoHourlySlots } from '../utils/timeBuckets';
 import { WeatherDashboard } from '../features/weather/components/WeatherDashboard';
 import { getWeatherIcon } from '../utils/weatherIcons';
 import { getWeekStartDate, canNavigateToPreviousWeek, isCurrentWeek } from '../utils/weekNavigation';
-import { getMonthViewDates, isCurrentMonth, canNavigateBackMonth } from '../utils/monthUtils';
+import { getMonthViewDates, isCurrentMonth, canNavigateBackMonth, periodAnchor } from '../utils/monthUtils';
 import { useTheme } from '../hooks/useTheme';
 import { useCurrentDate } from '../hooks/useCurrentDate';
 import { UpdateNotification } from './UpdateNotification';
@@ -20,7 +20,8 @@ import { splitMultiDayEvents } from '../utils/eventProcessing';
 
 const DAYS_TO_SHOW = 7;
 
-import { useCalendarData } from '../hooks/useCalendarData';
+import { useCalendarData, monthKeyOf } from '../hooks/useCalendarData';
+import { useDashboardLoad } from '../hooks/useDashboardLoad';
 
 interface DashboardProps {
   onLogout?: () => void;
@@ -30,13 +31,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
-  const [tasks, setTasks] = useState<AppTask[]>([]);
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  
-  const [config, setConfig] = useState<UserConfig>({ calendarIds: [], taskListIds: [] });
-  const [loading, setLoading] = useState(true);
-  const [loadingMessage, setLoadingMessage] = useState('Syncing...');
-  const [error, setError] = useState<string | null>(null);
+  const { config, weekStartDay, tasks, weather, loading, loadingMessage, generation, reload, readOptional } = useDashboardLoad();
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
@@ -45,11 +40,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   useTheme(config, weather);
 
   const today = useCurrentDate();
-  const startDate = useMemo(() => getWeekStartDate(today, weekOffset, config.weekStartDay), [today, weekOffset, config.weekStartDay]);
+  const startDate = useMemo(() => getWeekStartDate(today, weekOffset, weekStartDay), [today, weekOffset, weekStartDay]);
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
-  const monthDays = useMemo(() => getMonthViewDates(today, monthOffset, config.weekStartDay), [today, monthOffset, config.weekStartDay]);
+  const monthDays = useMemo(() => getMonthViewDates(today, monthOffset, weekStartDay), [today, monthOffset, weekStartDay]);
 
-  const { events, isEventsLoading, isBackgroundLoading, error: eventsError, fetchEventsForMonth, refreshEvents } = useCalendarData();
+  // The month whose events cover what is shown; none before the settings are read (generation 0).
+  const visibleMonth = generation > 0 ? monthKeyOf(periodAnchor(viewMode, today, weekOffset, monthOffset, weekStartDay)) : null;
+  const { events, activity, error: currentError, hasLoaded, refresh } = useCalendarData(visibleMonth, generation);
 
   const processedEvents = useMemo(() => splitMultiDayEvents(events), [events]);
 
@@ -115,90 +112,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   }, [days, eventsByDay, config.activeHoursStart, config.activeHoursEnd]);
 
 
-  // A date inside the currently visible week/month — used to fetch the correct month's grid
-  const representativeDate = useMemo(() => (
-      viewMode === 'week'
-        ? getWeekStartDate(today, weekOffset, config.weekStartDay)
-        : addMonths(today, monthOffset)
-  ), [viewMode, today, weekOffset, monthOffset, config.weekStartDay]);
-
-  const fetchData = useCallback(async (isInitial: boolean = false) => {
-      setLoading(true);
-      setError(null);
-      try {
-          if (isInitial) {
-             setLoadingMessage('Fetching Events...');
-          }
-          await fetchEventsForMonth(representativeDate, config.weekStartDay);
-
-          if (isInitial) {
-             if (!window.ipcRenderer) throw new Error('ipcRenderer unavailable');
-
-             setLoadingMessage('Fetching Tasks...');
-             const fetchedTasks = await window.ipcRenderer.invoke('data:tasks');
-             setTasks(fetchedTasks as AppTask[]);
-
-             setLoadingMessage('Updating Weather...');
-             const fetchedWeather = await window.ipcRenderer.invoke('weather:get');
-             setWeather(fetchedWeather as WeatherData);
-
-             setLoadingMessage('Loading Settings...');
-             const fetchedSettings = await window.ipcRenderer.invoke('settings:get').catch(() => null); // settings file busy: keep the current config, the data loaded fine
-             if (fetchedSettings) setConfig(fetchedSettings as UserConfig);
-          }
-      } catch (err) {
-          console.error("Failed to fetch data", err);
-          setError("Failed to load calendar data.");
-      } finally {
-          setLoading(false);
-      }
-  }, [representativeDate, config.weekStartDay, fetchEventsForMonth]);
-
-  // Keep a stable reference so mount/auth effects don't refire on every
-  // navigation (fetchData identity changes with the visible date).
-  const fetchDataRef = useRef(fetchData);
-  fetchDataRef.current = fetchData;
-
-  // Initial Data Load — run once on mount. Subsequent navigation is handled
-  // by the soft-reload effect below (cached, no full loading state).
-  useEffect(() => {
-    fetchDataRef.current(true);
-  }, []);
-
-  // Listen for login success (e.g., from reconnect in Settings) to refetch data
-  useEffect(() => {
-    if (!window.ipcRenderer) return;
-    const cleanup = window.ipcRenderer.on('auth:success', () => {
-        fetchDataRef.current(true);
-    });
-    return () => cleanup();
-  }, []);
-
-  // Soft reload events on date change (uses cache)
-  useEffect(() => {
-    fetchEventsForMonth(representativeDate, config.weekStartDay);
-  }, [representativeDate, fetchEventsForMonth, config.weekStartDay]);
-
   // Periodic global refresh
   useEffect(() => {
-    const interval = setInterval(() => {
-       refreshEvents(representativeDate, config.weekStartDay);
-
-       // Also background refresh other data
-       const ipc = window.ipcRenderer;
-       if (ipc) {
-           ipc.invoke('data:tasks').then(fetchedTasks => setTasks(fetchedTasks as AppTask[])).catch(console.error);
-           ipc.invoke('weather:get').then(fetchedWeather => setWeather(fetchedWeather as WeatherData)).catch(console.error);
-       }
-    }, 5 * 60 * 1000);
+    const interval = setInterval(() => { refresh(); void readOptional(); }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [refreshEvents, representativeDate, config.weekStartDay]);
+  }, [refresh, readOptional]);
 
+  // The header's one status: its bar, text and icon all follow it.
+  const status = loading ? { text: loadingMessage, background: false }
+    : activity === 'loading' ? { text: 'Fetching Events...', background: false }
+    : activity === 'refreshing' ? { text: 'Refreshing...', background: true }
+    : null;
 
-  const isInitialLoading = (loading || isEventsLoading) && events.length === 0 && !error && !eventsError;
-  const currentError = error || eventsError;
-
-  if (isInitialLoading) {
+  // The full-screen spinner only until the first week can be shown; after that the header indicator.
+  if (!hasLoaded) {
       return (
           <div className="h-screen w-screen bg-white dark:bg-zinc-950 flex flex-col items-center justify-center text-zinc-500 gap-4 transition-colors duration-300">
               <RefreshCw className="animate-spin" size={48} />
@@ -278,8 +205,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
             </div>
             <motion.div 
                 animate={{ 
-                    opacity: (loading || isEventsLoading || isBackgroundLoading) ? 1 : 0,
-                    y: (loading || isEventsLoading || isBackgroundLoading) ? 0 : -5
+                    opacity: status ? 1 : 0,
+                    y: status ? 0 : -5
                 }}
                 transition={{ duration: 0.2 }}
                 className="flex flex-col items-center w-full max-w-[200px] gap-1"
@@ -291,10 +218,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                         mounted), so without this guard these CSS loops — one of them
                         animating `width`, i.e. layout-driven — would run forever on an
                         idle Calendar view. */}
-                    <div className={`h-full bg-family-cyan ${(loading || isEventsLoading || isBackgroundLoading) ? 'animate-sync-bar' : ''}`} />
+                    <div className={`h-full bg-family-cyan ${status ? 'animate-sync-bar' : ''}`} />
                 </div>
-                <span className={`text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 ${(loading || isEventsLoading || isBackgroundLoading) ? 'animate-pulse' : ''}`}>
-                    {isBackgroundLoading && !isEventsLoading && !loading ? 'Refreshing...' : (loadingMessage || 'Syncing...')}
+                <span className={`text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 ${status ? 'animate-pulse' : ''}`}>
+                    {status?.text}
                 </span>
             </motion.div>
         </div>
@@ -308,9 +235,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
 
              <UpdateNotification />
 
-             {(loading || isEventsLoading || isBackgroundLoading) && (
-                 <div title={isBackgroundLoading && !isEventsLoading ? "Background Refreshing..." : "Loading..."} className="flex items-center">
-                    <RefreshCw size={16} className={`text-zinc-600 ${isBackgroundLoading && !isEventsLoading ? 'animate-pulse' : 'animate-spin'}`} />
+             {status && (
+                 <div title={status.background ? "Background Refreshing..." : "Loading..."} className="flex items-center">
+                    <RefreshCw size={16} className={`text-zinc-600 ${status.background ? 'animate-pulse' : 'animate-spin'}`} />
                  </div>
              )}
              {currentError && <span className="text-red-500 text-xs font-bold">{currentError}</span>}
@@ -492,7 +419,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
         {showSettings && (
             <SettingsModal 
                 onClose={() => setShowSettings(false)} 
-                onSave={() => fetchData(true)}
+                onSave={reload}
                 onLogout={onLogout}
             />
         )}

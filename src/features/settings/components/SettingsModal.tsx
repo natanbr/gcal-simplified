@@ -9,7 +9,7 @@ import { loadFailureMessage, saveFailureMessage, SETTINGS_NOT_SAVED } from './se
 
 interface SettingsModalProps {
     onClose: () => void;
-    onSave: () => void; // Trigger a refresh
+    onSave: (saved: UserConfig) => void; // what was just saved, for the Dashboard to apply without reading the settings again
     onLogout?: () => void; // Trigger a logout and re-login
 }
 
@@ -64,7 +64,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onSave, o
         try {
             const result = await window.ipcRenderer.invoke('settings:save', config) as SaveSettingsResult;
             if (!result.ok) { setSaveError(saveFailureMessage(result)); return; }
-            onSave();
+            onSave(config);
             onClose();
         } catch (e) {
             console.error("Failed to save settings", e);

@@ -255,7 +255,9 @@ pass, and update this table when it merges.
 | 15 | After picking, the new goal renders pushed down until the picker's exit ends | unconfirmed | 3.8.3 |
 | 16 | The bank trap overlay stays ~10 s instead of 5 s | open, cosmetic | 3.8.1 |
 | 17 | Overlapping week cards overhang their day column by ~3 px | open, cosmetic | 3.3.4 |
-| S1 | A weather failure at launch shows "Failed to load calendar data." and leaves settings unloaded (`Dashboard.tsx`: `weather:get` sits before `settings:get` in one `try`) | suspected from code, not yet seen | 3.3.14 |
+| 18 | "Syncing with Google..." covers the week again at launch and on the first Next Week into a month not loaded yet (found by the PR 186 review) | fixed 2026-10-04, PR 192, not yet on `main` | 3.3.10, 3.3.14 |
+| 19 | Days on screen with no events: the request ended at the start of its last day (the 7th column of a "today" week on the 30th and 31st, the month view's last cell), and in "today" mode from Next Month on it covered other days than the grid (found by the PR 192 review) | fixed 2026-10-04 with bug 18 (same cause: the request followed the week start), PR 192, not yet on `main` | 3.3.10 |
+| S1 | A weather failure at launch shows "Failed to load calendar data." and leaves settings unloaded (`Dashboard.tsx`: `weather:get` sat before `settings:get` in one `try`) | confirmed by a unit test, fixed 2026-10-04 with bug 18 (same cause), PR 192, not yet on `main` | 3.3.14 |
 
 **Decisions for Nathan**
 - **D1 A mission starting under an open game** (bug 2). End the game when the mission starts (refund

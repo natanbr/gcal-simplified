@@ -95,8 +95,12 @@ Contains global, cross-domain UI components.
 * `MonthlyView.tsx`, `DayColumn.tsx`: Calendar rendering specifics.
 
 ### `src/hooks/` (Global State & API Hooks)
-Plain hooks, no context providers (`useCalendarData`, `useTheme`, `useCurrentDate`).
-* `useCalendarData.ts`: Central hook for syncing with external calendar APIs.
+Plain hooks, no context providers (`useCalendarData`, `useDashboardLoad`, `useTheme`, `useCurrentDate`).
+* `useCalendarData.ts`: the visible month's events, requested and cached per month (`fetchRangeOf`,
+  whatever the week start); a new `generation` refetches and drops older answers.
+* `useDashboardLoad.ts`: the Dashboard's settings (read first, or the config Save just wrote), tasks
+  and weather, the one place an absent week start becomes `'today'`, and the `generation` that
+  Save and reconnect bump.
 
 ### `src/utils/` (Shared Helpers)
 Generic, pure functions used across multiple domains.

@@ -1,103 +1,89 @@
-import { useState, useCallback, useRef } from 'react';
-import { startOfMonth, startOfWeek, addDays } from 'date-fns';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { addDays, addMonths } from 'date-fns';
 import { AppEvent, SerializedAppEvent } from '../types';
 
-interface CacheEntry {
-    events: AppEvent[];
-    lastFetched: number;
+/** The visible month's events: none yet and being read (`loading`), or shown and being re-read (`refreshing`). */
+export type CalendarActivity = 'idle' | 'loading' | 'refreshing';
+
+/** Events are requested and cached per month, keyed `YYYY-MM`. */
+export const monthKeyOf = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+/**
+ * A month's request: from a week before the month to two weeks after it, end exclusive (Google's
+ * timeMax is). Any week starting in the month and any 42-day grid of it fall inside, whatever the
+ * week start, so a display setting never changes what is fetched (useCalendarData.range.test.ts).
+ */
+export function fetchRangeOf(month: string): { timeMin: Date; timeMax: Date } {
+    const [year, monthNumber] = month.split('-').map(Number);
+    const first = new Date(year, monthNumber - 1, 1);
+    return { timeMin: addDays(first, -7), timeMax: addDays(addMonths(first, 1), 15) };
 }
 
-export function useCalendarData() {
-    // Key format: YYYY-MM
-    const eventCacheRef = useRef<Record<string, CacheEntry>>({});
-    const [events, setEvents] = useState<AppEvent[]>([]);
+interface MonthEntry { events?: AppEvent[]; failed?: boolean }
 
-    // UI state
-    const [isEventsLoading, setIsEventsLoading] = useState(false);
-    const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+/**
+ * The events of `visibleMonth` (a `monthKeyOf` key; null fetches nothing). A new `generation`
+ * refetches the month even while a request for it is in flight, and an answer from an older
+ * generation is dropped: a Save or a reconnect may have changed what the main process reads.
+ */
+export function useCalendarData(visibleMonth: string | null, generation: number) {
+    const [months, setMonths] = useState<Record<string, MonthEntry>>({});
+    const [pending, setPending] = useState<Record<string, number>>({}); // month → generation in flight
+    const newest = useRef<Record<string, number>>({});                 // month → newest generation asked for
+    const inFlight = useRef(new Set<string>());                        // `${month}@${generation}`
 
-    // Prevents duplicate concurrent fetches for the same month
-    const fetchingMonthsRef = useRef<Set<string>>(new Set());
-
-    const fetchEventsForMonth = useCallback(async (date: Date, weekStartDayStr: string = 'sunday') => {
-        // Find the visible grid for this month
-        const weekStartDay = weekStartDayStr === 'monday' ? 1
-            : weekStartDayStr === 'today' ? date.getDay()
-                : 0;
-
-        const monthStart = startOfMonth(date);
-        const gridStart = startOfWeek(monthStart, { weekStartsOn: weekStartDay as 0 | 1 | 2 | 3 | 4 | 5 | 6 });
-        // The MonthlyView grid is always 42 days (6 weeks) long.
-        // We must fetch this exact range so that trailing days in the 6th week show events.
-        const gridEnd = addDays(gridStart, 41);
-
-        const cacheKey = `${date.getFullYear()}-${date.getMonth()}-${weekStartDay}`;
-
-        setError(null);
-
-        const hasCache = !!eventCacheRef.current[cacheKey];
-
-        if (hasCache) {
-            // Serve from cache immediately
-            setEvents(eventCacheRef.current[cacheKey].events);
-            setIsBackgroundLoading(true);
-        } else {
-            setIsEventsLoading(true);
-            setEvents([]); // Clear while loading new initial data
-        }
-
-        // Avoid concurrent fetches for the same key
-        if (fetchingMonthsRef.current.has(cacheKey)) {
-            return;
-        }
-        fetchingMonthsRef.current.add(cacheKey);
-
+    const request = useCallback(async (month: string, gen: number) => {
+        const id = `${month}@${gen}`;
+        if (gen < (newest.current[month] ?? gen) || inFlight.current.has(id)) return;
+        inFlight.current.add(id);
+        newest.current[month] = gen;
+        setPending(p => ({ ...p, [month]: gen }));
+        let answer: AppEvent[] | null = null;
         try {
-            if (!window.ipcRenderer) throw new Error('ipcRenderer not available');
-            const fetchedEvents = await window.ipcRenderer.invoke(
-                'data:events',
-                gridStart.toISOString(),
-                gridEnd.toISOString()
-            ) as SerializedAppEvent[];
-
-            const hydratedEvents: AppEvent[] = fetchedEvents.map((e: SerializedAppEvent) => ({
-                ...e,
-                start: new Date(e.start),
-                end: new Date(e.end)
-            }));
-
-            // Update cache and ref
-            const newCacheEntry = {
-                events: hydratedEvents,
-                lastFetched: Date.now()
-            };
-
-            eventCacheRef.current[cacheKey] = newCacheEntry;
-
-            setEvents(hydratedEvents);
+            const ipc = window.ipcRenderer;
+            if (!ipc) throw new Error('ipcRenderer not available');
+            const { timeMin, timeMax } = fetchRangeOf(month);
+            const fetched = await ipc.invoke('data:events', timeMin.toISOString(), timeMax.toISOString()) as SerializedAppEvent[];
+            answer = fetched.map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
         } catch (err) {
-            console.error("Failed to fetch events", err);
-            setError("Failed to load calendar events.");
+            console.error('Failed to fetch events', err);
         } finally {
-            setIsEventsLoading(false);
-            setIsBackgroundLoading(false);
-            fetchingMonthsRef.current.delete(cacheKey);
+            inFlight.current.delete(id);
         }
+        if (gen < newest.current[month]) return; // asked for again since: this answer is stale
+        setMonths(m => ({ ...m, [month]: answer ? { events: answer } : { ...m[month], failed: true } }));
+        setPending(p => {
+            if (p[month] !== gen) return p;
+            const rest = { ...p };
+            delete rest[month];
+            return rest;
+        });
     }, []);
 
-    // Force a full background refresh of the current visible data
-    const refreshEvents = useCallback((date: Date, weekStartDayStr: string = 'sunday') => {
-        // Since our logic currently always fetches, just calling fetchEventsForMonth does the job.
-        return fetchEventsForMonth(date, weekStartDayStr);
-    }, [fetchEventsForMonth]);
+    useEffect(() => {
+        if (visibleMonth) void request(visibleMonth, generation);
+    }, [visibleMonth, generation, request]);
+
+    /** Re-reads the visible month in the background; a request already in flight for it answers instead. */
+    const refresh = useCallback(() => {
+        if (visibleMonth) void request(visibleMonth, generation);
+    }, [visibleMonth, generation, request]);
+
+    const entry = visibleMonth ? months[visibleMonth] : undefined;
+    // A month not loaded yet keeps the events last shown (requirements → Enhanced Loading Indicator).
+    const [shown, setShown] = useState<AppEvent[]>([]);
+    if (entry?.events && entry.events !== shown) setShown(entry.events);
+    const events = entry?.events ?? shown;
+    const activity: CalendarActivity = visibleMonth && pending[visibleMonth] !== undefined
+        ? (entry?.events ? 'refreshing' : 'loading')
+        : 'idle';
 
     return {
         events,
-        isEventsLoading,
-        isBackgroundLoading,
-        error,
-        fetchEventsForMonth,
-        refreshEvents
+        activity,
+        error: entry?.failed ? 'Failed to load calendar events.' : null,
+        /** The first answer, or failure, is in: from then on the week stays on screen. */
+        hasLoaded: Object.keys(months).length > 0,
+        refresh,
     };
 }

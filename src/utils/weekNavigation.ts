@@ -1,11 +1,10 @@
 import { startOfWeek, addWeeks } from 'date-fns';
-
-export type WeekStartDay = 'sunday' | 'monday' | 'today';
+import type { WeekStartDay } from '../types';
 
 /**
  * Get the start date for a week view
  */
-export function getWeekStartDate(referenceDate: Date, weekOffset: number, weekStartDay: WeekStartDay = 'today'): Date {
+export function getWeekStartDate(referenceDate: Date, weekOffset: number, weekStartDay: WeekStartDay): Date {
     if (weekStartDay === 'today' && weekOffset === 0) {
         return referenceDate;
     }
