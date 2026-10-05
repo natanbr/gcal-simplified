@@ -23,6 +23,7 @@ import { productionSources, readSource, repoRoot, toRepoPath } from './helpers/s
 /** Test kits beside the code they fake. Adding one is a deliberate edit. */
 const TEST_SUPPORT = [
     'electron/authTestKit.ts',
+    'src/components/calendarTestKit.ts',
     'src/mission-control/games/blocks/dragFixtures.ts',
     'src/mission-control/games/blocks/dragTestKit.ts',
     'src/mission-control/games/quiz/quizTestKit.ts',

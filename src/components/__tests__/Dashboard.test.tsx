@@ -4,31 +4,16 @@
 // ============================================================
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest';
 import { Dashboard } from '../Dashboard';
+import { installCalendarIpc, settle, type CalendarIpc } from '../calendarTestKit';
 
-// Mock ipcRenderer (Electron) so Dashboard doesn't hang on auth
-const mockIpcRenderer = {
-    invoke: vi.fn(),
-    on: vi.fn().mockReturnValue(() => {}),
-};
-
-beforeEach(() => {
-    Object.defineProperty(globalThis, 'ipcRenderer', {
-        value: mockIpcRenderer,
-        writable: true,
-        configurable: true,
-    });
-
-    mockIpcRenderer.invoke.mockImplementation((channel: string) => {
-        if (channel === 'auth:check') return Promise.resolve(true);
-        if (channel === 'settings:get') return Promise.resolve({ calendarIds: [], taskListIds: [] });
-        if (channel === 'data:tasks') return Promise.resolve([]);
-        if (channel === 'weather:get') return Promise.resolve(null);
-        return Promise.resolve(null);
-    });
-});
+// The shared Calendar IPC fake: data:events answers a list, so these tests run
+// the Dashboard's normal path rather than a failed fetch.
+let ipc: CalendarIpc;
+beforeEach(() => { ipc = installCalendarIpc(); });
+afterEach(() => { delete window.ipcRenderer; });
 
 vi.mock('framer-motion', async () => {
     const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion');
@@ -94,19 +79,15 @@ describe('Dashboard — view mode controls', () => {
 // events, tasks and weather loaded fine, so that must not read as a failed load.
 describe('Dashboard — settings file busy at start-up', () => {
     it('keeps the loaded calendar without an error when settings:get fails', async () => {
-        mockIpcRenderer.invoke.mockImplementation((channel: string) => {
-            if (channel === 'settings:get') return Promise.reject(new Error('settings file is busy'));
-            if (channel === 'data:events' || channel === 'data:tasks') return Promise.resolve([]);
-            return Promise.resolve(null);
-        });
+        ipc.failing.add('settings:get');
         const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         onTestFinished(() => quiet.mockRestore());
 
         render(<Dashboard />);
-        await waitFor(() => expect(mockIpcRenderer.invoke).toHaveBeenCalledWith('settings:get'));
-        await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+        await settle();
 
-        expect(screen.queryByText('Failed to load calendar data.')).toBeNull();
+        expect(ipc.requests('settings:get')).toHaveLength(1);
+        expect(screen.queryByText(/Failed to load/)).toBeNull();
         expect(screen.getByTestId('settings-button')).toBeTruthy();
     });
 });
