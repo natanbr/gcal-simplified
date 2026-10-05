@@ -35,6 +35,9 @@ export interface TaskListSource {
     updated: string;
 }
 
+/** The first day of the week view. A display setting only: the events request does not depend on it. */
+export type WeekStartDay = 'sunday' | 'monday' | 'today';
+
 export interface UserConfig {
     calendarIds: string[];
     taskListIds: string[];
@@ -49,7 +52,7 @@ export interface UserConfig {
     sleepStart?: number;     // 0-23 (Default 22)
     sleepEnd?: number;       // 0-23 (Default 6)
 
-    weekStartDay?: 'sunday' | 'monday' | 'today';
+    weekStartDay?: WeekStartDay; // absent means 'today', as in electron/store.ts
 }
 
 /** Why the main process wrote nothing (mirrors electron/store.ts WriteResult).

@@ -93,9 +93,11 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 643 → 640 on 2026-09-23 (the picker's cost/enabled reads moved into
     // rewardCatalogue.ts's rewardCost / isRewardEnabled, shared with the reducer).
     'src/mission-control/components/GoalPedestal.tsx': 640,
-    // 504 → 478 on 2026-10-05 (the launch load reads settings first and no longer
-    // needs the error state or the fetchData ref; the events effect does the fetching).
-    'src/components/Dashboard.tsx': 478,
+    // 504 → 478 on 2026-10-04 (the launch load reads settings first and no longer
+    // needs the error state or the fetchData ref; the events effect does the fetching),
+    // then 478 → 431 the same day (settings, tasks and weather loads moved to
+    // hooks/useDashboardLoad.ts; useCalendarData fetches the visible month itself).
+    'src/components/Dashboard.tsx': 431,
     // 493 → 481 on 2026-09-24 (the Minimize long-press that stopped a mission is
     // gone: only the phone stops one; the button now only minimizes).
     // 481 → 482 the same day (review fix: Minimize fires only for a press that began

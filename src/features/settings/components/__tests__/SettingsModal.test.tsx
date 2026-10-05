@@ -282,6 +282,7 @@ describe('SettingsModal', () => {
 
             await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
             expect(onSave).toHaveBeenCalledTimes(1);
+            expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ calendarIds: ['cal-1'] })); // the Dashboard applies it without a read
             expect(mockInvoke).toHaveBeenCalledWith('settings:save', expect.objectContaining({ calendarIds: ['cal-1'] }));
         });
 

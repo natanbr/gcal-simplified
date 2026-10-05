@@ -1,11 +1,11 @@
 import { startOfMonth, startOfWeek, addMonths, addDays, isSameMonth } from 'date-fns';
-
-export type WeekStartDay = 'sunday' | 'monday' | 'today';
+import type { WeekStartDay } from '../types';
+import { getWeekStartDate } from './weekNavigation';
 
 /**
  * Get the start date for the monthly grid (7x5)
  */
-export function getMonthViewStartDate(referenceDate: Date, monthOffset: number, weekStartDay: WeekStartDay = 'sunday'): Date {
+export function getMonthViewStartDate(referenceDate: Date, monthOffset: number, weekStartDay: WeekStartDay): Date {
     const monthDate = addMonths(referenceDate, monthOffset);
     const firstOfMonth = startOfMonth(monthDate);
 
@@ -28,7 +28,7 @@ export function getMonthViewStartDate(referenceDate: Date, monthOffset: number, 
 /**
  * Get all 42 days for a 7x6 monthly grid
  */
-export function getMonthViewDates(referenceDate: Date, monthOffset: number, weekStartDay: WeekStartDay = 'sunday'): Date[] {
+export function getMonthViewDates(referenceDate: Date, monthOffset: number, weekStartDay: WeekStartDay): Date[] {
     const startDate = getMonthViewStartDate(referenceDate, monthOffset, weekStartDay);
 
     const days: Date[] = [];
@@ -37,6 +37,14 @@ export function getMonthViewDates(referenceDate: Date, monthOffset: number, week
     }
 
     return days;
+}
+
+/**
+ * A date inside what the view shows, whose month's events request covers all of it: the week's
+ * first day, or a day of the month shown (useCalendarData.range.test.ts sweeps that claim).
+ */
+export function periodAnchor(view: 'week' | 'month', today: Date, weekOffset: number, monthOffset: number, weekStartDay: WeekStartDay): Date {
+    return view === 'week' ? getWeekStartDate(today, weekOffset, weekStartDay) : addMonths(today, monthOffset);
 }
 
 /**

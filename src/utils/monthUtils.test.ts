@@ -13,7 +13,7 @@ const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
 
 // ── getMonthViewStartDate ─────────────────────────────────────────────────────
 
-describe('getMonthViewStartDate — sunday mode (default)', () => {
+describe('getMonthViewStartDate — sunday mode', () => {
     it('offset 0 returns Sunday of the week containing March 1, 2025', () => {
         // March 1, 2025 is a Saturday → week starts Sunday Feb 23
         const result = getMonthViewStartDate(REF, 0, 'sunday');
@@ -25,12 +25,8 @@ describe('getMonthViewStartDate — sunday mode (default)', () => {
         const result = getMonthViewStartDate(REF, 1, 'sunday');
         expect(fmt(result)).toBe('2025-03-30');
     });
-
-    it('defaults to sunday when weekStartDay is omitted', () => {
-        const explicit = getMonthViewStartDate(REF, 0, 'sunday');
-        const implicit = getMonthViewStartDate(REF, 0);
-        expect(fmt(implicit)).toBe(fmt(explicit));
-    });
+    // No default: the Dashboard resolves an absent week start to 'today' once,
+    // so a per-function default could only disagree with it.
 });
 
 describe('getMonthViewStartDate — monday mode', () => {
