@@ -10,139 +10,30 @@
 // "No access, refresh token, API key or refresh handler callback is set": an
 // empty week with no error on screen.
 //
-// The fake safeStorage behaves like Electron's on Windows: unusable before
-// ready, a reversible cipher after it. The OAuth client is the real
-// google-auth-library one; only Google's token endpoint is faked, on the
-// client's own transporter, so no test can reach the network.
+// Sign-in, sign-out and Google refusing the refresh token are in
+// auth_session.test.ts; the fakes are in authTestKit.ts.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import http from 'node:http';
-import type { Credentials } from 'google-auth-library';
 
-const fake = vi.hoisted(() => {
-    const app = { ready: false };
-    const notReady = () => new Error('safeStorage cannot be used before app is ready');
-    return {
-        app,
-        storeData: new Map<string, unknown>(),
-        safeStorage: {
-            isEncryptionAvailable: vi.fn(() => app.ready),
-            encryptString: vi.fn((plain: string): Buffer => {
-                if (!app.ready) throw notReady();
-                return Buffer.from(`enc:${plain}`, 'utf-8');
-            }),
-            decryptString: vi.fn((cipher: Buffer): string => {
-                if (!app.ready) throw notReady();
-                const text = cipher.toString('utf-8');
-                if (!text.startsWith('enc:')) {
-                    throw new Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.');
-                }
-                return text.slice('enc:'.length);
-            }),
-        },
-        /** When set, the next store read throws it (a file held by antivirus or a backup). */
-        storeReadError: { next: null as Error | null },
-        openExternal: vi.fn(),
-        /** Google's token endpoint (code exchange and refresh). */
-        tokenEndpoint: vi.fn<typeof fetch>(),
-    };
+const { kit, fake } = await vi.hoisted(async () => {
+    const kit = await import('./authTestKit');
+    return { kit, fake: await kit.createAuthFakes() };
 });
 
-vi.mock('electron', () => ({
-    app: { isReady: () => fake.app.ready, getPath: () => '/tmp' },
-    safeStorage: fake.safeStorage,
-    shell: { openExternal: fake.openExternal },
-}));
+vi.mock('electron', () => kit.electronModule(fake));
+vi.mock('electron-store', () => kit.electronStoreModule(fake));
+vi.mock('googleapis', () => kit.googleapisModule(fake));
 
-vi.mock('electron-store', () => ({
-    default: class FakeStore {
-        get = (key: string) => {
-            const error = fake.storeReadError.next;
-            fake.storeReadError.next = null;
-            if (error) throw error;
-            return fake.storeData.get(key);
-        };
-        set = (values: Record<string, unknown>) => {
-            for (const [key, value] of Object.entries(values)) fake.storeData.set(key, value);
-        };
-        delete = (key: string) => { fake.storeData.delete(key); };
-    },
-}));
+const { HOUR, NO_CREDENTIALS, authorization, googleAnswers, readStored, stored } = kit;
+const storeEncrypted = (plain: string) => kit.storeEncrypted(fake, plain);
+const relaunch = () => kit.relaunch(fake);
+const appReady = () => { fake.app.ready = true; };
 
-vi.mock('googleapis', async () => {
-    const { OAuth2Client } = await import('google-auth-library');
-    class OAuth2 extends OAuth2Client {
-        constructor(clientId?: string, clientSecret?: string) {
-            super({ clientId, clientSecret, transporterOptions: { fetchImplementation: fake.tokenEndpoint } });
-        }
-    }
-    return { google: { auth: { OAuth2 } } };
-});
-
-const HOUR = 60 * 60 * 1000;
-const NO_CREDENTIALS = 'No access, refresh token, API key or refresh handler callback is set';
-
-const stored = (): Credentials => ({
-    access_token: 'stored-access',
-    refresh_token: 'stored-refresh',
-    expiry_date: Date.now() + HOUR,
-    token_type: 'Bearer',
-});
-
-function storeEncrypted(plain: string): void {
-    fake.storeData.set('tokens', Buffer.from(`enc:${plain}`, 'utf-8').toString('base64'));
-    fake.storeData.set('isEncrypted', true);
-}
-
-/** Decrypts what the service persisted, failing if it was written in plain text. */
-function readStored(): Credentials {
-    expect(fake.storeData.get('isEncrypted')).toBe(true);
-    const blob = fake.storeData.get('tokens');
-    if (typeof blob !== 'string') throw new Error('expected an encrypted token blob');
-    const plain = Buffer.from(blob, 'base64').toString('utf-8');
-    expect(plain.startsWith('enc:')).toBe(true);
-    const credentials: Credentials = JSON.parse(plain.slice('enc:'.length));
-    return credentials;
-}
-
-/** What main.js does on every launch: import auth.ts while the app is not ready yet. */
-async function relaunch() {
-    fake.app.ready = false;
-    vi.resetModules();
-    const { authService } = await import('./auth');
-    return authService;
-}
-
-function appReady(): void {
-    fake.app.ready = true;
-}
-
-function googleAnswers(body: Record<string, unknown>): void {
-    fake.tokenEndpoint.mockImplementation(async () => new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-    }));
-}
-
-function get(url: URL): Promise<void> {
-    return new Promise((resolve, reject) => {
-        http.get(url, res => { res.resume(); res.on('end', () => resolve()); }).on('error', reject);
-    });
-}
-
-async function authorization(authService: Awaited<ReturnType<typeof relaunch>>): Promise<string | null> {
-    return (await authService.getAuthClient().getRequestHeaders()).get('authorization');
-}
+await relaunch(); // the first import, at collection (see authTestKit.ts)
 
 describe('Google credentials and the app-ready lifecycle', () => {
-    beforeEach(() => {
-        fake.storeData.clear();
-        fake.storeReadError.next = null;
-        fake.app.ready = false;
-        vi.clearAllMocks();
-        fake.tokenEndpoint.mockRejectedValue(new Error('this test expected no call to Google'));
-    });
+    beforeEach(() => kit.resetAuthFakes(fake));
 
     it('importing auth.ts before the app is ready touches no safeStorage method', async () => {
         storeEncrypted(JSON.stringify(stored()));
@@ -164,7 +55,7 @@ describe('Google credentials and the app-ready lifecycle', () => {
 
     it('a relaunch after the access token expired refreshes it with the stored refresh_token and keeps it encrypted', async () => {
         storeEncrypted(JSON.stringify({ ...stored(), access_token: 'expired-access', expiry_date: Date.now() - HOUR }));
-        googleAnswers({ access_token: 'refreshed-access', expires_in: 3600 });
+        googleAnswers(fake, { access_token: 'refreshed-access', expires_in: 3600 });
         const authService = await relaunch();
         appReady();
 
@@ -173,7 +64,7 @@ describe('Google credentials and the app-ready lifecycle', () => {
         expect(refreshBody.get('refresh_token')).toBe('stored-refresh');
         // The tokens listener persisted the refresh, and the refresh response
         // (which carries no refresh_token) did not erase the stored one.
-        expect(readStored()).toMatchObject({ access_token: 'refreshed-access', refresh_token: 'stored-refresh' });
+        expect(readStored(fake)).toMatchObject({ access_token: 'refreshed-access', refresh_token: 'stored-refresh' });
     });
 
     it('isAuthenticated() answers from the credentials the client holds, decrypted once', async () => {
@@ -232,6 +123,18 @@ describe('Google credentials and the app-ready lifecycle', () => {
         await expect(authorization(authService)).rejects.toThrow(NO_CREDENTIALS);
     });
 
+    it('a blob that decrypts to damaged JSON is logged without its text', async () => {
+        storeEncrypted('{"refresh_token":SEEDED-SECRET-77}'); // V8's parse message would quote ~10 characters of it
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const authService = await relaunch();
+        appReady();
+
+        expect(authService.isAuthenticated()).toBe(false);
+        expect(logged).toHaveBeenCalled();
+        expect(JSON.stringify(logged.mock.calls.map(call => call.map(String)))).not.toContain('SEEDED');
+        logged.mockRestore();
+    });
+
     it('before the app is ready, the readers throw instead of answering "signed out"', async () => {
         storeEncrypted(JSON.stringify(stored()));
         const authService = await relaunch();
@@ -254,39 +157,14 @@ describe('Google credentials and the app-ready lifecycle', () => {
         expect(await authorization(authService)).toBe('Bearer stored-access');
     });
 
-    it.each([
-        ['after auth:check said signed out', true],
-        ['before anything read the credentials', false],
-    ])('a sign-in %s is what the client and isAuthenticated() see, stored encrypted', async (_case, checkFirst) => {
-        const authService = await relaunch();
-        appReady();
-        if (checkFirst) expect(authService.isAuthenticated()).toBe(false);
-        googleAnswers({ access_token: 'signed-in-access', refresh_token: 'signed-in-refresh', expires_in: 3600 });
-
-        const signedIn = authService.startAuth();
-        await vi.waitFor(() => expect(fake.openExternal).toHaveBeenCalled());
-        const authUrl = new URL(String(fake.openExternal.mock.calls[0][0]));
-        const callback = new URL(authUrl.searchParams.get('redirect_uri') ?? '');
-        callback.searchParams.set('code', 'one-time-code');
-        callback.searchParams.set('state', authUrl.searchParams.get('state') ?? '');
-        await get(callback);
-        await signedIn;
-
-        expect(authService.isAuthenticated()).toBe(true);
-        expect(await authorization(authService)).toBe('Bearer signed-in-access');
-        expect(readStored()).toMatchObject({ access_token: 'signed-in-access', refresh_token: 'signed-in-refresh' });
-    });
-
-    it('a sign-out leaves no credentials in the client or the store', async () => {
+    it('a token file held at launch stops neither the import nor the next call', async () => {
         storeEncrypted(JSON.stringify(stored()));
-        const authService = await relaunch();
+        fake.storeOpenError.next = Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+
+        const authService = await relaunch(); // the store opens on first use, after ready
         appReady();
+
+        expect(() => authService.isAuthenticated()).toThrow('EBUSY');
         expect(authService.isAuthenticated()).toBe(true);
-
-        authService.logout();
-
-        expect(authService.isAuthenticated()).toBe(false);
-        await expect(authorization(authService)).rejects.toThrow(NO_CREDENTIALS);
-        expect(fake.storeData.has('tokens')).toBe(false);
     });
 });

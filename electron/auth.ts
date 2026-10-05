@@ -1,69 +1,87 @@
-import { app, shell, safeStorage } from 'electron';
-import { google } from 'googleapis';
-import Store from 'electron-store';
+import { app, shell } from 'electron';
 import http from 'http';
 import { AddressInfo } from 'net';
-import { OAuth2Client, Credentials } from 'google-auth-library';
+import type { Credentials } from 'google-auth-library';
 import crypto from 'node:crypto';
-
-interface AuthStore {
-    tokens?: Credentials | string;
-    isEncrypted?: boolean;
-}
-
-const store = new Store<AuthStore>({ name: 'auth-store' });
+import { canAuthorize, clearStoredTokens, readStoredTokens, writeStoredTokens } from './auth-token-store';
+import { GoogleOAuthClient } from './auth-client';
+import { errorSummary } from './log-safe';
 
 const SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/tasks.readonly'
 ];
 
-/** google-auth-library's eagerRefreshThresholdMillis: an access token this close to expiry is refreshed, not sent. */
-const REFRESH_MARGIN_MS = 5 * 60 * 1000;
-
-/**
- * Whether these credentials can authorize a Google call: a refresh token, or an
- * access token the client will still send. An expired access token with no
- * refresh token is not a sign-in (every call fails "No refresh token is set."),
- * and neither is a parsed `42`, `null` or `{}`.
- */
-function canAuthorize(value: unknown): value is Credentials {
-    if (typeof value !== 'object' || value === null) return false;
-    if ('refresh_token' in value && typeof value.refresh_token === 'string' && value.refresh_token !== '') return true;
-    return 'access_token' in value && typeof value.access_token === 'string' && value.access_token !== ''
-        && 'expiry_date' in value && typeof value.expiry_date === 'number'
-        && value.expiry_date > Date.now() + REFRESH_MARGIN_MS;
-}
-
 export class AuthService {
-    private oauth2Client: OAuth2Client;
+    private oauth2Client: GoogleOAuthClient;
     private isAuthInProgress: boolean = false;
     private credentialsLoaded = false;
+    private readonly signedOutListeners = new Set<() => void>();
 
     constructor() {
-        // These will be loaded from env vars or a separate config file
-        // For now, we expect them to be available in process.env
-        this.oauth2Client = new google.auth.OAuth2(
+        this.oauth2Client = this.newClient();
+    }
+
+    /**
+     * One client per sign-in: a sign-out, or Google refusing the grant, replaces
+     * it, and a client that is no longer current is ignored. A token refresh
+     * still in flight when the user clicks Reconnect then lands on a client
+     * nobody uses. Ignoring its 'tokens' event alone would not do: the library
+     * installs the refresh on its client after the event, with the refresh token
+     * it finds there (none, after a sign-out), so the old account came back for
+     * an hour on an access token that could not be renewed.
+     */
+    private newClient(): GoogleOAuthClient {
+        const client: GoogleOAuthClient = new GoogleOAuthClient(
             process.env.GOOGLE_CLIENT_ID,
-            process.env.GOOGLE_CLIENT_SECRET
+            process.env.GOOGLE_CLIENT_SECRET,
+            () => this.refused(client),
         );
 
         // google-auth-library refreshes the access token in memory and never
         // tells the store about it. This listener persists every refresh, so the
         // stored blob stays current and a rotated refresh_token survives a
-        // restart. (It was once credited with the "sign in again every few days"
-        // symptom; the more likely cause was the credentials never loading on a
-        // relaunch, fixed 2026-10-01: see ensureCredentialsLoaded.)
-        // It runs inside the library's synchronous emit, before the library
-        // installs the tokens, so a store error must not escape it: that would
-        // throw away a grant Google already made.
-        this.oauth2Client.on('tokens', (granted) => {
+        // restart. It runs inside the library's synchronous emit, before the
+        // library installs the tokens, so a store error must not escape it: that
+        // would throw away a grant Google already made.
+        client.on('tokens', (granted) => {
+            if (client !== this.oauth2Client) return;
             try {
                 this.saveTokens(granted);
             } catch (error) {
-                console.error('Failed to save the Google tokens; they stay in memory until the next save', error);
+                console.error(`Failed to save the Google tokens (${errorSummary(error)}); they stay in memory until the next save`);
             }
         });
+        return client;
+    }
+
+    /**
+     * Google refused the saved refresh token (revoked, or expired): signed out,
+     * exactly as logout() leaves it, and the listeners (the window) are told, so
+     * the parent sees Sign in instead of an empty week. Never throws: it runs
+     * inside the library's refresh, whose own error must reach the caller.
+     */
+    private refused(client: GoogleOAuthClient): void {
+        if (client !== this.oauth2Client) return;
+        console.warn('[auth] Google refused the saved sign-in (revoked or expired); signing out.');
+        try {
+            this.logout();
+        } catch (error) {
+            console.error(`[auth] Could not clear the saved Google tokens (${errorSummary(error)}); the next launch is refused again`);
+        }
+        for (const listener of this.signedOutListeners) {
+            try {
+                listener();
+            } catch (error) {
+                console.error(`[auth] A signed-out listener failed (${errorSummary(error)})`);
+            }
+        }
+    }
+
+    /** Told when Google ends the sign-in, never for a sign-out the user asked for. Returns the unsubscribe. */
+    onSignedOut(listener: () => void): () => void {
+        this.signedOutListeners.add(listener);
+        return () => { this.signedOutListeners.delete(listener); };
     }
 
     /**
@@ -84,7 +102,7 @@ export class AuthService {
         if (!app.isReady()) {
             throw new Error('Google credentials were requested before the app is ready; safeStorage cannot decrypt them yet.');
         }
-        const tokens = this.loadTokens();
+        const tokens = readStoredTokens();
         // Set only once the read returned: a store read that throws (the file
         // held by antivirus or a backup) is retried by the next call instead of
         // answering "signed out" until a restart.
@@ -103,49 +121,11 @@ export class AuthService {
      * The kept one comes from the client, which still holds the previous set
      * when the library emits 'tokens' (as its own refresh does), never from a
      * re-read of the store, which can fail and lose it.
-     *
-     * Plain text only when this platform has no encryption (Linux without a
-     * keyring) or encrypting throws. A failed write throws and leaves the file as
-     * it was: falling back to plain text there wrote the refresh token to disk
-     * unencrypted.
      */
     private saveTokens(granted: Credentials) {
         const refreshToken = granted.refresh_token ?? this.oauth2Client.credentials.refresh_token;
         const tokens = refreshToken ? { ...granted, refresh_token: refreshToken } : granted;
-        store.set(this.encrypted(tokens) ?? { tokens, isEncrypted: false });
-    }
-
-    private encrypted(tokens: Credentials): AuthStore | null {
-        if (!safeStorage.isEncryptionAvailable()) return null;
-        try {
-            return { tokens: safeStorage.encryptString(JSON.stringify(tokens)).toString('base64'), isEncrypted: true };
-        } catch (error) {
-            console.error('Failed to encrypt tokens', error);
-            return null;
-        }
-    }
-
-    private loadTokens(): Credentials | null {
-        const stored = store.get('tokens');
-        const isEncrypted = store.get('isEncrypted');
-
-        if (!stored) return null;
-
-        if (isEncrypted && typeof stored === 'string' && safeStorage.isEncryptionAvailable()) {
-            try {
-                const buffer = Buffer.from(stored, 'base64');
-                const parsed: unknown = JSON.parse(safeStorage.decryptString(buffer));
-                return canAuthorize(parsed) ? parsed : null;
-            } catch (e) {
-                console.error('Failed to decrypt tokens', e);
-                return null;
-            }
-        } else if (typeof stored === 'object') {
-            // Unencrypted object (legacy or fallback)
-            return canAuthorize(stored) ? stored : null;
-        }
-
-        return null;
+        writeStoredTokens(tokens);
     }
 
     getAuthClient() {
@@ -213,21 +193,16 @@ export class AuthService {
                     }
 
                     if (code) {
-                        // Exchange code for tokens
-                        const { tokens } = await this.oauth2Client.getToken({
-                            code: code,
-                            redirect_uri: redirectUri
-                        });
-                        // getToken already saved them, through the 'tokens' listener.
-                        this.oauth2Client.setCredentials(tokens);
-                        this.credentialsLoaded = true;
+                        // On a client of its own: a read still refreshing the saved
+                        // grant on the current client can land after this exchange,
+                        // refused or with the old account's token, and must not touch it.
+                        const client = this.newClient();
+                        const { tokens } = await client.getToken({ code, redirect_uri: redirectUri });
+                        this.signedIn(client, tokens);
 
                         res.setHeader('Content-Type', 'text/html; charset=utf-8');
                         res.end('<h1>Authentication successful!</h1><p>You can close this window.</p><script>window.close()</script>');
-
-                        // Notify via IPC (we'll assume the caller handles the IPC reply)
-                        // Or better, we resolve the promise and the main process sends the event
-                        resolve();
+                        resolve(); // main.ts then sends auth:success
                         server.close();
                     }
                 } catch (e) {
@@ -286,12 +261,33 @@ export class AuthService {
         });
     }
 
+    /**
+     * Makes `client` the sign-in and retires the one before it. Saved here, not
+     * by the 'tokens' listener (the exchange ran before the client was current).
+     * A failed save does not undo the sign-in; the next refresh saves again.
+     */
+    private signedIn(client: GoogleOAuthClient, tokens: Credentials): void {
+        client.setCredentials(tokens);
+        const previous = this.oauth2Client;
+        this.oauth2Client = client;
+        this.credentialsLoaded = true;
+        previous.retire();
+        try {
+            this.saveTokens(tokens);
+        } catch (error) {
+            console.error(`Failed to save the Google tokens (${errorSummary(error)}); they stay in memory until the next save`);
+        }
+    }
+
     logout() {
         // The client first: a store delete that throws must not leave it signed in.
-        this.oauth2Client.setCredentials({});
+        const previous = this.oauth2Client;
+        this.oauth2Client = this.newClient();
+        // A read still holding it (api.ts keeps one across calendarList and
+        // events.list) must not reach Google as the old account.
+        previous.retire();
         this.credentialsLoaded = true;
-        store.delete('tokens');
-        store.delete('isEncrypted');
+        clearStoredTokens();
     }
 }
 

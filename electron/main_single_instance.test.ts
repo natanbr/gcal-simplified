@@ -73,7 +73,7 @@ vi.mock('node:child_process', () => ({
 }));
 
 vi.mock('./auth', () => ({
-  authService: { startAuth: vi.fn(), logout: vi.fn(), isAuthenticated: vi.fn() },
+  authService: { startAuth: vi.fn(), logout: vi.fn(), isAuthenticated: vi.fn(), onSignedOut: vi.fn() },
 }));
 
 vi.mock('./api', () => ({

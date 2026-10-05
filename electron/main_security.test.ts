@@ -89,6 +89,7 @@ vi.mock('./auth', () => ({
     startAuth: vi.fn(),
     logout: vi.fn(),
     isAuthenticated: vi.fn(),
+    onSignedOut: vi.fn(),
   }
 }));
 
