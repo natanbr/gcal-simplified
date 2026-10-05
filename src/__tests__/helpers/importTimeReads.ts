@@ -22,12 +22,14 @@ interface Facts {
     storeNamespaces: Set<string>;
     functions: Map<string, ts.FunctionLikeDeclaration>;
     classes: Map<string, ts.ClassLikeDeclaration>;
+    /** `const tray = { warm() {…}, peek: () => … }`: its methods can be called at module scope. */
+    objects: Map<string, ts.ObjectLiteralExpression>;
 }
 
 function topLevelFacts(file: ts.SourceFile): Facts {
     const facts: Facts = {
         readyOnly: new Set(READY_ONLY_NAMES), namespaces: new Set(), stores: new Set(), storeNamespaces: new Set(),
-        functions: new Map(), classes: new Map(),
+        functions: new Map(), classes: new Map(), objects: new Map(),
     };
     for (const statement of file.statements) {
         if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
@@ -59,6 +61,7 @@ function topLevelFacts(file: ts.SourceFile): Facts {
                 if (!ts.isIdentifier(name) || !initializer) continue;
                 if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) facts.functions.set(name.text, initializer);
                 if (ts.isClassExpression(initializer)) facts.classes.set(name.text, initializer);
+                if (ts.isObjectLiteralExpression(initializer)) facts.objects.set(name.text, initializer);
             }
         }
     }
@@ -68,8 +71,18 @@ function topLevelFacts(file: ts.SourceFile): Facts {
 const unwrap = (node: ts.Expression): ts.Expression => (ts.isParenthesizedExpression(node) ? unwrap(node.expression) : node);
 const isThisAccess = (node: ts.Node): node is ts.PropertyAccessExpression =>
     ts.isPropertyAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword;
-const memberName = (member: ts.ClassElement) =>
+const memberName = (member: ts.ClassElement | ts.ObjectLiteralElementLike) =>
     member.name && (ts.isIdentifier(member.name) || ts.isPrivateIdentifier(member.name) || ts.isStringLiteral(member.name)) ? member.name.text : undefined;
+const isStatic = (member: ts.ClassElement) =>
+    ts.canHaveModifiers(member) && (ts.getModifiers(member) ?? []).some(m => m.kind === ts.SyntaxKind.StaticKeyword);
+const extendsOf = (cls: ts.ClassLikeDeclaration) =>
+    cls.heritageClauses?.find(c => c.token === ts.SyntaxKind.ExtendsKeyword)?.types[0]?.expression;
+/** The function a class member or object property runs when called: a method, or a property holding an arrow or function expression. */
+function callable(member: ts.ClassElement | ts.ObjectLiteralElementLike): ts.FunctionLikeDeclaration | undefined {
+    if (ts.isMethodDeclaration(member)) return member;
+    const value = ts.isPropertyDeclaration(member) || ts.isPropertyAssignment(member) ? member.initializer : undefined;
+    return value && (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) ? value : undefined;
+}
 const decorators = (node: ts.Node) => (ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : []);
 
 /** A name in a position where it is declared or names a property, not a value read. */
@@ -102,22 +115,37 @@ export function importTimeReads(path: string, code: string): string[] {
         if (fn.body) visit(fn.body, cls);
     };
 
-    /** `this.x()` or `this.x`: the method, arrow property or getter it runs. */
+    const baseClass = (cls: ts.ClassLikeDeclaration) => {
+        const base = extendsOf(cls);
+        return base && ts.isIdentifier(base) ? facts.classes.get(base.text) : undefined;
+    };
+
+    /** `this.x()` or `this.x`: the method, arrow property or getter it runs, on the class or a same-file base. */
     const followThis = (access: ts.PropertyAccessExpression, cls: ts.ClassLikeDeclaration, called: boolean) => {
-        for (const member of cls.members) {
-            if (memberName(member) !== access.name.text) continue;
-            if (called && ts.isMethodDeclaration(member)) follow(member, cls);
-            if (called && ts.isPropertyDeclaration(member) && member.initializer
-                && (ts.isArrowFunction(member.initializer) || ts.isFunctionExpression(member.initializer))) follow(member.initializer, cls);
-            if (!called && ts.isGetAccessorDeclaration(member)) follow(member, cls);
+        // depth: a class cannot extend itself, but a guard must not loop on code that tries.
+        for (let owner: ts.ClassLikeDeclaration | undefined = cls, depth = 0; owner && depth < 20; owner = baseClass(owner), depth++) {
+            const member = owner.members.find(m => memberName(m) === access.name.text
+                && (called ? callable(m) !== undefined : ts.isGetAccessorDeclaration(m)));
+            if (!member) continue;
+            follow(called ? callable(member) : ts.isGetAccessorDeclaration(member) ? member : undefined, cls);
+            return;
         }
+    };
+
+    /** `Boot.warm()` or `tray.warm()`: a same-file class's static method, or a same-file object's method or arrow. */
+    const followOwnerCall = (owner: string, name: string) => {
+        const cls = facts.classes.get(owner);
+        const member = cls?.members.find(m => isStatic(m) && memberName(m) === name);
+        if (cls && member) follow(callable(member), cls);
+        const property = facts.objects.get(owner)?.properties.find(p => memberName(p) === name);
+        if (property) follow(callable(property));
     };
 
     /** `new X()` runs X's constructor and the ones it inherits from in this file; extending electron-store opens a store. */
     const construct = (cls: ts.ClassLikeDeclaration, site: ts.NewExpression) => {
         if (followed.has(cls)) return;
         followed.add(cls);
-        const base = cls.heritageClauses?.find(c => c.token === ts.SyntaxKind.ExtendsKeyword)?.types[0]?.expression;
+        const base = extendsOf(cls);
         if (base && ts.isIdentifier(base)) {
             if (facts.stores.has(base.text)) report(site, `new ${site.expression.getText()} (extends ${base.text})`);
             const parent = facts.classes.get(base.text);
@@ -146,6 +174,7 @@ export function importTimeReads(path: string, code: string): string[] {
             if (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)) follow(callee, cls);
             else if (ts.isIdentifier(callee)) follow(facts.functions.get(callee.text));
             else if (cls && isThisAccess(callee)) followThis(callee, cls, true);
+            else if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)) followOwnerCall(callee.expression.text, callee.name.text);
         }
         if (cls && isThisAccess(node) && !(ts.isCallExpression(node.parent) && node.parent.expression === node)) followThis(node, cls, false);
         if (ts.isTaggedTemplateExpression(node) && ts.isIdentifier(node.tag)) follow(facts.functions.get(node.tag.text));

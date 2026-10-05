@@ -15,23 +15,28 @@
 //
 // "Runs on import", followed within the same file: module-scope statements; an
 // immediately invoked arrow or function expression; a function declaration,
-// arrow or function expression called at module scope or as a template tag
-// (with its default parameters, and what it calls in turn); a class's
-// decorators, heritage, computed member names, static initializers and static
-// blocks; every instance field initializer (wherever the class is built); and
-// for `new X()`, X's constructor, the same-file constructors it inherits, and
-// the methods, arrow properties and getters they reach through `this.`.
+// or a `const` arrow or function expression, called at module scope or as a
+// template tag (with its default parameters, and what it calls in turn); a
+// same-file class's static method (`Boot.warm()`) and a same-file object's
+// method or arrow (`tray.warm()`) called at module scope; a class's decorators,
+// heritage, computed member names, static initializers and static blocks; every
+// instance field initializer (wherever the class is built); and for `new X()`,
+// X's constructor, the same-file constructors it inherits, and the methods,
+// arrow properties and getters reached through `this.` from them, on X or a
+// same-file base class.
 // Resolved: renamed imports, `* as x`, electron's default import, an alias or
 // destructuring of authService/safeStorage at module scope (flagged itself), and
 // electron-store taken as a default, `{ default as X }`, `* as x` or a subclass.
 // Each shape has its own probe below.
 //
 // Not covered: a function or class imported from another file and called or
-// built at module scope; a callback that a module-scope call runs straight away
+// built at module scope; a function held in a `let` or `var` that is assigned
+// again before the call; a callback that a module-scope call runs straight away
 // (`[1].forEach(() => authService.x())`); computed access (`x['safeStorage']`,
-// `this[name]()`); reflection (`Reflect.construct`, `.call`/`.apply`); and a
-// value reached through what a function returns. auth_app_ready's import case
-// covers auth.ts itself whatever the shape.
+// `this[name]()`); reflection (`Reflect.construct`, `.call`/`.apply`); a method
+// reached through `super.` or through an object other than `this`; and a value
+// reached through what a function returns. auth_app_ready's import case covers
+// auth.ts itself whatever the shape.
 //
 // verifiedRedBy: see the registry entry in rule-registry.test.ts.
 // ============================================================
@@ -91,6 +96,23 @@ const PROBES: Array<[shape: string, lines: string[], flagged: string[]]> = [
     ['a getter read through this', [
         'class Tray {', '    get signedIn() { return authService.isAuthenticated(); }', '    constructor() { if (this.signedIn) { /* */ } }', '}', 'new Tray();',
     ], ['2 authService.isAuthenticated']],
+    ['a static method called at module scope', [
+        'class Boot { static warm() { return authService.isAuthenticated(); } }', 'Boot.warm();',
+    ], ['1 authService.isAuthenticated']],
+    ['an object method and an object arrow called at module scope', [
+        'const tray = {',
+        '    warm() { return authService.isAuthenticated(); },',
+        '    peek: () => safeStorage.isEncryptionAvailable(),',
+        '    later() { return authService.getAuthClient(); },',
+        '};',
+        'tray.warm();',
+        'tray.peek();',
+    ], ['2 authService.isAuthenticated', '3 safeStorage.isEncryptionAvailable']],
+    ['an inherited method called through this from a child constructor', [
+        'class Base { load() { return safeStorage.decryptString(blob); } }',
+        'class Child extends Base { constructor() { super(); this.load(); } }',
+        'new Child();',
+    ], ['1 safeStorage.decryptString']],
     ['an inherited constructor', [
         'class Base { constructor() { safeStorage.isEncryptionAvailable(); } }', 'class Child extends Base {}', 'new Child();',
     ], ['1 safeStorage.isEncryptionAvailable']],
