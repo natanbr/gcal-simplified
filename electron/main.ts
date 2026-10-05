@@ -11,6 +11,7 @@ import { auditLog } from './audit-log'
 import { startPowerPolicy } from './power-policy'
 import { acquireSingleInstanceLock } from './single-instance'
 import { readWhileHeld } from './held-file'
+import { ipcSafe } from './log-safe'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -116,28 +117,29 @@ function isStrictRequest(options: unknown): boolean {
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle('auth:login', async () => {
+  // data: and auth: handlers reject through ipcSafe: Electron logs a rejected handler's error object, and a Google error carries its request.
+  ipcMain.handle('auth:login', ipcSafe(async () => {
     if (win) {
       await authService.startAuth();
       win.webContents.send('auth:success');
       return true;
     }
     return false;
-  });
+  }));
 
-  ipcMain.handle('auth:logout', () => {
+  ipcMain.handle('auth:logout', ipcSafe(() => {
     authService.logout();
     return true;
-  });
+  }));
 
   // A token file held for a moment (antivirus, a backup) is read again before the window gets an answer.
-  ipcMain.handle('auth:check', () => readWhileHeld(() => authService.isAuthenticated()));
+  ipcMain.handle('auth:check', ipcSafe(() => readWhileHeld(() => authService.isAuthenticated())));
 
   // Google refused the saved sign-in (revoked, or expired): show Sign in, not an empty week.
   authService.onSignedOut(() => win?.webContents.send('auth:signed-out'));
 
   // Data Handlers
-  ipcMain.handle('data:events', async (_, timeMin?: string, timeMax?: string, options?: unknown) => {
+  ipcMain.handle('data:events', ipcSafe(async (_: unknown, timeMin?: string, timeMax?: string, options?: unknown) => {
     let start: Date;
     let end: Date;
 
@@ -165,17 +167,17 @@ function registerIpcHandlers(): void {
     }
 
     return await apiService.getEvents(start, end, { strict: isStrictRequest(options) });
-  });
+  }));
 
-  ipcMain.handle('data:tasks', async () => apiService.getTasks());
+  ipcMain.handle('data:tasks', ipcSafe(async () => apiService.getTasks()));
 
   // Settings
   ipcMain.handle('settings:get', () => apiService.getSettings());
   ipcMain.handle('settings:save', (_, config) => apiService.saveSettings(config));
 
   // Data Lists (for Settings UI)
-  ipcMain.handle('data:calendars', () => apiService.getCalendars());
-  ipcMain.handle('data:tasklists', () => apiService.getTaskLists());
+  ipcMain.handle('data:calendars', ipcSafe(() => apiService.getCalendars()));
+  ipcMain.handle('data:tasklists', ipcSafe(() => apiService.getTaskLists()));
 
   // Remote control
   ipcMain.handle('remote:regenerate', () => remoteBridge.regenerateKeys());

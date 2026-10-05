@@ -20,6 +20,31 @@ export function errorSummary(error: unknown): string {
     return typeof name === 'string' && SHORT_CODE.test(name) ? name : 'unknown error';
 }
 
+/**
+ * What an IPC handler may reject with. Electron logs every rejected
+ * ipcMain.handle with the error object, at Node's print depth, and a gaxios
+ * error carries its request (a refresh's body holds the refresh token). A plain
+ * Error our own code threw keeps its message; anything else is rebuilt from
+ * errorSummary, so the window still learns what failed.
+ */
+export function ipcSafeError(error: unknown): Error {
+    if (error instanceof Error && Object.getPrototypeOf(error) === Error.prototype
+        && Object.keys(error).length === 0 && !('cause' in error)) return error;
+    const fromGoogle = field(error, 'config') !== undefined || field(error, 'response') !== undefined;
+    return new Error(`${fromGoogle ? 'Google request failed' : 'Failed'} (${errorSummary(error)})`);
+}
+
+/** An ipcMain.handle handler whose rejection is always ipcSafeError's. */
+export function ipcSafe<A extends unknown[]>(handler: (...args: A) => unknown): (...args: A) => Promise<unknown> {
+    return async (...args: A) => {
+        try {
+            return await handler(...args);
+        } catch (error) {
+            throw ipcSafeError(error);
+        }
+    };
+}
+
 const SHORT_CODE = /^[A-Za-z0-9_]{1,40}$/;
 const OAUTH_ERROR = /^[a-z_]{1,40}$/;
 

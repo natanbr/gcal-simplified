@@ -11,6 +11,7 @@
 // ============================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { format, inspect } from 'node:util';
 
 const mocks = vi.hoisted(() => {
     const send = vi.fn();
@@ -24,6 +25,9 @@ const mocks = vi.hoisted(() => {
         BrowserWindow: Object.assign(BrowserWindow, { getAllWindows: vi.fn(() => []) }),
         handle: vi.fn(),
         isAuthenticated: vi.fn(),
+        startAuth: vi.fn(),
+        logout: vi.fn(),
+        api: { getEvents: vi.fn(), getTasks: vi.fn(), getCalendars: vi.fn(), getTaskLists: vi.fn() },
         onSignedOut: vi.fn(),
     };
 });
@@ -52,9 +56,9 @@ vi.mock('electron-updater', () => ({
 }));
 vi.mock('node:child_process', () => ({ execFile: vi.fn(), default: { execFile: vi.fn() } }));
 vi.mock('./auth', () => ({
-    authService: { startAuth: vi.fn(), logout: vi.fn(), isAuthenticated: mocks.isAuthenticated, onSignedOut: mocks.onSignedOut },
+    authService: { startAuth: mocks.startAuth, logout: mocks.logout, isAuthenticated: mocks.isAuthenticated, onSignedOut: mocks.onSignedOut },
 }));
-vi.mock('./api', () => ({ apiService: {} }));
+vi.mock('./api', () => ({ apiService: mocks.api }));
 vi.mock('./weather', () => ({ weatherService: {} }));
 vi.mock('./remote-bridge', () => ({ remoteBridge: { init: vi.fn() } }));
 vi.mock('./audit-log', () => ({ auditLog: {} }));
@@ -64,12 +68,22 @@ await vi.waitFor(() => expect(mocks.onSignedOut).toHaveBeenCalledTimes(1));
 
 const held = (code: string) => Object.assign(new Error(`${code}: resource busy or locked`), { code });
 
-function authCheck(): () => Promise<unknown> {
-    const registered = mocks.handle.mock.calls.find(([channel]) => channel === 'auth:check');
-    if (!registered) throw new Error('main.ts registered no auth:check handler');
+function handlerFor(channel: string): (...args: unknown[]) => Promise<unknown> {
+    const registered = mocks.handle.mock.calls.find(([name]) => name === channel);
+    if (!registered) throw new Error(`main.ts registered no ${channel} handler`);
     const [, handler] = registered;
-    return async () => handler(); // ipcMain.handle turns a throw into a rejection the same way
+    return async (...args) => handler({}, ...args); // ipcMain.handle turns a throw into a rejection the same way
 }
+const authCheck = () => () => handlerFor('auth:check')();
+
+/** A gaxios error as a failed refresh leaves it: the request body, refresh token included, in its config. */
+const SEED = 'SEEDED-REFRESH-TOKEN-0123';
+const googleError = () => Object.assign(new Error('request to https://oauth2.googleapis.com/token failed'), {
+    name: 'GaxiosError',
+    status: 503,
+    config: { url: 'https://oauth2.googleapis.com/token', method: 'POST', data: new URLSearchParams({ refresh_token: SEED, grant_type: 'refresh_token' }) },
+    response: { status: 503, data: { error: 'backend_error' } },
+});
 
 describe('main.ts and the Google sign-in', () => {
     afterEach(() => {
@@ -105,5 +119,35 @@ describe('main.ts and the Google sign-in', () => {
 
         await expect(authCheck()()).rejects.toThrow('before the app is ready');
         expect(mocks.isAuthenticated).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('no data: or auth: handler lets a Google error reach Electron\'s log', () => {
+    // Electron 40 logs every rejected ipcMain.handle as
+    // console.error(`Error occurred in handler for '${channel}':`, err), at Node's print depth.
+    const CHANNELS = mocks.handle.mock.calls.map(([channel]) => String(channel)).filter(channel => /^(data|auth):/.test(channel));
+
+    afterEach(() => {
+        for (const service of [mocks.startAuth, mocks.logout, mocks.isAuthenticated, ...Object.values(mocks.api)]) service.mockReset();
+    });
+
+    it('covers every data: and auth: handler main.ts registers', () => {
+        expect(CHANNELS).toEqual(expect.arrayContaining(['auth:login', 'auth:logout', 'auth:check', 'data:events', 'data:tasks', 'data:calendars', 'data:tasklists']));
+    });
+
+    it.each(CHANNELS)('%s', async channel => {
+        for (const service of [mocks.startAuth, mocks.isAuthenticated, mocks.logout, ...Object.values(mocks.api)]) {
+            service.mockImplementation(() => { throw googleError(); });
+        }
+
+        const rejection = await handlerFor(channel)().then(() => { throw new Error('expected a rejection'); }, (error: unknown) => error);
+
+        expect(format(`Error occurred in handler for '%s':`, channel, rejection)).not.toContain(SEED);
+        expect(inspect(rejection, { depth: null, showHidden: true })).not.toContain(SEED);
+        expect(String(rejection)).toContain('status 503'); // what failed still reaches the window
+    });
+
+    it('an error of our own reaches the window as it is', async () => {
+        await expect(handlerFor('data:events')(42, 'x')).rejects.toThrow('timeMin and timeMax must be strings');
     });
 });
