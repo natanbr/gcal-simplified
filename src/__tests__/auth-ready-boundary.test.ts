@@ -7,146 +7,113 @@
 // before `app` is ready, so it throws and no window opens on any launch, yet
 // every suite that loads main.ts mocks './auth' (a reviewer added exactly that
 // line and all 2234 unit tests stayed green, 2026-10-01). So this walks every
-// production file under electron/ with the TypeScript parser and lists the code
-// that runs on import and reads `authService` or `safeStorage`, or opens an
-// electron-store (a corrupt auth-store.json then threw before the
-// single-instance lock and no window opened, 2026-10-04).
+// production file under electron/ with the TypeScript parser
+// (helpers/importTimeReads.ts) and lists the code that runs on import and reads
+// `authService` or `safeStorage`, or opens an electron-store (a corrupt
+// auth-store.json then threw before the single-instance lock and no window
+// opened, 2026-10-04).
 //
-// "Runs on import": module-scope statements, and, followed inside the same
-// file, an immediately invoked function, a function called at module scope (and
-// what it calls), a class's static initializers, and the constructor and
-// instance initializers of a class built at module scope (and the methods it
-// calls through `this.`, which is how the original bug read safeStorage).
-// Imports renamed (`{ authService as a }`) or taken whole (`* as x`, electron's
-// default) are resolved.
+// "Runs on import", followed within the same file: module-scope statements; an
+// immediately invoked arrow or function expression; a function declaration,
+// arrow or function expression called at module scope or as a template tag
+// (with its default parameters, and what it calls in turn); a class's
+// decorators, heritage, computed member names, static initializers and static
+// blocks; every instance field initializer (wherever the class is built); and
+// for `new X()`, X's constructor, the same-file constructors it inherits, and
+// the methods, arrow properties and getters they reach through `this.`.
+// Resolved: renamed imports, `* as x`, electron's default import, an alias or
+// destructuring of authService/safeStorage at module scope (flagged itself), and
+// electron-store taken as a default, `{ default as X }`, `* as x` or a subclass.
+// Each shape has its own probe below.
 //
-// Not covered: a function imported from another file and called at module
-// scope, an alias (`const s = safeStorage`), computed access (`x['safeStorage']`)
-// and a callback that a module-scope call runs straight away
-// (`[1].forEach(() => authService.x())`).
+// Not covered: a function or class imported from another file and called or
+// built at module scope; a callback that a module-scope call runs straight away
+// (`[1].forEach(() => authService.x())`); computed access (`x['safeStorage']`,
+// `this[name]()`); reflection (`Reflect.construct`, `.call`/`.apply`); and a
+// value reached through what a function returns. auth_app_ready's import case
+// covers auth.ts itself whatever the shape.
 //
 // verifiedRedBy: see the registry entry in rule-registry.test.ts.
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import ts from 'typescript';
 import { productionSources, readSource, toRepoPath } from './helpers/sourceFiles';
-
-const READY_ONLY_EXPORTS = [
-    { from: /(^|\/)auth$/, name: 'authService' },
-    { from: /^electron$/, name: 'safeStorage' },
-];
-const READY_ONLY_NAMES = new Set(READY_ONLY_EXPORTS.map(e => e.name));
-const STORE_MODULE = 'electron-store';
-
-type Body = ts.Node | undefined;
-
-/** What the file binds at its top level: the names that reach a ready-only object, and its own functions and classes. */
-function topLevelFacts(file: ts.SourceFile) {
-    const readyOnly = new Set(READY_ONLY_NAMES);
-    const namespaces = new Set<string>();
-    const stores = new Set<string>();
-    const functions = new Map<string, Body>();
-    const classes = new Map<string, ts.ClassDeclaration>();
-    for (const statement of file.statements) {
-        if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
-            const from = statement.moduleSpecifier.text;
-            const exported = READY_ONLY_EXPORTS.filter(e => e.from.test(from)).map(e => e.name);
-            const clause = statement.importClause;
-            if (clause?.name && from === STORE_MODULE) stores.add(clause.name.text);
-            if (clause?.name && exported.length > 0) namespaces.add(clause.name.text);
-            const named = clause?.namedBindings;
-            if (named && ts.isNamespaceImport(named) && exported.length > 0) namespaces.add(named.name.text);
-            if (named && ts.isNamedImports(named)) {
-                for (const element of named.elements) {
-                    if (exported.includes((element.propertyName ?? element.name).text)) readyOnly.add(element.name.text);
-                }
-            }
-        } else if (ts.isFunctionDeclaration(statement) && statement.name) {
-            functions.set(statement.name.text, statement.body);
-        } else if (ts.isVariableStatement(statement)) {
-            for (const { name, initializer } of statement.declarationList.declarations) {
-                if (ts.isIdentifier(name) && initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))) {
-                    functions.set(name.text, initializer.body);
-                }
-            }
-        } else if (ts.isClassDeclaration(statement) && statement.name) {
-            classes.set(statement.name.text, statement);
-        }
-    }
-    return { readyOnly, namespaces, stores, functions, classes };
-}
-
-const isStatic = (member: ts.ClassElement) =>
-    ts.canHaveModifiers(member) && (ts.getModifiers(member) ?? []).some(m => m.kind === ts.SyntaxKind.StaticKeyword);
-
-function unwrap(node: ts.Expression): ts.Expression {
-    return ts.isParenthesizedExpression(node) ? unwrap(node.expression) : node;
-}
-
-/** Each import-time read, as "file:line authService.x", "file:line electron.safeStorage.x" or "file:line new Store". */
-function importTimeReads(path: string, code: string): string[] {
-    const file = ts.createSourceFile(path, code, ts.ScriptTarget.Latest, true);
-    const facts = topLevelFacts(file);
-    const found: string[] = [];
-    const followed = new Set<ts.Node>();
-    const at = (node: ts.Node) => `${path}:${file.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
-
-    const reachesReadyOnly = (expression: ts.Expression) =>
-        (ts.isIdentifier(expression) && facts.readyOnly.has(expression.text))
-        || (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
-            && facts.namespaces.has(expression.expression.text) && READY_ONLY_NAMES.has(expression.name.text));
-
-    const follow = (body: Body, cls?: ts.ClassLikeDeclaration) => {
-        if (!body || followed.has(body)) return;
-        followed.add(body);
-        visit(body, cls);
-    };
-
-    /** `new X()` runs X's constructor and instance initializers. */
-    const construct = (cls: ts.ClassDeclaration) => {
-        for (const member of cls.members) {
-            if (ts.isConstructorDeclaration(member)) follow(member.body, cls);
-            else if (ts.isPropertyDeclaration(member) && !isStatic(member)) follow(member.initializer, cls);
-        }
-    };
-
-    const visit = (node: ts.Node, cls?: ts.ClassLikeDeclaration): void => {
-        if (ts.isCallExpression(node)) {
-            const callee = unwrap(node.expression);
-            if (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)) follow(callee.body, cls);
-            else if (ts.isIdentifier(callee)) follow(facts.functions.get(callee.text));
-            else if (cls && ts.isPropertyAccessExpression(callee) && callee.expression.kind === ts.SyntaxKind.ThisKeyword) {
-                const method = cls.members.find(m => ts.isMethodDeclaration(m) && m.name.getText() === callee.name.text);
-                if (method && ts.isMethodDeclaration(method)) follow(method.body, cls);
-            }
-        }
-        if (ts.isNewExpression(node) && ts.isIdentifier(node.expression)) {
-            if (facts.stores.has(node.expression.text)) found.push(`${at(node)} new ${node.expression.text}`);
-            const built = facts.classes.get(node.expression.text);
-            if (built) construct(built);
-        }
-        if (ts.isClassLike(node)) {
-            // Defining a class runs its heritage and static parts; the rest runs on `new`, or never.
-            for (const clause of node.heritageClauses ?? []) visit(clause, cls);
-            for (const member of node.members) {
-                if (ts.isPropertyDeclaration(member) && isStatic(member)) follow(member.initializer, node);
-                if (ts.isClassStaticBlockDeclaration(member)) follow(member.body, node);
-            }
-            return;
-        }
-        if (ts.isFunctionLike(node)) return;
-        if (ts.isPropertyAccessExpression(node) && reachesReadyOnly(node.expression)) {
-            found.push(`${at(node)} ${node.getText()}`);
-        }
-        ts.forEachChild(node, child => visit(child, cls));
-    };
-
-    visit(file);
-    return found;
-}
+import { importTimeReads } from './helpers/importTimeReads';
 
 const SOURCES = productionSources(['electron']).map(f => ({ path: toRepoPath(f), code: readSource(f) }));
+
+const PROBES: Array<[shape: string, lines: string[], flagged: string[]]> = [
+    ['a module-scope read', ['authService.isAuthenticated();', 'const available = safeStorage.isEncryptionAvailable();'],
+        ['1 authService.isAuthenticated', '2 safeStorage.isEncryptionAvailable']],
+    ['a read inside a handler or a whenReady callback (not import time)', [
+        "ipcMain.handle('auth:check', () => authService.isAuthenticated());",
+        'app.whenReady().then(function () { safeStorage.decryptString(blob); });',
+    ], []],
+    ['a renamed import', ["import { authService as auth } from './auth';", 'auth.isAuthenticated();'], ['2 auth.isAuthenticated']],
+    ['a namespace import', ["import * as electron from 'electron';", 'electron.safeStorage.isEncryptionAvailable();'],
+        ['2 electron.safeStorage.isEncryptionAvailable']],
+    ["electron's default import", ["import electron from 'electron';", 'electron.safeStorage.decryptString(blob);'],
+        ['2 electron.safeStorage.decryptString']],
+    ['an arrow IIFE', ['(() => authService.getAuthClient())();'], ['1 authService.getAuthClient']],
+    ['a function-expression IIFE', ['(function () { safeStorage.isEncryptionAvailable(); })();'], ['1 safeStorage.isEncryptionAvailable']],
+    ['a function declaration called at module scope, and what it calls', [
+        'function check() { return helper(); }',
+        'function helper() { return authService.isAuthenticated(); }',
+        'function later() { return authService.getAuthClient(); }',
+        'check();',
+    ], ['2 authService.isAuthenticated']],
+    ['an arrow helper called at module scope', ['const warmUp = () => authService.isAuthenticated();', 'warmUp();'],
+        ['1 authService.isAuthenticated']],
+    ['a function-expression helper called at module scope', [
+        'const warmUp = function () { return safeStorage.isEncryptionAvailable(); };', 'warmUp();',
+    ], ['1 safeStorage.isEncryptionAvailable']],
+    ['a default parameter', ['function f(ready = authService.isAuthenticated()) { return ready; }', 'f();'],
+        ['1 authService.isAuthenticated']],
+    ['a template tag', ['function tag() { return authService.isAuthenticated(); }', 'tag`now`;'], ['1 authService.isAuthenticated']],
+    ['a static initializer', ['class A { static peek = authService.isAuthenticated(); }'], ['1 authService.isAuthenticated']],
+    ['a static block', ['class A { static { safeStorage.isEncryptionAvailable(); } }'], ['1 safeStorage.isEncryptionAvailable']],
+    ['an instance field, wherever the class is built', ['export class A { signedIn = authService.isAuthenticated(); }'],
+        ['1 authService.isAuthenticated']],
+    ['a class-expression singleton', [
+        'const Bridge = class { constructor() { authService.isAuthenticated(); } };', 'export const bridge = new Bridge();',
+    ], ['1 authService.isAuthenticated']],
+    ['a constructor and the method it calls through this', [
+        'class Service {',
+        '    constructor() { this.load(); }',
+        '    load() { return safeStorage.decryptString(blob); }',
+        '    unused() { return authService.isAuthenticated(); }',
+        '}',
+        'export const service = new Service();',
+    ], ['3 safeStorage.decryptString']],
+    ['an arrow property called through this', [
+        'class Tray {', '    private refresh = () => authService.isAuthenticated();', '    constructor() { this.refresh(); }', '}', 'const tray = new Tray();',
+    ], ['2 authService.isAuthenticated']],
+    ['a getter read through this', [
+        'class Tray {', '    get signedIn() { return authService.isAuthenticated(); }', '    constructor() { if (this.signedIn) { /* */ } }', '}', 'new Tray();',
+    ], ['2 authService.isAuthenticated']],
+    ['an inherited constructor', [
+        'class Base { constructor() { safeStorage.isEncryptionAvailable(); } }', 'class Child extends Base {}', 'new Child();',
+    ], ['1 safeStorage.isEncryptionAvailable']],
+    ['a heritage expression', ['class Mixed extends pick(authService.isAuthenticated()) {}'], ['1 authService.isAuthenticated']],
+    ['a decorator and a computed member name', [
+        '@track(authService.isAuthenticated())', 'class A { [safeStorage.isEncryptionAvailable() ? "a" : "b"]() { return 1; } }',
+    ], ['1 authService.isAuthenticated', '2 safeStorage.isEncryptionAvailable']],
+    ['an alias and a destructuring', ['const s = safeStorage;', 'const { isAuthenticated } = authService;'],
+        ['1 safeStorage (alias)', '2 authService (alias)']],
+    ['a namespace alias', ["import * as electron from 'electron';", 'const s = electron.safeStorage;'], ['2 electron.safeStorage (alias)']],
+    ['an electron-store opened on import, not in a function', [
+        "import Store from 'electron-store';",
+        "const tokens = new Store({ name: 'auth-store' });",
+        "export function open() { return new Store({ name: 'auth-store' }); }",
+    ], ['2 new Store']],
+    ['electron-store renamed or taken whole', [
+        "import { default as Conf } from 'electron-store';", "import * as ES from 'electron-store';", 'new Conf();', 'new ES.default();',
+    ], ['3 new Conf', '4 new ES.default']],
+    ['an electron-store subclass', [
+        "import Store from 'electron-store';", 'class TokenStore extends Store {}', 'export const tokens = new TokenStore();',
+    ], ['3 new TokenStore (extends Store)']],
+    ['types, which do not run', ['let s: typeof safeStorage;', 'type T = typeof authService;'], []],
+];
 
 describe('Google credentials are never read while main.js is imported', () => {
     it('no production file under electron/ reads authService or safeStorage, or opens a store, on import', () => {
@@ -154,52 +121,7 @@ describe('Google credentials are never read while main.js is imported', () => {
         expect(SOURCES.flatMap(({ path, code }) => importTimeReads(path, code))).toEqual([]);
     });
 
-    it('flags a module-scope read and allows the same read inside a handler', () => {
-        const probe = [
-            'authService.isAuthenticated();',
-            "ipcMain.handle('auth:check', () => authService.isAuthenticated());",
-            'const available = safeStorage.isEncryptionAvailable();',
-            'app.whenReady().then(function () { safeStorage.decryptString(blob); });',
-        ].join('\n');
-
-        expect(importTimeReads('probe.ts', probe)).toEqual([
-            'probe.ts:1 authService.isAuthenticated',
-            'probe.ts:3 safeStorage.isEncryptionAvailable',
-        ]);
-    });
-
-    it('follows renamed and whole imports, IIFEs, helpers, static parts and constructors run on import', () => {
-        const probe = [
-            "import { authService as auth } from './auth';",
-            "import * as electron from 'electron';",
-            "import Store from 'electron-store';",
-            'auth.isAuthenticated();',
-            'electron.safeStorage.isEncryptionAvailable();',
-            '(() => auth.getAuthClient())();',
-            'function check() { return helper(); }',
-            'function helper() { return auth.isAuthenticated(); }',
-            'check();',
-            'function later() { return auth.isAuthenticated(); }',
-            'class Service {',
-            '    static peek = electron.safeStorage.isEncryptionAvailable();',
-            '    constructor() { this.load(); }',
-            '    load() { return electron.safeStorage.decryptString(blob); }',
-            '    unused() { return auth.isAuthenticated(); }',
-            '}',
-            'export const service = new Service();',
-            "const tokens = new Store({ name: 'auth-store' });",
-            "export function open() { return new Store({ name: 'auth-store' }); }",
-            "app.whenReady().then(() => electron.app.getPath('userData'));",
-        ].join('\n');
-
-        expect(importTimeReads('probe.ts', probe).sort()).toEqual([
-            'probe.ts:12 electron.safeStorage.isEncryptionAvailable',
-            'probe.ts:14 electron.safeStorage.decryptString',
-            'probe.ts:18 new Store',
-            'probe.ts:4 auth.isAuthenticated',
-            'probe.ts:5 electron.safeStorage.isEncryptionAvailable',
-            'probe.ts:6 auth.getAuthClient',
-            'probe.ts:8 auth.isAuthenticated',
-        ]);
+    it.each(PROBES)('%s', (_shape, lines, flagged) => {
+        expect(importTimeReads('probe.ts', lines.join('\n')).sort()).toEqual(flagged.map(f => `probe.ts:${f}`).sort());
     });
 });
