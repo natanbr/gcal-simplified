@@ -9,15 +9,22 @@ export function errorSummary(error: unknown): string {
     const response = field(error, 'response');
     const status = field(error, 'status') ?? field(response, 'status');
     const code = field(error, 'code');
-    const oauthError = field(field(response, 'data'), 'error');
-    const name = field(error, 'name');
+    const body = field(field(response, 'data'), 'error');
+    // The token endpoint answers { error: 'invalid_grant' }; an API, { error: { errors: [{ reason }] } }.
+    const reasons = field(body, 'errors');
+    const reason = typeof body === 'string' ? body : Array.isArray(reasons) ? field(reasons[0], 'reason') : undefined;
     const parts = [
+        name(error),
         typeof status === 'number' ? `status ${status}` : null,
-        (typeof code === 'string' || typeof code === 'number') && SHORT_CODE.test(String(code)) ? String(code) : null,
-        typeof oauthError === 'string' && OAUTH_ERROR.test(oauthError) ? oauthError : null,
+        (typeof code === 'string' || typeof code === 'number') && String(code) !== String(status) && SHORT_CODE.test(String(code)) ? String(code) : null,
+        typeof reason === 'string' && REASON.test(reason) ? reason : null,
     ].filter((part): part is string => part !== null);
-    if (parts.length > 0) return parts.join(' ');
-    return typeof name === 'string' && SHORT_CODE.test(name) ? name : 'unknown error';
+    return parts.length > 0 ? parts.join(' ') : 'unknown error';
+}
+
+function name(error: unknown): string | null {
+    const value = field(error, 'name');
+    return typeof value === 'string' && SHORT_CODE.test(value) ? value : null;
 }
 
 /**
@@ -46,7 +53,8 @@ export function ipcSafe<A extends unknown[]>(handler: (...args: A) => unknown): 
 }
 
 const SHORT_CODE = /^[A-Za-z0-9_]{1,40}$/;
-const OAUTH_ERROR = /^[a-z_]{1,40}$/;
+/** OAuth error codes (invalid_grant) and API reasons (rateLimitExceeded): short words, never free text. */
+const REASON = /^[A-Za-z_]{1,40}$/;
 
 function field(value: unknown, key: string): unknown {
     return typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined;
