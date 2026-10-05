@@ -1,5 +1,6 @@
 // ============================================================
-// Test kit for the Google sign-in suites (auth_app_ready, auth_session).
+// Test kit for the Google sign-in suites (auth_app_ready, auth_session,
+// auth_store_corrupt).
 // ------------------------------------------------------------
 // The fake safeStorage behaves like Electron's on Windows: unusable before
 // ready, a reversible cipher after it. The OAuth client is the real

@@ -123,6 +123,18 @@ describe('Google credentials and the app-ready lifecycle', () => {
         await expect(authorization(authService)).rejects.toThrow(NO_CREDENTIALS);
     });
 
+    it('a blob that decrypts to damaged JSON is logged without its text', async () => {
+        storeEncrypted('{"refresh_token":SEEDED-SECRET-77}'); // V8's parse message would quote ~10 characters of it
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const authService = await relaunch();
+        appReady();
+
+        expect(authService.isAuthenticated()).toBe(false);
+        expect(logged).toHaveBeenCalled();
+        expect(JSON.stringify(logged.mock.calls.map(call => call.map(String)))).not.toContain('SEEDED');
+        logged.mockRestore();
+    });
+
     it('before the app is ready, the readers throw instead of answering "signed out"', async () => {
         storeEncrypted(JSON.stringify(stored()));
         const authService = await relaunch();

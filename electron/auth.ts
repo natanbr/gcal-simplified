@@ -5,6 +5,7 @@ import type { Credentials } from 'google-auth-library';
 import crypto from 'node:crypto';
 import { canAuthorize, clearStoredTokens, readStoredTokens, writeStoredTokens } from './auth-token-store';
 import { GoogleOAuthClient } from './auth-client';
+import { errorSummary } from './log-safe';
 
 const SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
@@ -48,7 +49,7 @@ export class AuthService {
             try {
                 this.saveTokens(granted);
             } catch (error) {
-                console.error('Failed to save the Google tokens; they stay in memory until the next save', error);
+                console.error(`Failed to save the Google tokens (${errorSummary(error)}); they stay in memory until the next save`);
             }
         });
         return client;
@@ -66,13 +67,13 @@ export class AuthService {
         try {
             this.logout();
         } catch (error) {
-            console.error('[auth] Could not clear the saved Google tokens; the next launch will be refused again', error);
+            console.error(`[auth] Could not clear the saved Google tokens (${errorSummary(error)}); the next launch is refused again`);
         }
         for (const listener of this.signedOutListeners) {
             try {
                 listener();
             } catch (error) {
-                console.error('[auth] A signed-out listener failed', error);
+                console.error(`[auth] A signed-out listener failed (${errorSummary(error)})`);
             }
         }
     }
@@ -274,7 +275,7 @@ export class AuthService {
         try {
             this.saveTokens(tokens);
         } catch (error) {
-            console.error('Failed to save the Google tokens; they stay in memory until the next save', error);
+            console.error(`Failed to save the Google tokens (${errorSummary(error)}); they stay in memory until the next save`);
         }
     }
 

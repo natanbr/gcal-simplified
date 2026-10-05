@@ -3,6 +3,7 @@ import Store from 'electron-store';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Credentials } from 'google-auth-library';
+import { errorSummary } from './log-safe';
 
 interface AuthStore {
     tokens?: Credentials | string;
@@ -88,7 +89,7 @@ export function readStoredTokens(): Credentials | null {
             const parsed: unknown = JSON.parse(safeStorage.decryptString(buffer));
             return canAuthorize(parsed) ? parsed : null;
         } catch (e) {
-            console.error('Failed to decrypt tokens', e);
+            console.error(`Failed to decrypt tokens (${errorSummary(e)})`);
             return null;
         }
     } else if (typeof stored === 'object') {
@@ -103,10 +104,15 @@ export function readStoredTokens(): Credentials | null {
  * Plain text only when this platform has no encryption (Linux without a
  * keyring) or encrypting throws. A failed write throws and leaves the file as
  * it was: falling back to plain text there wrote the refresh token to disk
- * unencrypted.
+ * unencrypted. electron-store re-reads the file before every write, so one
+ * damaged since it was opened is moved aside here too, and the write goes to a
+ * fresh file.
  */
 export function writeStoredTokens(tokens: Credentials): void {
-    authStore().set(encrypted(tokens) ?? { tokens, isEncrypted: false });
+    const values = encrypted(tokens) ?? { tokens, isEncrypted: false };
+    const write = () => authStore().set(values);
+    parsedOrMovedAside(write, write);
+    removeMovedAsideCopies();
 }
 
 function encrypted(tokens: Credentials): AuthStore | null {
@@ -114,13 +120,39 @@ function encrypted(tokens: Credentials): AuthStore | null {
     try {
         return { tokens: safeStorage.encryptString(JSON.stringify(tokens)).toString('base64'), isEncrypted: true };
     } catch (error) {
-        console.error('Failed to encrypt tokens', error);
+        console.error(`Failed to encrypt tokens (${errorSummary(error)})`);
         return null;
     }
 }
 
 export function clearStoredTokens(): void {
-    const store = authStore();
-    store.delete('tokens');
-    store.delete('isEncrypted');
+    parsedOrMovedAside(() => {
+        const store = authStore();
+        store.delete('tokens');
+        store.delete('isEncrypted');
+    }, () => undefined);
+    removeMovedAsideCopies();
+}
+
+/**
+ * A moved-aside token file has no recovery value and may still hold a refresh
+ * token, so the copies go on the next successful save and on every sign-out.
+ * config.json's copies are not this module's (a separate decision).
+ */
+function removeMovedAsideCopies(): void {
+    const folder = app.getPath('userData');
+    let names: string[];
+    try {
+        names = fs.readdirSync(folder);
+    } catch (error) {
+        console.error(`[auth] Could not list the userData folder for old token-file copies (${errorSummary(error)})`);
+        return;
+    }
+    for (const name of names.filter(entry => entry.startsWith('auth-store.json.corrupt-'))) {
+        try {
+            fs.unlinkSync(path.join(folder, name));
+        } catch (error) {
+            console.error(`[auth] Could not delete ${name} (${errorSummary(error)}); the next save or sign-out tries again.`);
+        }
+    }
 }

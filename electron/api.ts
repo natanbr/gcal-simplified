@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { authService } from './auth';
 import { store, UserConfig, type WriteResult } from './store';
 import { loadSettingsForDialog, saveSettingsFromDialog } from './settings-dialog';
+import { errorSummary } from './log-safe';
 
 // Duplicate definition to avoid import issues from src in electron context if needed
 // but we will try to stick to local types or basic mapping.
@@ -114,7 +115,7 @@ export class ApiService {
                 }
                 this.calendarColorsCache = { colors: calendarColors, fetchedAt: Date.now() };
             } catch (e) {
-                console.warn("Failed to fetch calendar colors", e);
+                console.warn(`Failed to fetch calendar colors (${errorSummary(e)})`);
                 // Keep serving a stale cache (if any) rather than dropping colors entirely
                 if (this.calendarColorsCache) calendarColors = this.calendarColorsCache.colors;
             }
@@ -159,7 +160,7 @@ export class ApiService {
                 });
             } catch (error) {
                 if (strict) throw error; // its Pro-D days would silently vanish
-                console.warn(`Failed to fetch events for calendar ${calId}`, error);
+                console.warn(`Failed to fetch events for calendar ${calId} (${errorSummary(error)})`);
                 return [];
             }
         });
@@ -255,7 +256,7 @@ export class ApiService {
                     listIds = [lists.data.items[0].id!];
                 }
             } catch (e) {
-                console.error("Failed to fetch default task list", e);
+                console.error(`Failed to fetch default task list (${errorSummary(e)})`);
                 return [];
             }
         }
@@ -273,7 +274,7 @@ export class ApiService {
                     status: t.status === 'completed' ? 'completed' : 'needsAction'
                 } as AppTask));
             } catch (e) {
-                console.warn(`Failed to fetch tasks for list ${listId}`, e);
+                console.warn(`Failed to fetch tasks for list ${listId} (${errorSummary(e)})`);
                 return [];
             }
         });
