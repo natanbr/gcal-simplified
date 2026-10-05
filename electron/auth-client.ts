@@ -1,4 +1,13 @@
 import { google } from 'googleapis';
+import { Readable } from 'node:stream';
+import type { OAuth2Client } from 'google-auth-library';
+
+/** What OAuth2Client.request takes (gaxios's options; gaxios is not a direct dependency). */
+type RequestOptions = Parameters<OAuth2Client['request']>[0];
+
+function field(value: unknown, key: string): unknown {
+    return typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined;
+}
 
 /**
  * Whether Google's token endpoint refused the refresh token itself
@@ -28,12 +37,28 @@ export class GoogleOAuthClient extends google.auth.OAuth2 {
     private retired = false;
 
     constructor(clientId: string | undefined, clientSecret: string | undefined, onRefusedGrant: () => void) {
-        // forceRefreshOnFailure: a revoke can kill the access token before it
-        // expires, and without it a 401 on a token that has an expiry_date never
-        // refreshes, so the refusal above would surface only up to an hour later.
-        // The library refreshes and retries once per 401/403, never in a loop.
-        super({ clientId, clientSecret, forceRefreshOnFailure: true });
+        super({ clientId, clientSecret });
         this.onRefusedGrant = onRefusedGrant;
+    }
+
+    /**
+     * A 401 is the access token refused: ask for a new one once and retry once,
+     * so a revoke that also killed a still-valid access token reaches the token
+     * endpoint, and the refusal hook below, on the first read. The library does
+     * that only for a token with no expiry_date, or with forceRefreshOnFailure,
+     * which covers a 403 too, and a 403 that keeps coming back (a quota, a scope
+     * left unchecked) would then refresh and save the tokens on every poll.
+     */
+    protected override async requestAsync<T>(opts: RequestOptions, reAuthRetried = false) {
+        try {
+            return await super.requestAsync<T>(opts, true); // true: the library's own refresh-and-retry stays off
+        } catch (error) {
+            const status = field(error, 'status') ?? field(field(error, 'response'), 'status');
+            // A stream body cannot be sent twice; the library skips those too.
+            if (reAuthRetried || status !== 401 || !this.credentials.refresh_token || opts.data instanceof Readable) throw error;
+            await this.refreshAccessToken();
+            return super.requestAsync<T>(opts, true);
+        }
     }
 
     /**

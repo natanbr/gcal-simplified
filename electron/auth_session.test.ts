@@ -229,7 +229,24 @@ describe('a revoke that also kills the access token before it expires', () => {
         expect(calls(isTokenRequest)).toBe(1);
     });
 
-    it('a 403 with a valid grant refreshes at most once, retries at most once, and keeps the sign-in', async () => {
+    it('a 401 with a valid grant refreshes once, retries once with the new token, and keeps the sign-in', async () => {
+        storeEncrypted(JSON.stringify(stored()));
+        googleRoutes([200, { access_token: 'refreshed-access', expires_in: 3600 }], [200, { items: [] }]);
+        fake.tokenEndpoint.mockImplementationOnce(async () => kit.googleResponse({ error: { code: 401 } }, 401)); // the first read only
+        const authService = await relaunch();
+        appReady();
+
+        await expect(authService.getAuthClient().request({ url: CALENDAR_LIST })).resolves.toMatchObject({ status: 200 });
+
+        expect(calls(isTokenRequest)).toBe(1);
+        const apiCalls = fake.tokenEndpoint.mock.calls.filter(([input]) => !isTokenRequest(input));
+        expect(apiCalls).toHaveLength(2); // gaxios redacts the failed request's headers in place, so only the retry's is readable
+        expect(new Headers(apiCalls[1][1]?.headers).get('authorization')).toBe('Bearer refreshed-access');
+        expect(authService.isAuthenticated()).toBe(true);
+        expect(readStored(fake)).toMatchObject({ access_token: 'refreshed-access', refresh_token: 'stored-refresh' });
+    });
+
+    it('a 403 (a quota, a scope left unchecked) asks for no new token: it would on every poll', async () => {
         storeEncrypted(JSON.stringify(stored()));
         googleRoutes([200, { access_token: 'refreshed-access', expires_in: 3600 }], [403, { error: { code: 403, message: 'Rate Limit Exceeded' } }]);
         const authService = await relaunch();
@@ -237,10 +254,9 @@ describe('a revoke that also kills the access token before it expires', () => {
 
         await expect(authService.getAuthClient().request({ url: CALENDAR_LIST })).rejects.toMatchObject({ status: 403 });
 
+        expect(calls(isTokenRequest)).toBe(0);
+        expect(calls(input => !isTokenRequest(input))).toBe(1);
         expect(authService.isAuthenticated()).toBe(true);
-        expect(readStored(fake).refresh_token).toBe('stored-refresh');
-        expect(calls(isTokenRequest)).toBeLessThanOrEqual(1);
-        expect(calls(input => !isTokenRequest(input))).toBeLessThanOrEqual(2);
     });
 });
 
