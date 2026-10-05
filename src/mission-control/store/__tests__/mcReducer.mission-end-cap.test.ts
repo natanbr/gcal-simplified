@@ -8,11 +8,13 @@
 // start, games stayed shut, and the 15 s expiry check ran on the idle Calendar
 // for good, all saved across a restart.
 //
-// The cap: a run may last at most its own length (the window, as Settings set
-// it) + MAX_MISSION_EXTENSION_MINS. An adjustment past it is refused, not
-// clamped, so the line in the log always names what really moved. A move that
-// changes nothing (−5 at the 1-minute floor) is refused too. The reducer and
-// createLogEntry both ask adjustedMissionDuration, so a refusal writes no line.
+// The cap: a run may last at most its length when it started (or was fully
+// reset; a later Settings save does not move it) + MAX_MISSION_EXTENSION_MINS,
+// compared in whole seconds. An adjustment past it is refused, not clamped. A
+// move that changes nothing (−5 at the 1-minute floor) and a minus press that
+// would LENGTHEN a sub-minute test run are refused too. The log names the move
+// that really happened (−10 on a 5-min run is −4). The reducer and
+// createLogEntry both ask adjustedMissionEnd, so a refusal writes no line.
 // ============================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -32,6 +34,12 @@ function evening(s: MCState) {
     const m = s.missions.find(x => x.phase === 'evening');
     if (!m) throw new Error('no evening');
     return m;
+}
+
+/** The evening with these settings, started at `startsAt` on 2026-10-01. */
+function startedEvening(settings: Partial<MCState['settings']>, startsAt = '19:00'): MCState {
+    const configured = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: startsAt, ...settings } });
+    return mcReducer(configured, { type: 'SET_ACTIVE_MISSION', phase: 'evening', timestamp: `2026-10-01T${startsAt}:00` });
 }
 
 /** The default evening (19:00, 60 min) started at 19:00. */
@@ -112,6 +120,63 @@ describe('what the cap refuses', () => {
         expect(evening(state).durationMins).toBeCloseTo(60 + 1 / 6);
         expect(press(state, 1).state.missions).toBe(state.missions);
     });
+
+    // The cap is compared in whole seconds: the 10 s window's end carries a float
+    // tail, and at these start times the sum landed 1 ulp over length + 60.
+    it.each([
+        ['00:00', [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]],
+        ['00:05', [10, 10, 10, 10, 10, 10]],
+    ])('a 10 s evening at %s reaches length + 60 exactly', (startsAt, deltas) => {
+        const { state, lines } = press(startedEvening({ eveningDurationMins: 1 / 6 }, startsAt), ...deltas);
+        expect(lines).toHaveLength(deltas.length);
+        expect(press(state, 1).lines, 'and not a second further').toEqual([]);
+    });
+
+    it('a minus press that would LENGTHEN a sub-minute run is refused', () => {
+        const tiny = startedEvening({ eveningDurationMins: 1 / 6 });
+        const { state, lines } = press(tiny, -1);
+        expect(state.missions).toBe(tiny.missions);
+        expect(lines).toEqual([]);
+    });
+});
+
+describe('the log names the move that really happened', () => {
+    it('−10 on a 5-min run moves 4 min, and says −4m', () => {
+        const { state, lines } = press(startedEvening({ eveningDurationMins: 5 }), -10);
+        expect(evening(state).durationMins).toBe(1);
+        expect(lines).toEqual(['Mission time adjusted (-4m)']);
+    });
+
+    it('three −10s on a 30-min run: the last moves 9', () => {
+        const { lines } = press(startedEvening({ eveningDurationMins: 30 }), -10, -10, -10);
+        expect(lines).toEqual(['Mission time adjusted (-10m)', 'Mission time adjusted (-10m)', 'Mission time adjusted (-9m)']);
+    });
+
+    it('a move of less than a whole minute is named in seconds', () => {
+        // 10 s + 1 min = 70 s; −5 then stops at the 60 s floor: a 10-second move.
+        const { lines } = press(startedEvening({ eveningDurationMins: 1 / 6 }), 1, -5);
+        expect(lines).toEqual(['Mission time adjusted (+1m)', 'Mission time adjusted (-10s)']);
+    });
+});
+
+describe('the cap counts from the run’s own length, not from a later Settings save', () => {
+    it('saving a 10 s duration mid-run does not shut the 60-min run’s extra hour', () => {
+        const saved = mcReducer(running, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 1 / 6 }, timestamp: T });
+        expect(evening(saved).durationMins, 'precondition: the run keeps its length').toBe(60);
+        expect(press(saved, 10, 10, 10, 10, 10, 10).lines).toHaveLength(6);
+    });
+
+    it('saving 120 min mid-run does not give the 60-min run a second extra hour', () => {
+        const saved = mcReducer(running, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 120 }, timestamp: T });
+        const { state, lines } = press(saved, 10, 10, 10, 10, 10, 10, 10);
+        expect(evening(state).durationMins).toBe(120);
+        expect(lines).toHaveLength(6);
+    });
+
+    it('a run saved before the base length existed counts from its window, as before', () => {
+        const older: MCState = { ...running, missions: running.missions.map(m => ({ ...m, baseDurationMins: undefined })) };
+        expect(press(older, 10, 10, 10, 10, 10, 10, 10).lines).toHaveLength(6);
+    });
 });
 
 describe('the cap across the mission’s life', () => {
@@ -149,7 +214,7 @@ describe('the cap across the mission’s life', () => {
 
 describe('structural: one decision, asked by the reducer and by the log', () => {
     const store = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-    it.each(['mcReducer.ts', 'activityLog.ts'])('store/%s calls adjustedMissionDuration(state, action)', (file) => {
-        expect(readFileSync(resolve(store, file), 'utf-8')).toMatch(/\badjustedMissionDuration\(state, action\)/);
+    it.each(['mcReducer.ts', 'activityLog.ts'])('store/%s calls adjustedMissionEnd(state, action)', (file) => {
+        expect(readFileSync(resolve(store, file), 'utf-8')).toMatch(/\badjustedMissionEnd\(state, action\)/);
     });
 });

@@ -19,7 +19,8 @@ import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
-import { deriveMissionWindow, hydrateMissionTimes, sanitizeMissionTimes } from './hhmm';
+import { deriveMissionWindow, hydrateMissionTimes, isValidDurationMins, sanitizeMissionTimes } from './hhmm';
+import { isDateKey } from './occurrenceDay';
 import { missionTimeRepairs, type MissionTimeRepair } from './missionTimeRepair';
 import { isStaleIncompleteRun } from './staleMissionRun';
 import { renewalLoggedMarker, withoutPairingCopy } from './pairingRenewal';
@@ -99,6 +100,9 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                     // Must survive a restart: a relaunch inside the window after a
                     // stop would otherwise start the mission again.
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
+                    // The run's day and base length, kept only when real (missing: the derivations they replace).
+                    occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,
+                    baseDurationMins: isValidDurationMins(savedM.baseDurationMins) ? savedM.baseDurationMins : undefined,
                     // Icon + label come from the code; a Cream or School Bag task
                     // the saved run carried is kept, ticked or not (routineTasks.ts).
                     tasks: hydrateMissionTasks(defaultM.tasks, savedM.tasks),

@@ -10,11 +10,12 @@
 
 import { renderHook, act } from '@testing-library/react';
 import { expect, vi } from 'vitest';
-import React, { useMemo, useReducer } from 'react';
+import React, { useMemo, useReducer, useRef } from 'react';
 import { useMissionScheduler } from './useMissionScheduler';
 import { useRemoteControl } from './useRemoteControl';
-import { MCContext, useMCDispatch } from '../store/useMCStore';
+import { MCContext, STORAGE_KEY, useMCDispatch } from '../store/useMCStore';
 import { initialState, mcReducer } from '../store/mcReducer';
+import { pendingFrom } from '../store/pendingState';
 import type { MCAction, MCState } from '../types';
 
 export type Phase = 'morning' | 'evening';
@@ -35,9 +36,10 @@ type Emit = (channel: string, payload?: unknown) => void;
 /**
  * A fake preload bridge, so the scheduler's `system:resume` listener and the
  * REAL remote path (useRemoteControl: allowlist, validators, timestamp scrub)
- * are mounted. `emit` plays what the main process would send.
+ * are mounted. `emit` plays what the main process would send, in its own act();
+ * `send` does the same without one, for a burst inside the caller's act().
  */
-function installFakeIpc(): Emit {
+function installFakeIpc(): { emit: Emit; send: Emit } {
     const listeners = new Map<string, Listener[]>();
     window.ipcRenderer = {
         invoke: vi.fn(),
@@ -46,22 +48,40 @@ function installFakeIpc(): Emit {
             return () => { listeners.set(channel, (listeners.get(channel) ?? []).filter(l => l !== listener)); };
         },
     };
-    return (channel, payload) => act(() => { (listeners.get(channel) ?? []).forEach(l => l(payload)); });
+    const send: Emit = (channel, payload) => { (listeners.get(channel) ?? []).forEach(l => l(payload)); };
+    return { send, emit: (channel, payload) => act(() => { send(channel, payload); }) };
 }
 
 export function renderLiveScheduler(initial: MCState, { ipc = false } = {}) {
-    const emit: Emit = ipc ? installFakeIpc() : () => { throw new Error('render with { ipc: true } to emit'); };
+    const noIpc: Emit = () => { throw new Error('render with { ipc: true } to emit'); };
+    const { emit, send } = ipc ? installFakeIpc() : { emit: noIpc, send: noIpc };
     const live: { state: MCState } = { state: initial };
     function Store({ children }: { children: React.ReactNode }) {
         const [state, dispatch] = useReducer(mcReducer, initial);
         live.state = state;
-        const value = useMemo(() => ({ state, dispatch }), [state]);
+        // Shared by every useMCDispatch, as MCStoreProvider does, so a burst from two
+        // sources before a render logs from the state each action really applies to.
+        const pending = useRef(pendingFrom(state));
+        pending.current = pendingFrom(state);
+        const value = useMemo(() => ({ state, dispatch, pending }), [state]);
         return React.createElement(MCContext.Provider, { value }, children);
     }
     const hook = renderHook(() => { useMissionScheduler(); useRemoteControl(); return useMCDispatch(); }, { wrapper: Store });
     const dispatch = (action: MCAction) => act(() => { hook.result.current(action); });
     const unmount = () => { hook.unmount(); if (ipc) delete window.ipcRenderer; };
-    return { live, dispatch, emit, unmount };
+    return { live, dispatch, emit, send, unmount };
+}
+
+/** The app is closed: what it saved is what the next launch loads. */
+export function saveAndClose(harness: { live: { state: MCState }; unmount: () => void }) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(harness.live.state));
+    harness.unmount();
+}
+
+/** Moves past `when` with a render between timer callbacks, so the 15 s expiry tick sees the run. */
+export function crossing(when: Date) {
+    jumpTo(new Date(when.getTime() - 60_000));
+    step(90_000);
 }
 
 /** Advance fake time the way the app experiences it: a render between timer callbacks. */

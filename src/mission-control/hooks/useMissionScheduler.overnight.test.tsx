@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initialState, mcReducer } from '../store/mcReducer';
 import { getLocalDateString } from '../store/behaviorSync';
 import { STORAGE_KEY, loadPersistedState } from '../store/useMCStore';
-import { at, jumpTo, renderLiveScheduler, startLogs, step } from './schedulerTestKit';
+import { at, crossing, jumpTo, renderLiveScheduler, saveAndClose, startLogs, step } from './schedulerTestKit';
 import type { MCState } from '../types';
 
 /** Evening 23:30 for 60 min, derived the way Settings → Save derives it. */
@@ -30,18 +30,6 @@ function lateEveningOnly(): MCState {
 }
 
 const skippedLogs = (s: MCState) => s.activityLogs.filter(l => l.message.startsWith('Evening mission skipped')).length;
-
-/** Moves past `when` with a render between timer callbacks, so the 15 s expiry tick sees the run. */
-function crossing(when: Date) {
-    jumpTo(new Date(when.getTime() - 60_000));
-    step(90_000);
-}
-
-/** The app is closed: what it saved is what the next launch loads. */
-function saveAndClose(harness: { live: { state: MCState }; unmount: () => void }) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(harness.live.state));
-    harness.unmount();
-}
 
 describe('an evening window that crosses midnight', () => {
     beforeEach(() => { vi.useFakeTimers(); });
@@ -64,10 +52,12 @@ describe('an evening window that crosses midnight', () => {
         expect(live.state.activeMission, 'precondition: armed, not started').toBe('none');
 
         // The machine sleeps through 23:30. vi.setSystemTime keeps the pending
-        // timer's remaining delay, so it fires at about 23:59:59.9: before
-        // midnight, but past the 5 min tolerance, so only the window end read
-        // from '24:30' keeps it on time. (After midnight the scheduler aims at
-        // tonight's occurrence and does not start it; an older limit.)
+        // timer's remaining delay, so it fires at about 23:59:59.9: past the
+        // 5 min tolerance, so only the window end read from '24:30' keeps it on
+        // time. The same late timer firing after midnight, still inside the
+        // window, starts it too (the cases below). What does NOT start it is a
+        // relaunch or the resume re-arm after midnight: those aim at tonight's
+        // occurrence (an older limit).
         vi.setSystemTime(at(23, 50));
         jumpTo(at(0, 0, 1));
         step(100);
@@ -194,6 +184,48 @@ describe('a late timer after midnight, for an evening already finished before it
         step(11 * 60_000);
 
         expect(skippedLogs(live.state)).toBe(0);
+        unmount();
+    });
+});
+
+// The scheduler names the occurrence it starts (SET_ACTIVE_MISSION's
+// occurrenceDate), so a run it starts late is dated by its target, whatever the
+// window looks like when it ends.
+describe('a late start is dated by the scheduler’s own target', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+    it('a late timer at about 00:10, inside last night’s window, starts that evening and dates it that night', () => {
+        const night = at(23, 20);
+        vi.setSystemTime(night);
+        const { live, unmount } = renderLiveScheduler(lateEveningOnly());
+        step(100);
+        vi.setSystemTime(at(0, 0, 1)); // the remaining ~10 min: it fires at about 00:10
+        step(11 * 60_000);
+        expect(live.state.activeMission, 'the late timer started it').toBe('evening');
+
+        crossing(at(1, 10, 1));
+        expect(live.state.lastCompletedOrFailedEveningDate).toBe(getLocalDateString(night));
+        unmount();
+    });
+
+    it('the 10 s test evening at 23:58, started 4 min late after midnight, is that night’s: the next one still starts', () => {
+        // Inside the 5 min late-fire tolerance, but its window (23:58–23:58:10)
+        // never crosses midnight, so re-deriving the day at the outcome said "tomorrow".
+        const night = at(23, 50);
+        vi.setSystemTime(night);
+        const tenSeconds = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:58', eveningDurationMins: 1 / 6 } });
+        const { live, unmount } = renderLiveScheduler({ ...tenSeconds, missions: tenSeconds.missions.filter(m => m.phase === 'evening') });
+        step(100);
+        vi.setSystemTime(at(23, 54)); // the timer keeps its ~8 min: it fires at about 00:02
+        step(8 * 60_000 + 30_000);
+        expect(startLogs(live.state, 'evening'), 'started inside the tolerance').toBe(1);
+        expect(live.state.activeMission, 'and expired 10 s later').toBe('none');
+        expect(live.state.lastCompletedOrFailedEveningDate).toBe(getLocalDateString(night));
+
+        jumpTo(at(23, 57, 0, 59));
+        step(2_000);
+        expect(live.state.activeMission, 'the next evening').toBe('evening');
         unmount();
     });
 });

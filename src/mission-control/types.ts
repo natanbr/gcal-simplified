@@ -85,6 +85,8 @@ export interface Mission {
     /** Tracks if we already logged the timeout so it doesn't log on remount */
     loggedTimeoutAt?: string;
     lastActiveAt?: string; // last start or end of a run; never cleared (store/missionActivity.ts)
+    occurrenceDate?: string; // YYYY-MM-DD of the occurrence this run belongs to, set when it starts (store/occurrenceDay.ts)
+    baseDurationMins?: number; // the run's length at its start or full Reset; the +/- cap counts from it (store/missionEndAdjust.ts)
     tasks: MissionTask[];
     active: boolean;
     whiningDetected?: boolean;
@@ -263,7 +265,7 @@ export type MCAction = (
     | { type: 'EXPIRE_SUSPENSIONS' }
     | { type: 'COMPLETE_TASK'; missionPhase: MissionPhase; taskId: MissionTaskId }
     | { type: 'LOCK_TASK'; missionPhase: MissionPhase; taskId: MissionTaskId }
-    | { type: 'SET_ACTIVE_MISSION'; phase: MissionPhase }
+    | { type: 'SET_ACTIVE_MISSION'; phase: MissionPhase; occurrenceDate?: string } // the scheduler's target day; honoured only from it
     | { type: 'RESET_MISSION'; missionPhase: MissionPhase }
     | { type: 'RESET_MISSION_WITH_TIMER'; missionPhase: MissionPhase }
     | { type: 'CANCEL_MISSION'; missionPhase: MissionPhase }

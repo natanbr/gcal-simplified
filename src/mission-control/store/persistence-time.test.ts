@@ -152,3 +152,37 @@ describe('hydration — a mission duration that is not a real length', () => {
         expect(mission(reloaded, 'morning').endsAt).toBe(endsAt);
     });
 });
+
+// A run stores the day it counts for and its length at start (2026-10-05), so
+// they survive a restart mid-run; anything else in those fields is dropped, and
+// the outcome and the +/- cap fall back to what they replaced.
+describe('hydration — a running mission’s stored day and base length', () => {
+    beforeEach(() => { localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { localStorage.removeItem(STORAGE_KEY); });
+
+    function restartRunning(fields: Record<string, unknown>): MCState {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            ...initialState,
+            activeMission: 'evening',
+            missions: initialState.missions.map(m => (m.phase === 'evening'
+                ? { ...m, active: true, startedAt: new Date(Date.now() - 600_000).toISOString(), durationMins: 70, ...fields }
+                : m)),
+        }));
+        return loadPersistedState();
+    }
+
+    it('real ones survive a restart', () => {
+        const reloaded = restartRunning({ occurrenceDate: '2026-10-04', baseDurationMins: 60 });
+        expect(mission(reloaded, 'evening')).toMatchObject({ occurrenceDate: '2026-10-04', baseDurationMins: 60 });
+    });
+
+    it.each([
+        [{ occurrenceDate: 'tomorrow', baseDurationMins: 0 }],
+        [{ occurrenceDate: 20261004, baseDurationMins: null }],
+        [{ occurrenceDate: '2026-10-4', baseDurationMins: 1440 }],
+    ])('anything else is dropped: %j', (fields) => {
+        const m = mission(restartRunning(fields), 'evening');
+        expect(m.occurrenceDate).toBeUndefined();
+        expect(m.baseDurationMins).toBeUndefined();
+    });
+});

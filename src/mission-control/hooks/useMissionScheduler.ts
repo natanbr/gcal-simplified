@@ -156,7 +156,8 @@ export function useMissionScheduler(): void {
                 if (!firedTooLate(target, `${phase} mission`, endMins)) {
                     // Only trigger if no mission is currently running AND it hasn't run today yet
                     if (s.activeMission === 'none' && !alreadyRun) {
-                        dispatch({ type: 'SET_ACTIVE_MISSION', phase, origin: 'scheduler' });
+                        // Names the occurrence it starts: a late fire after midnight is still last night's.
+                        dispatch({ type: 'SET_ACTIVE_MISSION', phase, origin: 'scheduler', occurrenceDate: getLocalDateString(target) });
                     }
                 } else if (!alreadyRun) {
                     // A skipped mission must be visible to a parent, not only in

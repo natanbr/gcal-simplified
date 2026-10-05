@@ -24,11 +24,13 @@ import { gameTokenRoom, moveGauge, settleGameTokenCap } from './moodGauge';
 import { applyQuizAnswer, makeLevelChangeLog } from './skillProgress';
 import { applyMissionRoutineComplete, applyMissionTimeout, applyStreakChange, isEconomyLocked, isRefusedByShieldLock, sanitizeMissedStreak } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
-import { deriveMissionWindow, missionDurationMins, withoutInvalidMissionTimes } from './hhmm';
+import { deriveMissionWindow, withoutInvalidMissionTimes } from './hhmm';
+import { freshAttempt } from './missionAttempt';
+import { startedOccurrenceDate } from './occurrenceDay';
 import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
-import { adjustedMissionDuration } from './missionEndAdjust';
+import { adjustedMissionEnd } from './missionEndAdjust';
 import { endStaleMissionRun } from './staleMissionRun';
 import { reschedulesRunningMission, startTimeChanged } from './missionReschedule';
 import { CREAM_TASK_ID, syncCreamTask, withSchoolBag } from './routineTasks';
@@ -377,15 +379,11 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 activeMission: action.phase,
                 missions: state.missions.map(m => {
                     if (m.phase !== action.phase) return { ...m, active: false };
-                    // Every trigger is a fresh start: new timer, reset checklist.
+                    // Every trigger is a fresh start: new timer, reset checklist, and the day it counts for.
                     return {
                         ...m,
-                        active: true,
-                        startedAt: now,
-                        durationMins: missionDurationMins(m, state.settings), // no minimum — allows sub-minute test durations
-                        loggedTimeoutAt: undefined, // fresh occurrence — a stale stamp capped the streak at 2
-                        whiningDetected: false,
-                        whiningLocked: false,
+                        ...freshAttempt(m, state.settings, now),
+                        occurrenceDate: startedOccurrenceDate(m, action, now),
                         tasks: withSchoolBag(m.tasks, m.phase, bagDue).map(t => ({ ...t, completed: false, locked: false })),
                     };
                 }),
@@ -422,16 +420,8 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...state,
                 missions: state.missions.map(m => {
                     if (m.phase !== action.missionPhase) return m;
-                    return {
-                        ...m,
-                        active: true,
-                        startedAt: now,
-                        durationMins: missionDurationMins(m, state.settings),
-                        loggedTimeoutAt: undefined,
-                        whiningDetected: false,
-                        whiningLocked: false,
-                        tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })),
-                    };
+                    // A second attempt at the same occurrence: its day stays.
+                    return { ...m, ...freshAttempt(m, state.settings, now), tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) };
                 }),
             };
         }
@@ -454,9 +444,9 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             return applyMissionTimeout(state, action.missionPhase, actionInstant(action));
 
         case 'ADJUST_MISSION_END': {
-            const durationMins = adjustedMissionDuration(state, action); // activityLog.ts mirrors this
-            if (durationMins === null) return state;
-            return { ...state, missions: state.missions.map(m => (m.phase === action.missionPhase ? { ...m, durationMins } : m)) };
+            const adjusted = adjustedMissionEnd(state, action); // activityLog.ts mirrors this
+            if (adjusted === null) return state;
+            return { ...state, missions: state.missions.map(m => (m.phase === action.missionPhase ? { ...m, durationMins: adjusted.durationMins } : m)) };
         }
 
         case 'CONSUME_CASE': {
