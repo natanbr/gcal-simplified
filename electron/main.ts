@@ -10,6 +10,7 @@ import { remoteBridge } from './remote-bridge'
 import { auditLog } from './audit-log'
 import { startPowerPolicy } from './power-policy'
 import { acquireSingleInstanceLock } from './single-instance'
+import { readWhileHeld } from './held-file'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -129,9 +130,8 @@ function registerIpcHandlers(): void {
     return true;
   });
 
-  ipcMain.handle('auth:check', () => {
-    return authService.isAuthenticated();
-  });
+  // A token file held for a moment (antivirus, a backup) is read again before the window gets an answer.
+  ipcMain.handle('auth:check', () => readWhileHeld(() => authService.isAuthenticated()));
 
   // Google refused the saved sign-in (revoked, or expired): show Sign in, not an empty week.
   authService.onSignedOut(() => win?.webContents.send('auth:signed-out'));

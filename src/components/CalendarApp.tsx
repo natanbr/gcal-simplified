@@ -4,14 +4,6 @@ import { LoginScreen } from './LoginScreen';
 
 type SignIn = 'checking' | 'signed-in' | 'signed-out';
 
-/**
- * The waits before asking auth:check again after it failed. It fails when the
- * token file is held for a moment (antivirus, a backup) and the next read in the
- * main process succeeds; offering Sign in at once sent a signed-in parent
- * through Google's consent page for nothing. After the last wait: Sign in.
- */
-const AUTH_CHECK_RETRY_DELAYS_MS = [1000, 2000, 4000];
-
 // ── Calendar app — handles auth, renders Dashboard ────────────────────────────
 interface CalendarAppProps {
   onSwitchToMC: () => void;
@@ -28,39 +20,22 @@ export function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
       return;
     }
     let active = true;
-    let retry: ReturnType<typeof setTimeout> | undefined;
 
-    const check = async (attempt: number) => {
-      try {
-        const isAuth = await ipc.invoke('auth:check');
-        if (active) setSignIn(isAuth === true ? 'signed-in' : 'signed-out');
-      } catch (e) {
-        if (!active) return;
-        const delay = AUTH_CHECK_RETRY_DELAYS_MS[attempt];
-        if (delay === undefined) {
-          console.error('Auth check failed', e);
-          setSignIn('signed-out');
-          return;
-        }
-        console.warn('Auth check failed; asking again', e);
-        retry = setTimeout(() => void check(attempt + 1), delay);
-      }
-    };
-    void check(0);
+    // The main process reads a held token file again before it answers (electron/held-file.ts).
+    ipc.invoke('auth:check').then(
+      isAuth => { if (active) setSignIn(isAuth === true ? 'signed-in' : 'signed-out'); },
+      error => {
+        console.error('Auth check failed', error);
+        if (active) setSignIn('signed-out');
+      },
+    );
 
-    const offSuccess = ipc.on('auth:success', () => {
-      clearTimeout(retry);
-      setSignIn('signed-in');
-    });
+    const offSuccess = ipc.on('auth:success', () => setSignIn('signed-in'));
     // Google refused the saved sign-in (revoked, or expired) and the main process signed out.
-    const offSignedOut = ipc.on('auth:signed-out', () => {
-      clearTimeout(retry);
-      setSignIn('signed-out');
-    });
+    const offSignedOut = ipc.on('auth:signed-out', () => setSignIn('signed-out'));
 
     return () => {
       active = false;
-      clearTimeout(retry);
       offSuccess();
       offSignedOut();
     };

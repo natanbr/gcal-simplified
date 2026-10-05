@@ -1924,7 +1924,7 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   relaunch, one notice per refresh and none for Reconnect, offline / 503 / `invalid_client` /
   `invalid_request` keep the sign-in, the refresh racing Reconnect, a read still holding the old
   client), `electron/auth_store_corrupt.test.ts` (the real electron-store in a throwaway folder),
-  `electron/main_signed_out.test.ts`, `src/components/CalendarApp.test.tsx`. Each new case was red
+  `electron/main_auth.test.ts`, `src/components/CalendarApp.test.tsx`. Each new case was red
   before its fix; the negatives were proven by treating every failure as a refusal.
   `src/__tests__/auth-ready-boundary.test.ts` now also follows renamed imports, immediately invoked
   functions, helpers and constructors run on import, and flags a store opened on import (the old

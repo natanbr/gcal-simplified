@@ -1,13 +1,12 @@
 // ============================================================
 // The calendar screen follows the Google sign-in (2026-10-04)
 // ------------------------------------------------------------
-// Two ways the screen and the main process disagreed:
-//   - Google refused the refresh token mid-session. The main process now signs
-//     out and sends `auth:signed-out`; without listening for it the screen kept
-//     the Dashboard, an empty week, until a relaunch.
-//   - auth:check rejected (the token file held by antivirus or a backup). The
-//     screen showed "Sign in with Google" and never asked again, although the
-//     next check in the main process would have answered.
+// Google refused the refresh token mid-session: the main process now signs out
+// and sends `auth:signed-out`; without listening for it the screen kept the
+// Dashboard, an empty week, until a relaunch.
+// A token file held for a moment is read again by the main process before
+// auth:check answers (electron/held-file.ts, main_auth.test.ts), so the screen
+// asks once and shows Sign in for any failure that is still left.
 // ============================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -16,8 +15,6 @@ import { CalendarApp } from './CalendarApp';
 
 vi.mock('./Dashboard', () => ({ Dashboard: () => <div>the week</div> }));
 vi.mock('./LoginScreen', () => ({ LoginScreen: () => <div>Sign in with Google</div> }));
-
-const HELD = () => Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
 
 /** A fake preload bridge whose auth:check answers come from `check`, and whose events the test sends. */
 function fakeBridge(check: () => Promise<unknown>) {
@@ -34,14 +31,14 @@ function fakeBridge(check: () => Promise<unknown>) {
     };
     const send = (channel: string) => act(() => { listeners.get(channel)?.forEach(listener => listener()); });
     const authChecks = () => invoke.mock.calls.filter(([channel]) => channel === 'auth:check').length;
-    return { send, authChecks };
+    return { send, authChecks, listening: (channel: string) => listeners.get(channel)?.size ?? 0 };
 }
 
 const renderCalendar = () => render(<CalendarApp onSwitchToMC={() => undefined} />);
 
 describe('CalendarApp and the Google sign-in', () => {
     afterEach(() => {
-        vi.useRealTimers();
+        vi.restoreAllMocks();
         delete window.ipcRenderer;
     });
 
@@ -72,42 +69,23 @@ describe('CalendarApp and the Google sign-in', () => {
         expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
     });
 
-    it('a check that fails (the token file held) is asked again before falling back to Sign in', async () => {
-        vi.useFakeTimers();
-        let answers = 0;
-        const bridge = fakeBridge(async () => { answers += 1; if (answers === 1) throw HELD(); return true; });
+    it('a check that still fails after the main process retried shows Sign in, asked once', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const bridge = fakeBridge(async () => { throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }); });
         renderCalendar();
 
-        await act(() => vi.runAllTimersAsync());
-
-        expect(screen.getByText('the week')).toBeInTheDocument();
-        expect(bridge.authChecks()).toBe(2);
+        expect(await screen.findByText('Sign in with Google')).toBeInTheDocument();
+        expect(bridge.authChecks()).toBe(1);
     });
 
-    it('a check that keeps failing ends on Sign in, and stops asking', async () => {
-        vi.useFakeTimers();
-        const bridge = fakeBridge(async () => { throw HELD(); });
-        renderCalendar();
-
-        await act(() => vi.runAllTimersAsync());
-        const asked = bridge.authChecks();
-        await act(() => vi.advanceTimersByTimeAsync(60 * 60 * 1000));
-
-        expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
-        expect(asked).toBe(4);
-        expect(bridge.authChecks()).toBe(asked);
-    });
-
-    it('leaving the calendar while a check waits to be asked again cancels it', async () => {
-        vi.useFakeTimers();
-        const bridge = fakeBridge(async () => { throw HELD(); });
+    it('leaving the calendar stops listening', async () => {
+        const bridge = fakeBridge(async () => true);
         const { unmount } = renderCalendar();
-        await act(() => vi.advanceTimersByTimeAsync(0));
-        const asked = bridge.authChecks();
+        expect(await screen.findByText('the week')).toBeInTheDocument();
 
         unmount();
-        await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
 
-        expect(bridge.authChecks()).toBe(asked);
+        expect(bridge.listening('auth:success')).toBe(0);
+        expect(bridge.listening('auth:signed-out')).toBe(0);
     });
 });
