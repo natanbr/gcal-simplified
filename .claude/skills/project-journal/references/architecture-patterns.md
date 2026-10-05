@@ -922,3 +922,19 @@ what was saved instead of reading the file again. Key a full-screen loader on "n
 never on an empty list. A forced refetch needs its own identity (a generation) in the de-dup and in
 which answer may win; overlapping loads need the same. The caller states the visible period; a hook
 that infers it from the last call lets any other call take over the screen.
+
+## 2026-10-05 — "Which day is done" comes from the occurrence, not the clock at the outcome
+
+**Learning:** `lastCompletedOrFailedEveningDate` was `getLocalDateString(outcome instant)`, and the
+scheduler compared it with *today*. Both halves agree on every daytime window, so the suite never saw
+that they answer different questions: an evening 23:30–00:30 that ended at 00:30 marked the next
+day's evening done, and it never started, silently (requirements had listed it as an "open
+follow-up" for weeks). The run's start had a trap of its own: `startedAt` moves with a full Reset (a
+second attempt at the *same* occurrence), so the start that names the occurrence is `lastActiveAt`,
+which during a run still holds its start stamp. The same review found a refusal predicate that left an
+action out on a premise ("the phone only sends plain Reset for the running mission") that the phone's
+own code contradicts: it picks the phase from a broadcast that may be stale.
+**Action:** A date that identifies an occurrence is derived from the occurrence (`occurrenceDay`), and
+every reader compares against the *occurrence's* day, not `today`; test it with a window that crosses
+midnight and an outcome after it. When a refusal excludes an action "because the client never sends
+it that way", read the client's code for where it gets the target, and assume it can be stale.
