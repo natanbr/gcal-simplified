@@ -16,6 +16,11 @@
  *
  * `invalid_grant` is a 400 from the token endpoint: refused here, and handled
  * by auth-client.ts, which signs out.
+ *
+ * Assumption: Calendar v3 and Tasks v1 report a 403 limit in the legacy body,
+ * `error.errors[].reason`. A body in the newer google.rpc form only (`error.status`
+ * RESOURCE_EXHAUSTED, `error.details[].reason`) would read as a refusal: that one
+ * calendar skipped until the limit passes, as before this file existed.
  */
 export function isGoogleUnreachable(error: unknown): boolean {
     const response = field(error, 'response');

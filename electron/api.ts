@@ -220,7 +220,7 @@ export class ApiService {
 
         try {
             const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CA`);
-            if (!response.ok) throw new Error(`Public holidays answered ${response.status}`);
+            if (!response.ok) throw Object.assign(new Error('Public holidays answered not ok'), { status: response.status });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const data = await response.json() as any[];
 
@@ -238,7 +238,7 @@ export class ApiService {
             return holidays;
         } catch (error) {
             if (strict) throw error;
-            console.warn("Failed to fetch public holidays", error);
+            console.warn(`Failed to fetch public holidays for ${year} (${errorSummary(error)})`);
             return [];
         }
     }
