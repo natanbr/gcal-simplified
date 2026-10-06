@@ -133,7 +133,7 @@ describe('getEvents (the Calendar view): what it still forgives', () => {
         expect(await new ApiService().getEvents(FROM, TO)).toEqual([]);
     });
 
-    it('Google refusing the sign-in (invalid_grant): each calendar is skipped as before, while auth.ts signs out', async () => {
+    it('Google refusing the sign-in (invalid_grant): each calendar is skipped as before (the sign-out itself: auth_session.test.ts)', async () => {
         const refused = await realGoogleError({ status: 400, body: REVOKED });
         calendars({ family: refused, school: refused });
 
@@ -176,6 +176,14 @@ describe('getTasks: Google unreachable fails the read', () => {
         mocks.tasklistsList.mockRejectedValue(await offline());
 
         await expect(new ApiService().getTasks()).rejects.toMatchObject({ code: 'ENOTFOUND' });
+    });
+
+    it.each([[404, 'notFound'], [403, 'forbidden']])('the default list refused for good (%i %s): no tasks, with the error logged, as before', async (status, reason) => {
+        mocks.taskListIds = [];
+        mocks.tasklistsList.mockRejectedValue(await google(status, reason));
+
+        expect(await new ApiService().getTasks()).toEqual([]);
+        expect(console.error).toHaveBeenCalledWith(`Failed to fetch default task list (status ${status} ${reason})`);
     });
 
     it('a list Google refuses for good (404) is skipped, as before', async () => {

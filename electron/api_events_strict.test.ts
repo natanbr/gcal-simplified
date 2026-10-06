@@ -64,7 +64,7 @@ describe('getEvents — the default (calendar view) answer is unchanged', () => 
         expect(titles(await new ApiService().getEvents(FROM, TO))).toEqual(['Pro-D Day', 'Thanksgiving']);
     });
 
-    it('skips a calendar that fails, unless Google was unreachable, and still answers', async () => {
+    it('skips a calendar that fails with an error that is not a request (signed out under the read), and still answers', async () => {
         mocks.eventsList.mockImplementation(async ({ calendarId }: { calendarId: string }) => {
             if (calendarId === 'school') throw new Error('No refresh token is set.');
             return { data: { items: [] } };
