@@ -18,14 +18,12 @@
 // ============================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { initialState, mcReducer } from '../mcReducer';
 import { createLogEntry } from '../activityLog';
 import { MAX_MISSION_EXTENSION_MINS } from '../missionEndAdjust';
 import { STORAGE_KEY, loadPersistedState } from '../useMCStore';
 import { launchInsideWindow } from '../../hooks/schedulerTestKit';
+import { storeFileCalls } from './decisionCalls';
 import type { MCAction, MCState } from '../../types';
 
 const T = '2026-10-01T19:05:00';
@@ -213,8 +211,8 @@ describe('the cap across the mission’s life', () => {
 });
 
 describe('structural: one decision, asked by the reducer and by the log', () => {
-    const store = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+    // Read by the parser (decisionCalls.ts): the text match was satisfied by a comment.
     it.each(['mcReducer.ts', 'activityLog.ts'])('store/%s calls adjustedMissionEnd(state, action)', (file) => {
-        expect(readFileSync(resolve(store, file), 'utf-8')).toMatch(/\badjustedMissionEnd\(state, action\)/);
+        expect(storeFileCalls(file, 'adjustedMissionEnd')).toBe(true);
     });
 });
