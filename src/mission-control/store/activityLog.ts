@@ -11,6 +11,7 @@ import { mcReducer, selectTotalWealth } from './mcReducer';
 import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { isStaleMissionAction } from './staleMissionAction';
+import { adjustedMissionEnd } from './missionEndAdjust';
 import { reschedulesRunningMission } from './missionReschedule';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
@@ -229,8 +230,10 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return null; // The user requested to only log the main event, not subtasks.
         case 'RESET_MISSION_WITH_TIMER':
             return { id, timestamp: now, icon: '🔄', message: `Mission fully reset (tasks + timer)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
-        case 'ADJUST_MISSION_END':
-            return { id, timestamp: now, icon: '⏱️', message: `Mission time adjusted (${action.deltaMinutes > 0 ? '+' : ''}${action.deltaMinutes}m)`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
+        case 'ADJUST_MISSION_END': { // the reducer's own decision, and the move it really made
+            const adjusted = adjustedMissionEnd(state, action);
+            return adjusted && { id, timestamp: now, icon: '⏱️', message: adjusted.message, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
+        }
         case 'ADD_RESPONSIBILITY_POINT': {
             const resp = state.responsibilities.find(r => r.id === action.taskId);
             const colorKey = resp?.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';

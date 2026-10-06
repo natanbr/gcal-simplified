@@ -7,6 +7,9 @@
 // the expiry check is gated on `activeMission`, so it never expired and no miss
 // was counted, while the log said "Mission stopped" (review of 985592f).
 //
+// The same holds for both Resets and for +/- (ADJUST_MISSION_END): each acts on
+// the mission it names, and the phone names it from a card that may be stale.
+//
 // `isStaleMissionAction` is the one predicate: the reducer returns the state
 // unchanged and `createLogEntry` writes no line, the `isRefusedByShieldLock`
 // pattern. The last case pins that both files still call it.
@@ -125,12 +128,94 @@ describe('a full Reset (tasks + timer) for a mission that is not running', () =>
         expect(createLogEntry(later, eveningRunning)).toMatchObject({ message: 'Mission fully reset (tasks + timer)' });
     });
 
-    // The phone's own Reset is plain RESET_MISSION (mc-remote MissionsSection.tsx);
-    // it is not part of this refusal and keeps its semantics.
-    it('does not cover the plain RESET_MISSION', () => {
-        const plain: MCAction = { type: 'RESET_MISSION', missionPhase: 'morning', timestamp: T };
-        expect(isStaleMissionAction(initialState, plain)).toBe(false);
+});
+
+// The phone's own Reset is plain RESET_MISSION (mc-remote MissionsSection.tsx). It
+// was left out of the refusal above on the reasoning that the phone sends it only
+// for the running mission, but the phone picks the phase from each mission's
+// broadcast `active` flag, which can be stale: a second tap in the sync delay, or
+// a tap just after the mission expired. The reducer then set the ended mission
+// `active: true` with nothing running, the same hidden mission the hold made.
+describe('a plain Reset (tasks only) for a mission that is not running', () => {
+    const reset = (missionPhase: 'morning' | 'evening'): MCAction =>
+        ({ type: 'RESET_MISSION', missionPhase, origin: 'remote', isRemote: true, timestamp: T });
+
+    it('with nothing running it changes nothing', () => {
+        const after = mcReducer(initialState, reset('morning'));
+
+        expect(mission(after, 'morning').active).toBe(false);
+        expect(after.missions).toBe(initialState.missions);
     });
+
+    it('while the other mission runs it leaves both alone', () => {
+        const after = mcReducer(eveningRunning, reset('morning'));
+
+        expect(mission(after, 'morning').active).toBe(false);
+        expect(after.missions).toBe(eveningRunning.missions);
+    });
+
+    it('for a mission stuck active with nothing running it changes nothing: the Stop is the way out', () => {
+        const stuck: MCState = { ...eveningRunning, activeMission: 'none' };
+        expect(mcReducer(stuck, reset('evening')).missions).toBe(stuck.missions);
+    });
+
+    it('for the running mission it still clears the checklist and keeps the timer', () => {
+        const ticked = mcReducer(eveningRunning, { type: 'COMPLETE_TASK', missionPhase: 'evening', taskId: 'shower', timestamp: T });
+        const after = mcReducer(ticked, reset('evening'));
+
+        expect(mission(after, 'evening').tasks.every(t => !t.completed)).toBe(true);
+        expect(mission(after, 'evening').startedAt).toBe(mission(ticked, 'evening').startedAt);
+    });
+
+    it('writes no log line either way (unchanged: a plain Reset has never been logged)', () => {
+        expect(createLogEntry(reset('morning'), initialState)).toBeNull();
+        expect(createLogEntry(reset('evening'), eveningRunning)).toBeNull();
+    });
+});
+
+// The phone's +1 / +5 / +10 and −1 / −5 / −10 are ADJUST_MISSION_END for the
+// card's phase, picked the same way. The reducer ignored one for a mission that
+// was not running, but the log still wrote "⏱️ Mission time adjusted (+5m)" for
+// it; and with nothing running it adjusted a mission stuck active.
+describe('a time adjustment for a mission that is not running', () => {
+    const adjust = (missionPhase: 'morning' | 'evening', deltaMinutes = 5): MCAction =>
+        ({ type: 'ADJUST_MISSION_END', missionPhase, deltaMinutes, origin: 'remote', isRemote: true, timestamp: T });
+
+    it('with nothing running it changes nothing, and logs nothing', () => {
+        expect(mcReducer(initialState, adjust('morning')).missions).toBe(initialState.missions);
+        expect(createLogEntry(adjust('morning'), initialState)).toBeNull();
+    });
+
+    it('naming the other mission while one runs, it changes nothing, and logs nothing', () => {
+        expect(mcReducer(eveningRunning, adjust('morning')).missions).toBe(eveningRunning.missions);
+        expect(createLogEntry(adjust('morning'), eveningRunning)).toBeNull();
+    });
+
+    it('for a mission stuck active with nothing running, it changes nothing, and logs nothing', () => {
+        const stuck: MCState = { ...eveningRunning, activeMission: 'none' };
+        expect(mcReducer(stuck, adjust('evening')).missions).toBe(stuck.missions);
+        expect(createLogEntry(adjust('evening'), stuck)).toBeNull();
+    });
+
+    it('for the running mission it still moves the end, and logs it', () => {
+        const after = mcReducer(eveningRunning, adjust('evening', 10));
+
+        expect(mission(after, 'evening').durationMins).toBe(70);
+        expect(createLogEntry(adjust('evening', 10), eveningRunning)).toMatchObject({ message: 'Mission time adjusted (+10m)', source: 'remote' });
+    });
+});
+
+// What it covers: the Stop, both Resets and +/-. NOT covered, a known gap (a
+// product call, review of PR 193): the same stale card's whining toggle and task
+// taps (TOGGLE_WHINING, COMPLETE_TASK), which still change an ended mission.
+describe('the predicate covers the Stop, both Resets and +/- from a stale phone card', () => {
+    it.each(['CANCEL_MISSION', 'RESET_MISSION', 'RESET_MISSION_WITH_TIMER', 'ADJUST_MISSION_END'] as const)(
+        '%s naming the other mission while one runs is stale', (type) => {
+            const action = (type === 'ADJUST_MISSION_END'
+                ? { type, missionPhase: 'morning', deltaMinutes: 5, timestamp: T }
+                : { type, missionPhase: 'morning', timestamp: T }) satisfies MCAction;
+            expect(isStaleMissionAction(eveningRunning, action)).toBe(true);
+        });
 });
 
 describe('structural: one predicate, called by the reducer and by the log', () => {

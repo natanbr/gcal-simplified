@@ -1,6 +1,6 @@
-import React, { useReducer, useMemo, useEffect, useRef, useState } from 'react';
+import React, { useReducer, useMemo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { mcReducer } from './mcReducer';
-import { MCContext, loadPersistedState, STORAGE_KEY } from './useMCStore';
+import { MCContext, loadPersistedStateWithRepairs, STORAGE_KEY } from './useMCStore';
 import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
 import { useRemoteSync } from './useRemoteSync';
 import { useAuditTrail } from './useAuditTrail';
@@ -12,6 +12,7 @@ import { gameTokensOverCap } from './moodGauge';
 import { pendingFrom } from './pendingState';
 import { useSchoolCalendarSync } from './useSchoolCalendarSync';
 import { pairingRenewedLogEntry, renewalToMark } from './pairingRenewal';
+import { missionTimeRepairLogEntry } from './missionTimeRepair';
 
 /** Inside the provider: both dispatch through the logging interceptor. */
 function SuspensionExpiry(): null {
@@ -36,7 +37,9 @@ function SchoolCalendarSync(): null {
 }
 
 export function MCStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
-    const [state, dispatch] = useReducer(mcReducer, undefined, loadPersistedState);
+    // Read once; the mission times hydration reset are logged just after load (missionTimeRepair.ts).
+    const [loaded] = useState(loadPersistedStateWithRepairs);
+    const [state, dispatch] = useReducer(mcReducer, loaded.state);
     // Every render starts the interceptor's pending state from this render's state.
     const pending = useRef(pendingFrom(state));
     pending.current = pendingFrom(state);
@@ -45,6 +48,19 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     // store change for the app's lifetime, for a job only an over-cap load has.
     const [needsSettle] = useState(() => gameTokensOverCap(state) > 0);
     const [hasStaleRun] = useState(() => staleIncompleteRunPhases(state).length > 0);
+
+    // Once per load, before paint: the mission times hydration reset get one system line
+    // (missionTimeRepair.ts). After load, not in it, or the audit trail, which treats the
+    // loaded log as already written, never sees it. Dispatched raw, like the pairing-renewal
+    // line: it logs no action, so there is nothing for the interceptor to derive or refuse.
+    // The ref is the guard (StrictMode runs the effect twice).
+    const repairLogged = useRef(false);
+    useLayoutEffect(() => {
+        if (repairLogged.current) return;
+        repairLogged.current = true;
+        const log = missionTimeRepairLogEntry(loaded.missionTimeRepairs, new Date().toISOString());
+        if (log) dispatch({ type: 'ADD_LOG', log });
+    }, [loaded]);
 
     // Accrue mood progress once a minute while the app is running.
     // This heartbeat is the ONLY generator of game tokens — see

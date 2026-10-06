@@ -97,28 +97,48 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   parent loses control of it.
 - **Refusals must be silent in the log and visible on screen**: `isRefusedByShieldLock` is the single
   predicate the reducer and `activityLog.ts` both call, so a refused action writes no derived log
-  line. A **hand-built** `ADD_LOG` bypasses that mirror entirely. There are three such sites:
+  line. A **hand-built** `ADD_LOG` bypasses that mirror entirely. There are four such sites:
   `useQuickGameSession` (its two game lines, the only ones that log a refusable action), the
-  scheduler's skipped-mission line (`useMissionScheduler`) and the pairing-renewal line
-  (`MCStoreProvider`, built in `store/pairingRenewal.ts`); `shieldLog` in `missionStreak.ts` is built
+  scheduler's skipped-mission line (`useMissionScheduler`), the pairing-renewal line
+  (`MCStoreProvider`, built in `store/pairingRenewal.ts`) and the load-time mission-time repair line
+  (`MCStoreProvider`, built in `store/missionTimeRepair.ts`); `shieldLog` in `missionStreak.ts` is built
   by hand inside the reducer. Any new hand-built entry must re-check the same condition before dispatching. And a
   refusal must be refused *before* any optimistic UI commits — the drag handlers return `false` when
   locked so the token springs back, rather than animating a coin away that the reducer then keeps.
 - **A mission re-trigger clears `loggedTimeoutAt`**: it marks "this occurrence already timed out", so
   a stale stamp surviving into the next day silently caps the streak (it capped at 2, and the shield
   could never break). Any new field describing *this occurrence* belongs in the `SET_ACTIVE_MISSION`
-  fresh-start reset. The opposite is `lastActiveAt`: stamped when a run starts **and** when it ends
+  fresh-start reset (`freshAttempt` in `store/missionAttempt.ts`, shared with the full Reset, plus the
+  run's `occurrenceDate`). The opposite is `lastActiveAt`: stamped when a run starts **and** when it ends
   (`stampMissionActivity`, derived from the `activeMission` transition in the reducer wrapper, its
   only writer) and **never** cleared, because the scheduler reads it to know the occurrence already
   ran. A stop records no outcome (not a miss, not a conclusion), so clearing it beside `startedAt`
-  restarts a stopped mission instantly (2026-09-22). Guarded by `activity-stamp-boundary.test.ts`.
+  restarts a stopped mission instantly (2026-09-22). An end noticed late (the app was closed, or a stale
+  run ended at load) is stamped at the run's **due** end, or the same phase's next window reads as run.
+  Guarded by `activity-stamp-boundary.test.ts`.
+  An outcome (completion or miss) is dated by the day its **occurrence** started, never by the clock
+  at the outcome, and that day is decided when the run **starts** and stored on it (`occurrenceDate`,
+  `store/occurrenceDay.ts`): the scheduler names the occurrence it starts; a start by hand or from the
+  phone never belongs to a future day's occurrence (at or after today's window start: today's; before
+  it: the nearer of today's start ahead and the previous occurrence's end behind, a tie: today; inside
+  the previous window: that one; all in real time); a full Reset keeps it. The outcome writes it into `lastCompletedOrFailed*Date`, and the scheduler compares an
+  occurrence with its own start day. Dated by the clock, an evening ending at 00:30 marked the next
+  day's evening done, and it never started; re-derived at the outcome, a Settings save mid-run or a
+  late start moved it again. Guarded by `mcReducer.occurrence-day.test.ts`,
+  `useMissionScheduler.overnight.test.tsx` and `outcome-date-boundary.test.ts`.
 - **Only the phone stops a mission**: no desktop *gesture* dispatches `CANCEL_MISSION` (a stop sticks for the
   window and spares the shield, so a desktop gesture let the child end one); "— Minimize" only minimizes.
   The phone's Stop reaches it through `REMOTE_ALLOWED_ACTIONS`. Guarded by `action-literal-boundary.test.ts`.
   One desktop path still ends a mission: saving a new start time for the RUNNING mission in MC Settings
   (`SET_SETTINGS`). That is kept and logged, "⏹️ … mission ended: its start time was changed in Settings"
-  (open decision, PR 170). A Stop or a full Reset naming a mission that is not the running one is refused
-  by the reducer and the log alike (`isStaleMissionAction`, `mcReducer.stale-mission-action.test.ts`).
+  (open decision, PR 170). A Stop, a Reset (plain or full) or a time adjustment naming a mission that is
+  not the running one is refused by the reducer and the log alike (`isStaleMissionAction`,
+  `mcReducer.stale-mission-action.test.ts`): the phone names it from a card that may be stale. (A stale
+  whining or task tap is not refused: a known gap, a product call.) And a time adjustment may make a run
+  at most its length when it started (`baseDurationMins`) + 60 min (`MAX_MISSION_EXTENSION_MINS`),
+  compared in whole seconds; past that it is refused, not clamped, through `adjustedMissionEnd`
+  (`store/missionEndAdjust.ts`), which the reducer and the log both ask, and the log names the move
+  that really happened (`mcReducer.mission-end-cap.test.ts`).
 - **Quick-game window**: games open only between the day's missions — `isQuickGameWindowOpen` in
   `gameWindow.ts`, enforced in the `START_GAME` **and** `CONSUME_CASE` reducer cases (they must
   agree, or redeeming at the boundary burns the goal for a game that is then refused), not only at

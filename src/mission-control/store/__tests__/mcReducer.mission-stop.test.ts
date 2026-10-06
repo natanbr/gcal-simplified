@@ -142,3 +142,28 @@ describe('the stamp across a restart', () => {
         expect(restartWithEvening({}).lastActiveAt).toBeUndefined();
     });
 });
+
+// The overlay's timer keeps its last props for the ~575 ms of its exit
+// animation, so a phone Stop that lands just before "Time's up" let it dispatch
+// MARK_MISSION_TIMEOUT for the stopped mission: a silent miss (shield −1, gauge
+// −20, an outcome date) with only "Mission stopped" in the log (review of PR
+// 193, V8). A timeout is an outcome of a RUNNING mission, as a completion is.
+describe('a timeout that arrives after the stop', () => {
+    const TIMEOUT_0634: MCAction = { type: 'MARK_MISSION_TIMEOUT', missionPhase: 'morning', timestamp: isoAt(6, 34) };
+
+    it('changes nothing: no miss, no gauge penalty, no outcome date', () => {
+        const stopped = run(initialState, START_0604, STOP_0605);
+        const after = mcReducer(stopped, TIMEOUT_0634);
+
+        expect(after.missedMissionStreak).toBe(0);
+        expect(after.lastCompletedOrFailedMorningDate).toBeNull();
+        expect(after.missions).toBe(stopped.missions);
+    });
+
+    it('guard: the scheduler’s order (timeout while running, then the end) still charges the miss', () => {
+        const after = run(initialState, START_0604, TIMEOUT_0634,
+            { type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler', timestamp: isoAt(6, 34) });
+        expect(after.missedMissionStreak).toBe(1);
+        expect(mission(after, 'morning').loggedTimeoutAt).toBe(isoAt(6, 34));
+    });
+});

@@ -5,9 +5,10 @@
 // never ended: the expiry check skips a null duration. Hydration gives a run
 // from today its window's length (hhmm.ts hydrateMissionTimes), so it ends
 // normally. A run whose window closed before today must not: its first tick
-// would charge a miss dated on the launch day (a shield segment for a data
-// bug) and mark today's occurrence concluded, so that day's mission never
-// started. Hydration leaves it as saved; END_STALE_MISSION_RUN, dispatched once
+// would charge a miss, a shield segment for a data bug. The end of such a run
+// is stamped at its due end (missionActivity.ts), not at this launch, so a
+// launch inside the same phase's window today still starts today's mission.
+// Hydration leaves it as saved; END_STALE_MISSION_RUN, dispatched once
 // after load (useStaleMissionRunEnd), ends it with no outcome, like a Stop.
 // The reducer and createLogEntry both ask isStaleIncompleteRun, so a replay or
 // a second dispatch changes nothing and writes no line.
@@ -43,8 +44,9 @@ function staleRun(state: MCState, phase: Phase, instant: string): Mission | unde
 
 /**
  * No outcome: no miss, no conclusion date. The run is cleared; ending the
- * activeMission it named lets stampMissionActivity stamp lastActiveAt, so the
- * old occurrence is not restarted. Same state when the run is not stale.
+ * activeMission it named lets stampMissionActivity stamp lastActiveAt at the
+ * run's due end, so the old occurrence is not restarted and today's is not
+ * taken as run. Same state when the run is not stale.
  */
 export function endStaleMissionRun(state: MCState, phase: Phase, instant: string): MCState {
     if (!staleRun(state, phase, instant)) return state;

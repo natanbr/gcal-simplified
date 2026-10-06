@@ -10,12 +10,13 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import type { ActivityLogEntry, MCAction, MCState, MissionPhase } from '../types';
+import type { ActivityLogEntry, MCAction, MCState, Mission, MissionPhase } from '../types';
 
 /** Mirrors ActivityLogEntry['source'] without importing activityLog.ts (that would cycle). */
 type LogSource = NonNullable<ActivityLogEntry['source']>;
-import { getLocalDateString, MAX_ACTIVITY_LOGS } from './behaviorSync';
+import { MAX_ACTIVITY_LOGS } from './behaviorSync';
 import { moveGauge } from './moodGauge';
+import { occurrenceDay } from './occurrenceDay';
 
 /** Net misses (each completion gives one back) that break the shield and freeze the child's economy. */
 export const MISSED_LOCK_THRESHOLD = 6;
@@ -156,11 +157,12 @@ function shieldLog(
     };
 }
 
-/** The morning/evening outcome-date field for a phase. */
-function outcomeDatePatch(phase: MissionPhase, nowIso: string): Partial<MCState> {
-    const date = getLocalDateString(new Date(nowIso));
-    if (phase === 'morning') return { lastCompletedOrFailedMorningDate: date };
-    if (phase === 'evening') return { lastCompletedOrFailedEveningDate: date };
+/** The morning/evening outcome-date field for a run: the day its occurrence began, not the
+ *  outcome's (an evening ending at 00:30 marked the next day's evening done). */
+function outcomeDatePatch(mission: Mission, nowIso: string): Partial<MCState> {
+    const date = occurrenceDay(mission, nowIso);
+    if (mission.phase === 'morning') return { lastCompletedOrFailedMorningDate: date };
+    if (mission.phase === 'evening') return { lastCompletedOrFailedEveningDate: date };
     return {};
 }
 
@@ -201,13 +203,15 @@ export function applyMissionTimeout(
     nowIso: string,
 ): MCState {
     const mission = state.missions.find(m => m.phase === missionPhase);
-    if (!mission || mission.loggedTimeoutAt) return state;
+    // Only a running mission times out: the overlay's timer, still mounted for its
+    // exit animation, fired after a phone Stop and charged a silent miss.
+    if (!mission || !mission.active || mission.loggedTimeoutAt) return state;
 
     return {
         ...state,
         ...moveGauge(state, -TIMEOUT_BEHAVIOR_PENALTY, 0).patch,
         ...applyStreakChange(state, sanitizeMissedStreak(state.missedMissionStreak) + 1, nowIso, 'missed'),
-        ...outcomeDatePatch(missionPhase, nowIso),
+        ...outcomeDatePatch(mission, nowIso),
         missions: state.missions.map(m =>
             m.phase === missionPhase ? { ...m, loggedTimeoutAt: nowIso } : m,
         ),
@@ -242,7 +246,7 @@ export function applyMissionRoutineComplete(
         bankCount: state.bankCount + bonusTokens,
         ...moveGauge(state, whining ? 0 : COMPLETION_BEHAVIOR_BONUS, 1).patch, // earning a token resets mood
         ...applyStreakChange(state, sanitizeMissedStreak(state.missedMissionStreak) - 1, nowIso, 'completed'),
-        ...outcomeDatePatch(missionPhase, nowIso),
+        ...outcomeDatePatch(mission, nowIso),
         missions: state.missions.map(m =>
             m.phase === missionPhase
                 ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }
