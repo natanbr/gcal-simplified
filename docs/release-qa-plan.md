@@ -79,7 +79,7 @@ without one they check nothing in two different ways. `week-navigation`, `monthl
 **passed** (their output says "Skipping"); `event-colors` also passes with zero events. So check the
 report for skips and those three specs' output before trusting a `[glance]` there. Coverage is also
 narrower than the names: `mc-bank-management` reaches the real "⚙️ Bank Admin" only for "+1" (its
-other tests open the look-alike trap), Activity's "Claim" (+3) has no automated test, and
+other tests open the look-alike trap), Activity's "Claim" (+3) is covered by unit tests only (no E2E spec), and
 `event-colors` checks colour classes, not measured contrast.
 
 ## 2. Profiles

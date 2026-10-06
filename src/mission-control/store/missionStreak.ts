@@ -94,7 +94,10 @@ const LOCKED_WHILE_SHIELD_BROKEN: ReadonlySet<MCAction['type']> = new Set<MCActi
     'VACUUM_TO_CASE',
     'CONSUME_CASE',
     'START_GAME',
-    // Earning — the child's own loop
+    // Earning — the child's own loop. A point is refused whatever its amount, the
+    // parent's phone ➖ included (decided 2026-10-06, PR 195): unlike REMOVE_TOKEN
+    // it moves no token, so there is nothing to correct in the bank, and it is no
+    // way out of the lock. The phone greys out both point buttons while locked.
     'ADD_RESPONSIBILITY_POINT',
     'RESET_RESPONSIBILITY',
 ]);
