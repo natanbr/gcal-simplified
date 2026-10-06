@@ -1,15 +1,16 @@
 // ============================================================
-// Calendar — Save, reconnect and overlapping loads
+// Calendar — Save and overlapping loads
 // ------------------------------------------------------------
-// Saving Settings and a reconnect must really refetch: a request already in
-// flight was built with the old calendar selection, so it must not stand in for
-// the new one, nor land last and win. Save applies the config it just wrote
-// instead of reading config.json again at the moment antivirus is most likely
-// to hold it. And a load that fails in an unexpected way must still end, or the
-// header's loading loops run on the idle Calendar.
+// Saving Settings must really refetch: a request already in flight was built
+// with the old calendar selection, so it must not stand in for the new one,
+// nor land last and win. Save applies the config it just wrote instead of
+// reading config.json again at the moment antivirus is most likely to hold it.
+// And a load that fails in an unexpected way must still end, or the header's
+// loading loops run on the idle Calendar. A reconnect remounts the Dashboard
+// instead (CalendarApp.reconnect.test.tsx).
 // ============================================================
 
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest';
 import { Dashboard } from '../Dashboard';
 import { calendarEvent, installCalendarIpc, settle, someWeather, type CalendarIpc } from '../calendarTestKit';
@@ -38,8 +39,6 @@ async function saveSettings(weekStart?: 'monday' | 'sunday') {
     fireEvent.click(screen.getByTestId('save-settings-button'));
     await settle();
 }
-
-const reconnect = () => act(async () => { ipc.listeners['auth:success'](); });
 
 beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -74,7 +73,7 @@ describe('Save', () => {
     it('refetches even while a request for the month is in flight, and that older answer cannot win', async () => {
         await launch();
         ipc.holding.add('data:events');
-        await reconnect();                       // a request built with the old selection, now in flight
+        await saveSettings();                    // a request built with the old selection, now in flight
         const before = ipc.requests('data:events').length;
         ipc.events = [STANDUP, ADDED];           // the saved selection adds a calendar
 
@@ -87,35 +86,6 @@ describe('Save', () => {
     });
 });
 
-describe('Reconnect', () => {
-    it('reads the settings again and refetches the visible month even when nothing changed', async () => {
-        await launch();
-        const before = ipc.requests('data:events').length;
-
-        await reconnect();
-        await settle();
-
-        expect(ipc.requests('data:events').length).toBe(before + 1);
-        expect(ipc.requests('settings:get').length).toBe(2);
-    });
-
-    it('refetches while a request for the month is in flight', async () => {
-        await launch();
-        ipc.holding.add('data:events');
-        await reconnect();
-        const before = ipc.requests('data:events').length;
-        ipc.events = [STANDUP, ADDED];
-
-        await reconnect();
-        await settle();
-        expect(ipc.requests('data:events').length).toBe(before + 1);
-
-        await ipc.release('data:events', 'newest');
-        await ipc.release('data:events', 'oldest');
-        expect(screen.getByTestId('event-card-added-calendar')).toBeTruthy();
-    });
-});
-
 describe('Loads that overlap or fail unexpectedly', () => {
     it('the first load ending does not hide the indicator while a newer load still runs', async () => {
         ipc.weather = someWeather;              // the tasks count shows on the weather pill
@@ -124,10 +94,10 @@ describe('Loads that overlap or fail unexpectedly', () => {
         await launch();                          // the week shows; the launch's tasks answer is held
 
         ipc.tasks = tasks(1);
-        await reconnect();
+        await saveSettings();
         await settle();
         await ipc.release('data:tasks', 'oldest'); // the launch's answer lands first
-        expect(busy()).toBeTruthy();              // the reconnect's load is still running
+        expect(busy()).toBeTruthy();              // the Save's load is still running
 
         await ipc.release('data:tasks', 'newest');
         expect(busy()).toBeNull();
@@ -141,7 +111,7 @@ describe('Loads that overlap or fail unexpectedly', () => {
         await launch();
 
         ipc.tasks = tasks(1);
-        await reconnect();
+        await saveSettings();
         await settle();
         await ipc.release('data:tasks', 'newest');
         await ipc.release('data:tasks', 'oldest');

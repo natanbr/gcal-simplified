@@ -259,6 +259,22 @@ describe('useCalendarData', () => {
             expect(result.current.events).toEqual([]);
             expect(result.current.failure).toEqual({ kind: 'unloaded' });
         });
+
+        // March's read starts on Feb 22: a February week from then on is covered, one starting the day before is not.
+        it('a month never read borrows the events on screen only from the first day their read covers', async () => {
+            mockIpc.invoke.mockResolvedValueOnce(answer('mar'));
+            const { result, rerender } = renderMonth('2026-03', 1, daysFrom(new Date(2026, 2, 2), 7));
+            await settle();
+
+            mockIpc.invoke.mockImplementation(offline);
+            rerender({ month: '2026-02', generation: 1, onScreen: daysFrom(new Date(2026, 1, 22), 7) });  // Feb 22-28
+            await settle();
+            expect(ids(result.current.events)).toEqual(['mar']);
+
+            rerender({ month: '2026-02', generation: 1, onScreen: daysFrom(new Date(2026, 1, 21), 7) }); // Feb 21-27
+            expect(result.current.events).toEqual([]);
+            expect(result.current.failure).toEqual({ kind: 'unloaded' });
+        });
     });
 });
 

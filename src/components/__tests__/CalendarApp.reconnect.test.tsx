@@ -54,6 +54,19 @@ describe('CalendarApp: Reconnect as another account', () => {
         expect(screen.getByTestId('calendar-read-notice').textContent).toBe("Couldn't load the calendar");
     });
 
+    it('reads the settings, the month, the tasks and the weather once each: the remount is the only reload', async () => {
+        render(<CalendarApp onSwitchToMC={() => undefined} />);
+        await screen.findByTestId('event-card-account-a-dentist');
+        await settle();
+        const before = ['settings:get', 'data:events', 'data:tasks', 'weather:get'].map(c => ipc.requests(c).length);
+
+        await act(async () => { ipc.listeners['auth:success'](); });
+        await screen.findByTestId('event-card-account-a-dentist');   // the new account happens to have it too
+        await settle();
+
+        expect(['settings:get', 'data:events', 'data:tasks', 'weather:get'].map((c, i) => ipc.requests(c).length - before[i])).toEqual([1, 1, 1, 1]);
+    });
+
     it('an answer for the account before it, still in flight at the sign-in, cannot land', async () => {
         ipc.holding.add('data:events');
         render(<CalendarApp onSwitchToMC={() => undefined} />);    // account A's read, held

@@ -17,7 +17,7 @@ async function readSettings(): Promise<UserConfig | null> {
  * config.json again while antivirus may hold it), then starts a new events generation, so the events
  * are requested for the saved settings and are requested again even when nothing in them changed.
  * Generation 0 means the settings have not been read yet: no events request. Loads can overlap
- * (launch, Save, reconnect): only the newest one applies what it reads and ends the loading state.
+ * (launch, Save): only the newest one applies what it reads and ends the loading state.
  */
 export function useDashboardLoad() {
     const [config, setConfig] = useState<UserConfig>({ calendarIds: [], taskListIds: [] });
@@ -72,8 +72,7 @@ export function useDashboardLoad() {
 
     useEffect(() => { void reload(); }, [reload]);
 
-    // A reconnect (Settings → Reconnect Account) loads everything again.
-    useEffect(() => window.ipcRenderer?.on('auth:success', () => { void reload(); }), [reload]);
+    // No auth:success listener: a new sign-in remounts the Dashboard (CalendarApp), which loads everything.
 
     // The one place an absent week start is resolved, as electron/store.ts defaults it.
     const weekStartDay: WeekStartDay = config.weekStartDay ?? 'today';

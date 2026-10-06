@@ -14,7 +14,7 @@
 // (Adapted from a PR 194 review probe.)
 // ============================================================
 
-import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
 import net from 'node:net';
 
 const state = vi.hoisted(() => ({ client: null as unknown }));
@@ -27,7 +27,16 @@ import { isGoogleUnreachable } from './google-unreachable';
 
 let closedPort = 0;
 
+// gaxios skips its proxy for a host NO_PROXY or no_proxy lists: with googleapis.com in one of them, a
+// refresh with these dummy credentials would reach Google. Neither is read while this file runs.
+const BYPASS = ['NO_PROXY', 'no_proxy'] as const;
+const savedBypass = new Map(BYPASS.map(name => [name, process.env[name]]));
+afterAll(() => {
+    for (const [name, value] of savedBypass) if (value !== undefined) process.env[name] = value;
+});
+
 beforeAll(async () => {
+    for (const name of BYPASS) delete process.env[name];
     const probe = net.createServer();
     await new Promise<void>(resolve => probe.listen(0, '127.0.0.1', () => resolve()));
     const address = probe.address();
@@ -46,6 +55,7 @@ function offlineClient() {
     const client = new GoogleOAuthClient('client-id', 'client-secret', () => { signOuts.count++; });
     client.setCredentials({ access_token: 'expired-access', refresh_token: 'kept-refresh', token_type: 'Bearer', expiry_date: Date.now() - 3_600_000 });
     client.transporter.defaults.proxy = `http://127.0.0.1:${closedPort}`;
+    client.transporter.defaults.noProxy = []; // and no host exempt from it
     state.client = client;
     return { client, signOuts };
 }
