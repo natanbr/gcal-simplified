@@ -27,6 +27,7 @@ export interface CalendarIpc {
     throwing: Set<string>;
     /** Channels whose answers wait for `release`. */
     holding: Set<string>;
+    /** Sends a main-process event: calls every listener subscribed to the channel now. */
     listeners: Record<string, () => void>;
     invoke: ReturnType<typeof vi.fn<(channel: string, ...args: unknown[]) => Promise<unknown>>>;
     /** Lets held answers go, all of one channel or only its oldest or newest, then settles. */
@@ -56,6 +57,7 @@ export const someWeather: WeatherData = {
 /** Installs the fake as `window.ipcRenderer`; remove it with `delete window.ipcRenderer`. */
 export function installCalendarIpc(): CalendarIpc {
     const held: Held[] = [];
+    const subscribed = new Map<string, Set<() => void>>();
     const ipc: CalendarIpc = {
         settings: { calendarIds: [], taskListIds: [], weekStartDay: 'today' },
         events: [],
@@ -85,6 +87,7 @@ export function installCalendarIpc(): CalendarIpc {
     async function answerFor(channel: string, args: unknown[]): Promise<unknown> {
         if (ipc.failing.has(channel)) throw new Error(`${channel} failed`);
         switch (channel) {
+            case 'auth:check': return true;
             case 'settings:get': return { ...ipc.settings };
             case 'settings:save': ipc.settings = { ...(args[0] as UserConfig) }; return { ok: true };
             case 'data:events': {
@@ -101,7 +104,13 @@ export function installCalendarIpc(): CalendarIpc {
 
     window.ipcRenderer = {
         invoke: ipc.invoke,
-        on: (channel, listener) => { ipc.listeners[channel] = listener as () => void; return () => undefined; },
+        on: (channel, listener) => {
+            // Several listeners per channel, as Electron's (CalendarApp and the Dashboard both hear auth:success).
+            const set = subscribed.get(channel) ?? new Set<() => void>();
+            subscribed.set(channel, set.add(listener as () => void));
+            ipc.listeners[channel] = () => { [...set].forEach(l => l()); };
+            return () => { set.delete(listener as () => void); };
+        },
     };
     return ipc;
 }
