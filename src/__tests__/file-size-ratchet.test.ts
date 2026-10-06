@@ -72,8 +72,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 748 → 738 the same day (a new attempt's fields, shared by the fresh start and the
     // full Reset, moved to store/missionAttempt.ts with the run's stored day and base length).
     // 738 → 731 on 2026-10-06 (ADD_RESPONSIBILITY_POINT delegates to store/responsibilityPoint.ts,
-    // which decides what a press does and is shared with the log).
-    'src/mission-control/store/mcReducer.ts': 731,
+    // which decides what a press does and is shared with the log), then 731 → 725 the same
+    // day (RESET_RESPONSIBILITY asks store/responsibilityClaim.ts, shared with the log too).
+    'src/mission-control/store/mcReducer.ts': 725,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.

@@ -32,6 +32,7 @@ import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
 import { adjustedMissionEnd } from './missionEndAdjust';
 import { responsibilityPointChange } from './responsibilityPoint';
+import { responsibilityClaim } from './responsibilityClaim';
 import { endStaleMissionRun } from './staleMissionRun';
 import { reschedulesRunningMission, startTimeChanged } from './missionReschedule';
 import { CREAM_TASK_ID, syncCreamTask, withSchoolBag } from './routineTasks';
@@ -542,17 +543,10 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             };
         }
 
-        case 'RESET_RESPONSIBILITY': {
-            const addedBank = action.claimTokens ? state.bankCount + action.claimTokens : state.bankCount;
-            return {
-                ...state,
-                bankCount: addedBank,
-                responsibilities: state.responsibilities.map(r =>
-                    r.id === action.taskId
-                        ? { ...r, pointsEarned: 0, completedAt: null }
-                        : r
-                )
-            };
+        case 'RESET_RESPONSIBILITY': { // the parent's Claim
+            const claim = responsibilityClaim(state, action); // activityLog.ts mirrors this
+            if (claim === null) return state;
+            return { ...state, bankCount: state.bankCount + claim.tokens, responsibilities: state.responsibilities.map(r => (r.id === action.taskId ? { ...r, pointsEarned: 0, completedAt: null } : r)) };
         }
 
         case 'ADD_LOG': {

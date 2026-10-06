@@ -27,6 +27,8 @@ function locked(patch: Partial<MCState> = {}): MCState {
             : c.id === 1 ? { ...c, status: 'active' as const, reward: 'campfire' as const, targetCount: 4, tokenCount: 1 }
             : c,
         ),
+        // Activity is COMPLETE too: the only state in which its card offers Claim.
+        responsibilities: initialState.responsibilities.map(r => (r.id === 'activity' ? { ...r, pointsEarned: 3, completedAt: `${TODAY}T08:00:00` } : r)),
         ...patch,
     };
 }
@@ -61,8 +63,8 @@ const FROZEN_ACTIONS: MCAction[] = [
     { type: 'CONSUME_CASE', caseId: 0 },
     { type: 'START_GAME' },
     // The earning loop: tapping an activity, and claiming a finished chore.
-    { type: 'ADD_RESPONSIBILITY_POINT', taskId: initialState.responsibilities[0].id },
-    { type: 'RESET_RESPONSIBILITY', taskId: initialState.responsibilities[0].id, claimTokens: 3 },
+    { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' },
+    { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
 ];
 
 // The PARENT's tools and the exit. Blocking any of these would either make the

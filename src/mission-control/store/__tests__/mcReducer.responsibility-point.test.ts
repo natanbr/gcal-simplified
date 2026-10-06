@@ -167,24 +167,8 @@ describe('complete, take one back, earn it again', () => {
         expect(state.gameTokens).toBe(done.gameTokens);
     });
 
-    it('after a Claim the count is 0, so a ➖ changes nothing and the paid tokens stay', () => {
-        const claim: MCAction = { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3, timestamp: T };
-        const { state, lines } = press(withPoints('activity', 3), claim, phone('activity', -1));
-        expect(messages(lines)).toEqual(['Activity completed']);
-        expect(state.bankCount).toBe(initialState.bankCount + 3);
-        expect(task(state, 'activity').pointsEarned).toBe(0);
-    });
-
-    it('FINDING, pinned as it is today: a Claim that lands after a ➖ took the task below its goal still pays', () => {
-        // RESET_RESPONSIBILITY pays claimTokens whatever the count: only the desktop
-        // card hides Claim below the goal, and the phone cannot send it. So the one way
-        // here is a Claim tap racing the phone's ➖. Changing it is an economy decision.
-        const claim: MCAction = { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3, timestamp: T };
-        const { state, lines } = press(withPoints('activity', 3), phone('activity', -1), claim);
-        expect(messages(lines)).toEqual(['-1 point for Activity (2/3) — no longer complete', 'Activity completed']);
-        expect(lines[1].delta).toBe(3);
-        expect(state.bankCount).toBe(initialState.bankCount + 3);
-    });
+    // The Claim's side of this life (a ➖ after a Claim, a Claim after a ➖):
+    // mcReducer.responsibility-claim.test.ts.
 });
 
 describe('over the real remote channel (useRemoteControl’s validator)', () => {

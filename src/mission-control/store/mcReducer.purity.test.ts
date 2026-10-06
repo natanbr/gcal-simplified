@@ -58,7 +58,7 @@ const SAMPLE_ACTIONS: MCAction[] = [
     { type: 'CONSUME_CASE', caseId: 0 },
     { type: 'SET_SETTINGS', settings: { morningStartsAt: '07:00' } },
     { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' },
-    { type: 'RESET_RESPONSIBILITY', taskId: 'recycling', claimTokens: 3 },
+    { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
     {
         type: 'ADD_LOG',
         log: { id: 'x', timestamp: TIMESTAMP, icon: '🪙', message: 'm', type: 'manual' },
@@ -101,6 +101,10 @@ function richState(): MCState {
         ),
         missions: initialState.missions.map(m =>
             m.phase === 'morning' ? { ...m, active: true, startedAt: TIMESTAMP, durationMins: 30 } : m
+        ),
+        // Activity complete, so its Claim pays rather than being refused.
+        responsibilities: initialState.responsibilities.map(r =>
+            r.id === 'activity' ? { ...r, pointsEarned: r.pointsRequired, completedAt: TIMESTAMP } : r
         ),
     };
 }

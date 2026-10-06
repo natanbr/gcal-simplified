@@ -276,7 +276,7 @@ export type MCAction = (
     | { type: 'CONSUME_CASE'; caseId: number }
     | { type: 'SET_SETTINGS'; settings: Partial<MCSettings> }
     | { type: 'ADD_RESPONSIBILITY_POINT'; taskId: string; amount?: 1 | -1 } // the phone's ➕ / ➖; none (the desktop card) is +1
-    | { type: 'RESET_RESPONSIBILITY'; taskId: string; claimTokens?: number }
+    | { type: 'RESET_RESPONSIBILITY'; taskId: string } // the Claim: pays the task's own tokenReward (responsibilityClaim)
     | { type: 'ADD_LOG'; log: ActivityLogEntry }
     | { type: 'CHEAT_ATTEMPT' }
     | { type: 'CLEAR_CHEAT_FLAG' }

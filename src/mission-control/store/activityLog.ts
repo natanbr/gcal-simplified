@@ -14,6 +14,7 @@ import { bankLogEntry, isBankAction } from './bankLog';
 import { isStaleMissionAction } from './staleMissionAction';
 import { adjustedMissionEnd } from './missionEndAdjust';
 import { responsibilityPointChange } from './responsibilityPoint';
+import { responsibilityClaim } from './responsibilityClaim';
 import { reschedulesRunningMission } from './missionReschedule';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
@@ -166,10 +167,11 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             const colorKey = change.task.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
             return { id, timestamp: now, icon: change.task.icon || '⭐', message: change.message, type: 'responsibility', colorKey, ...snap() };
         }
-        case 'RESET_RESPONSIBILITY': {
-            const resp = state.responsibilities.find(r => r.id === action.taskId);
-            const colorKey = resp?.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
-            return resp ? { id, timestamp: now, icon: resp.icon, message: `${resp.label} completed`, delta: action.claimTokens ? +action.claimTokens : undefined, type: 'responsibility', colorKey, ...snap() } : null;
+        case 'RESET_RESPONSIBILITY': { // the reducer's own decision: only a completed task is claimed, for its own reward
+            const claim = responsibilityClaim(state, action);
+            if (claim === null) return null;
+            const colorKey = claim.task.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
+            return { id, timestamp: now, icon: claim.task.icon, message: `${claim.task.label} completed`, delta: claim.tokens ? +claim.tokens : undefined, type: 'responsibility', colorKey, ...snap() };
         }
         case 'CHEAT_ATTEMPT':
             return { id, timestamp: now, icon: '🚨', message: 'Unauthorized bank access attempt!', type: 'cheat-attempt', colorKey: 'cheat', ...snap() };

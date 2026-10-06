@@ -35,6 +35,10 @@ function richState(): MCState {
         missions: initialState.missions.map(m =>
             m.phase === 'morning' ? { ...m, active: true, startedAt: TIMESTAMP, durationMins: 30 } : m
         ),
+        // Activity complete, so its Claim writes a line rather than being refused.
+        responsibilities: initialState.responsibilities.map(r =>
+            r.id === 'activity' ? { ...r, pointsEarned: r.pointsRequired, completedAt: TIMESTAMP } : r
+        ),
     };
 }
 
@@ -60,7 +64,7 @@ const LOGGABLE_ACTIONS: MCAction[] = [
     { type: 'ADJUST_MISSION_END', missionPhase: 'morning', deltaMinutes: 5 },
     { type: 'LOCK_TASK', missionPhase: 'morning', taskId: 'tshirt' },
     { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' },
-    { type: 'RESET_RESPONSIBILITY', taskId: 'recycling', claimTokens: 3 },
+    { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
     { type: 'CHEAT_ATTEMPT' },
     { type: 'GRANT_GAME_TOKEN' },
     { type: 'CONSUME_GAME_TOKEN' },
