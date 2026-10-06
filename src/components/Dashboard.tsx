@@ -45,8 +45,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)), [startDate]);
   const monthDays = useMemo(() => getMonthViewDates(today, monthOffset, weekStartDay), [today, monthOffset, weekStartDay]);
 
-  // The month whose events cover what is shown; none before the settings are read (generation 0).
-  const visibleMonth = generation > 0 ? monthKeyOf(periodAnchor(viewMode, today, weekOffset, monthOffset, weekStartDay)) : null;
+  // The month whose events cover what is shown; generation 0 (settings not read yet) shows what is kept, reads none.
+  const visibleMonth = monthKeyOf(periodAnchor(viewMode, today, weekOffset, monthOffset, weekStartDay));
   const { events, activity, failure: readFailure, hasLoaded, refresh } = useCalendarData(visibleMonth, generation, viewMode === 'week' ? days : monthDays);
 
   const processedEvents = useMemo(() => splitMultiDayEvents(events), [events]);
@@ -120,9 +120,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
   }, [refresh, readOptional]);
 
   // The header's one status: its bar, text and icon all follow it.
-  const status = loading ? { text: loadingMessage, background: false }
+  const status = loading === 'foreground' ? { text: loadingMessage, background: false }
     : activity === 'loading' ? { text: 'Fetching Events...', background: false }
-    : activity === 'refreshing' ? { text: 'Refreshing...', background: true }
+    : loading || activity === 'refreshing' ? { text: 'Refreshing...', background: true }
     : null;
 
   // The full-screen spinner only until the first week can be shown; after that the header indicator.

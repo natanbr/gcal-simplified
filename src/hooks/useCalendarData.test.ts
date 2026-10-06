@@ -53,6 +53,17 @@ describe('useCalendarData', () => {
         expect(result.current.hasLoaded).toBe(false);
     });
 
+    // The Dashboard names the month from the start (back from Mission Control it shows the kept one at once).
+    it('asks for nothing at generation 0, even with a month and a refresh', async () => {
+        const { result } = renderMonth('2026-02', 0);
+        act(() => { result.current.refresh(); });
+        await settle();
+
+        expect(requests()).toBe(0);
+        expect(result.current.activity).toBe('idle');
+        expect(result.current.hasLoaded).toBe(false);
+    });
+
     it('requests the month from a week before it to two weeks after it, and hydrates the dates', async () => {
         mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
         const { result } = renderMonth('2026-02');

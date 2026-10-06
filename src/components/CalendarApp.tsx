@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Dashboard } from './Dashboard';
 import { LoginScreen } from './LoginScreen';
+import { useCalendarSession } from '../features/calendar-session/calendarSession';
 
 type SignIn = 'checking' | 'signed-in' | 'signed-out';
 
@@ -10,7 +11,9 @@ interface CalendarAppProps {
 }
 
 export function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
-  const [signIn, setSignIn] = useState<SignIn>('checking');
+  const session = useCalendarSession();
+  // Back from Mission Control with this sign-in's week kept: show it while auth:check confirms the sign-in.
+  const [signIn, setSignIn] = useState<SignIn>(() => (session?.warm ? 'signed-in' : 'checking'));
   // A new sign-in (Settings → Reconnect may change the account) remounts the Dashboard: a failed read
   // keeps what it shows, so without this the account before it stayed on screen while Google was
   // unreachable, and no answer still in flight for that account can reach a new tree.
@@ -35,6 +38,9 @@ export function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
     );
 
     const offSuccess = ipc.on('auth:success', () => {
+      // The session hears it as well (it must on the Mission Control view); forgetting here too puts the
+      // forget before the remount below whatever order the listeners run in.
+      session?.forget();
       setSignIn('signed-in');
       setSignIns(n => n + 1);
     });
@@ -46,7 +52,12 @@ export function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
       offSuccess();
       offSignedOut();
     };
-  }, []);
+  }, [session]);
+
+  // Signed out, however it was found (auth:check, Google's sign-out, Settings): nothing read for the account is kept.
+  useEffect(() => {
+    if (signIn === 'signed-out') session?.forget();
+  }, [signIn, session]);
 
   if (signIn === 'checking') {
       return <div className="h-screen w-screen bg-zinc-950 flex items-center justify-center text-zinc-500">Loading...</div>;
