@@ -4,6 +4,7 @@ import { authService } from './auth';
 import { store, UserConfig, type WriteResult } from './store';
 import { loadSettingsForDialog, saveSettingsFromDialog } from './settings-dialog';
 import { errorSummary } from './log-safe';
+import { isGoogleUnreachable } from './google-unreachable';
 
 // Duplicate definition to avoid import issues from src in electron context if needed
 // but we will try to stick to local types or basic mapping.
@@ -23,8 +24,9 @@ interface AppEvent {
 /**
  * `strict` is for a reader that must not mistake a failure for an answer (the
  * school-bag decision): every failure the calendar view forgives — signed out,
- * a calendar that errors, the holiday feed down — throws instead of shrinking
- * the list. Off by default, so the calendar view's behaviour is unchanged.
+ * a calendar Google refuses, the holiday feed down — throws instead of shrinking
+ * the list. Google unreachable throws in both modes (google-unreachable.ts), so
+ * the calendar view keeps the events it shows instead of caching an empty month.
  */
 export interface EventFetchOptions {
     strict?: boolean;
@@ -159,7 +161,9 @@ export class ApiService {
                     } as AppEvent;
                 });
             } catch (error) {
-                if (strict) throw error; // its Pro-D days would silently vanish
+                // Strict: its Pro-D days would silently vanish. Unreachable: so would its events, for the whole
+                // month the window caches; one such calendar fails the read, and the window keeps what it shows.
+                if (strict || isGoogleUnreachable(error)) throw error;
                 console.warn(`Failed to fetch events for calendar ${calId} (${errorSummary(error)})`);
                 return [];
             }
@@ -256,6 +260,7 @@ export class ApiService {
                     listIds = [lists.data.items[0].id!];
                 }
             } catch (e) {
+                if (isGoogleUnreachable(e)) throw e; // the window keeps the tasks it shows
                 console.error(`Failed to fetch default task list (${errorSummary(e)})`);
                 return [];
             }
@@ -274,6 +279,7 @@ export class ApiService {
                     status: t.status === 'completed' ? 'completed' : 'needsAction'
                 } as AppTask));
             } catch (e) {
+                if (isGoogleUnreachable(e)) throw e; // as for events: a partial list would drop this list's tasks
                 console.warn(`Failed to fetch tasks for list ${listId} (${errorSummary(e)})`);
                 return [];
             }
