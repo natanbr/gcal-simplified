@@ -108,7 +108,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Active Hours**: Configurable Start and End times (0-23h).
   - **Calendars**: Toggle visibility of specific Google Calendars.
   - **Task Lists**: Toggle visibility of specific Task Lists.
-  - **Auto-Refresh**: Data refreshes every 5 minutes.
+  - **Auto-Refresh**: Data refreshes every 5 minutes. A refresh that cannot reach Google never
+    replaces what is on screen (UX / UI Enhancements → A refresh that fails, 2026-10-06).
 - **Remote Control (Mission Control)**:
   - **Remote indicator** (the "Remote" chip in Mission Control's top bar): a filled green dot while the phone remote's channel is connected, a hollow red ring while offline, labelled "Remote: connected" / "Remote: offline" (tooltip and screen reader). The dot pulses 3 times (6 s) when Mission Control opens and when the status changes, then stands still; a change less than 30 s after the last pulse started changes the colour without pulsing again, so a remote that keeps reconnecting does not keep it pulsing. It never loops: a looping pulse cost 20-25 % of one CPU core for as long as Mission Control was open (2026-10-04).
   - **Secure Bridge**: Established via Supabase Realtime (Broadcast) and Electron IPC.
@@ -192,7 +193,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Fallback**: no calendar connected, or a date outside the 16 days last read → plain Monday to Friday.
   - **Decided once, when the mission starts** — by the scheduler, ▶ Start or the phone alike — and never changed mid-run. A restart mid-mission keeps the task and its tick.
   - **Refreshed** on launch, when a mission ends, when the computer wakes, and when a calendar is connected; no timer, and no new read starts while a mission runs (a read already under way when a mission starts is still saved; it serves the next mission). The last answer is saved, so a morning with no network still knows a Pro-D day.
-  - **All or nothing (changed 2026-09-27, review)**: the school days are read in the calendar feed's *strict* mode. Offline, a sign-in that has expired, any one ticked calendar failing, or the holiday feed failing makes the whole read fail, and the saved days are kept unchanged until a later read succeeds. A read that succeeds replaces them — even when it finds no closures at all. (The first version kept an empty answer as "no news", but offline the feed answered holidays only, which is not empty, and overwrote the saved Pro-D days.) The Calendar view keeps its forgiving read: it still shows whatever did load.
+  - **All or nothing (changed 2026-09-27, review)**: the school days are read in the calendar feed's *strict* mode. Offline, a sign-in that has expired, any one ticked calendar failing, or the holiday feed failing makes the whole read fail, and the saved days are kept unchanged until a later read succeeds. A read that succeeds replaces them — even when it finds no closures at all. (The first version kept an empty answer as "no news", but offline the feed answered holidays only, which is not empty, and overwrote the saved Pro-D days.) The Calendar view keeps a forgiving read, which forgives less since 2026-10-06: it skips a calendar Google refuses and shows no holidays while the holiday feed is down, but fails when Google cannot be reached, and the view keeps the events it shows.
   - **The log says why**: the mission-start line ends with the decision — "morning mission started · 🎒 School Bag", "… · 🎒 School Bag (weekday; calendar not read)", "… · no School Bag (tomorrow is Saturday)", "… · no School Bag (Pro-D day)", "… · no School Bag (Thanksgiving)". The reason is a fixed label per keyword (Pro-D day, no school, school closed, non-instructional day, school break) or a statutory holiday's public name — never the title of someone's event, because the log is also sent to the phone. A statutory holiday's name is stripped of control and invisible formatting characters and cut to 40 characters. A start refused because another mission is running writes no line.
   - **Room on screen**: the mission's task cards shrink from 180 to 120 px wide when needed, so 7 task cards (the routine plus Cream and the bag) and the "Whining?" card stay visible at 1366 and 1280 px wide; at 1920 they are unchanged. (Found because the bag pushed "Whining?" off-screen at 1366.)
   - **Known limits**:
@@ -241,6 +242,25 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **Progress Bar**: Implement a Framer Motion-based progress bar (skeleton or linear loader).
 - **Status Text**: Display small text indicating the current loading status (e.g., "Fetching Schedule...", "Updating Weather...") next to or under the date range title in the header.
 - **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched. The full-screen "Syncing with Google..." shows only until the first week can be shown, and does not return while the Calendar stays open; after that a month not loaded yet keeps the calendar and its known events on screen with the header indicator (2026-10-04).
+- **A refresh that fails** (2026-10-06): a read during which Google could not be reached — no answer
+  at all (offline, DNS, a connection reset or refused, TLS, a timeout), HTTP 408, 429 or 5xx, or a 403
+  whose reason is a rate limit or a quota — fails, and never replaces or empties what is on screen:
+  - The events shown stay, and the header says "Not updated since 14:05" in amber: the time of the
+    last read of that month that worked, with the date ("Oct 28, 12:00") when it was another day. A
+    month that has never loaded says "Couldn't load events" in red. The tooltip says the refresh
+    could not reach Google, that the events shown may be out of date, and that the calendar tries
+    again every 5 minutes. No full-screen error, no timer, no animation. The next read that works
+    replaces the events and removes the notice.
+  - One calendar Google cannot answer fails the whole read: a partial answer would drop that
+    calendar's events until the next refresh. A calendar Google refuses for good (any other HTTP
+    status: not found, deleted, not shared, a bad request) is skipped with a warning in the log, and
+    the others show. Signed out answers no events (the Sign in screen covers it); Google refusing the
+    sign-in (`invalid_grant`) is skipped the same way while the app signs out.
+  - Tasks follow the same rule; the tasks shown stay, without a notice.
+  - Statutory holidays: a year, once read, is kept for the session, so the holiday service being down
+    never removes holidays already shown. While it is down, a year not read yet shows without its
+    holidays and Google's events still refresh: the holiday service is not Google, and its outage must
+    not freeze the calendar.
 
 ## Technical Context
 
@@ -2186,3 +2206,55 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   count as empty, unreadable or unreal, and garbage in every settings key reporting exactly what the
   sanitizer changed). Red before the fix: the 6 launch cases with something to repair; in review
   round 1, the running-mission case and the once-only guard by mutation (dropping each).
+
+### 2026-10-06 A refresh that cannot reach Google keeps the calendar on screen
+
+- **Bug** (found by the review of PR 192; not reported from use). The Calendar re-reads the visible
+  month every 5 minutes with the forgiving `data:events` read, which turned every calendar that
+  failed into an empty list. Offline, or with Google answering 5xx or a rate limit, the answer was
+  the statutory holidays alone, as a success: the window cached that month and the family's events
+  disappeared, with no error, until a later refresh worked. `getTasks` emptied the task list the
+  same way. The 2026-10-04 entry listed this under "Not changed".
+- **Now.**
+  - `electron/google-unreachable.ts` (`isGoogleUnreachable`) tells "Google could not answer now"
+    from "Google refused": no HTTP answer (a gaxios error without a response: DNS, a reset or
+    refused connection, TLS, a timeout or an abort, which carries no code), HTTP 408, 429 or 5xx,
+    and a 403 whose reason is `rateLimitExceeded`, `userRateLimitExceeded`, `dailyLimitExceeded` or
+    `quotaExceeded` are unreachable; any other status is a refusal; an error that is not a request
+    (signed out under the read: "No refresh token is set.", a retired client) is handled as before.
+  - The forgiving events read fails when any one calendar is unreachable and still skips a
+    calendar Google refuses, with a warning. Signed out still answers []; `invalid_grant` (a 400 from
+    the token endpoint) is skipped as before while `auth-client.ts` signs out. The strict read (the
+    School Bag) is unchanged: every failure throws. The calendar colours failing alone does not fail
+    the read. `getTasks` follows the same rule; the Dashboard already kept its tasks on a failed read.
+  - `useCalendarData` already kept a month's events when its read failed; it now records when each
+    month last loaded and returns `failure` (`stale` with that time, or `unloaded`) instead of an
+    error string. The header's red "Failed to load calendar events." is replaced by
+    `CalendarReadNotice`: "Not updated since 14:05" in amber over events from an earlier read, with
+    the date when it was another day, and "Couldn't load events" in red for a month that never
+    loaded, each with a tooltip. No new timer, interval or animation.
+  - Holidays are deliberately not part of the failure. A year once read is kept for the session, so
+    holidays already shown cannot vanish; failing the whole read while the holiday service is down
+    would freeze the family's Google events, or blank the calendar at launch, for a third-party
+    outage. While it is down, a year not read yet shows without its holidays.
+- **Known gaps.** The tasks keep what they show but have no notice. A network that answers Google's
+  address with a page of its own (a captive portal) with status 200 would still read as no events:
+  gaxios hands back the page as text and the read finds no `items` (seen in gaxios's code, not tested).
+- Tests: `electron/google-unreachable.test.ts` (real gaxios errors from google-auth-library's
+  transport: six errno codes, a timeout with no code, 408, 429, 5xx and four 403 rate-limit reasons
+  unreachable; 400, 401, 403 forbidden or without a reason, 404, 410, `invalid_grant`, signed out
+  under the read, a held file and non-errors refused), `electron/api_unreachable.test.ts` (offline,
+  one calendar at 503, 429 and a 403 rate limit fail the read; the next read answers in full; the
+  colours alone do not fail it; 404, 403 and 410 calendars skipped with the warning; signed out [];
+  `invalid_grant` skipped; holidays kept through a holiday-service outage; strict unchanged; tasks:
+  offline and the default list offline fail, a 404 list skipped, signed out []),
+  `src/components/__tests__/Dashboard.offline.test.tsx` (the 5-minute refresh: events kept with "Not
+  updated since 12:00" through two offline refreshes, then replaced; a month first opened offline,
+  then loaded; offline overnight names the day; tasks kept), and `useCalendarData.test.ts` (the two
+  failure shapes, the time of the last read that worked kept through a second failure). Red before
+  the fix: the 7 unreachable cases in `api_unreachable` ("promise resolved instead of rejecting")
+  and the 5 notice and `failure` cases; the guards in those files were green. Mutations, each caught:
+  a failed read dropping the month's events (3 red), any error without a response counted as
+  unreachable (6 red), every 403 counted as unreachable (4 red). Existing tests that asserted "no
+  calendar error" by its old text now look for the notice; the "offline" launch case in
+  `Dashboard.loading.test.tsx` fails the events read, as the main process now does.

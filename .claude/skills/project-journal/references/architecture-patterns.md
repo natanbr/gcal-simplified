@@ -943,3 +943,21 @@ the run" (the +/- cap) takes the run's own stored length, not the current Settin
 was only noticed late (the app closed) is stamped at its due end, or the next window reads as run.
 When a refusal excludes an action "because the client never sends it that way", read the client's
 code for where it gets the target, and assume it can be stale.
+
+## 2026-10-06 — A cached view needs "could not answer" kept apart from "answered nothing"
+
+**Learning:** The second time a forgiving read's swallowed failure looked like an answer (after
+2026-09-27). The Calendar's per-month cache stored whatever `data:events` returned, and the
+forgiving read returned `[]` per failed calendar, so one offline 5-minute refresh blanked the week
+until a later one worked. The renderer already kept its data on a *thrown* read; the fault was at the
+source. Not every failure can throw, though: a calendar the user can no longer see would then freeze
+the whole view for good. The split is the error's kind, as for `config.json`: no HTTP answer (gaxios
+error with `config` and no `response`; a timeout has no `code` at all, so an errno allowlist misses
+it), 408/429/5xx and a 403 rate-limit reason are transient and fail the read; any other status is
+permanent and is skipped (`electron/google-unreachable.ts`). An error that is not a request (the auth
+library's "No refresh token is set.") keeps the old path, so signed-out stays `[]`.
+**Action:** Before a reader caches or persists an answer, ask what the source returns when it could
+not answer. Classify by kind at the source, with real error shapes in the tests (authTestKit's
+`realGoogleError`), not by guessing which lists "look" empty in the consumer. Check which *other*
+inputs ride the same answer (here the holiday feed): an outage of a third-party extra should not
+freeze the primary data, and a per-process cache may already make it harmless.
