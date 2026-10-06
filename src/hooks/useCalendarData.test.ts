@@ -17,9 +17,16 @@ const ids = (events: { id: string }[]) => events.map(e => e.id);
 const settle = () => act(async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); });
 const requests = () => mockIpc.invoke.mock.calls.length;
 
-function renderMonth(month: string | null, generation = 1) {
-    return renderHook(({ month: m, generation: g }) => useCalendarData(m, g), { initialProps: { month, generation } });
+interface Shown { month: string | null; generation: number; onScreen?: Date[] }
+
+/** `onScreen`, the days drawn, matters only for a month that never loaded (none drawn: nothing to cover). */
+function renderMonth(month: string | null, generation = 1, onScreen: Date[] = []) {
+    return renderHook(({ month: m, generation: g, onScreen: days = [] }: Shown) => useCalendarData(m, g, days),
+        { initialProps: { month, generation, onScreen } as Shown });
 }
+
+/** `count` days from `first`, as the grid draws them. */
+const daysFrom = (first: Date, count: number) => Array.from({ length: count }, (_, i) => new Date(first.getFullYear(), first.getMonth(), first.getDate() + i));
 
 describe('useCalendarData', () => {
     beforeEach(() => {
@@ -142,21 +149,136 @@ describe('useCalendarData', () => {
         expect(ids(result.current.events)).toEqual(['feb-2']);
     });
 
-    it('a failure is shown and ends the first load; the next answer clears it', async () => {
-        const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        onTestFinished(() => quiet.mockRestore());
-        mockIpc.invoke.mockRejectedValueOnce(new Error('offline'));
+    it('a month whose only read failed says nothing is loaded and ends the first load; the next answer clears it', async () => {
+        quietErrors();
+        mockIpc.invoke.mockRejectedValueOnce(new Error('Google request failed (ENOTFOUND)'));
         const { result } = renderMonth('2026-02');
         await settle();
 
         expect(result.current.hasLoaded).toBe(true);
-        expect(result.current.error).not.toBeNull();
+        expect(result.current.failure).toEqual({ kind: 'unloaded' });
         expect(result.current.activity).toBe('idle');
 
         mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
         act(() => { result.current.refresh(); });
         await settle();
-        expect(result.current.error).toBeNull();
+        expect(result.current.failure).toBeNull();
         expect(ids(result.current.events)).toEqual(['feb']);
     });
+
+    // The main process fails a read Google could not answer (electron/google-unreachable.ts) instead of
+    // answering [], so a failed refresh must keep the month: it is what the family sees all day.
+    it('a failed refresh keeps the month\'s events and says when they were read; the next answer replaces them', async () => {
+        quietErrors();
+        vi.useFakeTimers({ toFake: ['Date'] });
+        onTestFinished(() => { vi.useRealTimers(); });
+        const at = (minute: number) => new Date(2026, 1, 20, 9, minute);
+        const refreshAt = async (minute: number, outcome: () => Promise<unknown>) => {
+            vi.setSystemTime(at(minute));
+            mockIpc.invoke.mockImplementationOnce(outcome);
+            act(() => { result.current.refresh(); });
+            await settle();
+        };
+        vi.setSystemTime(at(0));
+        mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
+        const { result } = renderMonth('2026-02');
+        await settle();
+        expect(result.current.failure).toBeNull();
+
+        await refreshAt(5, () => Promise.reject(new Error('Google request failed (ENOTFOUND)')));
+        expect(ids(result.current.events)).toEqual(['feb']);
+        expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) });
+
+        await refreshAt(10, () => Promise.reject(new Error('Google request failed (status 503)')));
+        expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) }); // the last read that worked
+
+        await refreshAt(15, () => Promise.resolve(answer('feb-2')));
+        expect(ids(result.current.events)).toEqual(['feb-2']);
+        expect(result.current.failure).toBeNull();
+    });
+
+    describe('offline, with the clock at 9:00 for the reads that worked', () => {
+        const at = (minute: number) => new Date(2026, 1, 20, 9, minute);
+        const offline = () => Promise.reject(new Error('Google request failed (ENOTFOUND)'));
+        let quiet: ReturnType<typeof vi.spyOn>;
+        beforeEach(() => {
+            quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(at(0));
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+            quiet.mockRestore();
+        });
+
+        it('a new generation (a Save or a reconnect) that fails keeps the events, with the time of the read that worked', async () => {
+            mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
+            const { result, rerender } = renderMonth('2026-02', 1);
+            await settle();
+
+            vi.setSystemTime(at(5));
+            mockIpc.invoke.mockImplementationOnce(offline);
+            rerender({ month: '2026-02', generation: 2 });
+            await settle();
+
+            expect(ids(result.current.events)).toEqual(['feb']);
+            expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) });
+        });
+
+        it('back to a month already read: its own events, with its own time', async () => {
+            mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
+            const { result, rerender } = renderMonth('2026-02');
+            await settle();
+            vi.setSystemTime(at(1));
+            mockIpc.invoke.mockResolvedValueOnce(answer('mar'));
+            rerender({ month: '2026-03', generation: 1 });
+            await settle();
+
+            vi.setSystemTime(at(5));
+            mockIpc.invoke.mockImplementationOnce(offline);
+            rerender({ month: '2026-02', generation: 1 });
+            await settle();
+
+            expect(ids(result.current.events)).toEqual(['feb']);
+            expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) });
+        });
+
+        // February's read runs from Jan 25 to Mar 15 (fetchRangeOf): it can stand in for March's first two weeks only.
+        it('a month never read borrows the events on screen only while their read covers every day drawn', async () => {
+            mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
+            const { result, rerender } = renderMonth('2026-02', 1, daysFrom(new Date(2026, 1, 16), 7));
+            await settle();
+
+            mockIpc.invoke.mockImplementation(offline);
+            rerender({ month: '2026-03', generation: 1, onScreen: daysFrom(new Date(2026, 2, 9), 7) });  // Mar 9-15
+            await settle();
+            expect(ids(result.current.events)).toEqual(['feb']);
+            expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) });
+
+            rerender({ month: '2026-03', generation: 1, onScreen: daysFrom(new Date(2026, 2, 10), 7) }); // Mar 10-16
+            expect(result.current.events).toEqual([]);
+            expect(result.current.failure).toEqual({ kind: 'unloaded' });
+        });
+
+        // March's read starts on Feb 22: a February week from then on is covered, one starting the day before is not.
+        it('a month never read borrows the events on screen only from the first day their read covers', async () => {
+            mockIpc.invoke.mockResolvedValueOnce(answer('mar'));
+            const { result, rerender } = renderMonth('2026-03', 1, daysFrom(new Date(2026, 2, 2), 7));
+            await settle();
+
+            mockIpc.invoke.mockImplementation(offline);
+            rerender({ month: '2026-02', generation: 1, onScreen: daysFrom(new Date(2026, 1, 22), 7) });  // Feb 22-28
+            await settle();
+            expect(ids(result.current.events)).toEqual(['mar']);
+
+            rerender({ month: '2026-02', generation: 1, onScreen: daysFrom(new Date(2026, 1, 21), 7) }); // Feb 21-27
+            expect(result.current.events).toEqual([]);
+            expect(result.current.failure).toEqual({ kind: 'unloaded' });
+        });
+    });
 });
+
+function quietErrors() {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    onTestFinished(() => quiet.mockRestore());
+}

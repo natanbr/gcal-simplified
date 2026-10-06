@@ -11,6 +11,10 @@ interface CalendarAppProps {
 
 export function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
   const [signIn, setSignIn] = useState<SignIn>('checking');
+  // A new sign-in (Settings → Reconnect may change the account) remounts the Dashboard: a failed read
+  // keeps what it shows, so without this the account before it stayed on screen while Google was
+  // unreachable, and no answer still in flight for that account can reach a new tree.
+  const [signIns, setSignIns] = useState(0);
 
   useEffect(() => {
     const ipc = window.ipcRenderer;
@@ -30,7 +34,10 @@ export function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
       },
     );
 
-    const offSuccess = ipc.on('auth:success', () => setSignIn('signed-in'));
+    const offSuccess = ipc.on('auth:success', () => {
+      setSignIn('signed-in');
+      setSignIns(n => n + 1);
+    });
     // Google refused the saved sign-in (revoked, or expired) and the main process signed out.
     const offSignedOut = ipc.on('auth:signed-out', () => setSignIn('signed-out'));
 
@@ -46,6 +53,6 @@ export function CalendarApp({ onSwitchToMC }: CalendarAppProps) {
   }
 
   return signIn === 'signed-in'
-    ? <Dashboard onLogout={() => setSignIn('signed-out')} onSwitchToMC={onSwitchToMC} />
+    ? <Dashboard key={signIns} onLogout={() => setSignIn('signed-out')} onSwitchToMC={onSwitchToMC} />
     : <LoginScreen />;
 }

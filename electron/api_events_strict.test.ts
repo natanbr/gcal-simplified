@@ -7,7 +7,9 @@
 // live with that: offline (the token file still exists, so auth:check says
 // yes) the answer was holidays-only and non-empty, and it overwrote the stored
 // Pro-D days. In STRICT mode every one of those failures throws instead, so the
-// renderer keeps what it has. The default stays exactly as it was.
+// renderer keeps what it has. The default stays exactly as it was, except that
+// since 2026-10-06 it no longer forgives Google being unreachable either
+// (offline, 5xx, a rate limit): api_unreachable.test.ts.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -62,9 +64,9 @@ describe('getEvents — the default (calendar view) answer is unchanged', () => 
         expect(titles(await new ApiService().getEvents(FROM, TO))).toEqual(['Pro-D Day', 'Thanksgiving']);
     });
 
-    it('skips a calendar that fails and still answers', async () => {
+    it('skips a calendar that fails with an error that is not a request (signed out under the read), and still answers', async () => {
         mocks.eventsList.mockImplementation(async ({ calendarId }: { calendarId: string }) => {
-            if (calendarId === 'school') throw new Error('500');
+            if (calendarId === 'school') throw new Error('No refresh token is set.');
             return { data: { items: [] } };
         });
         expect(titles(await new ApiService().getEvents(FROM, TO))).toEqual(['Thanksgiving']);
@@ -89,8 +91,8 @@ describe('getEvents — the default (calendar view) answer is unchanged', () => 
     });
 
     it('treats { strict: false } exactly like no option', async () => {
-        mocks.eventsList.mockRejectedValue(new Error('offline'));
-        fetchMock.mockImplementation(async () => { throw new Error('offline'); });
+        mocks.eventsList.mockRejectedValue(new Error('No refresh token is set.'));
+        fetchMock.mockImplementation(async () => { throw new TypeError('fetch failed'); });
         expect(await new ApiService().getEvents(FROM, TO, { strict: false })).toEqual([]);
     });
 });

@@ -56,9 +56,11 @@ reaches the main process only through the preload bridge.
 * `preload.ts`: exposes only `window.ipcRenderer.{invoke,on}` behind the two channel whitelists
   (`ALLOWED_INVOKE_CHANNELS`, `ALLOWED_ON_CHANNELS`). A non-whitelisted channel throws.
 * `auth.ts` / `api.ts`: Google OAuth2 via local HTTP server redirect flow + Calendar/Tasks.
-  `data:events` forgives failures for the Calendar view (a failing calendar or holiday feed just
-  shrinks the list); with a plain `{ strict: true }` third argument (the school-bag reader) every
-  such failure throws instead.
+  `data:events` forgives some failures for the Calendar view (a calendar Google refuses, or the
+  holiday feed down, just shrinks the list) but rejects when Google cannot be reached
+  (`google-unreachable.ts`; `data:tasks` too): every consumer must catch that and keep what it
+  shows. With a plain `{ strict: true }` third argument (the school-bag reader) every failure
+  throws.
   Tokens are encrypted with `electron.safeStorage` when available (plaintext fallback) and stored
   in electron-store (`auth-store`), opened on first use by `auth-token-store.ts` (an unparseable
   file is moved aside). `auth-client.ts` is the OAuth client: Google refusing the refresh token
