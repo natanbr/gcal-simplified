@@ -73,13 +73,23 @@ describe('mcReducer — ADD_RESPONSIBILITY_POINT', () => {
 // ──────────────────────────────────────────────────────────────
 
 describe('mcReducer — RESET_RESPONSIBILITY', () => {
-    it('resets pointsEarned to 0', () => {
+    it('resets pointsEarned to 0 once the task is complete', () => {
         const state = applyActions([
+            { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' },
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' },
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' },
             { type: 'RESET_RESPONSIBILITY', taskId: 'recycling' },
         ]);
         expect(recycling(state).pointsEarned).toBe(0);
+    });
+
+    it('refuses a task below its goal: the points stay (2026-10-06, responsibilityClaim.ts)', () => {
+        const state = applyActions([
+            { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' },
+            { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' },
+            { type: 'RESET_RESPONSIBILITY', taskId: 'recycling' },
+        ]);
+        expect(recycling(state).pointsEarned).toBe(2);
     });
 
     it('clears completedAt', () => {
@@ -118,10 +128,10 @@ describe('mcReducer — RESET_RESPONSIBILITY', () => {
 
 // ──────────────────────────────────────────────────────────────
 // Activity tokenReward — bank payout on claim
-// The Claim button dispatches ONE action, RESET_RESPONSIBILITY with
-// claimTokens: tokenReward (ResponsibilityPanel.tsx); the reducer pays the bank
-// from it. These cases used to replay ADD_TOKEN × 3 first, a path the UI does
-// not take, and stayed green with the claimTokens payout removed.
+// The Claim button dispatches ONE action, RESET_RESPONSIBILITY; the reducer pays
+// the bank the task's own tokenReward (responsibilityClaim.ts; the action carried
+// it as claimTokens until 2026-10-06). These cases used to replay ADD_TOKEN × 3
+// first, a path the UI does not take, and stayed green with the payout removed.
 // ──────────────────────────────────────────────────────────────
 
 function activity(state: MCState) {
@@ -137,11 +147,14 @@ describe('Activity tokenReward — bank payout on claim', () => {
         expect(recycling(initialState).tokenReward).toBeUndefined();
     });
 
-    it('claim: RESET_RESPONSIBILITY with claimTokens 3 gives bank +3', () => {
+    it('claim: RESET_RESPONSIBILITY on a completed Activity gives bank +3', () => {
         const startingBank = initialState.bankCount;
-        // What the Claim button dispatches
+        // What the Claim button dispatches, on the only state that shows it
         const state = applyActions([
-            { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3 },
+            { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
+            { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
+            { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
+            { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
         ]);
         expect(state.bankCount).toBe(startingBank + 3);
     });
@@ -157,7 +170,7 @@ describe('Activity tokenReward — bank payout on claim', () => {
 
         // Then claim
         const state = applyActions([
-            { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3 },
+            { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
         ], earned);
 
         expect(activity(state).pointsEarned).toBe(0);
@@ -169,7 +182,7 @@ describe('Activity tokenReward — bank payout on claim', () => {
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' },
-            { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3 },
+            { type: 'RESET_RESPONSIBILITY', taskId: 'activity' },
             { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'activity' }, // new session
         ]);
         expect(activity(afterClaim).pointsEarned).toBe(1);

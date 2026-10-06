@@ -19,9 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { mcReducer, initialState } from '../mcReducer';
 import { createLogEntry } from '../activityLog';
 import { isStaleMissionAction } from '../staleMissionAction';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { storeFileCalls } from './decisionCalls';
 import type { MCAction, MCState, Mission } from '../../types';
 
 const T = '2026-09-28T19:05:00.000Z';
@@ -220,9 +218,9 @@ describe('the predicate covers the Stop, both Resets and +/- from a stale phone 
 
 describe('structural: one predicate, called by the reducer and by the log', () => {
     // A copy of the check in one file drifts from the other; a refusal that the
-    // log does not mirror writes a line about a stop that never happened.
-    const store = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+    // log does not mirror writes a line about a stop that never happened. Read by
+    // the parser (decisionCalls.ts): the text match was satisfied by a comment.
     it.each(['mcReducer.ts', 'activityLog.ts'])('store/%s calls isStaleMissionAction(state, action)', (file) => {
-        expect(readFileSync(resolve(store, file), 'utf-8')).toMatch(/\bisStaleMissionAction\(state, action\)/);
+        expect(storeFileCalls(file, 'isStaleMissionAction')).toBe(true);
     });
 });

@@ -961,3 +961,22 @@ not answer. Classify by kind at the source, with real error shapes in the tests 
 `realGoogleError`), not by guessing which lists "look" empty in the consumer. Check which *other*
 inputs ride the same answer (here the holiday feed): an outage of a third-party extra should not
 freeze the primary data, and a per-process cache may already make it harmless.
+
+## 2026-10-06 — One decision, asked by the reducer and by the log
+
+**Learning:** `createLogEntry` describes an action before the reducer applies it, so every case
+that can be refused, clamped or turned into a no-op is a second copy of the reducer's rule. The
+copies drifted: a phone ➖ logged "Point earned for Recycling" while the count went down, presses
+the reducer ignored still wrote lines, and the Claim paid whatever the count (a double tap on the
+fading button paid twice; nothing in the log or the reducer asked whether the task was complete).
+**Action:** Put the rule in one pure function beside the reducer, taking `(state, action)` and
+returning what really happens (the new value and the line's words) or `null` for a refusal or a
+no-op. The reducer case returns `state` itself on `null`; the log case returns `null` on `null`.
+Instances: `adjustedMissionEnd` (`missionEndAdjust.ts`), `isStaleMissionAction`,
+`responsibilityPointChange` (`responsibilityPoint.ts`), `responsibilityClaim`
+(`responsibilityClaim.ts`); `canSelectReward` is the older predicate-only form. Pin it with a
+structural check that BOTH files call `fn(state, action)` in code, read by the TypeScript parser
+(`store/__tests__/decisionCalls.ts`): a regex over the text was satisfied by the call left in a
+comment. A number the decision can read from state (a reward, a cost) stays off the action
+(2026-09-23 above). And a UI that hides a button is not a refusal: a button that animates out
+keeps its handler until it unmounts, so the decision must refuse the second press itself.

@@ -59,10 +59,11 @@ const PAYLOAD_VALIDATORS: Partial<Record<MCAction['type'], (a: MCAction) => bool
     // store/staleMissionAction.ts. This check cannot do that: it has no state.
     CANCEL_MISSION: a => a.type === 'CANCEL_MISSION'
         && ['morning', 'evening'].includes(a.missionPhase),
-    // `amount` is optional on this one (the reducer defaults it to 1), so the
-    // validator must accept `undefined` or the remote's own button breaks.
+    // The phone's ➕ / ➖ send 1 / -1; no amount is +1. Anything else is refused:
+    // a finite amount used to pass, and 1e9 completed a task in one press, 0.5
+    // left a fractional count, 0 was read as +1 (store/responsibilityPoint.ts).
     ADD_RESPONSIBILITY_POINT: a => a.type === 'ADD_RESPONSIBILITY_POINT'
-        && (a.amount === undefined || Number.isFinite(a.amount)),
+        && (a.amount === undefined || a.amount === 1 || a.amount === -1),
     ADJUST_BEHAVIOR_PROGRESS: a => a.type === 'ADJUST_BEHAVIOR_PROGRESS' && Number.isFinite(a.amount),
     ADJUST_MISSION_END: a => a.type === 'ADJUST_MISSION_END' && Number.isFinite(a.deltaMinutes),
     SET_MOOD_WIND: a => a.type === 'SET_MOOD_WIND' && Number.isFinite(a.level),

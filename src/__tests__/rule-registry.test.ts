@@ -244,7 +244,7 @@ const REGISTRY: Rule[] = [
         source: 'CLAUDE.md → Conventions → Refusals must be silent in the log and visible on screen',
         status: 'guarded',
         guard: 'src/mission-control/store/__tests__/mcReducer.streak-lock.test.ts',
-        verifiedRedBy: "drop the isRefusedByShieldLock call from createLogEntry — all 5 'writes no activity-log line' cases go red; or remove the window mirror from activityLog.ts's CONSUME_CASE branch — the refused-redemption log case goes red (proven 2026-09-03).",
+        verifiedRedBy: "drop the isRefusedByShieldLock call from createLogEntry — all 5 'writes no activity-log line' cases go red; or remove the window mirror from the log's CONSUME_CASE branch (activityLog.ts then, store/bankLog.ts since 2026-10-06) — the refused-redemption log case goes red (proven 2026-09-03; re-proven in bankLog.ts 2026-10-06, where both refused-redemption cases go red).",
         defence: 'This entry guards the log half only. The drag-handler half is the next entry, guarded since 2026-09-23.',
     },
     {

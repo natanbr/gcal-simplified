@@ -108,6 +108,20 @@ describe('remote action allowlist', () => {
             expect(mockDispatch).not.toHaveBeenCalled();
         });
 
+        it('rejects a responsibility point that is not the phone’s +1 / -1 or the desktop’s no-amount +1', () => {
+            // A finite amount used to pass: 1e9 completed a task in one press, 0.5
+            // left a fractional count, 0 was read as +1 (2026-10-06).
+            const listener = mountAndGetListener();
+            for (const amount of [1e9, -1e9, 2, -2, 0.5, 0, NaN, Infinity, '1', null]) {
+                listener({ type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling', amount });
+            }
+            expect(mockDispatch).not.toHaveBeenCalled();
+            listener({ type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling', amount: 1 });
+            listener({ type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling', amount: -1 });
+            listener({ type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling' });
+            expect(mockDispatch).toHaveBeenCalledTimes(3);
+        });
+
         it("rejects a phone Stop whose phase is missing or not a real mission", () => {
             // Stop is phone-only since 2026-09-24. A malformed phase is dropped here;
             // a well-formed one naming a mission that is not running is refused later,

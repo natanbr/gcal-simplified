@@ -133,6 +133,8 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Detailed Mission State Reflection**: The remote control displays individual card views for both Morning and Evening missions simultaneously. Each card reflects its current state (Active/Inactive), live countdown timers, adjustment buttons, task checklist progress (percentage bar and expandable/collapsible checkbox list), and whining status (highlighted pulsing indicator).
 - **Mission Control Responsibilities & Privileges**:
   - **Responsibility Progress**: Point-based tracking using visual point dots (no text counters). Shows Done status and a "Claim" button once the target point goal is met.
+  - **Points and the log (2026-10-06)**: a point comes from the desktop card's +1 (`ADD_RESPONSIBILITY_POINT` with no amount) or the phone's ➕ / ➖ (amount `1` / `-1`). Each press that moves the count writes one line naming the move and the new count, with the task's icon and colour, attributed to whoever pressed (📱 for the phone): "♻️ +1 point for Recycling (2/3)", "♻️ -1 point for Recycling (1/3)". The point that meets the goal adds " — ready to claim" ("+1 point for Recycling (3/3) — ready to claim"), and a ➖ that takes a completed task below its goal adds " — no longer complete" ("-1 point for Recycling (2/3) — no longer complete"): Claim goes away until the point is earned again. A point is not a token, so the line carries no token delta. A press that changes nothing leaves the responsibilities as they were and writes no line: a ➖ at 0, a ➕ on a completed task (it waits for Claim), a task id that does not exist, and any press while the shield is broken, the parent's phone ➖ included (decided 2026-10-06: a point ➖ moves no token and is no way out of the lock; the phone greys both buttons out then). The phone's amount must be `1`, `-1` or absent: anything else (`null` too) is dropped before it reaches the store, and refused by the reducer too. The reducer and the log ask one decision, `responsibilityPointChange` in `store/responsibilityPoint.ts`.
+  - **Claim (2026-10-06)**: the card's Claim button (`RESET_RESPONSIBILITY`; the phone cannot send it) pays the task's own reward and starts the task over at 0: Activity 3 bank tokens, logged "🛼 Activity completed +3"; Recycling nothing in the app, its reward being the bottle-depot money ("♻️ Recycling completed", no delta). Only a completed task can be claimed: a Claim on a task below its goal (a tap racing the phone's ➖) or on an unknown task changes nothing and writes no line, and a second tap (the button stays on screen while it fades out, and takes no pointer then) pays nothing more. The reward is read from the task (`tokenReward`), never from the action. The reducer and the log ask one decision, `responsibilityClaim` in `store/responsibilityClaim.ts`.
   - **Privilege Suspension System**:
     - Privileges can be suspended for a duration (1 Day, 3 Days, 1 Week, or 2 Weeks).
     - **A suspension ends by itself** at its end time (`suspendedUntil`), with no action from the parent. Every surface asks one predicate, `isPrivilegeSuspended` in `store/privileges.ts`, which reads the stored status *and* the clock: the card's red hazard look, the dashboard summary, the Goal picker and the "Use!" lock. The stored `status: 'suspended'` is only the parent's last decision and is never trusted on its own. A suspension with no readable end time is not in force. The end time is read one way everywhere (`parseSuspensionEnd`): a date string, never a number.
@@ -2310,3 +2312,77 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   recorded in the rule registry. Existing tests that asserted "no calendar error" by its old text
   now look for the notice; the "offline" launch case in `Dashboard.loading.test.tsx` fails the
   events read, as the main process now does.
+
+### 2026-10-06 A responsibility ➖ is logged as a ➖, and a press that changes nothing writes no line
+
+- **The bug (QA 2026-10-01; the same in v0.0.42).** The phone's Responsibilities card sends ➕ / ➖ as
+  `ADD_RESPONSIBILITY_POINT` with amount `1` / `-1`. The log ignored the amount: a ➖ wrote "Point
+  earned for Recycling" while the count went down. It also wrote that line when nothing changed: a ➖
+  at 0 points and a ➕ on a completed task (ignored until Claim). A parent reads the log to see who
+  moved what (CLAUDE.md → Attribution).
+- **Now** the line names the move that happened and the new count: "+1 point for Recycling (2/3)",
+  "-1 point for Recycling (1/3)" (the task's icon and colour as before, no token delta). A press that
+  changes nothing writes no line and leaves the responsibilities list as it was, so the press alone
+  no longer triggers the phone broadcast that watches that list (before, every such press made a new
+  list). The whole state object stays the same only for an action with no timestamp: every real
+  dispatch carries one, and the mood catch-up that runs first may make a new state during active
+  hours. One decision, `responsibilityPointChange` (`store/responsibilityPoint.ts`), is asked by the
+  reducer and the log alike, so they cannot disagree (the `adjustedMissionEnd` pattern).
+- **The phone's amount is checked.** The remote validator accepted any finite amount: `1e9` completed
+  a task in one press, `0.5` left a fractional count, `0` counted as +1. Now only `1`, `-1` or no
+  amount passes; anything else is dropped before the store like any malformed payload, and the
+  reducer refuses it too. The desktop card sends no amount and is unchanged; the phone app needs no
+  change. `ADD_RESPONSIBILITY_POINT`'s `amount` is typed `1 | -1`.
+- **A ➖ on a completed task** (behaviour unchanged, written down): it takes it back below its goal,
+  so Claim goes away until the point is earned again. No token moves: only Claim pays. After a Claim
+  the count is 0, so a ➖ then changes nothing and the paid tokens stay.
+- **Found here, fixed in review (next entry)**: Claim paid whatever the count, so a Claim tap racing a
+  phone ➖ still paid. The shield lock keeps refusing a parent's ➖ too (decided, next entry).
+- **Code.** `activityLog.ts` was over the 300-line limit (322). The bank and goal log cases moved,
+  unchanged, to `store/bankLog.ts`; `activityLog.ts` is at 250 lines and off the file-size ratchet.
+- Tests: `store/__tests__/mcReducer.responsibility-point.test.ts` (+1 and -1 lines with their counts
+  and attribution, from the phone and the desktop; no line and the same state for a ➖ at 0, a ➕ on a
+  completed task, an unknown task, eight amounts the phone never sends, and a broken shield; complete,
+  take one back, earn it again; no token moved by a ➖; over the real remote channel (the remote
+  listener and the test kit's store), eight refused amounts and the phone's ➕ and ➖; both files
+  asking the one decision) and a validator case in `hooks/useRemoteControl.allowlist.test.ts`. Red
+  before the fix: 26 of the new cases and the validator case; seven were green before (guards).
+  Mutations, each red: the old log case (20 cases), the old reducer case (13), the old validator
+  (5), and dropping each of the decision's three refusals (7, 3, 3).
+
+### 2026-10-06 PR 195 review: a Claim pays once, only for a completed task, and its own reward
+
+- **The bug (on `main` before this PR, two reviewers reproduced it).** The Claim button keeps its
+  click handler while it fades out (about 0.3 s), and `RESET_RESPONSIBILITY` paid the action's
+  `claimTokens` whatever the count. A double tap on Activity's Claim paid twice: bank 3 → 6 → 9 and
+  two "Activity completed +3" lines. A Claim racing the phone's ➖ paid for a task at 2/3, and a Claim
+  naming an unknown task added the tokens with no line.
+- **Now (decided for the owner, reversible)** one decision, `responsibilityClaim`
+  (`store/responsibilityClaim.ts`), asked by the reducer and the log: only a completed task can be
+  claimed, and it pays the task's own `tokenReward` (Activity 3, Recycling none). `claimTokens` is
+  gone from the action (journal 2026-09-23: a value the reducer can derive must not ride on the
+  action). A refused Claim changes nothing and writes no line. In the UI, the fading Claim button
+  takes no pointer (`pointerEvents: 'none'` in its exit). The phone still cannot send a Claim.
+- **Decided: the shield lock keeps refusing a parent's ➖** (a point ➖ moves no token and is no way
+  out of the lock); the reason is beside `LOCKED_WHILE_SHIELD_BROKEN` in `store/missionStreak.ts`.
+- **Wording**: the point that meets the goal adds " — ready to claim"; a ➖ that takes a completed
+  task below its goal adds " — no longer complete". `amount: null` is refused by the reducer too
+  (it was read as +1 there; the validator already dropped it).
+- **Guards**: the four "one decision, asked by the reducer and by the log" checks
+  (`adjustedMissionEnd`, `isStaleMissionAction`, `responsibilityPointChange`, `responsibilityClaim`)
+  read the files with the TypeScript parser (`store/__tests__/decisionCalls.ts`): a text match was
+  satisfied by the call left in a comment. `bankLog.ts` keeps one list of its action types
+  (`BANK_ACTIONS`, `isBankAction`); `LogEnvelope` moved to `store/logEnvelope.ts`.
+- Tests: `store/__tests__/mcReducer.responsibility-claim.test.ts` (Activity pays 3, Recycling 0; the
+  task's reward, not a stale build's `claimTokens: 99`; a second Claim, a task below its goal, an
+  unknown task and a broken shield refused with no line; a ➖ then a Claim; a Claim then a ➖; two full
+  cycles pay twice) and `components/ResponsibilityPanel.claim.test.tsx` with the real framer-motion
+  (a tap on the fading button, two taps before a re-render, the fading button's pointer-events).
+  Existing Claim fixtures now complete the task first (the streak-lock, purity and attribution
+  fixtures complete Activity, the only state that shows Claim). Red before the fix: the double tap
+  paid 9, a Claim on an incomplete or unknown task was not refused, the reward came from the action
+  (and the panel's fading button had no pointer-events rule). Mutations, each red:
+  drop the completion check (7 cases, both panel taps included), pay 0 (7), drop the exit's
+  pointer-events (1), read `null` as +1 (1), drop the wording (4); each structural check goes red with
+  the call removed and with the call only in a comment (8 of 8 both ways; the old text match stayed
+  green on the comment).

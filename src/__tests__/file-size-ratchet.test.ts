@@ -71,7 +71,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // which owns its cap and is shared with the log).
     // 748 → 738 the same day (a new attempt's fields, shared by the fresh start and the
     // full Reset, moved to store/missionAttempt.ts with the run's stored day and base length).
-    'src/mission-control/store/mcReducer.ts': 738,
+    // 738 → 731 on 2026-10-06 (ADD_RESPONSIBILITY_POINT delegates to store/responsibilityPoint.ts,
+    // which decides what a press does and is shared with the log), then 731 → 725 the same
+    // day (RESET_RESPONSIBILITY asks store/responsibilityClaim.ts, shared with the log too).
+    'src/mission-control/store/mcReducer.ts': 725,
     // 767 → 748 on 2026-08-20 (sidebar buttons deduped into SettingsTab, which
     // paid for the Learning tab), then 748 → 755 same day for the hold-to-open
     // gate that keeps the Learning tab off the kid's tap path. Net −12.
@@ -126,23 +129,11 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // refused while the shield is broken — a refused action writes no log line,
     // so a live-looking button gives a dead tap with no trace on either side).
     'src/mission-control/components/ResponsibilityPanel.tsx': 324,
-    // NEW on 2026-09-24 at 304 (was 300): the SETTLE_GAME_TOKEN_CAP log case, 4
-    // lines that delegate the wording to moodGauge's gameTokenCapNote. Moving the
-    // game-token cases out was the cleaner fix, but not this close to a release.
-    // 304 → 305 on 2026-09-28 (+1: the import of isStaleMissionAction; the mirror
-    // shares the shield-lock line), then 305 → 313 the same day (+8: the SET_SETTINGS
-    // case that logs a settings save ending the running mission, which was silent).
-    // Moving the mission cases out is the split this file needs next. 313 → 314 the
-    // same day (+1: the import of the reducer's reschedule check, which replaced a
-    // second reducer pass on every settings save while a mission runs).
-    // 314 → 319 on 2026-09-29 (+5: END_STALE_MISSION_RUN's log line, so the end of
-    // an earlier day's stuck run reaches the audit trail; the sentence lives in
-    // store/staleMissionRun.ts).
-    // 319 → 321 on 2026-10-05 (+2: ADJUST_MISSION_END asks the reducer's own decision,
-    // store/missionEndAdjust.ts, and its import, so a refused +/- writes no line).
-    // 321 → 322 the same day (+1: the line names the move the reducer really made, from
-    // the same decision, so its case needs a block).
-    'src/mission-control/store/activityLog.ts': 322,
+    // store/activityLog.ts: NEW on 2026-09-24 at 304 (the SETTLE_GAME_TOKEN_CAP log
+    // case), 322 by 2026-10-05 (the SET_SETTINGS, END_STALE_MISSION_RUN and
+    // ADJUST_MISSION_END lines and their imports), then OFF the backlog on 2026-10-06
+    // at 248: the bank and goal cases moved, unchanged, to store/bankLog.ts, which made
+    // room for the responsibility-point fix. Re-adding it would need a fresh entry.
     // NEW on 2026-09-24 at 302 (was 300): the SETTLE_GAME_TOKEN_CAP union member
     // and its one-line doc comment. Split candidate: MCAction into its own module.
     // 302 → 304 on 2026-09-29: the END_STALE_MISSION_RUN member and its doc comment.

@@ -189,7 +189,7 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                             key="claim"
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0 }}
+                            exit={{ opacity: 0, pointerEvents: 'none' }} // a tap on the exiting button must not claim again
                             style={{ display: 'flex', height: '100%' }}
                         >
                             <motion.button
@@ -197,7 +197,7 @@ function ResponsibilityCard({ task }: TaskCardProps) {
                                 whileTap={locked ? undefined : { scale: 0.93 }}
                                 whileHover={locked ? undefined : { scale: 1.03 }}
                                 onClick={locked ? undefined : () => {
-                                    dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id, claimTokens: task.tokenReward });
+                                    dispatch({ type: 'RESET_RESPONSIBILITY', taskId: task.id }); // pays the task's own reward
                                 }}
                                 disabled={locked}
                                 aria-label={locked ? 'Bank locked — finish your next mission' : 'Claim this reward'}

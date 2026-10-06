@@ -30,7 +30,11 @@ A strictly isolated application module — the kid-facing reward/mission app.
   `useSchoolCalendarSync.ts` (reads the family calendar for school days — **MC now invokes
   `auth:check` and `data:events` in its strict mode**, the calendar view's own channels, on launch, mission end,
   `system:resume` and `auth:success`; no timer),
-  `activityLog.ts` (action → human-readable log entry, with attribution),
+  `activityLog.ts` (action → human-readable log entry, with attribution; the bank and goal
+  lines are in `bankLog.ts`),
+  shared decisions asked by both the reducer and the log, so a refused action changes nothing and
+  writes no line: `adjustedMissionEnd`, `isStaleMissionAction`, `responsibilityPointChange`,
+  `responsibilityClaim` (journal: "One decision, asked by the reducer and by the log"),
   `useBehaviorHeartbeat.ts` (60s mood accrual — the ONLY token generator),
   `behaviorSync.ts` (the accrual engine), `moodGauge.ts` (`moveGauge`, the one writer of the gauge),
   `useRemoteSync.ts`, `useAuditTrail.ts` (mirrors log entries to the on-disk trail).
