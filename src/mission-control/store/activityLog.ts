@@ -13,6 +13,7 @@ import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { bankLogEntry } from './bankLog';
 import { isStaleMissionAction } from './staleMissionAction';
 import { adjustedMissionEnd } from './missionEndAdjust';
+import { responsibilityPointChange } from './responsibilityPoint';
 import { reschedulesRunningMission } from './missionReschedule';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
@@ -160,10 +161,11 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             const adjusted = adjustedMissionEnd(state, action);
             return adjusted && { id, timestamp: now, icon: '⏱️', message: adjusted.message, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         }
-        case 'ADD_RESPONSIBILITY_POINT': {
-            const resp = state.responsibilities.find(r => r.id === action.taskId);
-            const colorKey = resp?.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
-            return { id, timestamp: now, icon: resp?.icon || '⭐', message: `Point earned for ${resp?.label || 'responsibility'}`, type: 'responsibility', colorKey, ...snap() };
+        case 'ADD_RESPONSIBILITY_POINT': { // the reducer's own decision: a press that changes nothing writes no line
+            const change = responsibilityPointChange(state, action);
+            if (change === null) return null;
+            const colorKey = change.task.label.toLowerCase().includes('recycling') ? 'recycling' : 'activity';
+            return { id, timestamp: now, icon: change.task.icon || '⭐', message: change.message, type: 'responsibility', colorKey, ...snap() };
         }
         case 'RESET_RESPONSIBILITY': {
             const resp = state.responsibilities.find(r => r.id === action.taskId);

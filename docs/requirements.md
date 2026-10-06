@@ -133,6 +133,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Detailed Mission State Reflection**: The remote control displays individual card views for both Morning and Evening missions simultaneously. Each card reflects its current state (Active/Inactive), live countdown timers, adjustment buttons, task checklist progress (percentage bar and expandable/collapsible checkbox list), and whining status (highlighted pulsing indicator).
 - **Mission Control Responsibilities & Privileges**:
   - **Responsibility Progress**: Point-based tracking using visual point dots (no text counters). Shows Done status and a "Claim" button once the target point goal is met.
+  - **Points and the log (2026-10-06)**: a point comes from the desktop card's +1 (`ADD_RESPONSIBILITY_POINT` with no amount) or the phone's ➕ / ➖ (amount `1` / `-1`). Each press that moves the count writes one line naming the move and the new count, with the task's icon and colour, attributed to whoever pressed (📱 for the phone): "♻️ +1 point for Recycling (2/3)", "♻️ -1 point for Recycling (1/3)". A point is not a token, so the line carries no token delta. A press that changes nothing changes no state and writes no line: a ➖ at 0, a ➕ on a completed task (it waits for Claim), a task id that does not exist, and any press while the shield is broken (the phone greys both buttons out then). A ➖ on a completed task takes it back below its goal, so Claim goes away until the point is earned again; no token moves, because only Claim pays (Activity 3 bank tokens, logged "🛼 Activity completed +3"; Recycling none, its reward is the bottle-depot money). After a Claim the count is 0. The phone's amount must be `1`, `-1` or absent: anything else is dropped before it reaches the store, and refused by the reducer too. The reducer and the log ask one decision, `responsibilityPointChange` in `store/responsibilityPoint.ts`. **Known gap (economy decision, not made)**: Claim pays whatever the count; only the desktop card hides it below the goal, and the phone cannot send it, so a Claim tap that races a phone ➖ still pays.
   - **Privilege Suspension System**:
     - Privileges can be suspended for a duration (1 Day, 3 Days, 1 Week, or 2 Weeks).
     - **A suspension ends by itself** at its end time (`suspendedUntil`), with no action from the parent. Every surface asks one predicate, `isPrivilegeSuspended` in `store/privileges.ts`, which reads the stored status *and* the clock: the card's red hazard look, the dashboard summary, the Goal picker and the "Use!" lock. The stored `status: 'suspended'` is only the parent's last decision and is never trusted on its own. A suspension with no readable end time is not in force. The end time is read one way everywhere (`parseSuspensionEnd`): a date string, never a number.
@@ -2310,3 +2311,41 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   recorded in the rule registry. Existing tests that asserted "no calendar error" by its old text
   now look for the notice; the "offline" launch case in `Dashboard.loading.test.tsx` fails the
   events read, as the main process now does.
+
+### 2026-10-06 A responsibility ➖ is logged as a ➖, and a press that changes nothing writes no line
+
+- **The bug (QA 2026-10-01; the same in v0.0.42).** The phone's Responsibilities card sends ➕ / ➖ as
+  `ADD_RESPONSIBILITY_POINT` with amount `1` / `-1`. The log ignored the amount: a ➖ wrote "Point
+  earned for Recycling" while the count went down. It also wrote that line when nothing changed: a ➖
+  at 0 points and a ➕ on a completed task (ignored until Claim). A parent reads the log to see who
+  moved what (CLAUDE.md → Attribution).
+- **Now** the line names the move that happened and the new count: "+1 point for Recycling (2/3)",
+  "-1 point for Recycling (1/3)" (the task's icon and colour as before, no token delta). A press that
+  changes nothing writes no line, and the reducer returns the same state object for it, so nothing
+  re-renders, saves or goes to the phone (before, every such press made a new list and a broadcast).
+  One decision, `responsibilityPointChange` (`store/responsibilityPoint.ts`), is asked by the reducer
+  and the log alike, so they cannot disagree (the `adjustedMissionEnd` pattern).
+- **The phone's amount is checked.** The remote validator accepted any finite amount: `1e9` completed
+  a task in one press, `0.5` left a fractional count, `0` counted as +1. Now only `1`, `-1` or no
+  amount passes; anything else is dropped before the store like any malformed payload, and the
+  reducer refuses it too. The desktop card sends no amount and is unchanged; the phone app needs no
+  change. `ADD_RESPONSIBILITY_POINT`'s `amount` is typed `1 | -1`.
+- **A ➖ on a completed task** (behaviour unchanged, written down): it takes it back below its goal,
+  so Claim goes away until the point is earned again. No token moves: only Claim pays. After a Claim
+  the count is 0, so a ➖ then changes nothing and the paid tokens stay.
+- **Known gap, not changed (an economy decision)**: Claim (`RESET_RESPONSIBILITY`) pays `claimTokens`
+  whatever the count. Only the desktop card hides Claim below the goal, and the phone cannot send it,
+  so a Claim tap that races a phone ➖ still pays and logs "Activity completed +3". Pinned by a test.
+- **Open question**: the shield lock refuses both ➕ and ➖. A ➖ is the parent's correction, like
+  `REMOVE_TOKEN`, which the lock lets through. Not changed.
+- **Code.** `activityLog.ts` was over the 300-line limit (322). The bank and goal log cases moved,
+  unchanged, to `store/bankLog.ts`; `activityLog.ts` is at 250 lines and off the file-size ratchet.
+- Tests: `store/__tests__/mcReducer.responsibility-point.test.ts` (+1 and -1 lines with their counts
+  and attribution, from the phone and the desktop; no line and the same state for a ➖ at 0, a ➕ on a
+  completed task, an unknown task, eight amounts the phone never sends, and a broken shield; complete,
+  take one back, earn it again; no token moved by a ➖; a ➖ after a Claim; the Claim race pinned;
+  over the real remote channel, eight refused amounts and the phone's ➕ and ➖; both files asking the
+  one decision) and a validator case in `hooks/useRemoteControl.allowlist.test.ts`. Red before the
+  fix: 26 of the new cases and the validator case (the Claim-race case only for its "-1" line).
+  Mutations, each red: the old log case (20 cases), the old reducer case (13), the old validator
+  (5), and dropping each of the decision's three refusals (7, 3, 3).

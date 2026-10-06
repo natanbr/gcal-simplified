@@ -31,6 +31,7 @@ import { expireLapsedSuspensions, setPrivilegeStatus } from './privileges';
 import { stampMissionActivity } from './missionActivity';
 import { isStaleMissionAction } from './staleMissionAction';
 import { adjustedMissionEnd } from './missionEndAdjust';
+import { responsibilityPointChange } from './responsibilityPoint';
 import { endStaleMissionRun } from './staleMissionRun';
 import { reschedulesRunningMission, startTimeChanged } from './missionReschedule';
 import { CREAM_TASK_ID, syncCreamTask, withSchoolBag } from './routineTasks';
@@ -532,20 +533,12 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
         }
 
         case 'ADD_RESPONSIBILITY_POINT': {
-            const now = actionInstant(action);
+            const change = responsibilityPointChange(state, action); // activityLog.ts mirrors this
+            if (change === null) return state;
+            const completedAt = change.complete ? actionInstant(action) : null;
             return {
                 ...state,
-                responsibilities: state.responsibilities.map(r => {
-                    if (r.id !== action.taskId) return r;
-                    if (r.completedAt && (action.amount || 1) > 0) return r; // already complete — ignore if adding
-                    const newPoints = Math.max(0, r.pointsEarned + (action.amount || 1));
-                    const isComplete = newPoints >= r.pointsRequired;
-                    return {
-                        ...r,
-                        pointsEarned: newPoints,
-                        completedAt: isComplete ? now : null,
-                    };
-                }),
+                responsibilities: state.responsibilities.map(r => (r.id === action.taskId ? { ...r, pointsEarned: change.pointsEarned, completedAt } : r)),
             };
         }
 
