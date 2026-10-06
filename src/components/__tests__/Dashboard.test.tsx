@@ -87,7 +87,7 @@ describe('Dashboard — settings file busy at start-up', () => {
         await settle();
 
         expect(ipc.requests('settings:get')).toHaveLength(1);
-        expect(screen.queryByText(/Failed to load/)).toBeNull();
+        expect(screen.queryByTestId('calendar-read-notice')).toBeNull();
         expect(screen.getByTestId('settings-button')).toBeTruthy();
     });
 });

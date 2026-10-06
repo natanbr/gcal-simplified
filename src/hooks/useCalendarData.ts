@@ -19,7 +19,13 @@ export function fetchRangeOf(month: string): { timeMin: Date; timeMax: Date } {
     return { timeMin: addDays(first, -7), timeMax: addDays(addMonths(first, 1), 15) };
 }
 
-interface MonthEntry { events?: AppEvent[]; failed?: boolean }
+/**
+ * The visible month's latest read failed: its events from an earlier read, at `loadedAt`, are still
+ * shown (`stale`), or it never loaded (`unloaded`). A failed read never replaces a month's events.
+ */
+export type CalendarReadFailure = { kind: 'stale'; loadedAt: Date } | { kind: 'unloaded' };
+
+type MonthEntry = { events: AppEvent[]; loadedAt: Date; failed?: true } | { events?: undefined; failed: true };
 
 /**
  * The events of `visibleMonth` (a `monthKeyOf` key; null fetches nothing). A new `generation`
@@ -51,7 +57,8 @@ export function useCalendarData(visibleMonth: string | null, generation: number)
             inFlight.current.delete(id);
         }
         if (gen < newest.current[month]) return; // asked for again since: this answer is stale
-        setMonths(m => ({ ...m, [month]: answer ? { events: answer } : { ...m[month], failed: true } }));
+        const loadedAt = new Date();
+        setMonths(m => ({ ...m, [month]: answer ? { events: answer, loadedAt } : { ...m[month], failed: true } }));
         setPending(p => {
             if (p[month] !== gen) return p;
             const rest = { ...p };
@@ -78,10 +85,13 @@ export function useCalendarData(visibleMonth: string | null, generation: number)
         ? (entry?.events ? 'refreshing' : 'loading')
         : 'idle';
 
+    const failure: CalendarReadFailure | null = !entry?.failed ? null
+        : entry.events ? { kind: 'stale', loadedAt: entry.loadedAt } : { kind: 'unloaded' };
+
     return {
         events,
         activity,
-        error: entry?.failed ? 'Failed to load calendar events.' : null,
+        failure,
         /** The first answer, or failure, is in: from then on the week stays on screen. */
         hasLoaded: Object.keys(months).length > 0,
         refresh,

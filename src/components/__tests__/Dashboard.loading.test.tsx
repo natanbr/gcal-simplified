@@ -86,7 +86,7 @@ describe('Dashboard launch', () => {
         ipc.events = [];
         const seen = await launch();
         expect(screen.getAllByTestId('day-header-name')).toHaveLength(7);
-        expect(screen.queryByText(/Failed to load/)).toBeNull();
+        expect(screen.queryByTestId('calendar-read-notice')).toBeNull();
 
         fireEvent.click(screen.getByTestId('next-week-button'));
         await settle();
@@ -95,14 +95,14 @@ describe('Dashboard launch', () => {
         expect(seen).toEqual(['spinner', 'week']);
     });
 
-    it('offline: the week shows with the saved week start, without a calendar error', async () => {
-        ipc.events = [];  // main answers an empty list when Google cannot be reached
-        ipc.failing = new Set(['data:tasks', 'weather:get']);
+    it('offline: the week shows with the saved week start, saying its events could not load', async () => {
+        // Google unreachable fails the events read (electron/google-unreachable.ts); it used to answer [].
+        ipc.failing = new Set(['data:events', 'data:tasks', 'weather:get']);
         quietErrors();
         const seen = await launch();
 
         expect(firstDayShown()).toBe('Monday');
-        expect(screen.queryByText(/Failed to load/)).toBeNull();
+        expect(screen.getByTestId('calendar-read-notice').textContent).toBe("Couldn't load events");
         expect(seen).toEqual(['spinner', 'week']);
     });
 
@@ -114,7 +114,7 @@ describe('Dashboard launch', () => {
 
         expect(firstDayShown()).toBe('Monday');
         expect(screen.getByTestId('event-card-standup')).toBeTruthy();
-        expect(screen.queryByText(/Failed to load/)).toBeNull();
+        expect(screen.queryByTestId('calendar-read-notice')).toBeNull();
     });
 
     it('a settings file busy at launch: the week shown and the days fetched agree (week start "today")', async () => {

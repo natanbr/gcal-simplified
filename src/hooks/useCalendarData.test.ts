@@ -142,21 +142,56 @@ describe('useCalendarData', () => {
         expect(ids(result.current.events)).toEqual(['feb-2']);
     });
 
-    it('a failure is shown and ends the first load; the next answer clears it', async () => {
-        const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        onTestFinished(() => quiet.mockRestore());
-        mockIpc.invoke.mockRejectedValueOnce(new Error('offline'));
+    it('a month whose only read failed says nothing is loaded and ends the first load; the next answer clears it', async () => {
+        quietErrors();
+        mockIpc.invoke.mockRejectedValueOnce(new Error('Google request failed (ENOTFOUND)'));
         const { result } = renderMonth('2026-02');
         await settle();
 
         expect(result.current.hasLoaded).toBe(true);
-        expect(result.current.error).not.toBeNull();
+        expect(result.current.failure).toEqual({ kind: 'unloaded' });
         expect(result.current.activity).toBe('idle');
 
         mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
         act(() => { result.current.refresh(); });
         await settle();
-        expect(result.current.error).toBeNull();
+        expect(result.current.failure).toBeNull();
         expect(ids(result.current.events)).toEqual(['feb']);
     });
+
+    // The main process fails a read Google could not answer (electron/google-unreachable.ts) instead of
+    // answering [], so a failed refresh must keep the month: it is what the family sees all day.
+    it('a failed refresh keeps the month\'s events and says when they were read; the next answer replaces them', async () => {
+        quietErrors();
+        vi.useFakeTimers({ toFake: ['Date'] });
+        onTestFinished(() => { vi.useRealTimers(); });
+        const at = (minute: number) => new Date(2026, 1, 20, 9, minute);
+        const refreshAt = async (minute: number, outcome: () => Promise<unknown>) => {
+            vi.setSystemTime(at(minute));
+            mockIpc.invoke.mockImplementationOnce(outcome);
+            act(() => { result.current.refresh(); });
+            await settle();
+        };
+        vi.setSystemTime(at(0));
+        mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
+        const { result } = renderMonth('2026-02');
+        await settle();
+        expect(result.current.failure).toBeNull();
+
+        await refreshAt(5, () => Promise.reject(new Error('Google request failed (ENOTFOUND)')));
+        expect(ids(result.current.events)).toEqual(['feb']);
+        expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) });
+
+        await refreshAt(10, () => Promise.reject(new Error('Google request failed (status 503)')));
+        expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) }); // the last read that worked
+
+        await refreshAt(15, () => Promise.resolve(answer('feb-2')));
+        expect(ids(result.current.events)).toEqual(['feb-2']);
+        expect(result.current.failure).toBeNull();
+    });
 });
+
+function quietErrors() {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    onTestFinished(() => quiet.mockRestore());
+}
