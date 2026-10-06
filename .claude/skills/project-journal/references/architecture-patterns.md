@@ -980,3 +980,20 @@ structural check that BOTH files call `fn(state, action)` in code, read by the T
 comment. A number the decision can read from state (a reward, a cost) stays off the action
 (2026-09-23 above). And a UI that hides a button is not a refusal: a button that animates out
 keeps its handler until it unmounts, so the decision must refuse the second press itself.
+
+## 2026-10-06 — A view switch unmounts the cache with the view
+
+**Learning:** `App.tsx` swaps the Calendar and Mission Control, so every switch threw away the
+Calendar's month cache, tasks and weather, and each return (the 5-minute auto-return makes it many a
+day) was a launch: "Loading...", the full-screen spinner, and offline an empty week. Keeping the view
+mounted but hidden would have kept its window listeners and 5-minute refresh running under Mission
+Control. The fix lifts only the data into an owner above the switch (`features/calendar-session`),
+the "global listeners mount at global scope" rule applied to state. A lifted cache outlives the
+remount that used to clear it on a sign-in, so it needs its own account boundary: the owner hears
+`auth:success` / `auth:signed-out` itself (the view that normally hears them is not mounted on the
+other view), and each consumer writes through a ticket taken at mount that a sign-in or sign-out
+invalidates, so a Dashboard still mounted from before cannot write the old account back.
+**Action:** Before keying a component to "start over", list what lives in the subtree that a view
+switch also unmounts. When state must survive the switch, lift the data, not the component; give the
+lifted state the same lifetime boundaries the remount gave it (sign-in, sign-out, relaunch) and test
+each from both views.
