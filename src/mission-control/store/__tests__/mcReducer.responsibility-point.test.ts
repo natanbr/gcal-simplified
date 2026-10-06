@@ -13,13 +13,11 @@
 // ============================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { initialState, mcReducer } from '../mcReducer';
 import { createLogEntry } from '../activityLog';
 import { MISSED_LOCK_THRESHOLD } from '../missionStreak';
 import { at, renderLiveScheduler } from '../../hooks/schedulerTestKit';
+import { storeFileCalls } from './decisionCalls';
 import type { ActivityLogEntry, MCAction, MCState } from '../../types';
 
 const T = '2026-10-06T12:00:00.000Z';
@@ -81,10 +79,15 @@ describe('the line says what the press really did', () => {
         expect(lines[0]).toMatchObject({ icon: '🛼', type: 'responsibility', colorKey: 'activity', source: 'local' });
     });
 
-    it('the point that meets the goal completes the task, and its line shows the full count', () => {
+    it('the point that meets the goal completes the task, and its line says it can be claimed', () => {
         const { state, lines } = press(withPoints('activity', 2), desk('activity'));
         expect(task(state, 'activity').completedAt).toBe(T);
-        expect(messages(lines)).toEqual(['+1 point for Activity (3/3)']);
+        expect(messages(lines)).toEqual(['+1 point for Activity (3/3) — ready to claim']);
+    });
+
+    it('a ➖ that takes a completed task below its goal says it is no longer complete', () => {
+        const { lines } = press(withPoints('activity', 3), phone('activity', -1), phone('activity', -1));
+        expect(messages(lines)).toEqual(['-1 point for Activity (2/3) — no longer complete', '-1 point for Activity (1/3)']);
     });
 
     it('a point line moves no token, so it carries no token delta (the balances still ride along)', () => {
@@ -114,15 +117,16 @@ describe('a press that changes nothing writes no line and keeps the same state',
         expect(state.responsibilities).toBe(initialState.responsibilities);
     });
 
-    it('returns the very same state object, so nothing re-renders, saves or broadcasts', () => {
-        // No timestamp: the mood sync that runs first on a timestamped action is not part of this.
+    it('returns the very same state object when the action has no timestamp', () => {
+        // A real dispatch carries one, and the mood catch-up that runs first may make a new
+        // state during active hours; the press itself still leaves the list as it was (above).
         const done = withPoints('recycling', 3);
         expect(mcReducer(initialState, { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling', amount: -1 })).toBe(initialState);
         expect(mcReducer(done, { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling', amount: 1 })).toBe(done);
     });
 
     // A path that skips the remote validator must not complete a task in one press either.
-    it.each([1e9, -1e9, 2, -2, 0.5, 0, NaN, Infinity])('an amount the phone never sends (%s) is refused by the reducer and the log', amount => {
+    it.each([1e9, -1e9, 2, -2, 0.5, 0, NaN, Infinity, null, '1'])('an amount the phone never sends (%s) is refused by the reducer and the log', amount => {
         const start = withPoints('recycling', 1);
         const tampered = { type: 'ADD_RESPONSIBILITY_POINT', taskId: 'recycling', amount, timestamp: T } as MCAction;
         const { state, lines } = press(start, tampered);
@@ -148,9 +152,9 @@ describe('complete, take one back, earn it again', () => {
         expect(messages(lines)).toEqual([
             '+1 point for Recycling (1/3)',
             '+1 point for Recycling (2/3)',
-            '+1 point for Recycling (3/3)',
-            '-1 point for Recycling (2/3)',
-            '+1 point for Recycling (3/3)',
+            '+1 point for Recycling (3/3) — ready to claim',
+            '-1 point for Recycling (2/3) — no longer complete',
+            '+1 point for Recycling (3/3) — ready to claim',
         ]);
         expect(task(state, 'recycling')).toMatchObject({ pointsEarned: 3, completedAt: T });
     });
@@ -177,7 +181,7 @@ describe('complete, take one back, earn it again', () => {
         // here is a Claim tap racing the phone's ➖. Changing it is an economy decision.
         const claim: MCAction = { type: 'RESET_RESPONSIBILITY', taskId: 'activity', claimTokens: 3, timestamp: T };
         const { state, lines } = press(withPoints('activity', 3), phone('activity', -1), claim);
-        expect(messages(lines)).toEqual(['-1 point for Activity (2/3)', 'Activity completed']);
+        expect(messages(lines)).toEqual(['-1 point for Activity (2/3) — no longer complete', 'Activity completed']);
         expect(lines[1].delta).toBe(3);
         expect(state.bankCount).toBe(initialState.bankCount + 3);
     });
@@ -220,8 +224,7 @@ describe('over the real remote channel (useRemoteControl’s validator)', () => 
 });
 
 describe('structural: one decision, asked by the reducer and by the log', () => {
-    const store = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-    it.each(['mcReducer.ts', 'activityLog.ts'])('store/%s calls responsibilityPointChange(state, action)', (file) => {
-        expect(readFileSync(resolve(store, file), 'utf-8')).toMatch(/\bresponsibilityPointChange\(state, action\)/);
+    it.each(['mcReducer.ts', 'activityLog.ts'])('store/%s calls responsibilityPointChange(state, action) in code', (file) => {
+        expect(storeFileCalls(file, 'responsibilityPointChange')).toBe(true);
     });
 });
