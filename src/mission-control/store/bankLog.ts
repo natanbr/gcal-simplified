@@ -1,27 +1,31 @@
 // ============================================================
-// Mission Control — Activity Log: the bank and the goals
-// The log lines for every token moved by hand: into and out of the
-// bank, onto a goal, between goals, and spent on a reward. Called by
-// createLogEntry (activityLog.ts) after its shared refusals (unlogged,
-// shield lock, stale mission), with the id, instant and lazy balance
-// snapshot it gives every derived entry.
+// Mission Control — Activity Log: the bank and goal (case) lines
+// Bank tokens added and removed by hand, a goal picked, tokens put on,
+// moved between and taken off goals, and a goal spent on its reward.
+// (Game-token lines and a responsibility's Claim are in activityLog.ts.)
+// Called by createLogEntry after its shared refusals (unlogged, shield
+// lock, stale mission), with the id, instant and lazy balance snapshot
+// it gives every derived entry.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
 import type { MCState, MCAction, ActivityLogEntry } from '../types';
+import type { LogEnvelope } from './logEnvelope';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { REWARD_MAP, canSelectReward } from '../rewardCatalogue';
 
-export type BankAction = Extract<MCAction, {
-    type: 'ADD_TOKEN' | 'ADD_TOKENS' | 'REMOVE_TOKEN' | 'SELECT_CASE' | 'DEPOSIT_TO_CASE'
-        | 'MOVE_TOKEN' | 'VACUUM_TO_CASE' | 'REFUND_CASE' | 'CONSUME_CASE';
-}>;
+/** The one list of what this file logs: createLogEntry routes by it, and bankLogEntry's switch must cover it. */
+const BANK_ACTIONS = [
+    'ADD_TOKEN', 'ADD_TOKENS', 'REMOVE_TOKEN', 'SELECT_CASE', 'DEPOSIT_TO_CASE',
+    'MOVE_TOKEN', 'VACUUM_TO_CASE', 'REFUND_CASE', 'CONSUME_CASE',
+] as const satisfies ReadonlyArray<MCAction['type']>;
 
-/** What createLogEntry fixes before any case runs: the entry id, the action's own instant, and the balances after it (lazy). */
-export interface LogEnvelope {
-    id: string;
-    now: string;
-    snap: () => Pick<ActivityLogEntry, 'totalTokens' | 'bankTokens' | 'gameTokens' | 'source' | 'isRemote'>;
+export type BankAction = Extract<MCAction, { type: (typeof BANK_ACTIONS)[number] }>;
+
+const BANK_ACTION_TYPES: ReadonlySet<MCAction['type']> = new Set(BANK_ACTIONS);
+
+export function isBankAction(action: MCAction): action is BankAction {
+    return BANK_ACTION_TYPES.has(action.type);
 }
 
 export function bankLogEntry(action: BankAction, state: MCState, { id, now, snap }: LogEnvelope): ActivityLogEntry | null {

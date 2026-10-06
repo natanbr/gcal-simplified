@@ -288,7 +288,7 @@ describe('quick-game window — a refused redemption writes no log line', () => 
     const consumeAt = (iso: string): MCAction => ({ type: 'CONSUME_CASE', caseId: 0, timestamp: iso });
 
     it('writes no "Used" line when the evening has already started', () => {
-        // Catches the deletion of the window mirror in activityLog.ts. Without
+        // Catches the deletion of the window mirror in the log (store/bankLog.ts). Without
         // it a refused redemption still writes "Used: 🐍 Quick Game −1" into the
         // append-only trail — a token movement the reducer never performed.
         clockAt(EVENING);

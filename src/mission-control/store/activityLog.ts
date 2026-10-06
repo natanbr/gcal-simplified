@@ -3,14 +3,14 @@
 // Turns dispatched actions into human-readable ActivityLogEntry
 // records. Bank/total snapshots are derived by running the pure
 // reducer, so they can never drift from the real state math.
-// The bank and goal lines are built in bankLog.ts.
+// The bank and goal (case) lines are built in bankLog.ts.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
 import type { MCState, MCAction, ActivityLogEntry } from '../types';
 import { mcReducer, selectTotalWealth } from './mcReducer';
 import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
-import { bankLogEntry } from './bankLog';
+import { bankLogEntry, isBankAction } from './bankLog';
 import { isStaleMissionAction } from './staleMissionAction';
 import { adjustedMissionEnd } from './missionEndAdjust';
 import { responsibilityPointChange } from './responsibilityPoint';
@@ -103,11 +103,10 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
     // hitting `default`) must not pay a second full reducer pass per dispatch.
     const snap = () => deriveSnapshots(state, action);
 
+    // The bank and goal (case) lines: store/bankLog.ts.
+    if (isBankAction(action)) return bankLogEntry(action, state, { id, now, snap });
+
     switch (action.type) {
-        // The bank and the goals: every token moved by hand (store/bankLog.ts).
-        case 'ADD_TOKEN': case 'ADD_TOKENS': case 'REMOVE_TOKEN': case 'SELECT_CASE': case 'DEPOSIT_TO_CASE':
-        case 'MOVE_TOKEN': case 'VACUUM_TO_CASE': case 'REFUND_CASE': case 'CONSUME_CASE':
-            return bankLogEntry(action, state, { id, now, snap });
         case 'ADJUST_SHIELD': {
             // applyStreakChange only logs when the lock state CROSSES, so
             // without this the phone could walk the shield 0 -> 5 unrecorded.
