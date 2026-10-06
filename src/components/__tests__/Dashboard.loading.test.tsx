@@ -102,7 +102,7 @@ describe('Dashboard launch', () => {
         const seen = await launch();
 
         expect(firstDayShown()).toBe('Monday');
-        expect(screen.getByTestId('calendar-read-notice').textContent).toBe("Couldn't load events");
+        expect(screen.getByTestId('calendar-read-notice').textContent).toBe("Couldn't load the calendar");
         expect(seen).toEqual(['spinner', 'week']);
     });
 

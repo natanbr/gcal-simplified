@@ -47,7 +47,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
 
   // The month whose events cover what is shown; none before the settings are read (generation 0).
   const visibleMonth = generation > 0 ? monthKeyOf(periodAnchor(viewMode, today, weekOffset, monthOffset, weekStartDay)) : null;
-  const { events, activity, failure: readFailure, hasLoaded, refresh } = useCalendarData(visibleMonth, generation);
+  const { events, activity, failure: readFailure, hasLoaded, refresh } = useCalendarData(visibleMonth, generation, viewMode === 'week' ? days : monthDays);
 
   const processedEvents = useMemo(() => splitMultiDayEvents(events), [events]);
 
@@ -196,7 +196,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
             </div>
         </div>
 
-        <div className="flex flex-col items-center gap-1">
+        <div className="relative flex flex-col items-center gap-1">
             <div className="text-2xl font-bold text-zinc-700 dark:text-zinc-300 transition-colors duration-300"
                 data-testid="month-label"
             >
@@ -225,6 +225,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                     {status?.text}
                 </span>
             </motion.div>
+            <CalendarReadNotice failure={status ? null : readFailure} today={today} />
         </div>
         <div className="flex items-center gap-4">
              {weather && (
@@ -241,7 +242,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                     <RefreshCw size={16} className={`text-zinc-600 ${status.background ? 'animate-pulse' : 'animate-spin'}`} />
                  </div>
              )}
-             <CalendarReadNotice failure={readFailure} today={today} />
 
              {onSwitchToMC && (
                <button

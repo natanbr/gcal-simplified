@@ -17,9 +17,16 @@ const ids = (events: { id: string }[]) => events.map(e => e.id);
 const settle = () => act(async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); });
 const requests = () => mockIpc.invoke.mock.calls.length;
 
-function renderMonth(month: string | null, generation = 1) {
-    return renderHook(({ month: m, generation: g }) => useCalendarData(m, g), { initialProps: { month, generation } });
+interface Shown { month: string | null; generation: number; onScreen?: Date[] }
+
+/** `onScreen`, the days drawn, matters only for a month that never loaded (none drawn: nothing to cover). */
+function renderMonth(month: string | null, generation = 1, onScreen: Date[] = []) {
+    return renderHook(({ month: m, generation: g, onScreen: days = [] }: Shown) => useCalendarData(m, g, days),
+        { initialProps: { month, generation, onScreen } as Shown });
 }
+
+/** `count` days from `first`, as the grid draws them. */
+const daysFrom = (first: Date, count: number) => Array.from({ length: count }, (_, i) => new Date(first.getFullYear(), first.getMonth(), first.getDate() + i));
 
 describe('useCalendarData', () => {
     beforeEach(() => {
@@ -188,6 +195,70 @@ describe('useCalendarData', () => {
         await refreshAt(15, () => Promise.resolve(answer('feb-2')));
         expect(ids(result.current.events)).toEqual(['feb-2']);
         expect(result.current.failure).toBeNull();
+    });
+
+    describe('offline, with the clock at 9:00 for the reads that worked', () => {
+        const at = (minute: number) => new Date(2026, 1, 20, 9, minute);
+        const offline = () => Promise.reject(new Error('Google request failed (ENOTFOUND)'));
+        let quiet: ReturnType<typeof vi.spyOn>;
+        beforeEach(() => {
+            quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(at(0));
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+            quiet.mockRestore();
+        });
+
+        it('a new generation (a Save or a reconnect) that fails keeps the events, with the time of the read that worked', async () => {
+            mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
+            const { result, rerender } = renderMonth('2026-02', 1);
+            await settle();
+
+            vi.setSystemTime(at(5));
+            mockIpc.invoke.mockImplementationOnce(offline);
+            rerender({ month: '2026-02', generation: 2 });
+            await settle();
+
+            expect(ids(result.current.events)).toEqual(['feb']);
+            expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) });
+        });
+
+        it('back to a month already read: its own events, with its own time', async () => {
+            mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
+            const { result, rerender } = renderMonth('2026-02');
+            await settle();
+            vi.setSystemTime(at(1));
+            mockIpc.invoke.mockResolvedValueOnce(answer('mar'));
+            rerender({ month: '2026-03', generation: 1 });
+            await settle();
+
+            vi.setSystemTime(at(5));
+            mockIpc.invoke.mockImplementationOnce(offline);
+            rerender({ month: '2026-02', generation: 1 });
+            await settle();
+
+            expect(ids(result.current.events)).toEqual(['feb']);
+            expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) });
+        });
+
+        // February's read runs from Jan 25 to Mar 15 (fetchRangeOf): it can stand in for March's first two weeks only.
+        it('a month never read borrows the events on screen only while their read covers every day drawn', async () => {
+            mockIpc.invoke.mockResolvedValueOnce(answer('feb'));
+            const { result, rerender } = renderMonth('2026-02', 1, daysFrom(new Date(2026, 1, 16), 7));
+            await settle();
+
+            mockIpc.invoke.mockImplementation(offline);
+            rerender({ month: '2026-03', generation: 1, onScreen: daysFrom(new Date(2026, 2, 9), 7) });  // Mar 9-15
+            await settle();
+            expect(ids(result.current.events)).toEqual(['feb']);
+            expect(result.current.failure).toEqual({ kind: 'stale', loadedAt: at(0) });
+
+            rerender({ month: '2026-03', generation: 1, onScreen: daysFrom(new Date(2026, 2, 10), 7) }); // Mar 10-16
+            expect(result.current.events).toEqual([]);
+            expect(result.current.failure).toEqual({ kind: 'unloaded' });
+        });
     });
 });
 

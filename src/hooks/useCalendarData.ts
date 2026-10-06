@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { addDays, addMonths } from 'date-fns';
+import { addDays, addMonths, startOfDay } from 'date-fns';
 import { AppEvent, SerializedAppEvent } from '../types';
 
 /** The visible month's events: none yet and being read (`loading`), or shown and being re-read (`refreshing`). */
@@ -20,19 +20,46 @@ export function fetchRangeOf(month: string): { timeMin: Date; timeMax: Date } {
 }
 
 /**
- * The visible month's latest read failed: its events from an earlier read, at `loadedAt`, are still
- * shown (`stale`), or it never loaded (`unloaded`). A failed read never replaces a month's events.
+ * The visible month's latest read failed: the events shown come from an earlier read, at `loadedAt`
+ * (`stale`), or nothing that was read covers the days on screen (`unloaded`, an empty grid).
+ * A failed read never replaces a month's events.
  */
 export type CalendarReadFailure = { kind: 'stale'; loadedAt: Date } | { kind: 'unloaded' };
 
 type MonthEntry = { events: AppEvent[]; loadedAt: Date; failed?: true } | { events?: undefined; failed: true };
 
+/** The events on screen, and the month whose read they came from. */
+interface Shown { events: AppEvent[]; from: { month: string; loadedAt: Date } | null }
+const NOTHING_SHOWN: Shown = { events: [], from: null };
+
+/** Whether `month`'s read covers every day in `days` (in order; none drawn, nothing to miss). */
+function covers(month: string, days: readonly Date[]): boolean {
+    if (days.length === 0) return true;
+    const { timeMin, timeMax } = fetchRangeOf(month);
+    const first = startOfDay(days[0]);
+    const end = addDays(startOfDay(days[days.length - 1]), 1);
+    return first.getTime() >= timeMin.getTime() && end.getTime() <= timeMax.getTime();
+}
+
 /**
- * The events of `visibleMonth` (a `monthKeyOf` key; null fetches nothing). A new `generation`
- * refetches the month even while a request for it is in flight, and an answer from an older
- * generation is dropped: a Save or a reconnect may have changed what the main process reads.
+ * What the grid draws for the visible month, and what the header says about it. A month not read
+ * yet keeps the events on screen while it loads. Once its read has failed it borrows them only if
+ * their read covers every day drawn: past that, a day would look empty when nothing was read for it.
  */
-export function useCalendarData(visibleMonth: string | null, generation: number) {
+function view(entry: MonthEntry | undefined, shown: Shown, onScreen: readonly Date[]): { events: AppEvent[]; failure: CalendarReadFailure | null } {
+    if (entry?.events) return { events: entry.events, failure: entry.failed ? { kind: 'stale', loadedAt: entry.loadedAt } : null };
+    if (!entry?.failed) return { events: shown.events, failure: null };
+    if (shown.from && covers(shown.from.month, onScreen)) return { events: shown.events, failure: { kind: 'stale', loadedAt: shown.from.loadedAt } };
+    return { events: [], failure: { kind: 'unloaded' } };
+}
+
+/**
+ * The events of `visibleMonth` (a `monthKeyOf` key; null fetches nothing) for the days `onScreen`.
+ * A new `generation` refetches the month even while a request for it is in flight, and an answer
+ * from an older generation is dropped: a Save or a reconnect may have changed what the main process
+ * reads. A new sign-in remounts the Dashboard (CalendarApp), so nothing here outlives an account.
+ */
+export function useCalendarData(visibleMonth: string | null, generation: number, onScreen: readonly Date[]) {
     const [months, setMonths] = useState<Record<string, MonthEntry>>({});
     const [pending, setPending] = useState<Record<string, number>>({}); // month → generation in flight
     const newest = useRef<Record<string, number>>({});                 // month → newest generation asked for
@@ -78,15 +105,14 @@ export function useCalendarData(visibleMonth: string | null, generation: number)
 
     const entry = visibleMonth ? months[visibleMonth] : undefined;
     // A month not loaded yet keeps the events last shown (requirements → Enhanced Loading Indicator).
-    const [shown, setShown] = useState<AppEvent[]>([]);
-    if (entry?.events && entry.events !== shown) setShown(entry.events);
-    const events = entry?.events ?? shown;
+    const [shown, setShown] = useState<Shown>(NOTHING_SHOWN);
+    if (visibleMonth && entry?.events && entry.events !== shown.events) {
+        setShown({ events: entry.events, from: { month: visibleMonth, loadedAt: entry.loadedAt } });
+    }
+    const { events, failure } = view(entry, shown, onScreen);
     const activity: CalendarActivity = visibleMonth && pending[visibleMonth] !== undefined
         ? (entry?.events ? 'refreshing' : 'loading')
         : 'idle';
-
-    const failure: CalendarReadFailure | null = !entry?.failed ? null
-        : entry.events ? { kind: 'stale', loadedAt: entry.loadedAt } : { kind: 'unloaded' };
 
     return {
         events,
