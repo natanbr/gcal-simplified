@@ -6,8 +6,8 @@
 // empty list: the week went blank, with no error, until a later refresh
 // worked. Now such a read fails (electron/google-unreachable.ts) and the
 // Dashboard keeps what it shows, saying since when it has not been updated.
-// A month it never loaded borrows the events on screen only for the days
-// their read covered; past them the grid is empty and says it could not
+// A month it never loaded shows the events on screen only when their read
+// covers every day drawn; otherwise the grid is empty and says it could not
 // load, never days the data does not cover drawn as if they were empty.
 // The notice sits under the date, out of the header's flow (PR 194 review:
 // in the right-hand group it wrapped the header at 1280x720). Tasks stay.

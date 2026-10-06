@@ -11,6 +11,12 @@
 // may forgive an unreachable source. The list is exact: an entry whose catch
 // is gone, or now rethrows, fails too.
 //
+// What it cannot see: only try/catch statements inside ApiService's methods
+// (and functions nested in them) are read. A promise `.catch()`,
+// `Promise.allSettled`, an arrow-function class property, a function outside
+// the class, or a Google call added inside a listed exception's try (the
+// holiday fetch's) passes this guard. Review is the defence there.
+//
 // verifiedRedBy (2026-10-06, each reverted):
 //   - the rethrow removed from getTasks's per-list catch → "getTasks › service.tasks.list" named;
 //   - getCalendars wrapped in try/catch answering [] → "getCalendars › …" named;

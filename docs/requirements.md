@@ -241,7 +241,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **Visibility**: When navigating between weeks or refreshing data, a more prominent loading indicator should be visible.
 - **Progress Bar**: Implement a Framer Motion-based progress bar (skeleton or linear loader).
 - **Status Text**: Display small text indicating the current loading status (e.g., "Fetching Schedule...", "Updating Weather...") next to or under the date range title in the header.
-- **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched. The full-screen "Syncing with Google..." shows only until the first week can be shown, and does not return while the Calendar stays open; after that a month not loaded yet keeps the calendar and its known events on screen with the header indicator (2026-10-04). A new sign-in (Settings → Reconnect Account) starts the Calendar over, spinner included, so nothing of the account before it stays on screen (2026-10-06).
+- **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched. The full-screen "Syncing with Google..." shows only until the first week can be shown, and does not return while the Calendar stays open; after that a month not loaded yet keeps the calendar and its known events on screen with the header indicator (2026-10-04). A new sign-in starts the Calendar over: a successful Settings → Reconnect Account closes Settings and shows the full-screen loading spinner while the new account loads, and nothing of the account before it stays on screen (2026-10-06).
 - **A refresh that fails** (2026-10-06): a read during which Google could not be reached — no answer
   at all (offline, DNS, a connection reset or refused, TLS, a timeout), HTTP 408, 429 or 5xx, or a 403
   whose reason is a rate limit or a quota — fails, and never replaces or empties what is on screen:
@@ -269,7 +269,9 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
     calendars used to show.
   - Tasks follow the same rule; the tasks shown stay, without a notice.
   - A new sign-in (Settings → Reconnect Account, maybe as another account) starts the Calendar over:
-    nothing read for the account before it stays on screen, even while Google cannot be reached.
+    Settings closes, the spinner shows while the new account loads, and nothing read for the account
+    before it stays on screen, even when the new account's first read fails. Signing in needs
+    Google, so a Reconnect while offline ends on the Sign in screen.
   - Statutory holidays: a year, once read, is kept for the session, so the holiday service being down
     never removes holidays already shown. While it is down, a year not read yet shows without its
     holidays and Google's events still refresh: the holiday service is not Google, and its outage must
@@ -2262,6 +2264,12 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   (Architecture → Google unreachable is a failure, not nothing), with a structural guard on every
   catch in `ApiService` and a rule-registry entry. The holiday log line goes through
   `errorSummary`.
+- **Review round 2 (PR 194).** A reconnect read the settings three times and the tasks and weather
+  twice: the Dashboard's own `auth:success` reload ran beside the remount, and is removed (one read
+  each, `CalendarApp.reconnect.test.tsx`; the Dashboard-level reload tests use Save). The real-chain
+  test no longer depends on `NO_PROXY` / `no_proxy` (with Google listed there, its dummy refresh
+  would have reached Google). The coverage rule's lower bound is pinned by a test. QA 3.12.5 no
+  longer asks for a Reconnect while offline, which cannot succeed.
   - Holidays are deliberately not part of the failure. A year once read is kept for the session, so
     holidays already shown cannot vanish; failing the whole read while the holiday service is down
     would freeze the family's Google events, or blank the calendar at launch, for a third-party
@@ -2296,9 +2304,9 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   googleapis, GoogleOAuthClient and gaxios chain through a closed local port: an expired token's
   refresh meets ECONNREFUSED, both reads fail, no sign-out, the refresh token kept) and
   `src/__tests__/google-unreachable-boundary.test.ts` (every catch in `ApiService`). Red before the
-  fix: the 7 unreachable cases in `api_unreachable` ("promise resolved instead of rejecting") and 6
-  renderer cases on revert (`useCalendarData` 2, `Dashboard.offline` 3, the offline launch case in
-  `Dashboard.loading` 1); the guards in those files were green. The mutations, each caught, are
+  fix: the 7 unreachable cases in `api_unreachable` ("promise resolved instead of rejecting") and 8
+  renderer cases on revert of the renderer change (the count measured in review round 2); the
+  guards in those files were green. The mutations, each caught, are
   recorded in the rule registry. Existing tests that asserted "no calendar error" by its old text
   now look for the notice; the "offline" launch case in `Dashboard.loading.test.tsx` fails the
   events read, as the main process now does.
