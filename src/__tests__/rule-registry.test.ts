@@ -111,6 +111,13 @@ const REGISTRY: Rule[] = [
         defence: 'The logging clause is guarded by behaviour at every site that logs or rethrows an error from Google or the token file today: api.ts\'s four reads (api_error_logging), the token store (auth_store_corrupt, auth_app_ready), the four log sites in auth.ts (auth_logging) and every data: and auth: IPC handler (main_auth, which drives each registered one). A new log site outside those needs its own case.',
     },
     {
+        rule: 'Google unreachable is a failure, not nothing: the Calendar\'s forgiving reads (data:events without strict, data:tasks) rethrow it (no response, 408, 429, 5xx, a 403 rate limit or quota) and skip only what Google refuses; every catch in ApiService rethrows it first or is a listed exception; the renderer keeps what it shows, a month never loaded borrows the events on screen only for the days their read covered, and a new sign-in remounts the Dashboard',
+        source: 'CLAUDE.md → Architecture → Google unreachable is a failure, not nothing',
+        status: 'guarded',
+        guard: ['src/__tests__/google-unreachable-boundary.test.ts', 'electron/google-unreachable.test.ts', 'electron/api_unreachable.test.ts', 'electron/api_offline_chain.test.ts', 'src/hooks/useCalendarData.test.ts', 'src/components/__tests__/Dashboard.offline.test.tsx', 'src/components/__tests__/CalendarApp.reconnect.test.tsx'],
+        verifiedRedBy: 'proven 2026-10-06 (PR 194). Against the code before the fix: api_unreachable 7 red ("promise resolved instead of rejecting": offline, one calendar at 503, 429, a 403 rate limit, the recovery case, tasks offline, the default list offline); 6 renderer cases red on revert (useCalendarData 2, Dashboard.offline 3, the offline launch case in Dashboard.loading 1). Mutations, each reverted: a failed read dropping the month\'s events (3 red); any error without a response counted as unreachable (6 red); every 403 counted as unreachable (4 red). Review round 1: the five recipes in google-unreachable-boundary.test.ts\'s header (a rethrow removed, a new forgiving catch in getCalendars, the check negated, an exception deleted, an exception for a catch that rethrows), each red; coverage always true in useCalendarData (the hook case and Next Month red) and always false (the hook case, the midnight roll-over and Next Week red); the notice back in the header\'s right-hand group (2 red); CalendarApp without the sign-in key (the reconnect case red: account A\'s event stayed on screen); auth-client.ts signing out on every failed refresh (api_offline_chain red: 3 sign-outs).',
+    },
+    {
         rule: 'Mission Control never imports from src/components, src/hooks, src/utils',
         source: 'CLAUDE.md → Conventions',
         status: 'guarded',
