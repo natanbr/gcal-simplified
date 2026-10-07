@@ -183,9 +183,9 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - A stop covers only the occurrences its run overlapped. Moving that phase's start time to later makes a new occurrence, and it starts at the new time. A mission started by hand *before* its window and stopped before the window opens does not cancel the scheduled one (completing or failing it early still does: that is today's outcome). Moving it to a start at or before the run's stop (or, for a running mission, before now) makes an occurrence that run already covers: it is not started again (open decision for Nathan, PR 170; before this fix a running mission moved earlier restarted at once).
   - The stamp uses this computer's clock, never the phone's: a phone Stop's own timestamp is dropped on arrival (`useRemoteControl`), so a phone that runs behind cannot stamp the stop before the window. A stamp later than now (written while the clock was set ahead) is ignored by the scheduler and dropped at load. A run that ended unnoticed (the app was closed or the machine slept past its end, or an earlier day's stuck run is ended at load) is stamped as ended at its due end (start + duration), not when it was noticed, so a launch inside the same phase's next window still starts that window's mission (2026-10-05).
   - While any mission is running, the scheduler does not aim at an open window (it waits for tomorrow's): when that mission ends it re-arms once and starts the open window's mission if that occurrence has not run. A window timer that fires late (the machine slept) while its own mission is still running logs no "skipped" line.
-  - **Which occurrence is open (2026-10-06).** An occurrence's window runs from its start time for the mission's duration, in real time (a DST night counts its real length), and belongs to the day it started; a window shorter than 5 min (the 10-second test step) stays open 5 min, the scheduler's late-start tolerance. At launch, on waking from sleep, when a mission ends and after a Settings save, the scheduler starts the open occurrence if it has not run, so a relaunch or a wake at 00:10 inside an evening at 23:30 for 60 min starts that evening, dated the evening before; at 00:40 it is over and does not start. Before, only a late timer started it: a relaunch or a wake after midnight aimed at the next 23:30. One decision answers "which occurrence is open now" for the scheduler's start and its late-fire check, the hand-start rule below and the dating of a run saved before the stored day existed (`openOccurrence`, `store/missionOccurrence.ts`).
-  - **A window missed unseen is logged once (2026-10-06).** When a mission's most recent window closed without the mission running, because the app was closed or the machine asleep, the scheduler writes one line, the existing "⏭️ Evening mission skipped — the 23:30 window was missed (machine asleep)" (the same words when the app was closed). It is written by whichever comes first, the launch or wake that finds it or the late timer, and never again for that occurrence on a later launch (the line names its occurrence; see the known limit below). Only the most recent window per mission is reported: a weekend with the app closed gives one line per mission, not one per day. It needs evidence the app was there to run it: the mission ran at some time before that window, or the window began while the app was open (it slept through it). A profile on which the mission never ran gets no line at launch. A skip moves nothing: no shield (a skip is not a miss, as before), no outcome date, so a skipped morning keeps the quick-game window shut; the parent's way out is ▶ Start. When a window was missed and the next one is open now (closed for a whole day, relaunched at 19:10), the line comes first and the open mission starts a second later.
-  - **Known limits (2026-10-06)**: "logged once" is checked against the activity log. After the parent clears the log, or 200 newer lines push the line out, a relaunch or a wake before that mission's next window closes writes it once more. A Settings save that moves a start time to a time already passed today, while today's mission has not concluded (not run, or stopped before the new time), writes the "skipped" line for the new time at once: true (that mission will not run today), but it still says "(machine asleep)".
+  - **Which occurrence is open (2026-10-06).** An occurrence's window runs from its start time for the mission's duration, in real time (a DST night counts its real length), and belongs to the day it started; a window shorter than 5 min (the 10-second test step) stays open 5 min, the scheduler's late-start tolerance. At launch, on waking from sleep, when a mission ends and after a Settings save, the scheduler starts the open occurrence if it has not run, so a relaunch or a wake at 00:10 inside an evening at 23:30 for 60 min starts that evening, dated the evening before; at 00:40 it is over and does not start. Before, only a late timer started it: a relaunch or a wake after midnight aimed at the next 23:30. The occurrences come from one module, `store/missionOccurrence.ts`: the scheduler's arm asks `lastClosedOccurrence`, `openOccurrence` and `nextOccurrence`, its late-fire check `hasClosed`, the hand-start rule below `occurrenceOn` (today's and yesterday's occurrence), and the dating of a run saved before the stored day existed `openOccurrence`. **A late start runs the mission's full duration from the moment it starts**, as a late start always has: a relaunch or a wake at 00:20 inside an evening at 23:30 for 60 min starts it at 00:20 and it runs to 01:20, and if it times out unfinished it costs a shield segment while the child is likely asleep; the same as a launch at 19:50 inside the default 19:00–20:00 evening, which runs to 20:50. Whether a late start should end with its window instead is an open product question for the owner (follow-up list, item 39).
+  - **A window missed unseen is logged once (2026-10-06).** When a mission's most recent window closed without the mission running, because the app was closed or the machine asleep, the scheduler writes one line: "⏭️ Evening mission skipped — the 23:30 window was missed (app closed or machine asleep)" (the words "(machine asleep)" until 2026-10-06). It is written by whichever comes first: a launch, the re-arm after a wake, or the timer for that window firing late. A re-arm for a change to the missions (a mission starting or ending, a task tap, a Settings save) never writes it: the app was up. The scheduler remembers each line it wrote or found in the log while it runs, so a CLEAR does not bring it back in that session, and a later launch finds it in the log (the line names its occurrence; see the known limits below). Only the most recent window per mission is reported: a weekend with the app closed gives one line per mission, not one per day. It needs evidence the app was there to run it: the mission ran at some time before that window, or the window began while the app was open (it slept through it). So the morning at 06:00–06:30, which ran on an earlier day, with the app closed until 07:00 gets one line at 07:00 and none on a relaunch at 09:00; a profile on which the mission never ran gets no line at launch. A window the mission did not run because another mission ran through all of it gets no line when that run ends; the next launch or wake reports it, with the same words. A skip moves nothing: no shield (a skip is not a miss, as before), no outcome date, so a skipped morning keeps the quick-game window shut; the parent's way out is ▶ Start. When a window was missed and the next one is open now (closed for a whole day, relaunched at 19:10), the line comes first and the open mission starts a second later. Both missions overdue at one launch get one line each.
+  - **Known limits (2026-10-06)**: "logged once" is checked against the activity log at a launch. After the parent clears the log, or 200 newer lines push the line out, a relaunch before that mission's next window closes writes it once more (a wake in the same session does not). A Settings save that moves a start time to a time already passed today writes nothing, but if today's mission has not concluded (not run, or stopped before the new time), the next launch or wake that day reports the window at the new time.
   - **A mission start time must be a real time (fixed 2026-09-24).** Settings → "Auto-trigger at" cannot be saved empty: Save is disabled, the empty field is outlined, and the footer names the empty time and its tab ("Set the Morning auto-trigger time (🕒 Missions Time tab) to save.") until both times are filled in. `SET_SETTINGS` also ignores a start time that is not `HH:MM` (it keeps the stored one and does not stop a running mission), a profile saved empty by an older version loads with the default time (06:00 / 19:00) and a window re-derived from its duration, and the log gets one system line saying which time was reset and why ("🔧 Mission settings repaired at startup: the evening start time was empty, reset to 19:00", 2026-10-05; it used to be silent), and the scheduler arms nothing for a time that is not a real `HH:MM`.
   - **A mission duration must be a real length (2026-09-26).** At least one second and less than 24 h (the 10-second test step counts; the duration slider starts at 5 min, so it cannot offer 0). `SET_SETTINGS` keeps the stored duration for anything else, and a profile holding one (JSON saves NaN as `null`) loads with the default (30 / 60 min), named in the same startup line ("the evening duration could not be read, reset to 60 min"). At load the mission window is always re-derived from the settings, never trusted from the saved copy, and a mission saved running with no readable duration gets its window's length, so it can end (named in the same startup line since 2026-10-05: "the running evening mission had no length, set to its window's 60 min"). If that run's window closed before today, it is ended just after load instead (a logged system action, so it reaches the audit trail), with no outcome (no miss, no conclusion date, like a Stop) and one system log line ("Evening mission from <date> ended at startup: its saved record was incomplete"); ending it on the first tick would charge a miss (a shield segment) for a data bug. Every reader of an entered time (scheduler, mood gauge, quick-game window) uses the same strict `HH:MM` rule and does nothing with a time it cannot read; a mission end past midnight (`24:30`) is read as 00:30 the next day, so a launch, a wake from sleep or a late timer inside such a window starts it, before or after midnight (since 2026-10-06 also a relaunch or a wake after midnight: "Which occurrence is open" above). **An outcome is dated by the day its occurrence started (2026-10-05)**, and that day is decided when the run starts and stored on it: the scheduler names the occurrence it starts (a late fire after midnight is still last night's); a start by hand or from the phone **never belongs to a future day's occurrence** (decided for Nathan by the review of PR 193, reversible): at or after today's window start it is today's (a morning made up at 19:30, an evening started late at 21:00); before it, it is whichever is nearer in real time, today's start ahead or the previous occurrence's end behind, a tie going to today, and inside the previous occurrence's window (an overnight tail) it is that one. So a morning at 06:00 started at 05:50 is today's, an evening at 19:00–20:00 started at 00:20 is the evening before and at 14:00 today's. A full Reset keeps the day. So an evening that ends after midnight, finished or timed out, marks the evening that began before midnight as done, not the next day's, and the next evening still starts; a Settings save during the run does not move it. The phone's "Done Today" badge follows the same date, so after an evening that ended at 00:15 it reads "Inactive" until that night's evening. A morning run left from an earlier day concludes that day, not today, so today's games stay shut until today's morning concludes (the quick-game rule below).
 
@@ -2527,29 +2527,34 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   passed over the window in silence: the parent never learned the morning was missed (open question
   Q5 in the release QA plan).
 - **Now** one decision answers "which occurrence is open now", `openOccurrence` in the new
-  `store/missionOccurrence.ts` (with `nextOccurrence`, `lastClosedOccurrence` and `hasClosed`). The
-  scheduler asks it at every arm (launch, wake, a mission ending, a Settings save) and in its fire (on
-  time while the target's window is open, else skipped); the hand-start rule and the dating of a run
-  saved before the stored day existed (`occurrenceDay.ts`) ask it too. Examples, an evening at 23:30
-  for 60 min that ran the night before: relaunch or wake at 00:10 → it starts, dated the evening
-  before; at 00:40 → it does not start, one "⏭️ Evening mission skipped — the 23:30 window was missed
-  (machine asleep)"; relaunched again at 01:30 or 09:00 → no second line. The morning at 06:00–06:30
-  with the app closed until 07:00 → one line at 07:00, none at 09:00.
+  `store/missionOccurrence.ts`, built on the same occurrences as its siblings: the scheduler's arm
+  (launch, wake, a mission ending, a Settings save) asks `lastClosedOccurrence`, `openOccurrence` and
+  `nextOccurrence`, its fire `hasClosed` (on time while the target's window is open, else skipped),
+  the hand-start rule `occurrenceOn`, and the dating of a run saved before the stored day existed
+  `openOccurrence` (both in `occurrenceDay.ts`). Examples, an evening at 23:30 for 60 min that ran the
+  night before: relaunch or wake at 00:10 → it starts, dated the evening before; at 00:40 → it does
+  not start, one "⏭️ Evening mission skipped — the 23:30 window was missed (app closed or machine
+  asleep)"; relaunched again at 01:30 or 09:00 → no second line. The morning at 06:00–06:30, which
+  ran on an earlier day, with the app closed until 07:00 → one line at 07:00, none at 09:00. A late
+  start runs its full duration from the start, as before (open product question, follow-up item 39).
 - **The window** lasts as long as a run started then, in real time, as the run's expiry and its due
   end measure it: the night the clocks spring forward (America/Vancouver, 2026-03-08), an evening at
   23:30 for 4 h is open until 04:30, not 03:30 as the wall clock ('27:30') said; the night they fall
   back, 23:30 for 3 h ends at the second 01:30, not 02:30. A window shorter than 5 min (the 10-second
   test step) stays open 5 min, the late-start tolerance a timer already had: the 10 s evening at
   23:58 relaunched at 00:02 starts, dated the evening before; at 00:05 it gets the line.
-- **The line** (the existing words, hand-built as before, `source: scheduler`; it logs no action the
-  shield lock refuses, so it needs no lock re-check) is written once per occurrence: its id names the
-  occurrence (`mission-skipped-<phase>-<day>`), the arm skips one already in the log, and the
-  scheduler remembers what it reported this session, so a line that has not reached the state yet
-  (or never does) is not reported again a second later. Only the most recent window per mission, and
-  only with evidence the app was there to run it: the mission ran before that window, or the window
-  began while the app was open. A profile on which the mission never ran gets no line at launch (a
-  fresh install, every throwaway E2E profile). When a window was missed and the next one is open
-  (closed a whole day, relaunched at 19:10), the line comes first and the evening starts a second later.
+- **The line** (hand-built as before, `source: scheduler`; it logs no action the shield lock
+  refuses, so it needs no lock re-check; its words now end "(app closed or machine asleep)") is
+  written once per occurrence, by a launch, the re-arm after a wake or the late timer, never by a
+  re-arm for a change to the missions: its id names the occurrence (`mission-skipped-<phase>-<day>`),
+  a launch skips one already in the log, and the scheduler remembers each line it wrote or found
+  while it runs, so a line that has not reached the state yet (or never does), or one the parent
+  CLEARed, is not reported again. Only the most recent window per mission, and only with evidence
+  the app was there to run it: the mission ran before that window, or the window began while the app
+  was open. A profile on which the mission never ran gets no line at launch (a fresh install, every
+  throwaway E2E profile). When a window was missed and the next one is open (closed a whole day,
+  relaunched at 19:10), the line comes first and the evening starts a second later. A window another
+  mission ran through gets its line at the next launch or wake, not when that run ends.
 - **The shield** is not charged for a skip, as before (only a run that expired with tasks unfinished
   is a miss, 2026-09-27), and a skip records no outcome date, so a skipped morning keeps the
   quick-game window shut until the parent starts it with ▶ Start. Unchanged: a stop, a completion or a
@@ -2558,24 +2563,50 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   report is armed at 0 ms and goes through the same fire as a late timer; then the 1 s re-arm aims at
   the open or next occurrence. `idle-performance.test.tsx` now also checks that after the line
   nothing is armed for 10 s, even when the line never reaches the state.
-- **Known limits.** "Once" is checked against the activity log: after a CLEAR, or 200 newer lines,
-  a relaunch or wake before that mission's next window closes writes it once more (a persisted marker
-  needs a new field and action, and `types.ts` and `mcReducer.ts` are at their size ratchets). A
-  Settings save that moves a start time to a time already passed today, before today's mission
-  concluded, writes the line at once, saying "(machine asleep)" (pinned as a KNOWN LIMIT case). The
-  words also say "(machine asleep)" when the app was closed (the existing wording, kept). A weekend
-  away gives one line per mission, not one per missed day.
+- **Known limits.** "Once" is checked against the activity log at a launch: after a CLEAR, or 200
+  newer lines, a relaunch before that mission's next window closes writes it once more (a wake in the
+  same session does not). Kept on purpose: the exposure is under a day and needs a CLEAR, while a
+  persisted marker is a new saved field, hydrated, kept off the phone broadcast and written by a new
+  action. A Settings save that moves a start time to a time already passed today writes nothing; if
+  today's mission has not concluded, the next launch or wake that day reports that window. A weekend
+  away gives one line per mission, not one per missed day. The first two are pinned as KNOWN LIMIT
+  cases.
 - Tests: `hooks/useMissionScheduler.open-occurrence.test.tsx` (relaunch and wake at 00:10 start last
   night's evening and date it so; finished at 23:55 or at 00:05, or stopped at 23:50, it is not
   restarted; a cleared start time does nothing), `hooks/useMissionScheduler.skipped-window.test.tsx`
   (one line at 00:40 with no shield and no outcome, none on two more relaunches, the morning at
-  07:00 and 09:00, a whole day closed, the Settings-save limit, a run that finished, a fresh profile,
-  a slept-through window with the wake before the stale timer, the stale timer before the wake, a
-  wake then a relaunch, the 10 s evening at 00:02 and 00:05), `hooks/useMissionScheduler.dst.test.tsx`
-  (both DST nights, its own TZ), `store/__tests__/missionOccurrence.test.ts` (the decision, and the
-  hand-start rule agreeing with it inside every open window), the structural
-  `src/__tests__/occurrence-arithmetic-boundary.test.ts` (only `missionOccurrence.ts` puts a time of
-  day on a date; it named the scheduler's 2 and `occurrenceDay.ts`'s 4 such lines), and a case in
-  `idle-performance.test.tsx`. Red before the fix: 11 scheduler cases and the boundary case; the
-  mutations, each red and reverted, are in the rule registry ("Mission occurrences"). No existing
-  assertion changed (one stale comment in `useMissionScheduler.overnight.test.tsx`).
+  07:00 and 09:00, a whole day closed, a run that finished, a fresh profile, a slept-through window
+  with the wake before the stale timer, the stale timer before the wake, a wake then a relaunch, the
+  10 s evening at 00:02 and 00:05), `hooks/useMissionScheduler.skipped-once.test.tsx` (review
+  round 1, below), `hooks/useMissionScheduler.dst.test.tsx` (both DST nights, its own TZ),
+  `store/__tests__/missionOccurrence.test.ts` (the decision, and the hand-start rule agreeing with it
+  inside every open window), the structural `src/__tests__/occurrence-arithmetic-boundary.test.ts`
+  (only `missionOccurrence.ts` puts a mission's time on a date; against the code before this change
+  it names 7 sites, the scheduler's 2 and `occurrenceDay.ts`'s 5), a case in
+  `idle-performance.test.tsx` and two in `src/__tests__/e2e-mission-clock.test.ts`. Red against the
+  scheduler before the fix: 20 behavioural cases and the boundary case; the mutations, each red and
+  reverted, are in the rule registry ("Mission occurrences"). No existing assertion changed (one
+  stale comment in `useMissionScheduler.overnight.test.tsx`).
+- **Review round 1 (PR 198).**
+  - The E2E launch helper (`e2e/helpers/missionClock.ts`) quieted a launch by marking today's
+    missions as concluded. After midnight the open window is last night's, which today's dates do not
+    cover: `mc-layout-fit.spec.ts` sets the evening to 23:59, so run between 00:00 and 00:59 the
+    evening started, "Use!" was disabled and the spec failed for an hour every night; the
+    real-profile specs the same on a dev profile whose evening runs past midnight. The quiet blob now
+    also stamps every mission's `lastActiveAt` with the launch instant; the real-profile restore puts
+    each mission's own stamp back. Two unit cases in `e2e-mission-clock.test.ts` (no E2E run).
+  - The line came back too easily: after a CLEAR, any re-arm in a later session (a Settings save, a
+    task tap, a mission starting) wrote it again, and a Settings save that moved a start time into
+    the past wrote it at once. Now only a launch, the re-arm after a wake or the late timer reports a
+    missed window, and the scheduler remembers each line it wrote or found in the log. Which re-arm
+    looks back is decided by what changed since the last arm: none yet (a launch), a new wake token,
+    or the same missions (StrictMode's second mount run); a change to the missions alone does not.
+  - The words are now "(app closed or machine asleep)" (decided by the coordinator, reversible).
+  - The structural guard reads the syntax tree (comments and strings no longer match or hide code)
+    and sees more shapes; the date sums of the School Bag, the mood gauge, skill progress and the
+    quiz look-back are allowed by name with the reason, and the claim is now "a mission's time".
+  - QA 3.12.3 and 3.12.12 told the tester to expect a line where none is written by design (a run
+    finished or expired today makes today's windows of that mission count as done); they now say
+    to stop that run from the phone first, and when not to expect a line.
+  - The behaviour of a late start (it runs its full duration) is now stated plainly, with the open
+    product question.
