@@ -155,6 +155,22 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   test duration), so it has its own parser, `windowEndToMins`. A duration is real when
   `isValidDurationMins` says so (one second up to, not including, 1440 min); `SET_SETTINGS` and hydration both refuse
   anything else. Guarded by `src/__tests__/hhmm-parse-boundary.test.ts`.
+- **Mission occurrences**: `store/missionOccurrence.ts` is the only place a mission's time is put on
+  a date (the other date sums in Mission Control, the School Bag's days, the mood gauge's waking
+  window, skill-progress days and the quiz look-back, are named in the guard with why).
+  `openOccurrence` is the one answer to "which occurrence is open now": today's, or last night's
+  while its window runs past midnight. A window lasts as long as a run started then, in real time (a
+  DST night counts its real length; one shorter than 5 min stays open 5 min, the late-start
+  tolerance). The scheduler's arm uses `lastClosedOccurrence`, `openOccurrence` and
+  `nextOccurrence`, its fire `hasClosed`, the hand-start rule `occurrenceOn` and a legacy run's
+  dating `openOccurrence`: a relaunch at 00:10 used to aim at tonight's 23:30 while a late timer
+  started last night's (2026-10-06). A window that closed without running gets one "⏭️ … skipped"
+  line, written by a launch, a wake or a late timer (or by the next arm when a change to the missions
+  cancelled that report before it fired; never by a re-arm for a mission change or a Settings save
+  alone), only when the mission ran before it or it began while the app was open; the line's id
+  names the mission and the day (one line per mission per day), and the scheduler remembers each one
+  it wrote or found in the log.
+  Guarded by `src/__tests__/occurrence-arithmetic-boundary.test.ts`.
 - **Remote actions**: `REMOTE_ALLOWED_ACTIONS` in `useRemoteControl.ts` is an allowlist. Adding a
   remote button means adding its action type there too.
 - **Skill progress**: `RECORD_QUIZ_ANSWER` is the only writer of `skillProgress` (bounded per-skill

@@ -13,9 +13,11 @@ import { expect, vi } from 'vitest';
 import React, { useMemo, useReducer, useRef } from 'react';
 import { useMissionScheduler } from './useMissionScheduler';
 import { useRemoteControl } from './useRemoteControl';
-import { MCContext, STORAGE_KEY, useMCDispatch } from '../store/useMCStore';
+import { MCContext, STORAGE_KEY, loadPersistedState, useMCDispatch } from '../store/useMCStore';
 import { initialState, mcReducer } from '../store/mcReducer';
+import { getLocalDateString } from '../store/behaviorSync';
 import { pendingFrom } from '../store/pendingState';
+import { useStaleMissionRunEnd } from '../store/useStaleMissionRunEnd';
 import type { MCAction, MCState } from '../types';
 
 export type Phase = 'morning' | 'evening';
@@ -52,7 +54,23 @@ function installFakeIpc(): { emit: Emit; send: Emit } {
     return { send, emit: (channel, payload) => act(() => { send(channel, payload); }) };
 }
 
-export function renderLiveScheduler(initial: MCState, { ipc = false } = {}) {
+function useSchedulerHarness() {
+    useMissionScheduler();
+    useRemoteControl();
+    return useMCDispatch();
+}
+
+/** The same, with the launch's stuck-run cleanup MCStoreProvider mounts (a layout effect). */
+function useSchedulerHarnessWithStaleRunEnd() {
+    useStaleMissionRunEnd();
+    return useSchedulerHarness();
+}
+
+/**
+ * `strict` mounts under React.StrictMode, as src/main.tsx does: every effect runs, is
+ * cleaned up and runs again. `staleRunEnd` also mounts useStaleMissionRunEnd.
+ */
+export function renderLiveScheduler(initial: MCState, { ipc = false, strict = false, staleRunEnd = false } = {}) {
     const noIpc: Emit = () => { throw new Error('render with { ipc: true } to emit'); };
     const { emit, send } = ipc ? installFakeIpc() : { emit: noIpc, send: noIpc };
     const live: { state: MCState } = { state: initial };
@@ -66,7 +84,10 @@ export function renderLiveScheduler(initial: MCState, { ipc = false } = {}) {
         const value = useMemo(() => ({ state, dispatch, pending }), [state]);
         return React.createElement(MCContext.Provider, { value }, children);
     }
-    const hook = renderHook(() => { useMissionScheduler(); useRemoteControl(); return useMCDispatch(); }, { wrapper: Store });
+    const wrapper = strict
+        ? ({ children }: { children: React.ReactNode }) => React.createElement(React.StrictMode, null, React.createElement(Store, null, children))
+        : Store;
+    const hook = renderHook(staleRunEnd ? useSchedulerHarnessWithStaleRunEnd : useSchedulerHarness, { wrapper });
     const dispatch = (action: MCAction) => act(() => { hook.result.current(action); });
     const unmount = () => { hook.unmount(); if (ipc) delete window.ipcRenderer; };
     return { live, dispatch, emit, send, unmount };
@@ -97,6 +118,38 @@ export function jumpTo(when: Date) {
 /** A prefix match: the start line goes on to say whether the school bag is on the list. */
 export function startLogs(state: MCState, phase: Phase): number {
     return state.activityLogs.filter(l => l.message.startsWith(`${phase} mission started`)).length;
+}
+
+/** Every "skipped" line for `phase`, whatever window it names. */
+export function skippedLines(state: MCState, phase: Phase): number {
+    const name = phase === 'morning' ? 'Morning' : 'Evening';
+    return state.activityLogs.filter(l => l.message.startsWith(`${name} mission skipped`)).length;
+}
+
+/** Only the evening, at `startsAt` for `durationMins`, derived the way Settings → Save derives it. */
+export function eveningOnlyAt(startsAt: string, durationMins: number): MCState {
+    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: startsAt, eveningDurationMins: durationMins } });
+    return { ...s, missions: s.missions.filter(m => m.phase === 'evening') };
+}
+
+/** What the last launch saved, without the morning hydration puts back (a 06:00 morning would run mid-test). */
+export function loadEveningOnly(): MCState {
+    const loaded = loadPersistedState();
+    return { ...loaded, missions: loaded.missions.filter(m => m.phase === 'evening') };
+}
+
+/**
+ * `state` after the scheduler started `phase` at `ranAt` and it was finished 20 min
+ * later, through the real reducer: the history a real profile has. A profile on
+ * which a mission never ran has no evidence the app existed at an earlier window,
+ * so it gets no "skipped" line at launch.
+ */
+export function ranOnce(state: MCState, phase: Phase, ranAt: Date): MCState {
+    const started = mcReducer(state, {
+        type: 'SET_ACTIVE_MISSION', phase, origin: 'scheduler', occurrenceDate: getLocalDateString(ranAt), timestamp: ranAt.toISOString(),
+    });
+    const finishedAt = new Date(ranAt.getTime() + 20 * 60_000).toISOString();
+    return mcReducer(started, { type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase, bonusTokens: 0, timestamp: finishedAt });
 }
 
 /** Launches inside `phase`'s window and lets the scheduler start it. */

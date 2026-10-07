@@ -12,15 +12,19 @@
 //     not put back.
 // ============================================================
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Page } from '@playwright/test';
 import {
     forgetMissionStartedSince,
     quietMissionClock,
+    restoreMissionSlice,
     seedFailingState,
     STORAGE_KEY,
     type MissionSlice,
 } from '../../e2e/helpers/missionClock';
+import { initialState, mcReducer } from '../mission-control/store/mcReducer';
+import { loadPersistedState } from '../mission-control/store/useMCStore';
+import { at, ranOnce, renderLiveScheduler, step } from '../mission-control/hooks/schedulerTestKit';
 
 const LAUNCHED_AT = Date.parse('2026-09-21T19:05:00.000-07:00');
 
@@ -161,5 +165,53 @@ describe('seedFailingState', () => {
         goto.mockClear();
         await expect(seedFailingState(page, 'window-open-now')).resolves.toBeUndefined();
         expect(goto).toHaveBeenCalledTimes(2); // to blank.html, then back to the app
+    });
+});
+
+// Since 2026-10-06 the scheduler starts last night's window while it is still
+// open after midnight. Today's outcome dates do not cover it, so a launch at
+// 00:30 with the evening at 23:59 (mc-layout-fit.spec.ts sets it) had the
+// evening start and cover "Use!", and the real-profile specs the same on a dev
+// profile whose evening runs past midnight. The quiet blob also marks every
+// mission as run at the launch instant.
+describe('quietMissionClock after midnight', () => {
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear(); });
+
+    it('marks every mission as run at the launch instant, and the real-profile restore puts each stamp back', async () => {
+        const launchedAt = Date.parse('2026-10-07T00:30:00');
+        const ownStamp = '2026-10-01T13:20:00.000Z';
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ missions: [
+            { phase: 'morning', startsAt: '06:00', endsAt: '06:30', active: false, lastActiveAt: ownStamp },
+            { phase: 'evening', startsAt: '23:59', endsAt: '24:59', active: false },
+        ] }));
+        let before: MissionSlice = {};
+        const { page } = fakePage((fn, arg) => fn(arg)); // runs the in-page functions against jsdom
+        await quietMissionClock(page, { launchedAt, keep: slice => { before = slice; } });
+
+        const quieted = (JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as { missions: Array<Record<string, unknown>> }).missions;
+        expect(quieted.map(m => m['lastActiveAt'])).toEqual([new Date(launchedAt).toISOString(), new Date(launchedAt).toISOString()]);
+
+        await restoreMissionSlice(page, before);
+        const restored = (JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as { missions: Array<Record<string, unknown>> }).missions;
+        expect(restored[0]['lastActiveAt']).toBe(ownStamp);
+        expect(restored[1]).not.toHaveProperty('lastActiveAt');
+    });
+
+    it('at 00:30, inside last night’s 23:59 evening, a quieted launch starts nothing and logs no "skipped" line', async () => {
+        const profile = ranOnce(ranOnce(
+            mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:59', eveningDurationMins: 60 } }),
+            'morning', at(6, 0, -3)), 'evening', at(23, 59, -3));
+        const launch = at(0, 30, 1);
+        vi.useFakeTimers();
+        vi.setSystemTime(launch);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+        const { page } = fakePage((fn, arg) => fn(arg));
+        await quietMissionClock(page, { launchedAt: launch.getTime() });
+
+        const { live, unmount } = renderLiveScheduler(loadPersistedState());
+        step(3_000);
+        expect(live.state.activeMission, 'the evening started and covered "Use!"').toBe('none');
+        expect(live.state.activityLogs.filter(l => l.message.includes('skipped'))).toHaveLength(0);
+        unmount();
     });
 });

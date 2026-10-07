@@ -286,8 +286,10 @@ pass, and update this table when it merges.
 - **Q3** Snake is keyboard-only (3.10.9): does the child's setup have a keyboard?
 - **Q4** Phone "Effects" and "Reactions" show nothing while the desktop is on the Calendar, because
   the overlay lives in MC (3.11.4). Intended?
-- **Q5** Sleeping through a window: the wake-up re-arm may cancel the timer before "⏭️ … skipped"
-  is written (3.12.3).
+- **Q5** (resolved 2026-10-06) Sleeping through a window: the wake-up re-arm could cancel the timer
+  before "⏭️ … skipped" was written, and a relaunch after a window passed never wrote it. The re-arm
+  now reports the window itself, once (requirements 2026-10-06, "A window missed unseen is logged
+  once"; 3.12.3, 3.12.12).
 - **Q6** A Windows clock jump has no specified behaviour (3.12.4).
 - **Q7** (resolved 2026-10-04) A revoked Google grant used to leave a signed-in, empty week (holidays
   only, no error): google-auth-library keeps its credentials when Google refuses the refresh token, so

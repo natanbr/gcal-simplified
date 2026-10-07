@@ -51,7 +51,9 @@ A strictly isolated application module — the kid-facing reward/mission app.
 * **`components/activity-log/`**: the parent-facing review surface —
   `logSources.ts` (source metadata + the pure daily roll-up), `LogSummaryStrip.tsx`
   (the five-second glance), `LogItemRow.tsx`, `renderHighlightedMessage.tsx`.
-* **`hooks/`**: `useMissionScheduler.ts` (exact-time triggers, late-fire guard, resume re-arm),
+* **`hooks/`**: `useMissionScheduler.ts` (exact-time triggers, late-fire guard, resume re-arm,
+  the one "skipped" line per missed window; which occurrence is open, next or last closed comes from
+  `store/missionOccurrence.ts` `openOccurrence`, the only place a time of day is put on a date),
   `useRemoteControl.ts` (remote action allowlist), `useMCAutoReturn.ts`.
 * **`games/`**: `snake`, `blocks` (Space Rescue), `quiz` (addition + reading), `fruits` (matter.js
   Suika-style). Each follows the game structure pattern in CLAUDE.md → Conventions.

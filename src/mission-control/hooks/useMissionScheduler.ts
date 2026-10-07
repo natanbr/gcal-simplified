@@ -2,71 +2,63 @@
 // Mission Control — useMissionScheduler
 // Exact-time scheduler using setTimeouts.
 // Checks the remaining time and triggers missions/locks precisely.
+// Which occurrence is open, next or last closed: store/missionOccurrence.ts.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
 import { useEffect, useRef, useState } from 'react';
 import { useMCStore, useMCDispatch } from '../store/useMCStore.tsx';
-import { getLocalDateString } from '../store/behaviorSync';
-import { hhmmToMins, windowEndToMins } from '../store/hhmm';
-import type { MissionPhase, MCState } from '../types';
+import { hhmmToMins } from '../store/hhmm';
+import {
+    LATE_FIRE_TOLERANCE_MS, hasClosed, lastClosedOccurrence, nextOccurrence, nextTimeOfDay, openOccurrence,
+    type Occurrence,
+} from '../store/missionOccurrence';
+import type { MissionPhase, MCState, Mission } from '../types';
 
-/**
- * How late a timer may fire and still count as "on time".
- *
- * A `setTimeout` armed for 06:00 does not survive a machine suspend intact —
- * on resume it fires immediately, hours after the moment it was aiming at. That
- * is what made missions start at visibly wrong times. Anything later than this
- * window is treated as a missed occurrence: it is skipped and recorded, rather
- * than starting a "morning" routine in the middle of the afternoon.
- */
-const LATE_FIRE_TOLERANCE_MS = 5 * 60 * 1000;
+type Phase = Exclude<MissionPhase, 'none'>;
 
-/** `mins` minutes after `day`'s local midnight; 1470 is 00:30 the next day. */
-function atMinutesOf(day: Date, mins: number): Date {
-    const target = new Date(day);
-    target.setHours(0, mins, 0, 0);
-    return target;
-}
-
-/** Today's Date at `mins` minutes after midnight (regardless of whether it passed). */
-function occurrenceToday(mins: number): Date {
-    return atMinutesOf(new Date(), mins);
-}
-
-/** The next Date at `mins` minutes after midnight — today if still ahead, else tomorrow. */
-function nextOccurrence(mins: number): Date {
-    const target = occurrenceToday(mins);
-    if (target.getTime() <= Date.now()) {
-        target.setDate(target.getDate() + 1);
-    }
-    return target;
-}
-
-/**
- * True when the occurrence of `phase` starting at `occurrenceStart` needs no
- * scheduler start: it concluded (completed or failed; the outcome is dated by
- * the day its window started, store/occurrenceDay.ts, so a timer firing after
- * midnight is judged against the evening that began before it), or the mission
- * ran at some point since its start time — it is running now, or it last started or
- * ended at or after that time. The run is what covers a STOP, which records no
- * outcome: a stop is not a miss (the shield) and not a conclusion (the
- * quick-game window). Without it a stopped mission was restarted 8 ms later.
- * A stamp in the future is ignored: it was written under a clock set ahead, and
- * trusting it would skip every occurrence, silently, until the clock caught up.
- */
-function occurrenceHandled(s: MCState, phase: MissionPhase, occurrenceStart: Date): boolean {
-    const occurrenceDate = getLocalDateString(occurrenceStart);
-    const concluded =
-        phase === 'morning' ? s.lastCompletedOrFailedMorningDate === occurrenceDate
-        : phase === 'evening' ? s.lastCompletedOrFailedEveningDate === occurrenceDate
-        : false;
+/** When the mission last started or ended (store/missionActivity.ts), NaN for never. */
+function lastActiveMs(s: MCState, phase: Phase): number {
     const stamp = s.missions.find(m => m.phase === phase)?.lastActiveAt;
-    const activeAt = stamp === undefined ? Number.NaN : Date.parse(stamp);
+    return stamp === undefined ? Number.NaN : Date.parse(stamp);
+}
+
+/**
+ * True when the occurrence `o` of `phase` needs no scheduler start: it
+ * concluded (completed or failed; the outcome is dated by the day its window
+ * started, store/occurrenceDay.ts, so a timer firing after midnight is judged
+ * against the evening that began before it), or the mission ran at some point
+ * since its start time — it is running now, or it last started or ended at or
+ * after that time. The run is what covers a STOP, which records no outcome: a
+ * stop is not a miss (the shield) and not a conclusion (the quick-game window).
+ * Without it a stopped mission was restarted 8 ms later. A stamp in the future
+ * is ignored: it was written under a clock set ahead, and trusting it would
+ * skip every occurrence, silently, until the clock caught up.
+ */
+function occurrenceHandled(s: MCState, phase: Phase, o: Occurrence): boolean {
+    const concluded = phase === 'morning'
+        ? s.lastCompletedOrFailedMorningDate === o.day
+        : s.lastCompletedOrFailedEveningDate === o.day;
+    const activeAt = lastActiveMs(s, phase);
     return concluded
         || s.activeMission === phase
-        || (activeAt >= occurrenceStart.getTime() && activeAt <= Date.now());
+        || (activeAt >= o.startMs && activeAt <= Date.now());
 }
+
+/**
+ * Whether `passed`, a window that closed without the mission running, is the
+ * scheduler's to report: it started while this session was up (the machine
+ * slept through it), or after the mission last ran (the app was closed through
+ * it). A profile on which the mission never ran says nothing about the app
+ * existing at that window, so it gets no line.
+ */
+function skipOwed(s: MCState, phase: Phase, passed: Occurrence, sessionStartMs: number): boolean {
+    return !occurrenceHandled(s, phase, passed)
+        && (passed.startMs >= sessionStartMs || lastActiveMs(s, phase) <= Date.now());
+}
+
+/** Names the occurrence, so its "skipped" line is written once: a later launch finds it in the log. */
+const skippedLineId = (phase: Phase, o: Occurrence) => `mission-skipped-${phase}-${o.day}`;
 
 export function useMissionScheduler(): void {
     const { state } = useMCStore();
@@ -75,6 +67,15 @@ export function useMissionScheduler(): void {
     // Keep a ref to the latest state so inner closures can read it.
     const stateRef = useRef<MCState>(state);
     useEffect(() => { stateRef.current = state; }, [state]);
+
+    // The "skipped" lines this session wrote or found in the log: an arm never
+    // reports one twice, before its line reaches the state or after a CLEAR.
+    // Made once: this hook re-renders on every Mission Control change.
+    const [reported] = useState(() => new Set<string>());
+    const sessionStart = useRef(0);
+    // Per mission: the wake token of its last arm, and what that arm's timer aims
+    // at (null once it fired). See `looksBack` below.
+    const lastArm = useRef(new Map<Phase, { token: number; target: Occurrence | null }>());
 
     // ── 0. Re-arm on resume ───────────────────────────────────────────────────
     // The main process emits `system:resume` when the machine wakes. Timers armed
@@ -92,21 +93,15 @@ export function useMissionScheduler(): void {
     // ── 1. Exact-Time Trigger Scheduler ───────────────────────────────────────
     // Sets timeouts to precisely start missions and lock tasks at their exact times.
     useEffect(() => {
+        if (sessionStart.current === 0) sessionStart.current = Date.now();
         // Use a Set so recursive schedules can add/remove themselves correctly
         const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
-        /** True when the timer fired so far past its target that it must be ignored.
-         *  A fire while the mission's own window (startsAt → endsAt) is still open
-         *  counts as ON TIME: waking the machine at 06:10 must start the
-         *  06:00–06:30 mission, not silently lose the day. */
-        function firedTooLate(target: Date, label: string, windowEndMins: number | null = null): boolean {
+        /** A task lock has no window: a fire more than the tolerance late is ignored. */
+        function firedTooLate(target: Date, label: string): boolean {
             const driftMs = Date.now() - target.getTime();
             if (driftMs <= LATE_FIRE_TOLERANCE_MS) return false;
-            if (windowEndMins !== null && Date.now() < atMinutesOf(target, windowEndMins).getTime()) return false;
-            console.warn(
-                `[MissionScheduler] Skipping ${label}: timer fired ${Math.round(driftMs / 60000)} min late ` +
-                `(target ${target.toLocaleTimeString()}). The machine was most likely asleep.`
-            );
+            console.warn(`[MissionScheduler] Skipping ${label}: timer fired ${Math.round(driftMs / 60000)} min late.`);
             return true;
         }
 
@@ -121,69 +116,101 @@ export function useMissionScheduler(): void {
             return mins;
         }
 
-        function schedulePhase(phase: MissionPhase, hhmm: string, endsAt?: string) {
-            if (phase === 'none') return;
-            const startMins = armableMins(hhmm, `${phase} mission`);
-            if (startMins === null) return;
-            // Unreadable = no window: the fire then counts as on time only
-            // within LATE_FIRE_TOLERANCE_MS, as a task lock does.
-            const endMins = endsAt === undefined ? null : windowEndToMins(endsAt);
-            let target = nextOccurrence(startMins);
-            // A re-arm (mount or system:resume) while today's window is still
-            // open must aim at today's occurrence — nextOccurrence alone rolls
-            // to tomorrow the second the start time has passed, which is how a
-            // sleep spanning 06:00 used to lose the whole day's mission.
-            // Only while that occurrence is pending and nothing else runs, though:
-            // either way the fire does nothing, and the re-schedule below brought
-            // it back every second until the window closed. A mission ending
-            // changes `missions`, which re-arms this effect in time to start it.
-            if (endMins !== null) {
-                const todayStart = occurrenceToday(startMins);
-                const windowOpen = todayStart.getTime() <= Date.now() && Date.now() < occurrenceToday(endMins).getTime();
-                // stateRef, not the effect's `state`: the 1 s re-schedule re-enters
-                // here without a render.
-                const s = stateRef.current;
-                if (windowOpen && s.activeMission === 'none' && !occurrenceHandled(s, phase, todayStart)) {
-                    target = todayStart;
-                }
+        /** Written this session, or found in the log once (remembered: a CLEAR does not bring it back). */
+        function isReported(id: string): boolean {
+            if (!reported.has(id) && stateRef.current.activityLogs.some(l => l.id === id)) reported.add(id);
+            return reported.has(id);
+        }
+
+        /** A skipped mission must be visible to a parent, not only in the dev
+         *  console — scheduler actions are never silent. Once per occurrence. */
+        function reportSkipped(phase: Phase, m: Mission, o: Occurrence) {
+            const id = skippedLineId(phase, o);
+            if (isReported(id)) return;
+            reported.add(id);
+            console.warn(`[MissionScheduler] Skipping the ${phase} mission of ${o.day}: its window closed unseen (the app closed or the machine asleep).`);
+            dispatch({ type: 'ADD_LOG', log: {
+                id,
+                timestamp: new Date().toISOString(),
+                icon: '⏭️',
+                message: `${phase === 'morning' ? 'Morning' : 'Evening'} mission skipped — the ${m.startsAt} window was missed (app closed or machine asleep)`,
+                type: 'mission',
+                colorKey: phase,
+                source: 'scheduler',
+            } });
+        }
+
+        /**
+         * Whether this arm looks back for a window missed unseen: the app was not
+         * watching. At a launch (no arm yet), a wake (a new token), or when the
+         * last arm's timer was cancelled after its window closed: it would have
+         * reported it (a launch's report cancelled by a change to `missions` before
+         * it fired, as the stuck-run cleanup at load does; a sleep with no wake
+         * event). A re-arm for a change to `missions` alone (a start or an end, a
+         * task tap, a Settings save) does not: the app was up, and a time moved
+         * into the past is not a missed window.
+         */
+        function looksBack(phase: Phase, now: Date): boolean {
+            const last = lastArm.current.get(phase);
+            return !last || last.token !== rearmToken || (last.target !== null && hasClosed(last.target, now));
+        }
+
+        /**
+         * What a (re-)arm aims at, in this order. When it looks back, the last
+         * window that closed without running, to report it: a launch or a wake
+         * used to aim past it in silence. Then the window open now (openOccurrence: after midnight,
+         * last night's), but only while it is pending and nothing else runs:
+         * either way the fire does nothing, and the re-schedule brought it back
+         * every second until the window closed. A mission ending changes
+         * `missions`, which re-arms this effect in time to start it. Else the next.
+         */
+        function targetOf(phase: Phase, m: Mission): Occurrence | null {
+            // stateRef, not the effect's `state`: the 1 s re-schedule re-enters here without a render.
+            const s = stateRef.current;
+            const now = new Date();
+            const passed = looksBack(phase, now) ? lastClosedOccurrence(m, s.settings, now) : null;
+            if (passed && skipOwed(s, phase, passed, sessionStart.current) && !isReported(skippedLineId(phase, passed))) {
+                return passed;
             }
+            const open = openOccurrence(m, s.settings, now);
+            if (open && s.activeMission === 'none' && !occurrenceHandled(s, phase, open)) return open;
+            return nextOccurrence(m, s.settings, now);
+        }
+
+        function schedulePhase(m: Mission) {
+            if (m.phase === 'none' || armableMins(m.startsAt, `${m.phase} mission`) === null) return;
+            const phase = m.phase;
+            const target = targetOf(phase, m);
+            lastArm.current.set(phase, { token: rearmToken, target });
+            if (!target) return;
             const id = setTimeout(() => {
                 timeouts.delete(id); // Clean up self first
+                lastArm.current.set(phase, { token: rearmToken, target: null });
 
                 const s = stateRef.current;
                 const alreadyRun = occurrenceHandled(s, phase, target);
-
-                if (!firedTooLate(target, `${phase} mission`, endMins)) {
-                    // Only trigger if no mission is currently running AND it hasn't run today yet
+                // On time while its window is open (waking at 06:10 starts the
+                // 06:00–06:30 mission); after that it was missed, and is reported.
+                if (!hasClosed(target, new Date())) {
                     if (s.activeMission === 'none' && !alreadyRun) {
-                        // Names the occurrence it starts: a late fire after midnight is still last night's.
-                        dispatch({ type: 'SET_ACTIVE_MISSION', phase, origin: 'scheduler', occurrenceDate: getLocalDateString(target) });
+                        // Names the occurrence it starts: a start after midnight is still last night's.
+                        dispatch({ type: 'SET_ACTIVE_MISSION', phase, origin: 'scheduler', occurrenceDate: target.day });
                     }
                 } else if (!alreadyRun) {
-                    // A skipped mission must be visible to a parent, not only in
-                    // the dev console — scheduler actions are never silent.
-                    dispatch({ type: 'ADD_LOG', log: {
-                        id: self.crypto.randomUUID(),
-                        timestamp: new Date().toISOString(),
-                        icon: '⏭️',
-                        message: `${phase === 'morning' ? 'Morning' : 'Evening'} mission skipped — the ${hhmm} window was missed (machine asleep)`,
-                        type: 'mission',
-                        colorKey: phase,
-                        source: 'scheduler',
-                    } });
+                    reportSkipped(phase, m, target);
                 }
 
-                // Schedule the next day's occurrence — tracked so cleanup catches it
-                const nextId = setTimeout(() => schedulePhase(phase, hhmm, endsAt), 1000);
+                // Aim at what comes next — tracked so cleanup catches it
+                const nextId = setTimeout(() => schedulePhase(m), 1000);
                 timeouts.add(nextId);
-            }, Math.max(0, target.getTime() - Date.now()));
+            }, Math.max(0, target.startMs - Date.now()));
             timeouts.add(id);
         }
 
         function scheduleTaskLock(missionPhase: MissionPhase, taskId: string, locksAtHhmm: string) {
             const locksAtMins = armableMins(locksAtHhmm, `task lock ${taskId}`);
             if (locksAtMins === null) return;
-            const target = nextOccurrence(locksAtMins);
+            const target = nextTimeOfDay(locksAtMins, new Date());
             const id = setTimeout(() => {
                 timeouts.delete(id); // Clean up self first
 
@@ -207,7 +234,7 @@ export function useMissionScheduler(): void {
 
         // Schedule all configured missions
         for (const m of state.missions) {
-            schedulePhase(m.phase as Exclude<MissionPhase, 'none'>, m.startsAt, m.endsAt);
+            schedulePhase(m);
             for (const t of m.tasks) {
                 if (t.locksAt) {
                     scheduleTaskLock(m.phase, t.id, t.locksAt);
@@ -222,7 +249,8 @@ export function useMissionScheduler(): void {
     }, [
         state.missions,
         dispatch,
-        rearmToken
+        rearmToken,
+        reported, // made once: never re-arms
     ]); // Re-arm when mission configuration changes, or after a system resume
 
     // ── 2. Expiry Interval (Duration Countdown) ───────────────────────────────
