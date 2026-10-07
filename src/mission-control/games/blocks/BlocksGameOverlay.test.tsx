@@ -122,12 +122,39 @@ describe('BlocksGameOverlay', () => {
         expect(animated.map(c => c.name), 'one Mission Control class animates the astronaut').toHaveLength(1);
 
         const declaration = animated[0].declaration ?? '';
-        expect(declaration).not.toMatch(/\binfinite\b|var\(/);
-        const [keyframes, ...rest] = declaration.split(/\s+/);
-        expect(MC_STYLES, `@keyframes ${keyframes} is defined`).toMatch(new RegExp(`@keyframes\\s+${keyframes}\\s*\\{`));
-        const counts = rest.filter(token => /^\d+$/.test(token)).map(Number);
-        expect(counts).toHaveLength(1);
+        expect(declaration).not.toMatch(/\binfinite\b|var\(/i);
+        const { names, counts } = animationParts(declaration);
+        expect(names, 'one keyframes name').toHaveLength(1);
+        expect(MC_STYLES, `@keyframes ${names[0]} is defined`).toMatch(new RegExp(`@keyframes\\s+${names[0]}\\s*\\{`));
+        expect(counts, 'one plain iteration count, never infinite').toHaveLength(1);
         expect(counts[0]).toBeGreaterThanOrEqual(1);
         expect(counts[0]).toBeLessThanOrEqual(15);
     });
+
+    it('reads an animation shorthand in any order', () => {
+        expect(animationParts('mc-bounce-emoji 2s ease-in-out 5')).toEqual({ names: ['mc-bounce-emoji'], counts: [5] });
+        expect(animationParts('5 mc-bounce-emoji 2s')).toEqual({ names: ['mc-bounce-emoji'], counts: [5] });
+        expect(animationParts('cubic-bezier(0.8, 0, 1, 1) 200ms 3 both x')).toEqual({ names: ['x'], counts: [3] });
+        // `infinite` is not a count, and a count held in var() cannot be read: both fail the test above.
+        expect(animationParts('x 2s infinite').counts).toEqual([]);
+        expect(animationParts('x 2s var(--n)').counts).toEqual([]);
+    });
 });
+
+/** Single-animation CSS keywords that are neither the keyframes name nor the count. */
+const ANIMATION_KEYWORDS = new Set([
+    'ease', 'linear', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end',
+    'normal', 'reverse', 'alternate', 'alternate-reverse', 'none', 'forwards', 'backwards', 'both',
+    'running', 'paused', 'infinite', 'initial', 'inherit', 'unset',
+]);
+
+/** The keyframes names and plain iteration counts in an `animation` shorthand, in any order. */
+function animationParts(declaration: string): { names: string[]; counts: number[] } {
+    const tokens = declaration.replace(/[\w-]+\([^)]*\)/g, ' ').split(/\s+/).filter(Boolean);
+    const isTime = (t: string) => /^-?[\d.]+m?s$/i.test(t);
+    const isNumber = (t: string) => /^[\d.]+$/.test(t);
+    return {
+        names: tokens.filter(t => !isTime(t) && !isNumber(t) && !ANIMATION_KEYWORDS.has(t.toLowerCase())),
+        counts: tokens.filter(isNumber).map(Number),
+    };
+}
