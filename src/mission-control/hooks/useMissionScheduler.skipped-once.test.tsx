@@ -18,7 +18,7 @@ import { act } from '@testing-library/react';
 import { initialState, mcReducer } from '../store/mcReducer';
 import { STORAGE_KEY, loadPersistedState } from '../store/useMCStore';
 import {
-    at, eveningOnlyAt, loadEveningOnly, ranOnce, renderLiveScheduler, saveAndClose, skippedLines, step,
+    at, crossing, eveningOnlyAt, jumpTo, loadEveningOnly, ranOnce, renderLiveScheduler, saveAndClose, skippedLines, step,
 } from './schedulerTestKit';
 import type { MCState } from '../types';
 
@@ -167,6 +167,80 @@ describe('both missions overdue at the same launch', () => {
         expect(skippedLines(live.state, 'evening'), 'today’s 19:00').toBe(1);
         expect(live.state.activeMission).toBe('none');
         expect(live.state.missedMissionStreak).toBe(0);
+        unmount();
+    });
+});
+
+// Review round 2 of PR 198: the look-back belonged to one effect run, so a change
+// to `missions` before its 0 ms report fired cancelled the report for good. Now
+// an arm also looks back when the last arm's timer was cancelled after its window
+// closed (it would have reported it).
+describe('a report the next change to the missions cancels before it fires', () => {
+    beforeEach(() => { vi.useFakeTimers(); localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.removeItem(STORAGE_KEY); });
+
+    it('a launch that also ends an earlier day’s stuck run: the missed morning still gets exactly one line', () => {
+        // The morning ran two days ago; yesterday's evening was saved running with no
+        // readable length, so useStaleMissionRunEnd ends it in a layout effect at load.
+        const history = ranOnce({ ...initialState }, 'morning', at(6, 0, -2));
+        const stuckSince = at(19, 0, -1).toISOString();
+        const launch = at(7, 0);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            ...history,
+            activeMission: 'evening',
+            missions: history.missions.map(m => (m.phase === 'evening' ? { ...m, active: true, startedAt: stuckSince, durationMins: null } : m)),
+        }));
+        vi.setSystemTime(launch);
+        const { live, unmount } = renderLiveScheduler(loadPersistedState(), { staleRunEnd: true });
+        step(3_000);
+
+        expect(live.state.activityLogs.some(l => l.message.includes('ended at startup')), 'precondition: the stuck run was ended').toBe(true);
+        expect(skippedLines(live.state, 'morning'), 'today’s 06:00, missed with the app closed').toBe(1);
+        expect(skippedLines(live.state, 'evening')).toBe(0);
+        unmount();
+    });
+
+    it('a Settings save right after a launch, before its report fires: still one line', () => {
+        const state = lateEvening();
+        vi.setSystemTime(at(0, 40, 1));
+        const { live, dispatch, unmount } = renderLiveScheduler(state);
+        dispatch({ type: 'SET_SETTINGS', settings: { eveningDurationMins: 45 } }); // no timer has run yet
+        step(3_000);
+        expect(skippedLines(live.state, 'evening')).toBe(1);
+        unmount();
+    });
+
+    it('a window another mission ran through: no line when that run ends, one at the next wake', () => {
+        // The evening, started by hand at 05:50, runs to 06:50 across the 06:00–06:30 morning.
+        const history = ranOnce({ ...initialState }, 'morning', at(6, 0, -1));
+        const [beforeSix, runEnds, wake] = [at(5, 59, 0, 50), at(6, 50), at(7, 0)];
+        vi.setSystemTime(at(5, 50));
+        const { live, dispatch, emit, unmount } = renderLiveScheduler(history, { ipc: true });
+        dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'local' });
+        jumpTo(beforeSix);
+        step(2_000); // the 06:00 timer fires while the evening runs: no start
+        crossing(runEnds);
+        expect(live.state.activeMission, 'precondition: the evening ended').toBe('none');
+        expect(skippedLines(live.state, 'morning'), 'the app was up: not a window missed unseen').toBe(0);
+
+        jumpTo(wake);
+        emit('system:resume');
+        step(3_000);
+        expect(skippedLines(live.state, 'morning')).toBe(1);
+        unmount();
+    });
+
+    it('a sleep with no wake event, then a Settings save before the stale timer fires: one line', () => {
+        // Modern Standby can resume with no `system:resume`. The 23:30 timer keeps its
+        // 30 min of queue time; the save's re-arm clears it, and its window has closed.
+        const wake = at(1, 0, 1);
+        vi.setSystemTime(at(23, 0));
+        const { live, dispatch, unmount } = renderLiveScheduler(eveningOnlyAt('23:30', 60));
+        step(100);
+        vi.setSystemTime(wake);
+        dispatch({ type: 'SET_SETTINGS', settings: { eveningDurationMins: 45 } });
+        step(3_000);
+        expect(skippedLines(live.state, 'evening')).toBe(1);
         unmount();
     });
 });

@@ -73,8 +73,9 @@ export function useMissionScheduler(): void {
     // Made once: this hook re-renders on every Mission Control change.
     const [reported] = useState(() => new Set<string>());
     const sessionStart = useRef(0);
-    // What the last arm was for (see `looksBack` below).
-    const lastArm = useRef<{ missions: Mission[]; token: number } | null>(null);
+    // Per mission: the wake token of its last arm, and what that arm's timer aims
+    // at (null once it fired). See `looksBack` below.
+    const lastArm = useRef(new Map<Phase, { token: number; target: Occurrence | null }>());
 
     // ── 0. Re-arm on resume ───────────────────────────────────────────────────
     // The main process emits `system:resume` when the machine wakes. Timers armed
@@ -93,14 +94,6 @@ export function useMissionScheduler(): void {
     // Sets timeouts to precisely start missions and lock tasks at their exact times.
     useEffect(() => {
         if (sessionStart.current === 0) sessionStart.current = Date.now();
-        // Only a launch or a wake looks back for a window missed unseen: the app
-        // was not watching. A re-arm for a change to `missions` (a start or an
-        // end, a task tap, a Settings save) does not: the app was up, and a time
-        // moved into the past is not a missed window. A launch has no last arm
-        // (StrictMode's second mount run finds the same missions), a wake a new token.
-        const last = lastArm.current;
-        const looksBack = last === null || last.token !== rearmToken || last.missions === state.missions;
-        lastArm.current = { missions: state.missions, token: rearmToken };
         // Use a Set so recursive schedules can add/remove themselves correctly
         const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
@@ -148,9 +141,24 @@ export function useMissionScheduler(): void {
         }
 
         /**
-         * What a (re-)arm aims at, in this order. At a launch or a wake, the last
-         * window that closed without running, to report it: they used to aim past
-         * it in silence. Then the window open now (openOccurrence: after midnight,
+         * Whether this arm looks back for a window missed unseen: the app was not
+         * watching. At a launch (no arm yet), a wake (a new token), or when the
+         * last arm's timer was cancelled after its window closed: it would have
+         * reported it (a launch's report cancelled by a change to `missions` before
+         * it fired, as the stuck-run cleanup at load does; a sleep with no wake
+         * event). A re-arm for a change to `missions` alone (a start or an end, a
+         * task tap, a Settings save) does not: the app was up, and a time moved
+         * into the past is not a missed window.
+         */
+        function looksBack(phase: Phase, now: Date): boolean {
+            const last = lastArm.current.get(phase);
+            return !last || last.token !== rearmToken || (last.target !== null && hasClosed(last.target, now));
+        }
+
+        /**
+         * What a (re-)arm aims at, in this order. When it looks back, the last
+         * window that closed without running, to report it: a launch or a wake
+         * used to aim past it in silence. Then the window open now (openOccurrence: after midnight,
          * last night's), but only while it is pending and nothing else runs:
          * either way the fire does nothing, and the re-schedule brought it back
          * every second until the window closed. A mission ending changes
@@ -160,7 +168,7 @@ export function useMissionScheduler(): void {
             // stateRef, not the effect's `state`: the 1 s re-schedule re-enters here without a render.
             const s = stateRef.current;
             const now = new Date();
-            const passed = looksBack ? lastClosedOccurrence(m, s.settings, now) : null;
+            const passed = looksBack(phase, now) ? lastClosedOccurrence(m, s.settings, now) : null;
             if (passed && skipOwed(s, phase, passed, sessionStart.current) && !isReported(skippedLineId(phase, passed))) {
                 return passed;
             }
@@ -173,9 +181,11 @@ export function useMissionScheduler(): void {
             if (m.phase === 'none' || armableMins(m.startsAt, `${m.phase} mission`) === null) return;
             const phase = m.phase;
             const target = targetOf(phase, m);
+            lastArm.current.set(phase, { token: rearmToken, target });
             if (!target) return;
             const id = setTimeout(() => {
                 timeouts.delete(id); // Clean up self first
+                lastArm.current.set(phase, { token: rearmToken, target: null });
 
                 const s = stateRef.current;
                 const alreadyRun = occurrenceHandled(s, phase, target);

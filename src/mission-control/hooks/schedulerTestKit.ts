@@ -17,6 +17,7 @@ import { MCContext, STORAGE_KEY, loadPersistedState, useMCDispatch } from '../st
 import { initialState, mcReducer } from '../store/mcReducer';
 import { getLocalDateString } from '../store/behaviorSync';
 import { pendingFrom } from '../store/pendingState';
+import { useStaleMissionRunEnd } from '../store/useStaleMissionRunEnd';
 import type { MCAction, MCState } from '../types';
 
 export type Phase = 'morning' | 'evening';
@@ -53,8 +54,23 @@ function installFakeIpc(): { emit: Emit; send: Emit } {
     return { send, emit: (channel, payload) => act(() => { send(channel, payload); }) };
 }
 
-/** `strict` mounts under React.StrictMode, as src/main.tsx does: every effect runs, is cleaned up and runs again. */
-export function renderLiveScheduler(initial: MCState, { ipc = false, strict = false } = {}) {
+function useSchedulerHarness() {
+    useMissionScheduler();
+    useRemoteControl();
+    return useMCDispatch();
+}
+
+/** The same, with the launch's stuck-run cleanup MCStoreProvider mounts (a layout effect). */
+function useSchedulerHarnessWithStaleRunEnd() {
+    useStaleMissionRunEnd();
+    return useSchedulerHarness();
+}
+
+/**
+ * `strict` mounts under React.StrictMode, as src/main.tsx does: every effect runs, is
+ * cleaned up and runs again. `staleRunEnd` also mounts useStaleMissionRunEnd.
+ */
+export function renderLiveScheduler(initial: MCState, { ipc = false, strict = false, staleRunEnd = false } = {}) {
     const noIpc: Emit = () => { throw new Error('render with { ipc: true } to emit'); };
     const { emit, send } = ipc ? installFakeIpc() : { emit: noIpc, send: noIpc };
     const live: { state: MCState } = { state: initial };
@@ -71,7 +87,7 @@ export function renderLiveScheduler(initial: MCState, { ipc = false, strict = fa
     const wrapper = strict
         ? ({ children }: { children: React.ReactNode }) => React.createElement(React.StrictMode, null, React.createElement(Store, null, children))
         : Store;
-    const hook = renderHook(() => { useMissionScheduler(); useRemoteControl(); return useMCDispatch(); }, { wrapper });
+    const hook = renderHook(staleRunEnd ? useSchedulerHarnessWithStaleRunEnd : useSchedulerHarness, { wrapper });
     const dispatch = (action: MCAction) => act(() => { hook.result.current(action); });
     const unmount = () => { hook.unmount(); if (ipc) delete window.ipcRenderer; };
     return { live, dispatch, emit, send, unmount };
