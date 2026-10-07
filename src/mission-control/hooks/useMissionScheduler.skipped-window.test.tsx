@@ -41,7 +41,7 @@ describe('a window that passed while the app was closed', () => {
 
         expect(live.state.activeMission).toBe('none');
         expect(skippedLines(live.state, 'evening'), 'the missed window left no trace').toBe(1);
-        expect(live.state.activityLogs[0].message).toBe('Evening mission skipped — the 23:30 window was missed (machine asleep)');
+        expect(live.state.activityLogs[0].message).toBe('Evening mission skipped — the 23:30 window was missed (app closed or machine asleep)');
         expect(live.state.activityLogs[0].source).toBe('scheduler');
         expect(live.state.missedMissionStreak, 'a skip is not a miss').toBe(0);
         expect(live.state.lastCompletedOrFailedEveningDate, 'nor a conclusion').toBe(nightBefore);
@@ -77,7 +77,7 @@ describe('a window that passed while the app was closed', () => {
         step(3_000);
         expect(first.live.state.activeMission).toBe('none');
         expect(skippedLines(first.live.state, 'morning')).toBe(1);
-        expect(first.live.state.activityLogs[0].message).toBe('Morning mission skipped — the 06:00 window was missed (machine asleep)');
+        expect(first.live.state.activityLogs[0].message).toBe('Morning mission skipped — the 06:00 window was missed (app closed or machine asleep)');
         first.dispatch({ type: 'ADD_TOKENS', amount: 1, source: 'manual' }); // not the newest line any more
         saveAndClose(first);
 
@@ -99,23 +99,6 @@ describe('a window that passed while the app was closed', () => {
         expect(live.state.activeMission, 'today’s 19:00').toBe('evening');
         // Newest first: the skipped line came before the start.
         expect(live.state.activityLogs.map(l => l.message.split(' ').slice(0, 3).join(' '))).toEqual(['evening mission started', 'Evening mission skipped']);
-        unmount();
-    });
-
-    it('KNOWN LIMIT: a Settings save moving a start to a time already passed today writes the line at once', () => {
-        // At 07:30 the 08:00 morning (which ran yesterday) is moved to 07:00: its window
-        // closed at 07:30, so today's morning will not run. True, but the line says
-        // "machine asleep" (requirements → Mission scheduling → Known limits, 2026-10-06).
-        const state = morningOnly(ranOnce(mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningStartsAt: '08:00' } }), 'morning', at(8, 0, -1)));
-        vi.setSystemTime(at(7, 30));
-        const { live, dispatch, unmount } = renderLiveScheduler(state);
-        step(3_000);
-        expect(skippedLines(live.state, 'morning'), 'precondition').toBe(0);
-        dispatch({ type: 'SET_SETTINGS', settings: { morningStartsAt: '07:00' } });
-        step(3_000);
-
-        expect(skippedLines(live.state, 'morning')).toBe(1);
-        expect(live.state.activeMission).toBe('none');
         unmount();
     });
 

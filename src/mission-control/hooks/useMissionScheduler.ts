@@ -68,10 +68,13 @@ export function useMissionScheduler(): void {
     const stateRef = useRef<MCState>(state);
     useEffect(() => { stateRef.current = state; }, [state]);
 
-    // The "skipped" lines this session wrote (an arm never reports one twice,
-    // even before its line reaches the state), and when the session began.
-    const reported = useRef(new Set<string>());
+    // The "skipped" lines this session wrote or found in the log: an arm never
+    // reports one twice, before its line reaches the state or after a CLEAR.
+    // Made once: this hook re-renders on every Mission Control change.
+    const [reported] = useState(() => new Set<string>());
     const sessionStart = useRef(0);
+    // What the last arm was for (see `looksBack` below).
+    const lastArm = useRef<{ missions: Mission[]; token: number } | null>(null);
 
     // ── 0. Re-arm on resume ───────────────────────────────────────────────────
     // The main process emits `system:resume` when the machine wakes. Timers armed
@@ -90,6 +93,14 @@ export function useMissionScheduler(): void {
     // Sets timeouts to precisely start missions and lock tasks at their exact times.
     useEffect(() => {
         if (sessionStart.current === 0) sessionStart.current = Date.now();
+        // Only a launch or a wake looks back for a window missed unseen: the app
+        // was not watching. A re-arm for a change to `missions` (a start or an
+        // end, a task tap, a Settings save) does not: the app was up, and a time
+        // moved into the past is not a missed window. A launch has no last arm
+        // (StrictMode's second mount run finds the same missions), a wake a new token.
+        const last = lastArm.current;
+        const looksBack = last === null || last.token !== rearmToken || last.missions === state.missions;
+        lastArm.current = { missions: state.missions, token: rearmToken };
         // Use a Set so recursive schedules can add/remove themselves correctly
         const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
@@ -112,21 +123,24 @@ export function useMissionScheduler(): void {
             return mins;
         }
 
-        const isReported = (id: string) =>
-            reported.current.has(id) || stateRef.current.activityLogs.some(l => l.id === id);
+        /** Written this session, or found in the log once (remembered: a CLEAR does not bring it back). */
+        function isReported(id: string): boolean {
+            if (!reported.has(id) && stateRef.current.activityLogs.some(l => l.id === id)) reported.add(id);
+            return reported.has(id);
+        }
 
         /** A skipped mission must be visible to a parent, not only in the dev
          *  console — scheduler actions are never silent. Once per occurrence. */
         function reportSkipped(phase: Phase, m: Mission, o: Occurrence) {
             const id = skippedLineId(phase, o);
             if (isReported(id)) return;
-            reported.current.add(id);
-            console.warn(`[MissionScheduler] Skipping the ${phase} mission of ${o.day}: its window closed unseen (the machine was most likely asleep, or the app closed).`);
+            reported.add(id);
+            console.warn(`[MissionScheduler] Skipping the ${phase} mission of ${o.day}: its window closed unseen (the app closed or the machine asleep).`);
             dispatch({ type: 'ADD_LOG', log: {
                 id,
                 timestamp: new Date().toISOString(),
                 icon: '⏭️',
-                message: `${phase === 'morning' ? 'Morning' : 'Evening'} mission skipped — the ${m.startsAt} window was missed (machine asleep)`,
+                message: `${phase === 'morning' ? 'Morning' : 'Evening'} mission skipped — the ${m.startsAt} window was missed (app closed or machine asleep)`,
                 type: 'mission',
                 colorKey: phase,
                 source: 'scheduler',
@@ -134,9 +148,9 @@ export function useMissionScheduler(): void {
         }
 
         /**
-         * What a (re-)arm aims at, in this order. The last window that closed
-         * without running, to report it: a relaunch or a wake used to aim past it
-         * in silence. Then the window open now (openOccurrence: after midnight,
+         * What a (re-)arm aims at, in this order. At a launch or a wake, the last
+         * window that closed without running, to report it: they used to aim past
+         * it in silence. Then the window open now (openOccurrence: after midnight,
          * last night's), but only while it is pending and nothing else runs:
          * either way the fire does nothing, and the re-schedule brought it back
          * every second until the window closed. A mission ending changes
@@ -146,7 +160,7 @@ export function useMissionScheduler(): void {
             // stateRef, not the effect's `state`: the 1 s re-schedule re-enters here without a render.
             const s = stateRef.current;
             const now = new Date();
-            const passed = lastClosedOccurrence(m, s.settings, now);
+            const passed = looksBack ? lastClosedOccurrence(m, s.settings, now) : null;
             if (passed && skipOwed(s, phase, passed, sessionStart.current) && !isReported(skippedLineId(phase, passed))) {
                 return passed;
             }
@@ -225,7 +239,8 @@ export function useMissionScheduler(): void {
     }, [
         state.missions,
         dispatch,
-        rearmToken
+        rearmToken,
+        reported, // made once: never re-arms
     ]); // Re-arm when mission configuration changes, or after a system resume
 
     // ── 2. Expiry Interval (Duration Countdown) ───────────────────────────────

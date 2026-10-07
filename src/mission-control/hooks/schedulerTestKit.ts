@@ -53,7 +53,8 @@ function installFakeIpc(): { emit: Emit; send: Emit } {
     return { send, emit: (channel, payload) => act(() => { send(channel, payload); }) };
 }
 
-export function renderLiveScheduler(initial: MCState, { ipc = false } = {}) {
+/** `strict` mounts under React.StrictMode, as src/main.tsx does: every effect runs, is cleaned up and runs again. */
+export function renderLiveScheduler(initial: MCState, { ipc = false, strict = false } = {}) {
     const noIpc: Emit = () => { throw new Error('render with { ipc: true } to emit'); };
     const { emit, send } = ipc ? installFakeIpc() : { emit: noIpc, send: noIpc };
     const live: { state: MCState } = { state: initial };
@@ -67,7 +68,10 @@ export function renderLiveScheduler(initial: MCState, { ipc = false } = {}) {
         const value = useMemo(() => ({ state, dispatch, pending }), [state]);
         return React.createElement(MCContext.Provider, { value }, children);
     }
-    const hook = renderHook(() => { useMissionScheduler(); useRemoteControl(); return useMCDispatch(); }, { wrapper: Store });
+    const wrapper = strict
+        ? ({ children }: { children: React.ReactNode }) => React.createElement(React.StrictMode, null, React.createElement(Store, null, children))
+        : Store;
+    const hook = renderHook(() => { useMissionScheduler(); useRemoteControl(); return useMCDispatch(); }, { wrapper });
     const dispatch = (action: MCAction) => act(() => { hook.result.current(action); });
     const unmount = () => { hook.unmount(); if (ipc) delete window.ipcRenderer; };
     return { live, dispatch, emit, send, unmount };
