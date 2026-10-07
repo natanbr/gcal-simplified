@@ -8,13 +8,14 @@
 // that way too, so a DST night counts its real length. An evening at 23:30 for
 // 60 min is open from 23:30 to 00:30 and belongs to the day it started.
 //
-// One answer to "which occurrence is open now". The scheduler's arm (launch,
-// a wake from sleep, a mission ending, a Settings save), its fire (start or
-// skip) and the day a hand start or a legacy run is dated by all ask here. The
-// scheduler used to place the start on today's date itself, so a relaunch at
-// 00:10 aimed at tonight's 23:30 while last night's window was still open
-// (fixed 2026-10-06). Only this file places a time of day on a date
-// (occurrence-arithmetic-boundary.test.ts).
+// One answer to "which occurrence is open now". Every caller builds on the same
+// occurrences: the scheduler's arm (lastClosedOccurrence, openOccurrence,
+// nextOccurrence) and its fire (hasClosed), the hand-start rule (occurrenceOn,
+// occurrenceDay.ts) and a legacy run's dating (openOccurrence). The scheduler
+// used to place the start on today's date itself, so a relaunch at 00:10 aimed
+// at tonight's 23:30 while last night's window was still open (fixed
+// 2026-10-06). Only this file places a mission's time on a date
+// (occurrence-arithmetic-boundary.test.ts, which names the other date sums).
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
