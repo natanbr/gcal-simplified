@@ -165,9 +165,11 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   `nextOccurrence`, its fire `hasClosed`, the hand-start rule `occurrenceOn` and a legacy run's
   dating `openOccurrence`: a relaunch at 00:10 used to aim at tonight's 23:30 while a late timer
   started last night's (2026-10-06). A window that closed without running gets one "⏭️ … skipped"
-  line, written by a launch or a wake (never by a re-arm for a mission change or a Settings save) or
-  by a late timer, only when the mission ran before it or it began while the app was open; the
-  line's id names the occurrence, and the scheduler remembers each one it wrote or found in the log.
+  line, written by a launch, a wake or a late timer (or by the next arm when a change to the missions
+  cancelled that report before it fired; never by a re-arm for a mission change or a Settings save
+  alone), only when the mission ran before it or it began while the app was open; the line's id
+  names the mission and the day (one line per mission per day), and the scheduler remembers each one
+  it wrote or found in the log.
   Guarded by `src/__tests__/occurrence-arithmetic-boundary.test.ts`.
 - **Remote actions**: `REMOTE_ALLOWED_ACTIONS` in `useRemoteControl.ts` is an allowlist. Adding a
   remote button means adding its action type there too.

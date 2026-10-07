@@ -16,15 +16,17 @@
 // midnight's zeros), a date stepped (setDate/setMonth/setFullYear, UTC too), a
 // date built from its parts (`new Date(y, m, d …)`, `Date.UTC(…)`), a day in
 // milliseconds (a literal or a product of literals equal to 86 400 000), and
-// minutes in milliseconds added to something named midnight or day.
+// minutes or hours in milliseconds added to something named midnight or day.
 // A heuristic, not a proof. Known gaps: `setTime(…)`; milliseconds added to a
-// timestamp named otherwise; a date parsed from a built string
-// ('2026-10-06T23:30'); a date library. Test kits are skipped: they build the
-// clock a test runs at. Scope is src/mission-control/.
+// timestamp named otherwise; a unit held in a named constant (`mins * MS_PER_MIN`);
+// a date parsed from a built string ('2026-10-06T23:30'); a date library. Test
+// kits are skipped: they build the clock a test runs at. Scope is
+// src/mission-control/.
 //
 // Four other files do date sums for other rules and are allowed by name, with
-// the reason, below. A new file joins them only by a reviewed edit here; a new
-// mission-time sum inside one of them is a gap (the allowance is per file).
+// the reason and the exact moves they make today: one more move of a pinned
+// kind in one of them (a mission-time sum in behaviorSync.ts) fails, as does a
+// new file. Either is a reviewed edit here.
 //
 // verifiedRedBy: see the rule registry entry (src/__tests__/rule-registry.test.ts).
 // ============================================================
@@ -33,13 +35,31 @@ import { describe, it, expect } from 'vitest';
 import ts from 'typescript';
 import { productionSources, readSource, toRepoPath } from './helpers/sourceFiles';
 
-/** The one file for mission occurrences, and the other date sums with why they are not one. */
-const ALLOWED: Record<string, string> = {
-    'src/mission-control/store/missionOccurrence.ts': 'the mission occurrences: this rule',
-    'src/mission-control/store/schoolDays.ts': 'calendar days for the School Bag: dates with no time of day, stepped by calendar day',
-    'src/mission-control/store/behaviorSync.ts': 'the mood gauge\'s waking-hours overlap: the accrual divisor, kept apart from the mission windows on purpose (CLAUDE.md → Quick-game window)',
-    'src/mission-control/skills/progressSelectors.ts': 'skill-progress day buckets: UTC date keys',
-    'src/mission-control/hooks/useQuizEngine.ts': 'the quiz\'s skill-weighting look-back: a date some days back, no time of day',
+// The moves the guard names (see arithmeticIn).
+const BUILT = 'new Date(y, m, d …): a date built from its parts';
+const UTC = 'Date.UTC: a date built from its parts';
+const DAY = 'a day in milliseconds';
+const ADDED = 'minutes or hours added to a midnight or a day';
+
+/** The one file for mission occurrences (any moves), and the other date sums: why they are not one, and their moves, sorted. */
+const ALLOWED: Record<string, { why: string; moves: string[] | 'any' }> = {
+    'src/mission-control/store/missionOccurrence.ts': { why: 'the mission occurrences: this rule', moves: 'any' },
+    'src/mission-control/store/schoolDays.ts': {
+        why: 'calendar days for the School Bag: dates with no time of day, stepped by calendar day',
+        moves: [BUILT, BUILT], // parseLocalDate, addLocalDays
+    },
+    'src/mission-control/store/behaviorSync.ts': {
+        why: 'the mood gauge\'s waking-hours overlap: the accrual divisor, kept apart from the mission windows on purpose (CLAUDE.md → Quick-game window)',
+        moves: [DAY, ADDED, ADDED], // activeWindowOverlapMs: DAY_MS, and the window's start and end on a midnight
+    },
+    'src/mission-control/skills/progressSelectors.ts': {
+        why: 'skill-progress day buckets: UTC date keys',
+        moves: [UTC, UTC, UTC, DAY], // daysBetween, shiftDate
+    },
+    'src/mission-control/hooks/useQuizEngine.ts': {
+        why: 'the quiz\'s skill-weighting look-back: a date some days back, no time of day',
+        moves: [DAY], // currentReadingShare
+    },
 };
 
 /** Test support beside the code it fakes (CLAUDE.md → Testing → Fixtures). */
@@ -67,35 +87,39 @@ function factors(node: ts.Expression): ts.Expression[] {
         ? [...factors(inner.left), ...factors(inner.right)] : [inner];
 }
 
-/** `x * 60_000` or `x * 60 * 1000`: some minutes in milliseconds. */
-function minutesInMs(node: ts.Expression): boolean {
+/** `x * 60_000`, `x * 60 * 1000`, `x * 3_600_000`, or a fixed `6 * 3_600_000`: a time of day in milliseconds. */
+function timeInMs(node: ts.Expression): boolean {
     const parts = factors(node);
     const literal = parts.map(numeric).filter((n): n is number => n !== null);
-    return literal.length < parts.length && literal.reduce((a, b) => a * b, 1) === 60_000;
+    const unit = literal.reduce((a, b) => a * b, 1);
+    if (literal.length === parts.length) return unit > 0 && unit < DAY_MS && unit % 60_000 === 0;
+    return unit === 60_000 || unit === 3_600_000;
 }
 
-/** Each arithmetic move in `source`, as "line: what". */
-export function arithmeticIn(source: string, fileName = 'probe.ts'): string[] {
+interface Move { line: number; what: string }
+
+/** Each arithmetic move in `source`. */
+function arithmeticIn(source: string, fileName = 'probe.ts'): Move[] {
     const kind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
     const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, kind);
-    const hits: string[] = [];
-    const hit = (node: ts.Node, what: string) => hits.push(`${file.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${what}`);
+    const hits: Move[] = [];
+    const hit = (node: ts.Node, what: string) => hits.push({ line: file.getLineAndCharacterOfPosition(node.getStart()).line + 1, what });
     const visit = (node: ts.Node): void => {
         if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
             const name = node.expression.name.text;
             const midnight = /Hours$/.test(name) && node.arguments.length > 0 && node.arguments.every(a => numeric(a) === 0);
             if (TIME_SETTER.test(name) && !midnight) hit(node, `${name}: a time of day put on a date`);
             if (DAY_SETTER.test(name)) hit(node, `${name}: a date stepped`);
-            if (name === 'UTC' && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Date') hit(node, 'Date.UTC: a date built from its parts');
+            if (name === 'UTC' && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Date') hit(node, UTC);
         }
         if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date' && (node.arguments?.length ?? 0) >= 2) {
-            hit(node, 'new Date(y, m, d …): a date built from its parts');
+            hit(node, BUILT);
         }
-        if (numeric(node) === DAY_MS && !(node.parent && numeric(node.parent) !== null)) hit(node, 'a day in milliseconds');
+        if (numeric(node) === DAY_MS && !(node.parent && numeric(node.parent) !== null)) hit(node, DAY);
         if (ts.isBinaryExpression(node) && [ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken].includes(node.operatorToken.kind)) {
             const [l, r] = [node.left, node.right];
             const anchored = (side: ts.Expression) => /midnight|day/i.test(side.getText(file));
-            if ((minutesInMs(r) && anchored(l)) || (minutesInMs(l) && anchored(r))) hit(node, 'minutes added to a midnight or a day');
+            if ((timeInMs(r) && anchored(l)) || (timeInMs(l) && anchored(r))) hit(node, ADDED);
         }
         ts.forEachChild(node, visit);
     };
@@ -103,7 +127,7 @@ export function arithmeticIn(source: string, fileName = 'probe.ts'): string[] {
     return hits;
 }
 
-function missionControlSources(): Array<{ rel: string; hits: string[] }> {
+function missionControlSources(): Array<{ rel: string; hits: Move[] }> {
     return productionSources(['src/mission-control'])
         .map(file => ({ file, rel: toRepoPath(file) }))
         .filter(({ rel }) => !TEST_KIT.test(rel))
@@ -127,6 +151,8 @@ describe('mission occurrence arithmetic lives in store/missionOccurrence.ts', ()
             'const days = span / 86_400_000;',
             'const start = midnight.getTime() + startMins * 60_000;',
             'const start = dayMs + mins * 60 * 1000;',
+            'const start = midnightMs + h * 3_600_000;',
+            'const six = midnightMs + 6 * 3_600_000;',
             '/* a note */ d.setHours(0, m);',
         ];
         expect(shapes.filter(line => arithmeticIn(line).length === 0)).toEqual([]);
@@ -147,14 +173,18 @@ describe('mission occurrence arithmetic lives in store/missionOccurrence.ts', ()
     it('happens nowhere in Mission Control outside the allowed files', () => {
         const offenders = missionControlSources()
             .filter(({ rel }) => !(rel in ALLOWED))
-            .flatMap(({ rel, hits }) => hits.map(h => `${rel}:${h}`));
+            .flatMap(({ rel, hits }) => hits.map(h => `${rel}:${h.line}: ${h.what}`));
         expect(offenders, 'ask store/missionOccurrence.ts (openOccurrence, occurrenceOn, …) instead').toEqual([]);
     });
 
-    it('every allowed file still does it (a moved sum must update this list)', () => {
+    it('each allowed file makes exactly the moves pinned for it (a new sum, or a moved one, must update this list)', () => {
         const byFile = new Map(missionControlSources().map(({ rel, hits }) => [rel, hits]));
-        for (const [rel, why] of Object.entries(ALLOWED)) {
-            expect(byFile.get(rel)?.length ?? 0, `${rel} (${why}) does no date sum any more`).toBeGreaterThan(0);
-        }
+        const mismatches = Object.entries(ALLOWED).flatMap(([rel, { why, moves }]) => {
+            const found = byFile.get(rel) ?? [];
+            const kinds = found.map(h => h.what).sort();
+            const ok = moves === 'any' ? found.length > 0 : JSON.stringify(kinds) === JSON.stringify(moves);
+            return ok ? [] : [`${rel} (${why}): pinned ${JSON.stringify(moves)}, found ${JSON.stringify(kinds)} at lines ${found.map(h => h.line).join(', ')}`];
+        });
+        expect(mismatches).toEqual([]);
     });
 });
