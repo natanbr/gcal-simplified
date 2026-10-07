@@ -10,7 +10,7 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import type { ActivityLogEntry, MCAction, MCState, Mission, MissionPhase } from '../types';
+import type { ActivityLogEntry, MCAction, MCSettings, MCState, Mission, MissionPhase } from '../types';
 
 /** Mirrors ActivityLogEntry['source'] without importing activityLog.ts (that would cycle). */
 type LogSource = NonNullable<ActivityLogEntry['source']>;
@@ -162,8 +162,8 @@ function shieldLog(
 
 /** The morning/evening outcome-date field for a run: the day its occurrence began, not the
  *  outcome's (an evening ending at 00:30 marked the next day's evening done). */
-function outcomeDatePatch(mission: Mission, nowIso: string): Partial<MCState> {
-    const date = occurrenceDay(mission, nowIso);
+function outcomeDatePatch(mission: Mission, settings: MCSettings, nowIso: string): Partial<MCState> {
+    const date = occurrenceDay(mission, settings, nowIso);
     if (mission.phase === 'morning') return { lastCompletedOrFailedMorningDate: date };
     if (mission.phase === 'evening') return { lastCompletedOrFailedEveningDate: date };
     return {};
@@ -214,7 +214,7 @@ export function applyMissionTimeout(
         ...state,
         ...moveGauge(state, -TIMEOUT_BEHAVIOR_PENALTY, 0).patch,
         ...applyStreakChange(state, sanitizeMissedStreak(state.missedMissionStreak) + 1, nowIso, 'missed'),
-        ...outcomeDatePatch(mission, nowIso),
+        ...outcomeDatePatch(mission, state.settings, nowIso),
         missions: state.missions.map(m =>
             m.phase === missionPhase ? { ...m, loggedTimeoutAt: nowIso } : m,
         ),
@@ -249,7 +249,7 @@ export function applyMissionRoutineComplete(
         bankCount: state.bankCount + bonusTokens,
         ...moveGauge(state, whining ? 0 : COMPLETION_BEHAVIOR_BONUS, 1).patch, // earning a token resets mood
         ...applyStreakChange(state, sanitizeMissedStreak(state.missedMissionStreak) - 1, nowIso, 'completed'),
-        ...outcomeDatePatch(mission, nowIso),
+        ...outcomeDatePatch(mission, state.settings, nowIso),
         missions: state.missions.map(m =>
             m.phase === missionPhase
                 ? { ...m, startedAt: undefined, active: false, loggedTimeoutAt: undefined, whiningDetected: false, whiningLocked: false, tasks: m.tasks.map(t => ({ ...t, completed: false, locked: false })) }

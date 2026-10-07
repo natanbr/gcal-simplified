@@ -13,8 +13,9 @@ import { expect, vi } from 'vitest';
 import React, { useMemo, useReducer, useRef } from 'react';
 import { useMissionScheduler } from './useMissionScheduler';
 import { useRemoteControl } from './useRemoteControl';
-import { MCContext, STORAGE_KEY, useMCDispatch } from '../store/useMCStore';
+import { MCContext, STORAGE_KEY, loadPersistedState, useMCDispatch } from '../store/useMCStore';
 import { initialState, mcReducer } from '../store/mcReducer';
+import { getLocalDateString } from '../store/behaviorSync';
 import { pendingFrom } from '../store/pendingState';
 import type { MCAction, MCState } from '../types';
 
@@ -97,6 +98,38 @@ export function jumpTo(when: Date) {
 /** A prefix match: the start line goes on to say whether the school bag is on the list. */
 export function startLogs(state: MCState, phase: Phase): number {
     return state.activityLogs.filter(l => l.message.startsWith(`${phase} mission started`)).length;
+}
+
+/** Every "skipped" line for `phase`, whatever window it names. */
+export function skippedLines(state: MCState, phase: Phase): number {
+    const name = phase === 'morning' ? 'Morning' : 'Evening';
+    return state.activityLogs.filter(l => l.message.startsWith(`${name} mission skipped`)).length;
+}
+
+/** Only the evening, at `startsAt` for `durationMins`, derived the way Settings → Save derives it. */
+export function eveningOnlyAt(startsAt: string, durationMins: number): MCState {
+    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: startsAt, eveningDurationMins: durationMins } });
+    return { ...s, missions: s.missions.filter(m => m.phase === 'evening') };
+}
+
+/** What the last launch saved, without the morning hydration puts back (a 06:00 morning would run mid-test). */
+export function loadEveningOnly(): MCState {
+    const loaded = loadPersistedState();
+    return { ...loaded, missions: loaded.missions.filter(m => m.phase === 'evening') };
+}
+
+/**
+ * `state` after the scheduler started `phase` at `ranAt` and it was finished 20 min
+ * later, through the real reducer: the history a real profile has. A profile on
+ * which a mission never ran has no evidence the app existed at an earlier window,
+ * so it gets no "skipped" line at launch.
+ */
+export function ranOnce(state: MCState, phase: Phase, ranAt: Date): MCState {
+    const started = mcReducer(state, {
+        type: 'SET_ACTIVE_MISSION', phase, origin: 'scheduler', occurrenceDate: getLocalDateString(ranAt), timestamp: ranAt.toISOString(),
+    });
+    const finishedAt = new Date(ranAt.getTime() + 20 * 60_000).toISOString();
+    return mcReducer(started, { type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase, bonusTokens: 0, timestamp: finishedAt });
 }
 
 /** Launches inside `phase`'s window and lets the scheduler start it. */

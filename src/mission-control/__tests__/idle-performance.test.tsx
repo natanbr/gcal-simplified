@@ -112,6 +112,29 @@ describe('idle perf — mission scheduler arms nothing between fires', () => {
         expect(timersArmedOver10s({ ...initialState }, at(14, 0))).toBe(0);
     });
 
+    it('after reporting a window that closed unseen: one line, then nothing armed, even if the line never lands', () => {
+        // The evening ran yesterday at 19:00 and today's 19:00–20:00 passed with the
+        // app closed. This dispatch is a mock, so the line never reaches the state:
+        // only the scheduler's own memory stops the 1 s re-arm reporting it again.
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        vi.setSystemTime(at(21, 0));
+        const evening: MCState = {
+            ...initialState,
+            lastCompletedOrFailedEveningDate: localDateString(new Date(Date.now() - 86_400_000)),
+            missions: initialState.missions.filter(m => m.phase === 'evening')
+                .map(m => ({ ...m, lastActiveAt: new Date(Date.now() - 86_400_000 - 60 * 60_000).toISOString() })),
+        };
+        const { wrapper, dispatch } = makeWrapper(evening);
+        renderHook(() => useMissionScheduler(), { wrapper });
+        for (let t = 0; t < 2_000; t += 100) vi.advanceTimersByTime(100);
+        expect(dispatch, 'precondition: the passed window was reported').toHaveBeenCalledTimes(1);
+        const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+        for (let t = 0; t < 10_000; t += 100) vi.advanceTimersByTime(100);
+
+        expect(dispatch, 'reported again').toHaveBeenCalledTimes(1);
+        expect(setTimeoutSpy.mock.calls.length, 'timers armed in 10 s').toBe(0);
+    });
+
     it('with an unparseable morning start (a cleared Settings time): no timer, no store write', () => {
         // setTimeout(fn, NaN) fires at once, the NaN drift reads as "missed",
         // and the chain re-armed every second with an ADD_LOG each time.

@@ -14,7 +14,9 @@
 // the occurrence it starts; a start by hand or from the phone never belongs to
 // a future day's (handStartOccurrenceDay). An outcome (missionStreak.ts) writes the
 // stored day; the scheduler's occurrenceHandled compares with the day of the
-// window start it is judging. Guarded by mcReducer.occurrence-day.test.ts,
+// window start it is judging. The occurrences (start, window, day) come from
+// missionOccurrence.ts, which the scheduler asks too, so a start inside an open
+// window is that window's whoever starts it. Guarded by mcReducer.occurrence-day.test.ts,
 // mcReducer.occurrence-dst.test.ts and
 // __tests__/outcome-date-boundary.test.ts.
 // ⚠️  Internal to src/mission-control/ only.
@@ -22,9 +24,7 @@
 
 import type { MCAction, MCSettings, Mission } from '../types';
 import { getLocalDateString } from './behaviorSync';
-import { hhmmToMins, isValidHhmm, missionDurationMins, windowEndToMins } from './hhmm';
-
-const DAY_MINS = 24 * 60;
+import { occurrenceOn, openOccurrence } from './missionOccurrence';
 
 /** A local date key as getLocalDateString writes it. */
 export function isDateKey(value: unknown): value is string {
@@ -47,18 +47,13 @@ export function isDateKey(value: unknown): value is string {
  */
 export function handStartOccurrenceDay(m: Mission, settings: MCSettings, instantIso: string): string {
     const at = new Date(instantIso);
-    const startMins = hhmmToMins(m.startsAt);
-    if (startMins === null || !Number.isFinite(at.getTime())) return getLocalDateString(at);
-    const todayStart = new Date(at);
-    todayStart.setHours(0, startMins, 0, 0);
-    if (at.getTime() >= todayStart.getTime()) return getLocalDateString(todayStart);
-    const yesterdayStart = new Date(todayStart);
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
-    yesterdayStart.setHours(0, startMins, 0, 0);
-    const yesterdayEndMs = yesterdayStart.getTime() + missionDurationMins(m, settings) * 60_000;
-    const sinceYesterdaysEnd = at.getTime() - yesterdayEndMs; // negative: still inside yesterday's window
-    const untilTodaysStart = todayStart.getTime() - at.getTime();
-    return getLocalDateString(sinceYesterdaysEnd < untilTodaysStart ? yesterdayStart : todayStart);
+    const today = occurrenceOn(m, settings, at);
+    const yesterday = occurrenceOn(m, settings, at, -1);
+    if (!today || !yesterday) return getLocalDateString(at);
+    if (at.getTime() >= today.startMs) return today.day;
+    const sinceYesterdaysEnd = at.getTime() - yesterday.endMs; // negative: still inside yesterday's window
+    const untilTodaysStart = today.startMs - at.getTime();
+    return sinceYesterdaysEnd < untilTodaysStart ? yesterday.day : today.day;
 }
 
 /** The day a run starting now belongs to: the scheduler's own target, or else the hand-start rule. */
@@ -80,27 +75,23 @@ export function startedOccurrenceDate(
  * after `nowIso` started under a clock set ahead, and so did its stored day:
  * the derivation below, which ignores such a stamp, dates it instead.
  */
-export function occurrenceDay(m: Mission, nowIso: string): string {
+export function occurrenceDay(m: Mission, settings: MCSettings, nowIso: string): string {
     const startedLater = Date.parse(m.lastActiveAt ?? m.startedAt ?? '') > Date.parse(nowIso);
-    return isDateKey(m.occurrenceDate) && !startedLater ? m.occurrenceDate : legacyOccurrenceDay(m, nowIso);
+    return isDateKey(m.occurrenceDate) && !startedLater ? m.occurrenceDate : legacyOccurrenceDay(m, settings, nowIso);
 }
 
 /**
  * For a run saved before `occurrenceDate` existed (the update arrives mid-run):
- * the day the run started, or the day before when it started after midnight
- * inside the previous day's window. During a run `lastActiveAt` is its start
- * stamp (its one writer stamps start and end, missionActivity.ts); `startedAt`
- * is the fallback, since a full Reset moves it. A stamp after `nowMs` (a clock
- * set ahead) is ignored.
+ * the occurrence open when the run started (missionOccurrence.ts), so the day
+ * before for a start after midnight inside the previous day's window, or else
+ * the day the run started. During a run `lastActiveAt` is its start stamp (its
+ * one writer stamps start and end, missionActivity.ts); `startedAt` is the
+ * fallback, since a full Reset moves it. A stamp after `nowMs` (a clock set
+ * ahead) is ignored.
  */
-function legacyOccurrenceDay(m: Mission, nowIso: string): string {
+function legacyOccurrenceDay(m: Mission, settings: MCSettings, nowIso: string): string {
     const start = new Date(runStartMs(m, Date.parse(nowIso)));
-    const windowEnd = windowEndToMins(m.endsAt);
-    const minsIntoDay = start.getHours() * 60 + start.getMinutes() + start.getSeconds() / 60;
-    const inYesterdaysWindow = isValidHhmm(m.startsAt) && windowEnd !== null
-        && windowEnd > DAY_MINS && minsIntoDay < windowEnd - DAY_MINS;
-    if (inYesterdaysWindow) start.setDate(start.getDate() - 1);
-    return getLocalDateString(start);
+    return openOccurrence(m, settings, start)?.day ?? getLocalDateString(start);
 }
 
 function runStartMs(m: Mission, nowMs: number): number {

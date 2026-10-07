@@ -55,9 +55,8 @@ describe('an evening window that crosses midnight', () => {
         // timer's remaining delay, so it fires at about 23:59:59.9: past the
         // 5 min tolerance, so only the window end read from '24:30' keeps it on
         // time. The same late timer firing after midnight, still inside the
-        // window, starts it too (the cases below). What does NOT start it is a
-        // relaunch or the resume re-arm after midnight: those aim at tonight's
-        // occurrence (an older limit).
+        // window, starts it too (the cases below), and since 2026-10-06 so do a
+        // relaunch and the resume re-arm (useMissionScheduler.open-occurrence.test.tsx).
         vi.setSystemTime(at(23, 50));
         jumpTo(at(0, 0, 1));
         step(100);
