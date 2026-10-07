@@ -13,6 +13,7 @@ import { isRefusedByShieldLock, shieldSegmentsLeft } from './missionStreak';
 import { bankLogEntry, isBankAction } from './bankLog';
 import { isStaleMissionAction } from './staleMissionAction';
 import { adjustedMissionEnd } from './missionEndAdjust';
+import { completableRun } from './missionCompletion';
 import { responsibilityPointChange } from './responsibilityPoint';
 import { responsibilityClaim } from './responsibilityClaim';
 import { reschedulesRunningMission } from './missionReschedule';
@@ -147,10 +148,9 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         case 'MARK_MISSION_TIMEOUT':
             return null; // SET_ACTIVE_MISSION phase 'none' logs the expiry with its phase; this would duplicate it
         case 'COMPLETE_MISSION_ROUTINE': {
-            // Mirror the reducer's idempotency guard — a second completion
-            // dispatch is a no-op and must not produce a duplicate log entry.
-            const mission = state.missions.find(m => m.phase === action.missionPhase);
-            if (!mission || !mission.active) return null;
+            // The reducer's own decision: a second completion, or one after the
+            // run's timeout was logged, pays nothing and writes no line.
+            if (!completableRun(state, action)) return null;
             return { id, timestamp: now, icon: '🎉', message: `${action.missionPhase === 'morning' ? 'Morning' : 'Evening'} mission completed`, delta: +action.bonusTokens, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         }
         case 'COMPLETE_TASK':

@@ -13,6 +13,7 @@ import { MissionTimerDisplay, MissionDepletingBar } from './MissionTimerDisplay'
 import { useLongPress } from '../hooks/useLongPress';
 import { usePressRelease } from '../hooks/usePressRelease';
 import type { MissionPhase } from '../types';
+import { completableRun } from '../store/missionCompletion';
 import { TaskCard } from './TaskCard';
 
 const PHASE_META: Record<Exclude<MissionPhase, 'none'>, { label: string; emoji: string; bg: string; accent: string }> = {
@@ -62,12 +63,10 @@ export function MissionOverlay() {
         phase, // a hold does not outlive its mission
     );
 
-
     const handleBarAdjust = useCallback((deltaMinutes: number) => {
         if (phase !== 'none')
             dispatch({ type: 'ADJUST_MISSION_END', missionPhase: phase as Exclude<MissionPhase,'none'>, deltaMinutes });
     }, [dispatch, phase]);
-
 
     const handleTimerExpiredInfo = useCallback(() => {
         if (mission && !mission.loggedTimeoutAt && phase !== 'none') {
@@ -88,8 +87,10 @@ export function MissionOverlay() {
 
     const doneCount    = mission?.tasks.filter(t => t.completed).length ?? 0;
     const totalCount   = mission?.tasks.length ?? 0;
-    const allDone      = totalCount > 0 && doneCount === totalCount;
     const effectiveBonus = whiningDetected ? Math.max(0, BONUS_BASE - 1) : BONUS_BASE;
+    // Done only while finishing still pays: once its timeout is logged a run is a miss, so no celebration, no collect.
+    const allDone      = totalCount > 0 && doneCount === totalCount
+        && completableRun(state, { type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase, bonusTokens: effectiveBonus }) !== null;
 
     const collectBonus = useCallback((origin?: 'auto') => {
         dispatch({ type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase as Exclude<MissionPhase, 'none'>, bonusTokens: effectiveBonus, origin });
@@ -392,7 +393,6 @@ export function MissionOverlay() {
                                 </motion.button>
                             </motion.div>
                         </div>
-
 
                         {/* All-done celebration */}
                         <AnimatePresence>
