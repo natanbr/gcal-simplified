@@ -1012,3 +1012,16 @@ same change, and refuse through the one predicate. A UI that flashes feedback be
 (TaskCard's burst) asks that predicate first; it reads the last rendered state, so a tap landing
 after a Stop but before the next render (a few ms) can still flash. Tests that dispatched the action on an idle state were
 fixtures, not flows: start the mission in them rather than exempting the idle case.
+
+## 2026-10-07 — An outcome that is logged before its run ends needs the other outcome to ask
+
+**Learning:** A mission run has two outcomes, a miss and a completion, and two writers decide them
+at different moments: the overlay's timer logs the miss the second the run ends (`loggedTimeoutAt`),
+but the scheduler ends the run only at its next 15 s tick. The completion path asked only "is the
+run active", so a task finished in that gap auto-collected: one run, charged a miss and paid as
+completed (PR 197 review). The idempotency guard of each outcome looked at its own stamp, never at
+the other's.
+**Action:** When an outcome is recorded before the state that hides its run (the overlay, the
+`active` flag) catches up, every other outcome of that run must ask the recorded one: put it in the
+shared decision (`completableRun`, `store/missionCompletion.ts`), and gate the UI's celebration on
+the same decision, not on "every task done", or it celebrates a payout the reducer then refuses.

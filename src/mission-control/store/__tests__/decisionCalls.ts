@@ -1,7 +1,7 @@
 // ============================================================
 // Test-only helper for the "one decision, asked by the reducer and by the log"
-// guards: adjustedMissionEnd, isStaleMissionAction, responsibilityPointChange
-// and responsibilityClaim. It reads a store file with the TypeScript parser and
+// guards: adjustedMissionEnd, isStaleMissionAction, responsibilityPointChange,
+// responsibilityClaim and completableRun. It reads a store file with the TypeScript parser and
 // answers whether its CODE calls `fn(state, action)`. A plain text match was
 // satisfied by the call left in a comment (PR 195 review), and a string naming
 // it would have satisfied it too. Here, under __tests__/, because the isolation

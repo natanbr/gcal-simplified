@@ -440,7 +440,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
             };
 
         case 'COMPLETE_MISSION_ROUTINE':
-            return applyMissionRoutineComplete(state, action.missionPhase, action.bonusTokens, actionInstant(action));
+            return applyMissionRoutineComplete(state, action, actionInstant(action)); // refused once the timeout is logged: missionCompletion.ts
 
         case 'MARK_MISSION_TIMEOUT':
             return applyMissionTimeout(state, action.missionPhase, actionInstant(action));

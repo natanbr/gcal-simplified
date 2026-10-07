@@ -17,6 +17,7 @@ type LogSource = NonNullable<ActivityLogEntry['source']>;
 import { MAX_ACTIVITY_LOGS } from './behaviorSync';
 import { moveGauge } from './moodGauge';
 import { occurrenceDay } from './occurrenceDay';
+import { completableRun } from './missionCompletion';
 
 /** Net misses (each completion gives one back) that break the shield and freeze the child's economy. */
 export const MISSED_LOCK_THRESHOLD = 6;
@@ -228,25 +229,24 @@ export function applyMissionTimeout(
  * miss costs (decided 2026-09-27; it used to clear the whole streak, so one
  * good morning wiped any number of misses). The end stays visible: at six
  * misses the next completion is 6 → 5, which unlocks. This action is never
- * in the locked set, so it is the way out.
+ * in the locked set, so it is the way out. Which run it pays, if any (not one
+ * whose timeout is already logged): completableRun, which the log asks too.
  */
 export function applyMissionRoutineComplete(
     state: MCState,
-    missionPhase: MissionPhase,
-    bonusTokens: number,
+    action: Extract<MCAction, { type: 'COMPLETE_MISSION_ROUTINE' }>,
     nowIso: string,
 ): MCState {
-    const mission = state.missions.find(m => m.phase === missionPhase);
-    // Idempotency: the expiry timers in MissionOverlay and MissionTimerDisplay
-    // can both fire at the same moment — only the first completion pays out.
-    if (!mission || !mission.active) return state;
+    const mission = completableRun(state, action);
+    if (!mission) return state;
+    const missionPhase = mission.phase;
 
     const whining = mission.whiningDetected ?? false;
     // "without wining will add points. with wining will result in no change"
     return {
         ...state,
         activeMission: 'none',
-        bankCount: state.bankCount + bonusTokens,
+        bankCount: state.bankCount + action.bonusTokens,
         ...moveGauge(state, whining ? 0 : COMPLETION_BEHAVIOR_BONUS, 1).patch, // earning a token resets mood
         ...applyStreakChange(state, sanitizeMissedStreak(state.missedMissionStreak) - 1, nowIso, 'completed'),
         ...outcomeDatePatch(mission, state.settings, nowIso),

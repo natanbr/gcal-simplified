@@ -247,6 +247,17 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: "restore `applyStreakChange(state, 0, nowIso, 'completed')` in applyMissionRoutineComplete — 7 cases red across missionStreak.test.ts, mcReducer.streak-lock.test.ts and mcReducer.streak-lifecycle.test.ts (proven 2026-09-27).",
     },
     {
+        rule: 'A run whose timeout is already logged is never also paid: its completion pays no bonus, gives no shield back and writes no line, through completableRun, asked by the reducer, the log and the overlay before it celebrates (not a lock: a run finished in time stays the way out)',
+        source: 'CLAUDE.md → Conventions → Mission streak shield',
+        status: 'guarded',
+        guard: [
+            'src/mission-control/store/__tests__/mcReducer.completion-after-timeout.test.ts',
+            'src/mission-control/components/MissionOverlay.late-finish.test.tsx',
+        ],
+        verifiedRedBy: "before the fix (a34a492) 17 cases red: 14 reducer cases (the late finish paid by the auto-collect, the Collect button and a remote-shaped dispatch, each in the reducer and the log, ended as expired, at the sixth miss, after a plain Reset, after the phone's ticks, after a relaunch, the next occurrence, both structural cases) and 3 overlay cases (ticked on the desktop, from the phone, a relaunch); the 2 happy cases, the full-Reset case and the overlay's in-time case stayed green. Drop `|| run.loggedTimeoutAt` from completableRun — 15 red (12 reducer, 3 overlay). Mirror the old `!mission.active` guard in createLogEntry instead of asking completableRun — 6 behavioural cases and the log's structural case go red. Keep the old guard in applyMissionRoutineComplete — 9 behavioural cases and its structural case go red. With the reducer and log fixed but the overlay's allDone not asking completableRun, the 3 overlay cases stay red (Mission Complete! and the Collect button shown for a refused payout). Drop `loggedTimeoutAt: undefined` from freshAttempt — the next-occurrence and full-Reset cases go red (all proven 2026-10-07).",
+        defence: 'The overlay half is behavioural only: the structural case reads the reducer and the log, which call it with (state, action); the overlay builds its own action. A new desktop or phone path that dispatches COMPLETE_MISSION_ROUTINE is refused by the reducer either way, but could still celebrate first unless it asks completableRun too.',
+    },
+    {
         rule: 'A refusal writes no log line, and is refused before any optimistic UI commits',
         source: 'CLAUDE.md → Conventions → Refusals must be silent in the log and visible on screen',
         status: 'guarded',

@@ -10,9 +10,10 @@ import {
     shieldSegmentsLeft,
     shieldTier,
 } from './missionStreak';
-import type { MCState } from '../types';
+import type { MCAction, MCState } from '../types';
 
 const AT = '2026-09-02T07:00:00.000Z';
+const COLLECT: Extract<MCAction, { type: 'COMPLETE_MISSION_ROUTINE' }> = { type: 'COMPLETE_MISSION_ROUTINE', missionPhase: 'morning', bonusTokens: 2 };
 
 function withStreak(streak: number, patch: Partial<MCState> = {}): MCState {
     return { ...initialState, missedMissionStreak: streak, ...patch };
@@ -112,14 +113,14 @@ describe('missionStreak — mission outcomes', () => {
         [1, 0],
         [0, 0], // never below zero
     ])('gives back exactly one shield when a mission is completed (streak %i → %i)', (before, after) => {
-        const next = applyMissionRoutineComplete(runningMorning(before), 'morning', 2, AT);
+        const next = applyMissionRoutineComplete(runningMorning(before), COLLECT, AT);
         expect(next.missedMissionStreak).toBe(after);
     });
 
     it('unlocks a broken shield with a single completion — 6 → 5, not back to full', () => {
         const locked = runningMorning(MISSED_LOCK_THRESHOLD);
         expect(isEconomyLocked(locked)).toBe(true);
-        const next = applyMissionRoutineComplete(locked, 'morning', 2, AT);
+        const next = applyMissionRoutineComplete(locked, COLLECT, AT);
         expect(next.missedMissionStreak).toBe(MISSED_LOCK_THRESHOLD - 1);
         expect(isEconomyLocked(next)).toBe(false);
     });
@@ -131,17 +132,17 @@ describe('missionStreak — mission outcomes', () => {
                 m.phase === 'morning' ? { ...m, whiningDetected: true } : m,
             ),
         };
-        expect(applyMissionRoutineComplete(whined, 'morning', 2, AT).missedMissionStreak).toBe(3);
+        expect(applyMissionRoutineComplete(whined, COLLECT, AT).missedMissionStreak).toBe(3);
     });
 
     it('still pays the completion bonus while the shield was broken — collecting is the way out', () => {
         const locked = runningMorning(MISSED_LOCK_THRESHOLD);
-        const next = applyMissionRoutineComplete(locked, 'morning', 2, AT);
+        const next = applyMissionRoutineComplete(locked, COLLECT, AT);
         expect(next.bankCount).toBe(locked.bankCount + 2);
     });
 
     it('ignores a completion for a mission that is not running (double-fire guard)', () => {
         const idle = withStreak(4);
-        expect(applyMissionRoutineComplete(idle, 'morning', 2, AT)).toBe(idle);
+        expect(applyMissionRoutineComplete(idle, COLLECT, AT)).toBe(idle);
     });
 });

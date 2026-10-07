@@ -221,7 +221,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 
 - **Mission Streak Shield (missed-mission lockout)**:
   - **One shared counter**: `missedMissionStreak` counts *failed* mission occurrences across morning and evening, minus completions — each miss takes one shield, each completion gives one back. Six net misses is roughly three days of earning nothing.
-  - **Miss / give back (changed 2026-09-27)**: only an expired mission with unfinished tasks counts as a miss. A parent-cancelled mission and a mission skipped because the machine was asleep leave the counter alone. Each completed mission routine gives back **one** shield (counter − 1, never below 0), with or without whining. Until 2026-09-27 a completion reset the counter to 0, so one good morning wiped any number of misses.
+  - **Miss / give back (changed 2026-09-27)**: only an expired mission with unfinished tasks counts as a miss. A parent-cancelled mission and a mission skipped because the machine was asleep leave the counter alone. Each completed mission routine gives back **one** shield (counter − 1, never below 0), with or without whining. Until 2026-09-27 a completion reset the counter to 0, so one good morning wiped any number of misses. **A run whose timeout is already logged is a miss and is never also paid (decided 2026-10-07)**: the timeout is logged by the open overlay the second the timer runs out, or, with the overlay minimized, by the scheduler's tick within 15 s. Once it is logged, finishing the last tasks (on the screen or from the phone) pays no bonus, gives no shield back and shows no "Mission Complete!"; the run ends as expired. Before it is logged, a finish still pays: with the overlay minimized, a phone tick of the last task in the seconds between the end and the scheduler's tick is collected and paid as before. The ticks themselves always land (a Cream tick still counts). A full Reset clears the stamp, so its finish pays: the 2026-09-03 decision ("Reset re-arms the occurrence") covers a parent's reset re-arming the miss; that the child's own 2 s hold on "↺ Reset" thereby erases a charged miss is not decided (open for the owner).
   - **Reset re-arms the occurrence (decided 2026-09-03)**: a mission the parent resets *can* be counted as a miss again the same day. Reset means "do it again", and a second failure of a second attempt is a second miss. This applies to **`RESET_MISSION_WITH_TIMER`** (long-press), which restarts the clock and so genuinely grants that second attempt. Plain **`RESET_MISSION`** (short-press) resets only the checklist and leaves the timer running, so on an already-expired mission it grants no time at all — it therefore does **not** re-arm the miss, or one press would cost a segment for an attempt zero seconds long. Both are remote-reachable. Pinned by tests so neither half is "fixed" later.
   - **Lock at 6 — the child's whole economy freezes (decided 2026-09-03)**, not just spending. Refused: deposit, vacuum, move, select a new goal, consume a completed reward, starting a quick game, **tapping an activity for a point, and claiming a finished responsibility**. The mood gauge also stops accruing, and because accrual is *skipped* rather than zeroed, unlocking cannot dump the frozen days back as progress. An earlier version froze spending only, on the reasoning that collecting was the way out; the stronger rule is what the owner wants and is simpler for a child to hold — while the shield is broken nothing moves, and a completed mission starts it again.
   - **What never freezes**: completing a mission (the exit), and the parent's tools — granting tokens, granting a game token, handing a shield back, removing a token, refunding a goal. Locking any of those would make the lock inescapable or take the adult's override away.
@@ -2630,3 +2630,52 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
     to stop that run from the phone first, and when not to expect a line.
   - The behaviour of a late start (it runs its full duration) is now stated plainly, with the open
     product question.
+
+### 2026-10-07 A mission finished after its timeout was logged pays nothing
+
+- **The bug** (found by the PR 197 review). When a mission's timer runs out with a task left, the
+  overlay's own timer logs the timeout at once (`MARK_MISSION_TIMEOUT`: a miss, one shield segment,
+  −20 on the mood gauge), but the run stays on screen until the scheduler's next 15 s tick ends it. A
+  task finished in that gap, on the desktop or from the phone's checklist, made every task done, and
+  the overlay's auto-collect sent `COMPLETE_MISSION_ROUTINE`: the run already charged a miss was also
+  paid as completed, bank +2 (+1 with whining), +25 on the gauge (none with whining) and the shield
+  segment given back,
+  with "🎉 Morning mission completed" in the log. The paths: the overlay's auto-collect effect
+  (`MissionOverlay.tsx`, the run's end is already past, so it collects at once), the expiry callback
+  of its timer (`MissionTimerDisplay` → `autoCollect`, when every task is done at the end) and the
+  "Collect N Bonus Stars!" button under "Mission Complete!". The phone cannot send a completion
+  (`COMPLETE_MISSION_ROUTINE` is not on `REMOTE_ALLOWED_ACTIONS`); its task ticks reach the same
+  auto-collect. The same happened on a relaunch with such a run saved.
+- **Now** (decided by the owner, 2026-10-07: "Refuse the payout once the timeout is logged") a
+  completion of a run whose timeout is logged is refused, by the reducer and the log alike, through
+  one decision, `completableRun` in `store/missionCompletion.ts` (the `adjustedMissionEnd` pattern):
+  no bonus, no shield back, no gauge move, no completion line. The overlay asks the same decision
+  before it counts the mission as done, so it shows no "Mission Complete!", no bonus stars and no
+  Collect button for it, and its auto-collect never fires. The run then ends at the scheduler's tick
+  as "🕐 Morning mission expired", with the miss kept.
+- **When the timeout counts as logged.** The open overlay logs it the second the timer runs out. With
+  the overlay minimized its timer is not mounted, so nothing logs it until the scheduler's tick, up
+  to 15 s later, which logs it and ends the run in one go. In those seconds a phone tick of the last
+  task still makes every task done and the overlay's auto-collect (mounted while minimized) pays the
+  run as completed, as before this change: the refusal follows the stamp, not the clock.
+- **Task taps after the timeout are still accepted** (decided for the owner, reversible): a tick is
+  a record, not a payment, and pays nothing now. Each tick lands with its card's "done" flash, and a
+  Cream tick still counts the application (`creamTaskDaysLeft`), which the treatment count needs. The
+  run simply ends as expired.
+- **Unchanged.** A run finished before its timeout pays and gives one shield back as before, so a
+  completed mission is still the way out of a broken shield (`COMPLETE_MISSION_ROUTINE` stays off
+  the locked set; this refusal is not a lock). At the sixth miss, a late finish does not unlock it.
+  A plain "↺ Reset" grants no time and keeps the stamp, so a run reset after its timeout is still not
+  paid. A full Reset (the 2 s hold on "↺ Reset", or the phone's) clears the stamp, so its finish pays
+  and gives back the segment the miss took. The 2026-09-03 decision ("Reset re-arms the occurrence")
+  covers a parent's reset re-arming the miss; that the child's own 2 s hold on the desktop thereby
+  erases a charged miss is pre-existing and not decided (open for the owner). The next occurrence
+  starts fresh and pays normally.
+- Tests: `store/__tests__/mcReducer.completion-after-timeout.test.ts` (in time: paid, and the way
+  out of a broken shield; after the logged timeout: refused by the reducer and the log for the
+  auto-collect, the Collect button and a remote-shaped dispatch, ended as expired, at the sixth miss,
+  after a plain Reset, after the phone's ticks with a Cream tick counted; a relaunch, the next
+  occurrence and a full Reset; both structural cases) and `components/MissionOverlay.late-finish.test.tsx`
+  (finished in time: auto-collected at the end; ticked after the logged timeout on the desktop and
+  from the phone: no payout, no line, no "Mission Complete!", no Collect button; a relaunch on such a
+  saved run). 17 cases red before the fix; the mutations are in the rule registry.
