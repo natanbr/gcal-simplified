@@ -2679,3 +2679,36 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   (finished in time: auto-collected at the end; ticked after the logged timeout on the desktop and
   from the phone: no payout, no line, no "Mission Complete!", no Collect button; a relaunch on such a
   saved run). 17 cases red before the fix; the mutations are in the rule registry.
+
+### 2026-10-07 Mission Control's top bar no longer blurs what is behind it
+
+- **Why** (owner approved, follow-up of the 2026-10-04 entry). The top bar (the "brow": Calendar,
+  Command Center, the Remote dot, Logs, Settings and the clock) had an 8 px background blur. All the
+  bar covers is the still gradient of Mission Control's background, so the blur showed the same bar,
+  yet it made the app draw the bar twice on every frame in which anything in it changed (the clock
+  each minute, the Remote dot's pulse): about a quarter of each such frame's cost on the child's
+  screen (measured 2026-10-04, `docs/performance.md`). The Logs button inside the bar had a small
+  blur of its own (Tailwind `backdrop-blur-sm`), over the same still bar; it is gone too.
+- **On screen.** The same bar: translucent white over the background, its bottom border unchanged;
+  its text renders slightly crisper (subpixel smoothing). Measured idle on the built app (1280x720
+  at 150 %): 0.374 % → 0.298 % of one core, within noise.
+  The blurs that stay are on overlays shown for a moment over busy content (the Logs and Settings
+  dialogs, the celebration, the cheat trap, the game selector, the quiz, the mood toast), not on
+  anything always on screen.
+- Tests: `src/mission-control/__tests__/brow-no-backdrop-filter.test.tsx` renders the main view and
+  fails if the bar or anything in it gets a backdrop filter, from a stylesheet rule, a Tailwind
+  `backdrop-*` class or an inline style.
+
+### 2026-10-07 Space Rescue's astronaut bounces on the waiting screen
+
+- **Bug.** The astronaut above "Help the Baby Astronaut launch to safety!" was meant to bounce, but
+  its inline style named a `bounce` animation that no stylesheet defines, so it stood still. Made to
+  work as written, it would have looped for as long as the child stayed on that screen before
+  pressing Play (a loop draws a frame every vsync, `docs/performance.md`).
+- **Now** it bounces 5 times (10 s) each time the waiting screen opens, then stands still. The class
+  is `mc-anim-astronaut-bounce` in `mc.css`, on the same keyframes as the other emoji bounce;
+  Mission Control's stylesheets still hold no `infinite`, and the infinite-animation registry lists
+  one loop fewer.
+- Tests: `src/mission-control/games/blocks/BlocksGameOverlay.test.tsx` fails if the astronaut has an
+  inline animation, if its class names keyframes that `mc.css` does not define, or if its count is
+  not a plain number from 1 to 15.

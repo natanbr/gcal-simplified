@@ -119,7 +119,7 @@ export function ActivityLogView(): React.JSX.Element {
         <div style={{ position: 'relative' }}>
             <button
                 onClick={handleOpen}
-                className="flex items-center gap-2 px-3 py-2 bg-white/80 hover:bg-slate-50 text-slate-700 rounded-lg transition border border-slate-200 backdrop-blur-sm shadow-sm"
+                className="flex items-center gap-2 px-3 py-2 bg-white/80 hover:bg-slate-50 text-slate-700 rounded-lg transition border border-slate-200 shadow-sm"
                 title="Activity Log"
             >
                 <Activity size={18} className="text-indigo-500" />

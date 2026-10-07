@@ -61,8 +61,6 @@ const REGISTRY: InfiniteAnimation[] = [
         onScreen: 'Settings dialog, while the saved settings load.' },
     { file: 'src/mission-control/games/blocks/Altimeter.tsx', match: 'repeat: Infinity', count: 1, onIdleView: false,
         onScreen: 'Space Rescue game, once the altitude reaches 200.' },
-    { file: 'src/mission-control/games/blocks/BlocksGameOverlay.tsx', match: "'infinite'", count: 1, onIdleView: false,
-        onScreen: 'Space Rescue, the waiting screen before Start. It names `bounce`, which no stylesheet defines, so today it does not move; defining one would make it loop there.' },
     { file: 'src/mission-control/games/fruits/FruitMergeGameOverlay.tsx', match: 'animate-pulse', count: 2, onIdleView: false,
         onScreen: 'Fruit Merge game: the "✕ Cancel" button while choosing a fruit to delete, and the clock in its last seconds.' },
     { file: 'src/mission-control/games/snake/SnakeGameOverlay.tsx', match: 'animate-pulse', count: 1, onIdleView: false,
