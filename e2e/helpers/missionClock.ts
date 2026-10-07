@@ -13,10 +13,13 @@
  * ---
  * `quietMissionClock` runs on every launch (launchApp.ts is the only way in)
  * before any spec code. It rewrites the persisted blob so that no mission is
- * running and today's morning and evening count as already concluded. The
- * scheduler's own "already ran today" check (useMissionScheduler.ts) then skips
- * any window that is open now or opens later today. Mission times and settings
- * are left as they were.
+ * running, today's morning and evening count as already concluded, and every
+ * mission counts as having run at the launch instant (`lastActiveAt`). The
+ * scheduler's own "already handled" check (useMissionScheduler.ts) then skips
+ * any window that is open now or opens later today, including last night's
+ * window still open after midnight (since 2026-10-06 the scheduler starts that
+ * one: a spec run at 00:30 with the evening at 23:59 had it start), and finds no
+ * missed window to report. Mission times and settings are left as they were.
  *
  * The write happens on blank.html in the same window. Every file:// document
  * shares one localStorage, so the store is not mounted there and none of its
@@ -107,7 +110,7 @@ function restoreSliceInPage({ key, fields, slice }: SliceArgs & { slice: Mission
     localStorage.setItem(key, JSON.stringify(state));
 }
 
-function quietBlobInPage(key: string): void {
+function quietBlobInPage({ key, launchedAt }: { key: string; launchedAt: number }): void {
     const state = JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, unknown>;
     // Same format as getLocalDateString in behaviorSync.ts: the LOCAL date,
     // which is what the scheduler compares against.
@@ -115,9 +118,12 @@ function quietBlobInPage(key: string): void {
     const pad = (n: number) => String(n).padStart(2, '0');
     const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const missions = Array.isArray(state['missions']) ? state['missions'] as Array<Record<string, unknown>> : [];
+    // A run at the launch instant covers every window that started by then:
+    // today's outcome dates do not cover last night's, still open after midnight.
+    const ranAt = new Date(launchedAt).toISOString();
 
     state['activeMission'] = 'none';
-    state['missions'] = missions.map(m => ({ ...m, active: false, startedAt: undefined, durationMins: undefined }));
+    state['missions'] = missions.map(m => ({ ...m, active: false, startedAt: undefined, durationMins: undefined, lastActiveAt: ranAt }));
     state['lastCompletedOrFailedMorningDate'] = today;
     state['lastCompletedOrFailedEveningDate'] = today;
     localStorage.setItem(key, JSON.stringify(state));
@@ -129,8 +135,11 @@ function seedInPage({ key, kind }: { key: string; kind: FailingState }): void {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    // The scheduler never treats a window that wraps past midnight as open, so
-    // the window must end today. In the last minutes before midnight none fits.
+    // The window ends today, as when this seed was proven. That was required
+    // until 2026-10-06, when the scheduler did not open a window past midnight;
+    // it does now (store/missionOccurrence.ts), but a seed crossing midnight has
+    // not been run end to end, so the cap stays. In the last minutes before
+    // midnight the running seed stands in.
     const minutesLeft = 24 * 60 - (now.getHours() * 60 + now.getMinutes());
 
     if (kind === 'mission-running' || minutesLeft < 3) {
@@ -217,7 +226,7 @@ export async function quietMissionClock(
         await simulateFailingClock(page, appUrl, keep ? 'mission-running' : 'window-open-now');
     }
 
-    await page.evaluate(quietBlobInPage, STORAGE_KEY);
+    await page.evaluate(quietBlobInPage, { key: STORAGE_KEY, launchedAt });
     await page.goto(appUrl);
 }
 
