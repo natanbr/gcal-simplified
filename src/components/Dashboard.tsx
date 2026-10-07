@@ -210,7 +210,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                     y: status ? 0 : -5
                 }}
                 transition={{ duration: 0.2 }}
-                className="flex flex-col items-center w-full max-w-[200px] gap-1"
+                className="relative flex flex-col items-center w-full max-w-[200px]"
                 style={{ pointerEvents: 'none' }}
             >
                 <div className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden" data-testid="loading-bar">
@@ -221,7 +221,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
                         idle Calendar view. */}
                     <div className={`h-full bg-family-cyan ${status ? 'animate-sync-bar' : ''}`} />
                 </div>
-                <span className={`text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 ${status ? 'animate-pulse' : ''}`}>
+                <span data-testid="sync-status" className={`absolute top-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] uppercase tracking-[0.2em] font-black text-family-cyan/80 ${status ? 'animate-pulse' : ''}`}>
                     {status?.text}
                 </span>
             </motion.div>
