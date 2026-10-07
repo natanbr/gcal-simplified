@@ -14,6 +14,13 @@ function morningMission(state: MCState) {
     return state.missions.find(m => m.phase === 'morning')!;
 }
 
+/** A task tap counts only on the running mission (store/staleMissionAction.ts). */
+function running(state: MCState, phase: 'morning' | 'evening'): MCState {
+    if (state.activeMission === phase) return state;
+    const idle = mcReducer(state, { type: 'SET_ACTIVE_MISSION', phase: 'none' });
+    return mcReducer(idle, { type: 'SET_ACTIVE_MISSION', phase });
+}
+
 describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
     it('enabling cream task dynamically injects it into evening mission by default', () => {
         expect(eveningMission(initialState).tasks.some(t => t.id === 'cream')).toBe(false);
@@ -78,7 +85,7 @@ describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
 
         expect(state.creamTaskDaysLeft).toBe(3);
 
-        state = mcReducer(state, {
+        state = mcReducer(running(state, 'evening'), {
             type: 'COMPLETE_TASK',
             missionPhase: 'evening',
             taskId: 'cream'
@@ -97,7 +104,7 @@ describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
 
         expect(state.creamTaskDaysLeft).toBe(3);
 
-        state = mcReducer(state, {
+        state = mcReducer(running(state, 'morning'), {
             type: 'COMPLETE_TASK',
             missionPhase: 'morning',
             taskId: 'cream'
@@ -106,7 +113,7 @@ describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
         expect(state.creamTaskDaysLeft).toBe(2.5);
         expect(morningMission(state).tasks.find(t => t.id === 'cream')?.label).toBe('Cream (3d left)');
         
-        state = mcReducer(state, {
+        state = mcReducer(running(state, 'evening'), {
             type: 'COMPLETE_TASK',
             missionPhase: 'evening',
             taskId: 'cream'
@@ -124,7 +131,7 @@ describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
 
         expect(eveningMission(state).tasks.some(t => t.id === 'cream')).toBe(true);
 
-        state = mcReducer(state, {
+        state = mcReducer(running(state, 'evening'), {
             type: 'COMPLETE_TASK',
             missionPhase: 'evening',
             taskId: 'cream'
@@ -144,7 +151,7 @@ describe('mcReducer — SET_SETTINGS and Cream Routine logic', () => {
             settings: { creamTaskEnabled: true, creamTaskDaysTarget: 5 }
         });
         
-        state = mcReducer(state, {
+        state = mcReducer(running(state, 'evening'), {
             type: 'COMPLETE_TASK',
             missionPhase: 'evening',
             taskId: 'cream'

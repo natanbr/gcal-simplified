@@ -1,12 +1,13 @@
 // ============================================================
 // Mission Control — a phone tap that lands after its mission ended
 // ------------------------------------------------------------
-// The phone draws each mission card from the last broadcast, so its Reset and
-// +/- buttons can name a mission that has already ended (it expired, or the
-// phone's own Stop landed first). The plain Reset set that mission `active`
-// again with nothing running: hidden on the desktop, never expiring, shown as
-// running on the phone, and saved across a restart. These drive the REAL remote
-// path (allowlist, validators, timestamp scrub) into the real reducer.
+// The phone draws each mission card from the last broadcast, so its Reset, +/-,
+// "Whining?" and task buttons can name a mission that has already ended (it
+// expired, or the phone's own Stop landed first). The plain Reset set that
+// mission `active` again with nothing running: hidden on the desktop, never
+// expiring, shown as running on the phone, and saved across a restart; an
+// un-mark of whining behind the Stop marked it (−10). These drive the REAL
+// remote path (allowlist, validators, timestamp scrub) into the real reducer.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -75,6 +76,39 @@ describe('a phone tap that lands after its mission ended', () => {
 
         expect(live.state.activeMission).toBe('none');
         expect(adjustLines(live.state)).toBe(0);
+        unmount();
+    });
+
+    // The phone's "Whining?" sends TOGGLE_WHINING with lockedFromUI (mc-remote MissionsSection.tsx).
+    const whine = { type: 'TOGGLE_WHINING', missionPhase: 'evening', lockedFromUI: true };
+
+    it('whining and a task tap reach the running mission; an un-mark right behind the Stop is not a −10', () => {
+        const { live, emit, unmount } = launchInsideWindow('evening', { ...initialState, behaviorProgress: 50 }, { ipc: true });
+        emit('remote-control:action', whine);
+        emit('remote-control:action', { type: 'COMPLETE_TASK', missionPhase: 'evening', taskId: 'shower' });
+        step(1_000);
+        expect(evening(live.state)?.whiningDetected, 'the running mission takes the mark').toBe(true);
+        expect(evening(live.state)?.tasks.find(t => t.id === 'shower')?.completed, 'and the tick').toBe(true);
+        expect(live.state.behaviorProgress).toBeCloseTo(40, 0);
+
+        emit('remote-control:action', { type: 'CANCEL_MISSION', missionPhase: 'evening' });
+        emit('remote-control:action', whine); // the card still shows "Whining Active": the parent un-marks it
+        step(1_000);
+
+        expect(live.state.activeMission).toBe('none');
+        expect(evening(live.state)?.whiningDetected, 'the ended evening is not marked again').toBe(false);
+        expect(live.state.behaviorProgress, 'no −10 for an un-mark (it was −10, then 30)').toBeCloseTo(40, 0);
+        unmount();
+    });
+
+    it('a task tap or a whining toggle for the expired mission changes nothing', () => {
+        const { live, emit, unmount } = eveningThatExpired();
+        const before = live.state.missions;
+        emit('remote-control:action', { type: 'COMPLETE_TASK', missionPhase: 'evening', taskId: 'shower' });
+        emit('remote-control:action', whine);
+        step(1_000);
+
+        expect(live.state.missions).toBe(before);
         unmount();
     });
 

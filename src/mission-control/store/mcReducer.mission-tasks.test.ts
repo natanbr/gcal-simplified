@@ -26,11 +26,16 @@ const MORNING_TASK_1 = 'tshirt';
 const MORNING_TASK_2 = 'toothbrush';
 const EVENING_TASK_1 = 'shower';
 
+// A task tap counts only on the running mission (store/staleMissionAction.ts), so
+// these start the mission first. A school-day start adds the bag to the morning.
+const morningRunning = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+const eveningRunning = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'evening' });
+
 // ── COMPLETE_TASK ─────────────────────────────────────────────────────────────
 
 describe('mcReducer — COMPLETE_TASK', () => {
     it('marks the specified task as completed', () => {
-        const state = mcReducer(initialState, {
+        const state = mcReducer(morningRunning, {
             type: 'COMPLETE_TASK',
             missionPhase: 'morning',
             taskId: MORNING_TASK_1,
@@ -40,7 +45,7 @@ describe('mcReducer — COMPLETE_TASK', () => {
     });
 
     it('does not affect other tasks in the same mission', () => {
-        const state = mcReducer(initialState, {
+        const state = mcReducer(morningRunning, {
             type: 'COMPLETE_TASK',
             missionPhase: 'morning',
             taskId: MORNING_TASK_1,
@@ -50,7 +55,7 @@ describe('mcReducer — COMPLETE_TASK', () => {
     });
 
     it('does not affect tasks in the other mission phase', () => {
-        const state = mcReducer(initialState, {
+        const state = mcReducer(morningRunning, {
             type: 'COMPLETE_TASK',
             missionPhase: 'morning',
             taskId: MORNING_TASK_1,
@@ -62,25 +67,25 @@ describe('mcReducer — COMPLETE_TASK', () => {
         const state = applyActions([
             { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: MORNING_TASK_1 },
             { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: MORNING_TASK_1 },
-        ]);
+        ], morningRunning);
         const task = morningMission(state).tasks.find(t => t.id === MORNING_TASK_1)!;
         expect(task.completed).toBe(false);
     });
 
     it('completing all morning tasks makes every task completed', () => {
-        const morningTaskIds = morningMission(initialState).tasks.map(t => t.id);
+        const morningTaskIds = morningMission(morningRunning).tasks.map(t => t.id);
         const actions: MCAction[] = morningTaskIds.map(id => ({
             type: 'COMPLETE_TASK',
             missionPhase: 'morning',
             taskId: id,
         }));
-        const state = applyActions(actions);
+        const state = applyActions(actions, morningRunning);
         const allDone = morningMission(state).tasks.every(t => t.completed);
         expect(allDone).toBe(true);
     });
 
     it('can complete a task in the evening mission independently', () => {
-        const state = mcReducer(initialState, {
+        const state = mcReducer(eveningRunning, {
             type: 'COMPLETE_TASK',
             missionPhase: 'evening',
             taskId: EVENING_TASK_1,
@@ -148,7 +153,7 @@ describe('mcReducer — LOCK_TASK', () => {
         const state = applyActions([
             { type: 'LOCK_TASK', missionPhase: 'morning', taskId: MORNING_TASK_1 },
             { type: 'COMPLETE_TASK', missionPhase: 'morning', taskId: MORNING_TASK_1 },
-        ]);
+        ], morningRunning);
         const task = morningMission(state).tasks.find(t => t.id === MORNING_TASK_1)!;
         expect(task.locked).toBe(true);
         expect(task.completed).toBe(true);
@@ -208,7 +213,7 @@ describe('all-done predicate — derived from task state', () => {
     });
 
     it('is false when only some tasks are completed', () => {
-        const state = mcReducer(initialState, {
+        const state = mcReducer(morningRunning, {
             type: 'COMPLETE_TASK',
             missionPhase: 'morning',
             taskId: MORNING_TASK_1,
@@ -217,13 +222,13 @@ describe('all-done predicate — derived from task state', () => {
     });
 
     it('is true when all morning tasks are completed', () => {
-        const taskIds = morningMission(initialState).tasks.map(t => t.id);
+        const taskIds = morningMission(morningRunning).tasks.map(t => t.id);
         const actions: MCAction[] = taskIds.map(id => ({
             type: 'COMPLETE_TASK',
             missionPhase: 'morning',
             taskId: id,
         }));
-        const state = applyActions(actions);
+        const state = applyActions(actions, morningRunning);
         expect(morningMission(state).tasks.every(t => t.completed)).toBe(true);
     });
 });

@@ -133,10 +133,11 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   The phone's Stop reaches it through `REMOTE_ALLOWED_ACTIONS`. Guarded by `action-literal-boundary.test.ts`.
   One desktop path still ends a mission: saving a new start time for the RUNNING mission in MC Settings
   (`SET_SETTINGS`). That is kept and logged, "⏹️ … mission ended: its start time was changed in Settings"
-  (open decision, PR 170). A Stop, a Reset (plain or full) or a time adjustment naming a mission that is
-  not the running one is refused by the reducer and the log alike (`isStaleMissionAction`,
-  `mcReducer.stale-mission-action.test.ts`): the phone names it from a card that may be stale. (A stale
-  whining or task tap is not refused: a known gap, a product call.) And a time adjustment may make a run
+  (open decision, PR 170). A Stop, a Reset (plain or full), a time adjustment, a whining toggle or a task
+  tap naming a mission that is not the running one is refused by the reducer and the log alike
+  (`isStaleMissionAction`, `mcReducer.stale-mission-action.test.ts`, `mcReducer.stale-whining-task.test.ts`):
+  the phone names it from a card that may be stale. `TaskCard` asks the same predicate before its burst.
+  Whining with phase `'none'` (the global flag) names no mission and is not refused. And a time adjustment may make a run
   at most its length when it started (`baseDurationMins`) + 60 min (`MAX_MISSION_EXTENSION_MINS`),
   compared in whole seconds; past that it is refused, not clamped, through `adjustedMissionEnd`
   (`store/missionEndAdjust.ts`), which the reducer and the log both ask, and the log names the move

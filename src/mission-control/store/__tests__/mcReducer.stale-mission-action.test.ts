@@ -7,8 +7,9 @@
 // the expiry check is gated on `activeMission`, so it never expired and no miss
 // was counted, while the log said "Mission stopped" (review of 985592f).
 //
-// The same holds for both Resets and for +/- (ADJUST_MISSION_END): each acts on
-// the mission it names, and the phone names it from a card that may be stale.
+// The same holds for both Resets, for +/- (ADJUST_MISSION_END) and for the
+// whining toggle and task taps (mcReducer.stale-whining-task.test.ts): each acts
+// on the mission it names, and the phone names it from a card that may be stale.
 //
 // `isStaleMissionAction` is the one predicate: the reducer returns the state
 // unchanged and `createLogEntry` writes no line, the `isRefusedByShieldLock`
@@ -203,15 +204,17 @@ describe('a time adjustment for a mission that is not running', () => {
     });
 });
 
-// What it covers: the Stop, both Resets and +/-. NOT covered, a known gap (a
-// product call, review of PR 193): the same stale card's whining toggle and task
-// taps (TOGGLE_WHINING, COMPLETE_TASK), which still change an ended mission.
-describe('the predicate covers the Stop, both Resets and +/- from a stale phone card', () => {
-    it.each(['CANCEL_MISSION', 'RESET_MISSION', 'RESET_MISSION_WITH_TIMER', 'ADJUST_MISSION_END'] as const)(
+// Every button on a stale phone card: the Stop, both Resets, +/-, and (since the
+// review of PR 193) the whining toggle and the task taps, whose cases are in
+// mcReducer.stale-whining-task.test.ts.
+describe('the predicate covers every mission button of a stale phone card', () => {
+    it.each(['CANCEL_MISSION', 'RESET_MISSION', 'RESET_MISSION_WITH_TIMER', 'ADJUST_MISSION_END', 'TOGGLE_WHINING', 'COMPLETE_TASK'] as const)(
         '%s naming the other mission while one runs is stale', (type) => {
             const action = (type === 'ADJUST_MISSION_END'
                 ? { type, missionPhase: 'morning', deltaMinutes: 5, timestamp: T }
-                : { type, missionPhase: 'morning', timestamp: T }) satisfies MCAction;
+                : type === 'COMPLETE_TASK'
+                    ? { type, missionPhase: 'morning', taskId: 'tshirt', timestamp: T }
+                    : { type, missionPhase: 'morning', timestamp: T }) satisfies MCAction;
             expect(isStaleMissionAction(eveningRunning, action)).toBe(true);
         });
 });
