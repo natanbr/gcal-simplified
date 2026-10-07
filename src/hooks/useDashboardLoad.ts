@@ -85,7 +85,7 @@ export function useDashboardLoad() {
     useEffect(() => { void reload(undefined, warm); }, [reload, warm]);
 
     // What the next Dashboard of this sign-in starts from (back from Mission Control).
-    useEffect(() => { ticket?.keep('dashboard', { config, tasks, weather }); }, [ticket, config, tasks, weather]);
+    useEffect(() => { ticket?.keepDashboard({ config, tasks, weather }); }, [ticket, config, tasks, weather]);
 
     // No auth:success listener: a new sign-in remounts the Dashboard (CalendarApp), which loads everything.
 

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { addDays, addMonths, startOfDay } from 'date-fns';
 import { AppEvent, SerializedAppEvent } from '../types';
-import { useSessionTicket } from '../features/calendar-session/calendarSession';
+import { useSessionTicket, type MonthEntry, type Shown } from '../features/calendar-session/calendarSession';
 
 /** The visible month's events: none yet and being read (`loading`), or shown and being re-read (`refreshing`). */
 export type CalendarActivity = 'idle' | 'loading' | 'refreshing';
@@ -27,14 +27,7 @@ export function fetchRangeOf(month: string): { timeMin: Date; timeMax: Date } {
  */
 export type CalendarReadFailure = { kind: 'stale'; loadedAt: Date } | { kind: 'unloaded' };
 
-type MonthEntry = { events: AppEvent[]; loadedAt: Date; failed?: true } | { events?: undefined; failed: true };
-
-/** The events on screen, and the month whose read they came from. */
-interface Shown { events: AppEvent[]; from: { month: string; loadedAt: Date } | null }
 const NOTHING_SHOWN: Shown = { events: [], from: null };
-
-/** What the hook has read, kept in the calendar session for the next Dashboard of the same sign-in. */
-export interface CalendarCache { months: Record<string, MonthEntry>; shown: Shown }
 
 /** Whether `month`'s read covers every day in `days` (in order; none drawn, nothing to miss). */
 function covers(month: string, days: readonly Date[]): boolean {
@@ -118,7 +111,7 @@ export function useCalendarData(visibleMonth: string | null, generation: number,
     if (visibleMonth && entry?.events && entry.events !== shown.events) {
         setShown({ events: entry.events, from: { month: visibleMonth, loadedAt: entry.loadedAt } });
     }
-    useEffect(() => { ticket?.keep('calendar', { months, shown }); }, [ticket, months, shown]);
+    useEffect(() => { ticket?.keepCalendar({ months, shown }); }, [ticket, months, shown]);
     const { events, failure } = view(entry, shown, onScreen);
     const activity: CalendarActivity = visibleMonth && pending[visibleMonth] !== undefined
         ? (entry?.events ? 'refreshing' : 'loading')

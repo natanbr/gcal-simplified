@@ -29,10 +29,10 @@ describe('CalendarSession', () => {
     it('what one Dashboard keeps is what the next one starts from; warm once a month was read', () => {
         const session = new CalendarSession();
         const first = session.open();
-        first.keep('dashboard', READ.dashboard);
+        first.keepDashboard(READ.dashboard);
         expect(session.warm).toBe(false);                    // the settings alone: the spinner was still up
 
-        first.keep('calendar', READ.calendar);
+        first.keepCalendar(READ.calendar);
 
         const next = session.open();
         expect(next.kept).toEqual(READ);
@@ -43,14 +43,26 @@ describe('CalendarSession', () => {
     it('a sign-in or a sign-out: nothing kept survives, and a Dashboard from before it cannot keep', () => {
         const session = new CalendarSession();
         const before = session.open();
-        before.keep('calendar', READ.calendar);
+        before.keepCalendar(READ.calendar);
 
         session.forget();
-        before.keep('calendar', READ.calendar);              // an answer for the account before, landing late
-        before.keep('dashboard', READ.dashboard);
+        before.keepCalendar(READ.calendar);                  // an answer for the account before, landing late
+        before.keepDashboard(READ.dashboard);
 
         expect(session.warm).toBe(false);
         expect(session.open().kept).toEqual({});
+        expect(session.epoch).toBe(1);
+    });
+
+    // settings:get answers with the phone pairing too (electron/settings-dialog.ts); the session lives as long as the sign-in.
+    it('keeps only the settings the Calendar draws with: never the phone pairing', () => {
+        const session = new CalendarSession();
+        const answer = { ...READ.dashboard.config, weekStartDay: 'monday' as const, activeHoursStart: 8, themeMode: 'manual' as const, sleepStart: 22, remoteRoomId: 'room-0001', remoteKey: 'pairing-key-0001', remotePairingVersion: 2 };
+        session.open().keepDashboard({ ...READ.dashboard, config: answer });
+
+        const kept = session.open().kept.dashboard;
+        expect(kept?.config).toEqual({ calendarIds: ['family'], taskListIds: [], weekStartDay: 'monday', activeHoursStart: 8, themeMode: 'manual' });
+        expect(JSON.stringify(kept)).not.toMatch(/room-0001|pairing-key-0001|remote/);
     });
 });
 
@@ -70,7 +82,7 @@ describe('CalendarSessionProvider', () => {
         let session: CalendarSession | null = null;
         function Probe() { session = useCalendarSession(); return null; }
         const view = render(<CalendarSessionProvider><Probe /></CalendarSessionProvider>);
-        const fill = () => session?.open().keep('calendar', READ.calendar);
+        const fill = () => session?.open().keepCalendar(READ.calendar);
         const send = (channel: string) => act(() => { listeners.get(channel)?.forEach(l => l()); });
         return { view, send, fill, warm: () => session?.warm, listening: (channel: string) => listeners.get(channel)?.size ?? 0 };
     }

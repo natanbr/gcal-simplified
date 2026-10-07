@@ -11,32 +11,55 @@
 // a Dashboard that mounted before that can no longer keep anything in it, so
 // nothing read for one account reaches the next. Memory only: a relaunch
 // starts without it. It has no timer and does no work: the Calendar writes it
-// when its own state changes and reads it when a Dashboard mounts.
+// when its own state changes and reads it when it mounts.
 // ============================================================
 
 import { createContext, useContext, useState } from 'react';
-import type { AppTask, UserConfig, WeatherData } from '../../types';
-import type { CalendarCache } from '../../hooks/useCalendarData';
+import type { AppEvent, AppTask, UserConfig, WeatherData } from '../../types';
+
+/** One month's read (useCalendarData): its events and when they loaded, and whether its latest read failed. */
+export type MonthEntry = { events: AppEvent[]; loadedAt: Date; failed?: true } | { events?: undefined; failed: true };
+
+/** The events on screen, and the month whose read they came from. */
+export interface Shown { events: AppEvent[]; from: { month: string; loadedAt: Date } | null }
+
+/** What useCalendarData has read. */
+export interface CalendarCache { months: Record<string, MonthEntry>; shown: Shown }
 
 /** What useDashboardLoad last loaded. */
 export interface DashboardData { config: UserConfig; tasks: AppTask[]; weather: WeatherData | null }
 
-/** What the last Dashboard of this sign-in left: its loads, and the events it read (useCalendarData). */
+/** What the last Dashboard of this sign-in left: its loads, and the events it read. */
 export interface Kept { dashboard?: DashboardData; calendar?: CalendarCache }
 
-/** One Dashboard's hold on the session, taken when it mounts. */
+/**
+ * The settings the Calendar draws with, copied field by field. `settings:get` also answers with the
+ * phone pairing, and the session, which lives as long as the sign-in, must hold no copy of it.
+ */
+function calendarSettings(config: UserConfig): UserConfig {
+    const { calendarIds, taskListIds, weekStartDay, activeHoursStart, activeHoursEnd, themeMode, manualDayStart, manualDayEnd } = config;
+    return { calendarIds, taskListIds, weekStartDay, activeHoursStart, activeHoursEnd, themeMode, manualDayStart, manualDayEnd };
+}
+
+/** One Dashboard's hold on the session, taken when it mounts. Its writes are refused once a sign-in or a sign-out came after that. */
 export interface SessionTicket {
     /** What the last Dashboard of this sign-in left, as it was when this one mounted. */
     readonly kept: Readonly<Kept>;
     /** That Dashboard had got past the spinner: this one starts from its week. */
     readonly warm: boolean;
-    /** Leaves part of what this Dashboard shows for the next one. Refused once a sign-in or a sign-out came after it mounted. */
-    keep<K extends keyof Kept>(part: K, value: NonNullable<Kept[K]>): void;
+    keepCalendar(calendar: CalendarCache): void;
+    /** Keeps only the settings fields the Calendar draws with (calendarSettings). */
+    keepDashboard(dashboard: DashboardData): void;
 }
 
 export class CalendarSession {
-    private signIn = 0;
+    private signIns = 0;
     private kept: Kept = {};
+
+    /** Counts the sign-ins and sign-outs it has heard: a component that saw another number missed one. */
+    get epoch(): number {
+        return this.signIns;
+    }
 
     /** A Dashboard of this sign-in has read a month (it got past the spinner): the next one can start from it. */
     get warm(): boolean {
@@ -44,19 +67,23 @@ export class CalendarSession {
     }
 
     open(): SessionTicket {
-        const signIn = this.signIn;
+        const opened = this.signIns;
+        const current = () => opened === this.signIns;
         return {
             kept: this.kept,
             warm: this.warm,
-            keep: (part, value) => {
-                if (signIn === this.signIn) this.kept = { ...this.kept, [part]: value };
+            keepCalendar: calendar => {
+                if (current()) this.kept = { ...this.kept, calendar };
+            },
+            keepDashboard: ({ config, tasks, weather }) => {
+                if (current()) this.kept = { ...this.kept, dashboard: { config: calendarSettings(config), tasks, weather } };
             },
         };
     }
 
     /** A sign-in or a sign-out: nothing kept survives it, and no Dashboard from before it can keep. */
     forget(): void {
-        this.signIn += 1;
+        this.signIns += 1;
         this.kept = {};
     }
 }

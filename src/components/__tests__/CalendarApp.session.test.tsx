@@ -49,7 +49,7 @@ beforeEach(() => {
         },
     };
     session = new CalendarSession();
-    session.open().keep('calendar', { months: { '2026-10': { events: [], loadedAt: new Date() } }, shown: { events: [], from: null } });
+    session.open().keepCalendar({ months: { '2026-10': { events: [], loadedAt: new Date() } }, shown: { events: [], from: null } });
 });
 
 afterEach(() => {
