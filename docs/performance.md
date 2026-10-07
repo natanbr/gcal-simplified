@@ -69,7 +69,7 @@ Whole-machine CPU during the runs (other work on the machine, not controlled): 2
 
 **Guards.** `src/__tests__/infinite-animation-registry.test.ts`, `src/__tests__/idle-calendar-animations.test.tsx` and `src/mission-control/__tests__/idle-animations.test.tsx` (see below).
 
-**Open.** `.mc-brow`'s `backdrop-filter: blur(8px)` blurs a backdrop that never moves, yet it adds a render pass to every frame in which anything in the brow changes. Idle, that is the clock (`LiveClockDisplay`, `useMinuteClock`: once a minute) and the Remote dot's pulse when the status changes. Removing it is a visual decision, not made here.
+**Closed (2026-10-07).** `.mc-brow`'s `backdrop-filter: blur(8px)` blurred a backdrop that never moves (the brow is a flex row above the stage; behind it is only `.mc-root`'s still gradient), yet it added a render pass to every frame in which anything in the brow changed. Idle, that is the clock (`LiveClockDisplay`, `useMinuteClock`: once a minute) and the Remote dot's pulse when the status changes. The owner approved removing it: the brow keeps its translucent white and looks the same. The Logs button inside the brow lost its `backdrop-blur-sm` too. Guarded by `src/mission-control/__tests__/brow-no-backdrop-filter.test.tsx`. Not re-measured: the survey's 25.4 % → 18.4 % was taken while the dot looped; idle, the view was already at 0.49 %.
 
 ## Live HUD (`src/components/PerformanceHud.tsx`)
 

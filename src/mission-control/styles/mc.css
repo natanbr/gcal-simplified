@@ -200,12 +200,17 @@
   cursor: grabbing;
 }
 
-/* ---- Status Brow Bar ---- */
+/* ---- Status Brow Bar ----
+   No backdrop-filter. The brow is a flex row above the stage, so all it covers
+   is .mc-root's still gradient, and blurring a smooth gradient leaves it as it
+   was: the translucent white alone draws the same bar. The blur still cost a
+   second render pass on every frame in which anything in the brow changed
+   (about a quarter of a frame's cost while the Remote dot looped, 2026-10-04,
+   docs/performance.md). Nor on anything inside it: the Logs button lost its
+   blur too. Guarded by mission-control/__tests__/brow-no-backdrop-filter.test.tsx. */
 .mc-brow {
   background: rgba(255, 255, 255, 0.75);
   border-bottom: 1.5px solid var(--mc-border);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 /* ---- Hazard Shutter ---- */
@@ -384,7 +389,7 @@
    Never `infinite`. A compositor-driven loop spares the main thread, not the
    frame: looping, this 8 px dot cost 20-25 % of one CPU core on the child's
    screen (59 frames a second through the compositor, viz and the GPU, each one
-   redrawing .mc-brow's backdrop blur too), against 0.4 % still. Opacity-only
+   redrawing .mc-brow's backdrop blur too, since removed), against 0.4 % still. Opacity-only
    or will-change did not help. docs/performance.md, 2026-10-04. */
 @keyframes mc-remote-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
