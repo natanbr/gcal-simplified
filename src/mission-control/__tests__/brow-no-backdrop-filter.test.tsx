@@ -10,7 +10,9 @@
 //
 // Renders Mission Control's main view and fails if the brow or any element in
 // it carries a backdrop filter: from a stylesheet rule that matches it, a
-// Tailwind `backdrop-*` class, or an inline style.
+// Tailwind `backdrop-*` class, or an inline style (a React `style` object
+// included, which jsdom keeps out of the style attribute: see
+// inlineBackdropFilter).
 // ============================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -40,6 +42,25 @@ function backdropFilterSelectors(css: string): string[] {
 
 const TAILWIND_BACKDROP = /(?:^|\s)(?:[\w-]+:)*backdrop-(?!filter-none\b)[\w/[\].-]+/;
 const describeElement = (el: Element) => `<${el.tagName.toLowerCase()} class="${el.getAttribute('class') ?? ''}">`;
+const blurs = (value: string) => value.trim() !== '' && value.trim() !== 'none';
+
+/**
+ * The element's inline backdrop filter, however it was written. React writes
+ * `style.backdropFilter = …` (camelCase), and jsdom's CSSStyleDeclaration does
+ * not know backdrop-filter: it leaves it out of the style attribute and of
+ * getPropertyValue, and keeps it only as an own property of the style object.
+ * So all four are read; the React case below proves this jsdom still keeps it.
+ */
+function inlineBackdropFilter(el: Element): string {
+    if (!(el instanceof HTMLElement)) return '';
+    const own = (name: string): string => {
+        const value: unknown = Object.getOwnPropertyDescriptor(el.style, name)?.value;
+        return typeof value === 'string' ? value : '';
+    };
+    const attribute = el.getAttribute('style')?.match(/(?:^|;)\s*(?:-webkit-)?backdrop-filter\s*:\s*([^;]*)/i)?.[1] ?? '';
+    return [own('backdropFilter'), own('WebkitBackdropFilter'), el.style.getPropertyValue('backdrop-filter'),
+        el.style.getPropertyValue('-webkit-backdrop-filter'), attribute].find(blurs) ?? '';
+}
 
 /** Every element in `root`'s subtree, `root` included, that a backdrop filter would apply to. */
 function blurredElements(root: Element, css: string): string[] {
@@ -51,7 +72,7 @@ function blurredElements(root: Element, css: string): string[] {
     }
     for (const el of elements) {
         if (TAILWIND_BACKDROP.test(el.getAttribute('class') ?? '')) found.push(`Tailwind class on ${describeElement(el)}`);
-        if (/backdrop-filter/i.test(el.getAttribute('style') ?? '')) found.push(`inline style on ${describeElement(el)}`);
+        if (inlineBackdropFilter(el)) found.push(`inline style on ${describeElement(el)}`);
     }
     return found;
 }
@@ -66,9 +87,25 @@ describe('blurredElements — what it sees', () => {
     });
 
     it('ignores `none`, commented-out rules and other blurs', () => {
-        document.body.innerHTML = '<div class="bar"><i class="blur-sm backdrop-filter-none"></i></div>';
+        document.body.innerHTML = '<div class="bar"><i class="blur-sm backdrop-filter-none" style="backdrop-filter: none"></i></div>';
         const css = '/* .bar { backdrop-filter: blur(8px) } */ .bar { backdrop-filter: none; filter: blur(2px) }';
         expect(blurredElements(document.querySelector('.bar') as Element, css)).toEqual([]);
+    });
+
+    // Five of Mission Control's seven blurs are written this way. jsdom drops
+    // them from the style attribute, which an earlier version of this test read.
+    it('sees a React inline style, standard and -webkit-, and ignores `none`', () => {
+        const { container } = render(
+            <div className="bar">
+                <span style={{ backdropFilter: 'blur(4px)' }} />
+                <b style={{ WebkitBackdropFilter: 'blur(4px)' }} />
+                <i style={{ backdropFilter: 'none' }} />
+            </div>,
+        );
+        expect(blurredElements(container.querySelector('.bar') as Element, '')).toEqual([
+            'inline style on <span class="">',
+            'inline style on <b class="">',
+        ]);
     });
 });
 
