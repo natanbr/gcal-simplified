@@ -33,12 +33,31 @@ export interface DashboardData { config: UserConfig; tasks: AppTask[]; weather: 
 export interface Kept { dashboard?: DashboardData; calendar?: CalendarCache }
 
 /**
- * The settings the Calendar draws with, copied field by field. `settings:get` also answers with the
- * phone pairing, and the session, which lives as long as the sign-in, must hold no copy of it.
+ * Which settings fields the session keeps: the ones the Calendar draws with. Typed over every field of
+ * the renderer's UserConfig (src/types.ts, which declares no pairing field), so a new field is a tsc
+ * error here until someone decides keep or drop, as SETTINGS_FIELDS does in electron/settings-dialog.ts.
+ */
+const KEPT_SETTINGS = {
+    calendarIds: true, taskListIds: true, weekStartDay: true, activeHoursStart: true, activeHoursEnd: true,
+    themeMode: true, manualDayStart: true, manualDayEnd: true,
+    sleepEnabled: false, sleepStart: false, sleepEnd: false,    // the main process's power policy, never drawn
+} satisfies Record<keyof UserConfig, boolean>;
+
+function copyField<K extends keyof UserConfig>(from: UserConfig, to: Partial<UserConfig>, key: K): void {
+    if (key in from) to[key] = from[key];
+}
+
+/**
+ * The settings the Calendar draws with, copied field by field from KEPT_SETTINGS. `settings:get` also
+ * answers with the phone pairing, and the session, which lives as long as the sign-in, must hold no
+ * copy of it: a field not named there is never copied.
  */
 function calendarSettings(config: UserConfig): UserConfig {
-    const { calendarIds, taskListIds, weekStartDay, activeHoursStart, activeHoursEnd, themeMode, manualDayStart, manualDayEnd } = config;
-    return { calendarIds, taskListIds, weekStartDay, activeHoursStart, activeHoursEnd, themeMode, manualDayStart, manualDayEnd };
+    const kept: Partial<UserConfig> = {};
+    for (const key of Object.keys(KEPT_SETTINGS) as (keyof UserConfig)[]) {
+        if (KEPT_SETTINGS[key]) copyField(config, kept, key);
+    }
+    return { calendarIds: [], taskListIds: [], ...kept };
 }
 
 /** One Dashboard's hold on the session, taken when it mounts. Its writes are refused once a sign-in or a sign-out came after that. */

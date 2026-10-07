@@ -55,14 +55,18 @@ describe('CalendarSession', () => {
     });
 
     // settings:get answers with the phone pairing too (electron/settings-dialog.ts); the session lives as long as the sign-in.
-    it('keeps only the settings the Calendar draws with: never the phone pairing', () => {
+    it('keeps every settings field the Calendar draws with, by value, and never the power policy or the phone pairing', () => {
         const session = new CalendarSession();
-        const answer = { ...READ.dashboard.config, weekStartDay: 'monday' as const, activeHoursStart: 8, themeMode: 'manual' as const, sleepStart: 22, remoteRoomId: 'room-0001', remoteKey: 'pairing-key-0001', remotePairingVersion: 2 };
+        const drawnWith = {
+            calendarIds: ['family', 'school'], taskListIds: ['chores'], weekStartDay: 'monday' as const,
+            activeHoursStart: 8, activeHoursEnd: 20, themeMode: 'manual' as const, manualDayStart: 6, manualDayEnd: 18,
+        };
+        const answer = { ...drawnWith, sleepEnabled: true, sleepStart: 22, sleepEnd: 6, remoteRoomId: 'room-0001', remoteKey: 'pairing-key-0001', remotePairingVersion: 2 };
         session.open().keepDashboard({ ...READ.dashboard, config: answer });
 
         const kept = session.open().kept.dashboard;
-        expect(kept?.config).toEqual({ calendarIds: ['family'], taskListIds: [], weekStartDay: 'monday', activeHoursStart: 8, themeMode: 'manual' });
-        expect(JSON.stringify(kept)).not.toMatch(/room-0001|pairing-key-0001|remote/);
+        expect(kept?.config).toStrictEqual(drawnWith);
+        expect(JSON.stringify(kept)).not.toMatch(/room-0001|pairing-key-0001|remote|sleep/);
     });
 });
 
