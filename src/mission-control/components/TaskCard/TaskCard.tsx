@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMCDispatch } from '../../store/useMCStore';
-import type { MissionPhase, MissionTask } from '../../types';
+import { useMCDispatch, useMCState } from '../../store/useMCStore';
+import { isStaleMissionAction } from '../../store/staleMissionAction';
+import type { MCAction, MissionPhase, MissionTask } from '../../types';
 
 // Map lucide icon names to emoji fallbacks (no external dep needed here)
 const ICON_MAP: Record<string, string> = {
@@ -60,15 +61,20 @@ function taskLabelColor(isLocked: boolean, isCompleted: boolean): string {
 }
 
 export function TaskCard({ task, phase, accent }: TaskCardProps) {
+    const state = useMCState();
     const dispatch = useMCDispatch();
     const [justDone, setJustDone] = useState(false);
 
     const handleTap = () => {
         if (task.locked) return;
+        const action: MCAction = { type: 'COMPLETE_TASK', missionPhase: phase, taskId: task.id };
+        // The reducer's own refusal, asked first: a card still on screen while the
+        // overlay slides away (its mission just ended) must not flash a tick that never lands.
+        if (isStaleMissionAction(state, action)) return;
         if (!task.completed) {
             setJustDone(true);
         }
-        dispatch({ type: 'COMPLETE_TASK', missionPhase: phase, taskId: task.id });
+        dispatch(action);
     };
 
     useEffect(() => {
@@ -117,6 +123,7 @@ export function TaskCard({ task, phase, accent }: TaskCardProps) {
                 {justDone && (
                     <motion.div
                         key="burst"
+                        data-testid="mc-task-burst"
                         initial={{ opacity: 0.7, scale: 0.5 }}
                         animate={{ opacity: 0, scale: 2.5 }}
                         exit={{ opacity: 0 }}

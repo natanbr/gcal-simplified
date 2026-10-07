@@ -125,7 +125,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
   - **Rollout of v2**: the v2 desktop works only with an `mc-remote` build that speaks protocol v2. The phone app deploys first (old pairings keep working with the installed v1 desktop; a scan of the new QR code gives a v2 pairing), then the desktop release. **The first start of the v2 desktop renews the pairing by itself, once** (a pairing without `remotePairingVersion: 2` gets a new room id and key before the renderer can read it, and the log says "Pairing renewed for signed messages (protocol v2): scan the QR code again on the phone."), because the old key was sent in plain text for months and a signature keyed with it proves nothing. **The phone must re-scan the QR code after the update**; until then it is in the old room and does nothing. The parent is told where they look, not in a console: until the phone's first verified message the Remote tab (⚙️ → 📱 Remote) shows "Remote was re-paired for security. Scan this QR code again on the phone.", and the activity log gets one line, "Remote re-paired for security: scan the QR code again (⚙️ → 📱 Remote)" (source `system`, once per renewal: Mission Control state remembers which renewal it logged, `settings.remotePairingRenewalLogged`, so neither a restart nor CLEAR nor 200 newer lines bring it back; a later renewal gets its own line). A brand-new install and a manual "Regenerate Keys" show neither.
   - **Remote Actions**: Supports triggering game tokens, adjusting mission timers, and firing special animations (Fireworks, Confetti).
   - **Only the phone can stop a mission (decided 2026-09-24)**: the phone's Stop sends `CANCEL_MISSION`, which stays on `REMOTE_ALLOWED_ACTIONS`. The desktop has no stop gesture: "— Minimize" only minimizes, a short tap and a long hold alike, because a stop sticks for the rest of the window without moving the shield, so a hold let the child end a mission. "↺ Reset" and its 2 s hold are unchanged (not decided yet). One desktop path still ends a mission: saving a new start time for the **running** mission in MC Settings ends it (no miss, the shield does not move). That is kept, and logged as "⏹️ Morning/Evening mission ended: its start time was changed in Settings", attributed 👤 (open decision for Nathan, PR 170; it used to be silent).
-  - **A Stop, a Reset or a time adjustment for a mission that is not running is refused (2026-09-28; plain Reset and time adjustment 2026-10-05)**: a phone Stop naming the other phase (a stale second tap), a Reset hold that fires after its mission ended, a phone Reset (tasks only) or +/- that lands after its mission ended or names the other phase changes nothing and writes no log line. The phone draws each card from the last broadcast, so its buttons can name a mission that has just ended; a plain Reset used to set that mission active again with nothing running (hidden on the desktop, never expiring, saved across a restart), and a +/- for it wrote "⏱️ Mission time adjusted" for nothing. **Known gap**: the same stale card's whining toggle and task taps are NOT refused (a tap right after a Stop can re-mark the ended evening's whining, or count a cream application twice); refusing them is a product call, not made yet.
+  - **A Stop, a Reset, a time adjustment, a whining toggle or a task tap for a mission that is not running is refused (2026-09-28; plain Reset and time adjustment 2026-10-05; whining and tasks 2026-10-06)**: a phone Stop naming the other phase (a stale second tap), a Reset hold that fires after its mission ended, a phone Reset (tasks only), +/-, "Whining?" or task tap that lands after its mission ended (stopped or expired) or names the other phase changes nothing and writes no log line. The phone draws each card from the last broadcast, so its buttons can name a mission that has just ended; a plain Reset used to set that mission active again with nothing running (hidden on the desktop, never expiring, saved across a restart), a +/- for it wrote "⏱️ Mission time adjusted" for nothing, an un-mark of whining right after a Stop marked it instead (−10 on the mood gauge where the un-mark gives +2), and a Cream tap right after a Stop counted a second application. A task card still on screen while the overlay slides away takes the same refusal and shows no "done" flash (it checks the last rendered state, so a tap landing after a Stop but before the next render, a few ms, can still flash; the tick itself is refused either way). The global whining flag (phase none, no sender in either app today) names no mission and is not refused.
   - **A mission can be made at most 60 min longer than its own length (2026-10-05)**: the phone's +1 / +5 / +10 and the overlay's +5 bar hold may take a run up to its length when it started (its window's length, Settings → Duration, at the start or the last full Reset; a Settings save during the run does not move it) + 60 min, so a 60-min evening up to 120 min, compared in whole seconds. A press that would go past that is refused whole (not clamped): nothing changes and no line is written, so the phone's countdown simply does not move. Shortening is always allowed, down to the 1-minute floor; a press that changes nothing (−5 at the floor) or a minus press that would lengthen a run shorter than the floor (the 10-second test run) is refused and writes no line. The line names the move that really happened: −10 on a 5-min run is "(-4m)", a move of less than a whole minute is named in seconds ("(-10s)"). A full Reset restarts the run at its window's length, so the 60 min are available again. Before, there was no ceiling: one stale or tampered payload (`deltaMinutes: 1e9`) made a mission that never ended, blocking every other mission and the quick-game window, saved across a restart.
   - **Shield −1 / +1 buttons (shipped in mc-remote 2026-09-28)**: the phone's Shield card has "−1 shield" and "+1 shield". They send `ADJUST_SHIELD` with `delta: -1` / `delta: 1`, which the desktop accepts (allowlist, validator, reducer). Details under Mission Streak Shield → Parent-adjustable shields.
   - **Sync & Identification**: Immediate state synchronization upon remote connection; remote-initiated actions are visually identified in the Activity Log with a 📱 emoji.
@@ -2165,9 +2165,8 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   nothing changes. A plain Reset still writes no log line, accepted or refused (unchanged).
 - **+/- for a mission that is not running** is refused too. The desktop already ignored it, but the
   log wrote "⏱️ Mission time adjusted (+5m)" for nothing; now neither moves.
-- **Not covered (known gap)**: the same stale card's whining toggle and task taps are not refused; a
-  tap right after a Stop can re-mark the ended evening's whining or count a cream application twice.
-  Refusing them is a product call.
+- The same stale card's whining toggle and task taps were left out here; they are refused since
+  2026-10-06 ("Phone mission buttons: a stale whining toggle or task tap is refused").
 - **A ceiling for +/-.** A run may last at most its length when it started (or was last fully reset;
   `baseDurationMins`, stored on the run, so a Settings save during it does not move the ceiling) +
   60 min (`MAX_MISSION_EXTENSION_MINS`, `store/missionEndAdjust.ts`), compared in whole seconds (the
@@ -2478,3 +2477,34 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
     Test: `Dashboard.loading.test.tsx`, the icon in both states (red with the icon removed when idle,
     spinning when idle, or visible when idle; spinning when idle also turns the idle-Calendar
     animation guard red).
+
+### 2026-10-06 Phone mission buttons: a stale whining toggle or task tap is refused
+
+- **The bug** (the known gap left by PR 193). The phone shows "Whining?" and the task checklist on
+  the card its last broadcast called active, so a tap can name a mission that has just been stopped
+  or has expired. `TOGGLE_WHINING` flips the flag of the mission it names and moves the mood gauge by
+  `nowDetected ? -10 : 2`. The phone's Stop clears the flag, so an un-mark tapped right behind it
+  read the flag as off and marked it: −10 on the gauge where the un-mark gives +2, and the ended
+  evening saved as "Whining". `COMPLETE_TASK` ticked or unticked a task of the ended mission; a Cream
+  tick right behind the Stop counted a second application (the Stop clears the tick, not the day
+  count), an untick after an expiry handed a day back.
+- **Now** both are refused like the Stop, the Resets and +/-: through `isStaleMissionAction`, by the
+  reducer and the log alike, for the phone and the desktop. Nothing changes and no line is written
+  (neither action has ever written one). The decision (taken for the owner, reversible) rests on a
+  sender audit: the desktop shows the task cards and "Whining?" only in the running mission's
+  overlay, the scheduler sends neither, and the phone draws both only on an active card; so no
+  legitimate tap names a mission that is not running. The one desktop window was a card still on
+  screen while the overlay slides away: `TaskCard` now asks the same predicate first, so a refused
+  tap shows no "done" flash. It asks with the last rendered state: a tap landing after a Stop but
+  before the next render (a few ms) can still flash, while the reducer refuses the tick either way.
+  The global whining flag (phase none) names no mission and is untouched.
+- Tests: `store/__tests__/mcReducer.stale-whining-task.test.ts` (the running mission still takes
+  both, by the overlay and the phone; refused with nothing running, for the other mission and for a
+  mission stuck active, both origins; an un-mark and a Cream tap right behind the Stop, a tap after an
+  expiry, a tap naming the previous mission while the next runs; the global flag still toggles), two
+  predicate cases in `mcReducer.stale-mission-action.test.ts`, two cases over the real remote channel
+  in `hooks/useMissionScheduler.stale-phone.test.tsx`, and `components/TaskCard/TaskCard.test.tsx`
+  (no flash for a tap after its mission ended and the card re-rendered). Fixtures that ticked tasks with nothing running
+  (`mcReducer.mission-tasks.test.ts`, the Cream cases in `mcReducer.settings.test.ts`) now start the
+  mission first. Red before the fix: 15 cases; the mutations are in the rule registry ("Only the
+  phone stops a mission").
