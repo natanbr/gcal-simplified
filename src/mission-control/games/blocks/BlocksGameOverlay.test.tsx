@@ -1,8 +1,13 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { BlocksGameOverlay } from './BlocksGameOverlay';
 import { stubEngine } from '../quiz/quizTestKit';
+import { animationDeclarationOf, stylesheetsUnder } from '../../__tests__/infiniteAnimations';
 import type { GamePhase } from './types';
+
+const MC_STYLES = stylesheetsUnder(resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'styles'));
 
 const mockStartGame = vi.fn();
 const mockResetGame = vi.fn();
@@ -101,5 +106,28 @@ describe('BlocksGameOverlay', () => {
         const engine = stubEngine();
         render(<BlocksGameOverlay open={true} onClose={vi.fn()} engine={engine} />);
         expect(engine.setDifficulty).toHaveBeenCalledWith(3, 3);
+    });
+
+    // It named `bounce 2s infinite` inline, and no stylesheet defined `bounce`,
+    // so the astronaut never moved; a looping one would draw a frame every vsync
+    // while the child sits on this screen. It must bounce a few times and stop.
+    it('bounces the waiting astronaut a few times through keyframes that exist, then stops', () => {
+        render(<BlocksGameOverlay open={true} onClose={vi.fn()} engine={stubEngine()} />);
+        const astronaut = screen.getByTestId('blocks-astronaut');
+        expect(astronaut.getAttribute('style') ?? '').not.toMatch(/animation/);
+
+        const animated = [...astronaut.classList]
+            .map(name => ({ name, declaration: animationDeclarationOf(MC_STYLES, `.${name}`) }))
+            .filter(c => c.declaration !== null);
+        expect(animated.map(c => c.name), 'one Mission Control class animates the astronaut').toHaveLength(1);
+
+        const declaration = animated[0].declaration ?? '';
+        expect(declaration).not.toMatch(/\binfinite\b|var\(/);
+        const [keyframes, ...rest] = declaration.split(/\s+/);
+        expect(MC_STYLES, `@keyframes ${keyframes} is defined`).toMatch(new RegExp(`@keyframes\\s+${keyframes}\\s*\\{`));
+        const counts = rest.filter(token => /^\d+$/.test(token)).map(Number);
+        expect(counts).toHaveLength(1);
+        expect(counts[0]).toBeGreaterThanOrEqual(1);
+        expect(counts[0]).toBeLessThanOrEqual(15);
     });
 });

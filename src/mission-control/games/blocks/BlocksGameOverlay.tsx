@@ -127,7 +127,7 @@ export function BlocksGameOverlay({ open, onClose, engine }: BlocksGameOverlayPr
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
                     {gameState.phase === 'waiting' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-                            <span style={{ fontSize: 64, animation: 'bounce 2s infinite' }}>🧑‍🚀</span>
+                            <span className="mc-anim-astronaut-bounce" data-testid="blocks-astronaut" style={{ fontSize: 64 }}>🧑‍🚀</span>
                             <span style={{ fontSize: 18, fontWeight: 800, color: '#f8fafc', textAlign: 'center' }}>
                                 Help the Baby Astronaut launch to safety!
                             </span>

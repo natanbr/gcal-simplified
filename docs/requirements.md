@@ -2696,3 +2696,17 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
 - Tests: `src/mission-control/__tests__/brow-no-backdrop-filter.test.tsx` renders the main view and
   fails if the bar or anything in it gets a backdrop filter, from a stylesheet rule, a Tailwind
   `backdrop-*` class or an inline style.
+
+### 2026-10-07 Space Rescue's astronaut bounces on the waiting screen
+
+- **Bug.** The astronaut above "Help the Baby Astronaut launch to safety!" was meant to bounce, but
+  its inline style named a `bounce` animation that no stylesheet defines, so it stood still. Made to
+  work as written, it would have looped for as long as the child stayed on that screen before
+  pressing Play (a loop draws a frame every vsync, `docs/performance.md`).
+- **Now** it bounces 5 times (10 s) each time the waiting screen opens, then stands still. The class
+  is `mc-anim-astronaut-bounce` in `mc.css`, on the same keyframes as the other emoji bounce;
+  Mission Control's stylesheets still hold no `infinite`, and the infinite-animation registry lists
+  one loop fewer.
+- Tests: `src/mission-control/games/blocks/BlocksGameOverlay.test.tsx` fails if the astronaut has an
+  inline animation, if its class names keyframes that `mc.css` does not define, or if its count is
+  not a plain number from 1 to 15.

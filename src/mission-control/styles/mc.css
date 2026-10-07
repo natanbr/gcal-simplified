@@ -421,6 +421,14 @@
   animation-fill-mode: forwards;
 }
 
+/* 11b. Space Rescue's astronaut on the waiting screen (BlocksGameOverlay)
+   It named `bounce 2s infinite` inline, and no stylesheet defines `bounce`,
+   so it never moved. 5 x 2 s = 10 s when the screen opens, then still: the
+   child can sit on this screen before pressing Play. Never `infinite`. */
+.mc-anim-astronaut-bounce {
+  animation: mc-bounce-emoji 2s ease-in-out 5;
+}
+
 /* 12. Space Rescue line-clear explosion (GridCell)
    Was a per-cell Framer Motion animation on backgroundColor + boxShadow — both
    main-thread paint properties, on up to 16 cells at once, right when the child
