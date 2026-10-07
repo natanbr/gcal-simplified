@@ -997,3 +997,16 @@ invalidates, so a Dashboard still mounted from before cannot write the old accou
 switch also unmounts. When state must survive the switch, lift the data, not the component; give the
 lifted state the same lifetime boundaries the remount gave it (sign-in, sign-out, relaunch) and test
 each from both views.
+
+## 2026-10-06 — A stale phone card names its target: refuse by action, not by button
+
+**Learning:** The phone draws each mission card from its last broadcast and names the mission in
+every action it sends. PR 193 refused a stale Stop, Reset and +/- (`isStaleMissionAction`) but left
+the same card's "Whining?" and task taps out as "a product call"; an un-mark behind the Stop then
+marked whining (−10 for a +2) and a Cream tap counted twice. The audit that settled it was cheap:
+list every sender of the action (desktop UI, scheduler, phone, tests) and when each can fire. None
+named a mission that was not running, except a card still animating out.
+**Action:** When one action of a card is found stale-prone, audit every action that card sends in the
+same change, and refuse through the one predicate. A UI that flashes feedback before dispatching
+(TaskCard's burst) asks that predicate first. Tests that dispatched the action on an idle state were
+fixtures, not flows: start the mission in them rather than exempting the idle case.
