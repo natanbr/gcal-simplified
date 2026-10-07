@@ -177,6 +177,26 @@ describe('Dashboard week navigation', () => {
         expect(seen).toEqual(['spinner', 'week']);
     });
 
+    // It used to be added and removed: the date and the weather pill slid 16-32 px at every read.
+    it('the refresh icon keeps its place: there in both states, hidden and still when idle', async () => {
+        await launch();
+        const icon = () => screen.getByTestId('sync-icon');
+        const animated = () => [icon(), ...icon().querySelectorAll('*')].some(el => /\banimate-/.test(el.getAttribute('class') ?? ''));
+        expect(icon()).toHaveClass('invisible');
+        expect(animated()).toBe(false);
+        ipc.holding.add('data:events');
+
+        fireEvent.click(screen.getByTestId('next-week-button'));       // November, not loaded yet
+        await settle();
+        expect(icon()).not.toHaveClass('invisible');
+        expect(animated()).toBe(true);
+
+        await ipc.release('data:events');
+        expect(icon()).toHaveClass('invisible');
+        expect(animated()).toBe(false);
+        expect(icon()).not.toHaveAttribute('title');
+    });
+
     it('Previous Week back into a loaded month shows it from the cache, refreshing in the background', async () => {
         const seen = await launch();
         fireEvent.click(screen.getByTestId('next-week-button'));

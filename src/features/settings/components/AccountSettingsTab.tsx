@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RefreshCw, LogOut } from 'lucide-react';
+import { useCalendarSession } from '../../calendar-session/calendarSession';
 
 interface AccountSettingsTabProps {
     onLogout?: () => void;
@@ -8,6 +9,7 @@ interface AccountSettingsTabProps {
 
 export const AccountSettingsTab: React.FC<AccountSettingsTabProps> = ({ onLogout, loadData }) => {
     const [isReconnecting, setIsReconnecting] = useState(false);
+    const session = useCalendarSession();
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -26,6 +28,9 @@ export const AccountSettingsTab: React.FC<AccountSettingsTabProps> = ({ onLogout
                             const ipc = window.ipcRenderer;
                             if (!ipc) return;
                             try {
+                                // auth:logout sends no event: empty the Calendar's session here, or a sign-in that
+                                // then fails while Mission Control is on screen leaves this account's week kept.
+                                session?.forget();
                                 await ipc.invoke('auth:logout');
                                 await ipc.invoke('auth:login');
                                 // Reload settings data after re-auth

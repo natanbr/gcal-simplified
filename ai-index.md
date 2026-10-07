@@ -16,6 +16,16 @@ This directory houses isolated, feature-specific modules that bundle their own c
 
 * **`weather/`**: Handles all weather, marine, and task data display for the dashboard.
   * **`components/`**: Contains small, focused UI components (`WeatherDashboard.tsx`, `WeatherPanel.tsx`, `TasksPanel.tsx`).
+* **`calendar-session/`**: what the Calendar keeps while Mission Control is on screen. `src/App.tsx`
+  swaps the views, so CalendarApp unmounts on the MC view; `CalendarSessionProvider` sits above the
+  switch and holds the last Dashboard's settings, tasks, weather and per-month events
+  (`calendarSession.ts`: `useSessionTicket` in `useDashboardLoad` and `useCalendarData`), so the
+  return shows that week at once and reads it again in the background. One sign-in: it hears
+  `auth:success` / `auth:signed-out` itself (on the MC view nothing else of the Calendar does);
+  CalendarApp empties it on the sign-outs that have no event (`auth:check`, Settings) and starts
+  over if the session heard one before it subscribed; Reconnect empties it at `auth:logout`; a
+  Dashboard from before cannot write to it. Only the Calendar's own settings fields are kept,
+  never the pairing. Memory only, no timer. Mission Control never imports it.
 
 ### `src/mission-control/` (Command Center)
 A strictly isolated application module — the kid-facing reward/mission app.
@@ -101,12 +111,14 @@ Contains global, cross-domain UI components.
 * `MonthlyView.tsx`, `DayColumn.tsx`: Calendar rendering specifics.
 
 ### `src/hooks/` (Global State & API Hooks)
-Plain hooks, no context providers (`useCalendarData`, `useDashboardLoad`, `useTheme`, `useCurrentDate`).
+Hooks, no context providers of their own (`useCalendarData`, `useDashboardLoad`, `useTheme`, `useCurrentDate`); `useCalendarData` and `useDashboardLoad` read the calendar session's context (`features/calendar-session`).
 * `useCalendarData.ts`: the visible month's events, requested and cached per month (`fetchRangeOf`,
-  whatever the week start); a new `generation` refetches and drops older answers.
+  whatever the week start); a new `generation` refetches and drops older answers; generation 0
+  reads nothing. The cache starts from, and is kept in, the calendar session.
 * `useDashboardLoad.ts`: the Dashboard's settings (read first, or the config Save just wrote), tasks
   and weather, the one place an absent week start becomes `'today'`, and the `generation` that
-  Save and reconnect bump.
+  Save and reconnect bump. Back from Mission Control it starts from the session, and its first load
+  is a background refresh (`loading: 'background'`).
 
 ### `src/utils/` (Shared Helpers)
 Generic, pure functions used across multiple domains.

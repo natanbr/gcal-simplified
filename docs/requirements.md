@@ -243,7 +243,7 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **Visibility**: When navigating between weeks or refreshing data, a more prominent loading indicator should be visible.
 - **Progress Bar**: Implement a Framer Motion-based progress bar (skeleton or linear loader).
 - **Status Text**: Display small text indicating the current loading status (e.g., "Fetching Schedule...", "Updating Weather...") next to or under the date range title in the header.
-- **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched. The full-screen "Syncing with Google..." shows only until the first week can be shown, and does not return while the Calendar stays open; after that a month not loaded yet keeps the calendar and its known events on screen with the header indicator (2026-10-04). A new sign-in starts the Calendar over: a successful Settings → Reconnect Account closes Settings and shows the full-screen loading spinner while the new account loads, and nothing of the account before it stays on screen (2026-10-06).
+- **Non-Intrusive**: The loader should not block the entire UI (unless it's the initial load), allowing the user to see the previous state while the new one is being fetched. The full-screen "Syncing with Google..." shows only until the first week can be shown, and does not return while the Calendar stays open; after that a month not loaded yet keeps the calendar and its known events on screen with the header indicator (2026-10-04). A new sign-in starts the Calendar over: a successful Settings → Reconnect Account closes Settings and shows the full-screen loading spinner while the new account loads, and nothing of the account before it stays on screen (2026-10-06). A return from Mission Control (the "← Calendar" button, or the auto-return after the "Auto-Return to Calendar" idle timeout, 5 minutes by default) is not a launch: the week the Calendar last showed comes back at once, on the current week (the navigation and the Weekly/Monthly choice reset, as before), with its saved settings, tasks and weather, and everything is read again in the background with "Refreshing..." in the header. The status text ("Refreshing...", "Fetching Events...") sits under the date out of the header's flow, and the refresh icon in the right-hand group keeps its place (hidden and still when idle), so nothing in the header moves and the grid does not move while a read runs. Offline, the events stay with "Calendar not updated since HH:mm" (the time of the last read that worked) and the tasks and weather stay; a month never read (midnight at a month's end while away) follows the coverage rule below. A sign-in or a sign-out, on either view, and a relaunch start the Calendar over (2026-10-06).
 - **A refresh that fails** (2026-10-06): a read during which Google could not be reached — no answer
   at all (offline, DNS, a connection reset or refused, TLS, a timeout), HTTP 408, 429 or 5xx, or a 403
   whose reason is a rate limit or a quota — fails, and never replaces or empties what is on screen:
@@ -2386,3 +2386,95 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   pointer-events (1), read `null` as +1 (1), drop the wording (4); each structural check goes red with
   the call removed and with the call only in a comment (8 of 8 both ways; the old text match stayed
   green on the comment).
+
+### 2026-10-06 Back from Mission Control, the Calendar shows the week it left
+
+- **The bug** (found by the review of PR 194; older than it). `App.tsx` swaps the two views, so
+  every switch to Mission Control unmounted the Calendar and threw away the events it had read,
+  their load time, the tasks and the weather. Every return (by hand, or the auto-return after its idle
+  timeout, 5 minutes by default, many times a day on the family screen) showed "Loading..." and then the full-screen
+  "Syncing with Google..." until the first answer. Offline, the week came back empty under red
+  "Couldn't load the calendar" (since PR 194; before it, silently empty), and the weather pill and
+  the tasks count were gone until a read worked.
+- **Now** the return draws the last week at once, on the current week, with its tasks and weather,
+  and the same load as a launch reads the settings, the month, the tasks and the weather again in
+  the background: "Refreshing..." in the header, one events request. Offline the events stay with
+  "Calendar not updated since HH:mm", the time of the last read that worked, and the tasks and
+  weather stay. A month never read (midnight at a month's end while away) shows the events kept
+  only where their read covers every day drawn, as in the 2026-10-06 refresh entry above.
+- **Design.** A small owner above the view switch, `CalendarSessionProvider`
+  (`src/features/calendar-session/`), keeps what the last Dashboard showed: the settings, tasks and
+  weather (`useDashboardLoad`) and the per-month events with their load times and the events on
+  screen (`useCalendarData`). The Calendar still unmounts on the Mission Control view, so none of
+  its listeners or timers run there. A Dashboard takes a ticket when it mounts: it starts from what
+  is kept and writes back when its own state changes. While the session holds a week, CalendarApp
+  shows it while `auth:check` confirms the sign-in, instead of the "Loading..." screen. Generation 0
+  (the settings not read yet) now reads no events but shows the visible month's kept ones.
+- **One sign-in.** A sign-in or a sign-out empties the session and stops every Dashboard mounted
+  before it from writing to it, so nothing read for one account reaches the next. The provider
+  hears `auth:success` and `auth:signed-out` itself (on the Mission Control view no Calendar is
+  mounted to hear them: a Reconnect finished in the browser lands there); CalendarApp empties it on
+  every sign-out it finds (`auth:check`, Google's sign-out, Settings) and before the sign-in
+  remount. Memory only: a relaunch starts with the spinner.
+- **Performance.** No timer, no interval, no animation, no read while Mission Control is shown; the
+  writes are object assignments from effects (no re-render, no store write). The timer registry is
+  unchanged. `CalendarSessionProvider` joins the always-mounted list in CLAUDE.md.
+- Tests: `src/App.returnToCalendar.test.tsx` (the real App with Mission Control's screen stubbed:
+  the week, its tasks and the header's "Background Refreshing..." at once and one events request,
+  nothing read for the Calendar while away; the current week with its own month's events after
+  leaving on December's month view; offline, the events with "not updated since 12:00" and the
+  tasks; midnight into November while away, November asked for and offline October's coverage; a
+  relaunch shows the spinner; a sign-in and a sign-out on the Mission Control view, and an answer
+  for the account before a sign-in, leave nothing of it), `calendarSession.test.tsx` (keep, the
+  stale ticket refused, the provider's two listeners and their removal),
+  `CalendarApp.session.test.tsx` (the kept week at once with one `auth:check`; four sign-outs and
+  the sign-in remount empty it) and a generation-0 case in `useCalendarData.test.ts`. Red before the
+  fix: 4 App cases ("Unable to find event-card-standup" and the grid) and the generation-0 case; the
+  sign-in cases were green guards. Mutations, each reverted and each red: listed in the rule
+  registry, plus the warm load shown in the foreground, the visible month left null before the
+  settings, and either part of the session not kept. No existing test changed.
+- **Known gaps.** A sign-out that comes without an event and is found only by `auth:check` on the
+  return shows the kept week (same account) until the check answers, then Sign in. An events answer
+  still in flight when the Calendar unmounts is dropped; the return asks again.
+- **Review round 1 (PR 196).**
+  - The hooks are pinned to write only through the ticket they took at mount (an answer landing
+    after a sign-in or sign-out is not kept, through the real hooks), and a launch loads once.
+  - The kept settings are tested: the return draws with the saved week start from its first frame,
+    also right after a Save.
+  - A sign-in that lands after the return's first render and before CalendarApp subscribes (the
+    auto-return renders from a timer) was missed by CalendarApp: its Dashboard kept the emptied
+    week. CalendarApp now compares the session's count of sign-ins and sign-outs at its first render
+    with the count when it subscribes, and starts over if they differ.
+  - Settings → Reconnect's `auth:logout` sends no event: a browser sign-in that then failed while
+    Mission Control was on screen left the week kept, drawn on a signed-out app until `auth:check`
+    answered. Reconnect now empties the session when it signs out.
+  - The status text ("Refreshing...", "Fetching Events...", "Loading Settings...") was in the
+    header's flow: on every return and every 5-minute refresh the header grew by 15 px and the grid
+    moved down, then back up. It is now absolutely positioned under the date, just under the progress
+    bar (the notice's slot overlaps the bar, which is hidden whenever the notice shows; the status
+    text and the notice never show together). Older than this PR for the
+    5-minute refresh.
+  - The session keeps only the settings fields the Calendar draws with (`calendarSettings`): the
+    `settings:get` answer also carries the phone pairing, which no long-lived copy may hold.
+  - The account boundary has its own rule in CLAUDE.md and the rule registry. The shared types moved
+    into the session module (a type-only import cycle). CalendarApp's own forget on `auth:success`
+    is gone: the provider hears it, and before any render.
+  - Tests: the sign-in cases moved to `App.returnToCalendar.signIn.test.tsx`, with a new Reconnect
+    case; the App suites share `src/viewSwitchTestKit.ts` (registered in `test-kit-boundary`).
+    `sessionHooks.test.tsx` (an answer or tasks landing after a forget, through the real hooks; a
+    launch reads the settings, the month, the tasks and the weather once each, with the tasks and
+    weather answering after the month). New cases: the saved week start on the return's first frame
+    and after a Save, the status text out of the header's flow, StrictMode, the sign-in landing
+    before CalendarApp subscribes, the pairing kept by value. Each fix red without it (the mutations
+    are in the rule registry: "The Calendar's session belongs to one sign-in").
+- **Review round 2 (PR 196).**
+  - The kept settings are a typed per-field map (`KEPT_SETTINGS`, `satisfies Record<keyof
+    UserConfig, boolean>`, as `SETTINGS_FIELDS` in `electron/settings-dialog.ts`): a new UserConfig
+    field is a tsc error until someone decides keep or drop. The by-value test pins all 8 kept fields.
+  - The refresh icon was added to the header's right-hand group while a read ran and removed after:
+    the date slid 16 px and the weather and tasks pills about 32 px, then back, on every return and
+    every 5-minute refresh (older than this PR; the old return spinner hid it). The icon is now always
+    rendered, `invisible` with no title and no animation class when idle (a `div`, no click target).
+    Test: `Dashboard.loading.test.tsx`, the icon in both states (red with the icon removed when idle,
+    spinning when idle, or visible when idle; spinning when idle also turns the idle-Calendar
+    animation guard red).

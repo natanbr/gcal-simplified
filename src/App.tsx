@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { CalendarApp } from './components/CalendarApp';
+import { CalendarSessionProvider } from './features/calendar-session/CalendarSessionProvider';
 import { MissionControl } from './mission-control/MissionControl';
 import { MCStoreProvider } from './mission-control/store/MCStoreProvider';
 import { DragLayer } from './mission-control/components/DragLayer';
@@ -71,16 +72,19 @@ function App() {
         {/* Always-on performance readout (both views + games) */}
         <PerformanceHud />
 
-        {/* View switch */}
-        {view === 'calendar' ? (
-          <CalendarApp onSwitchToMC={() => setView('mission-control')} />
-        ) : (
-          <>
-            {/* Auto-return bridge — only active while MC view is shown */}
-            <MissionAutoReturnBridge onReturnToCalendar={handleReturnToCalendar} />
-            <MissionControl onBackToCalendar={handleReturnToCalendar} />
-          </>
-        )}
+        {/* View switch. The Calendar unmounts on the MC view; what it read waits in its session, above
+            the switch, so the return shows the last week at once (features/calendar-session). */}
+        <CalendarSessionProvider>
+          {view === 'calendar' ? (
+            <CalendarApp onSwitchToMC={() => setView('mission-control')} />
+          ) : (
+            <>
+              {/* Auto-return bridge — only active while MC view is shown */}
+              <MissionAutoReturnBridge onReturnToCalendar={handleReturnToCalendar} />
+              <MissionControl onBackToCalendar={handleReturnToCalendar} />
+            </>
+          )}
+        </CalendarSessionProvider>
       </DragLayer>
     </MCStoreProvider>
   );

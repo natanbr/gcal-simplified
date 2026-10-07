@@ -119,6 +119,13 @@ const REGISTRY: Rule[] = [
         defence: 'Limits of the structural guard: it sees try/catch statements inside ApiService\'s methods (and functions nested in them) only. A promise .catch(), Promise.allSettled, an arrow-function class property, a function outside the class, or a Google call added inside a listed exception\'s try (the holiday fetch\'s) passes it; review is the defence there, with the behavioural suites for what exists today.',
     },
     {
+        rule: 'The Calendar\'s session belongs to one sign-in: what the Calendar keeps above App\'s view switch while Mission Control is shown (each month\'s events and load time, the settings fields it draws with and never the phone pairing, tasks, weather) is emptied by auth:success and auth:signed-out on either view, by the sign-outs CalendarApp finds with no event (auth:check, Settings) and by Reconnect\'s auth:logout; each hook writes only through the ticket it took at mount, and a ticket from before a forget cannot write; a forget heard before CalendarApp subscribes starts it over. Known gap: a sign-out nothing announces or finds shows the kept week of the same account until auth:check answers',
+        source: 'CLAUDE.md → Architecture → The Calendar\'s session belongs to one sign-in',
+        status: 'guarded',
+        guard: ['src/App.returnToCalendar.signIn.test.tsx', 'src/features/calendar-session/calendarSession.test.tsx', 'src/features/calendar-session/sessionHooks.test.tsx', 'src/components/__tests__/CalendarApp.session.test.tsx'],
+        verifiedRedBy: 'proven 2026-10-06 (PR 196, review round 1), each mutation reverted. The provider hearing no auth event: 6 red (a sign-in and a sign-out on the Mission Control view, the remount and the commit-gap cases, both provider cases). A ticket from before a forget allowed to write: 3 red (the class case and both real-hook cases). The hooks writing through a fresh ticket: both real-hook cases red. A new ticket at every render: those two and the launch read-count case red (settings read twice once the session turned warm). CalendarApp not forgetting on a sign-out: 3 red (auth:check false, a failed check, Settings). No epoch check: the commit-gap case red. Reconnect not forgetting at auth:logout: the Reconnect case red. The whole settings answer kept: the pairing-by-value case red. The sign-in cases that pass against the code before the session (a sign-in or sign-out on the Mission Control view, an old account\'s answer in flight) were green guards.',
+    },
+    {
         rule: 'Mission Control never imports from src/components, src/hooks, src/utils',
         source: 'CLAUDE.md → Conventions',
         status: 'guarded',

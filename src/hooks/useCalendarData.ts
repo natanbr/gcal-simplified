@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { addDays, addMonths, startOfDay } from 'date-fns';
 import { AppEvent, SerializedAppEvent } from '../types';
+import { useSessionTicket, type MonthEntry, type Shown } from '../features/calendar-session/calendarSession';
 
 /** The visible month's events: none yet and being read (`loading`), or shown and being re-read (`refreshing`). */
 export type CalendarActivity = 'idle' | 'loading' | 'refreshing';
@@ -26,10 +27,6 @@ export function fetchRangeOf(month: string): { timeMin: Date; timeMax: Date } {
  */
 export type CalendarReadFailure = { kind: 'stale'; loadedAt: Date } | { kind: 'unloaded' };
 
-type MonthEntry = { events: AppEvent[]; loadedAt: Date; failed?: true } | { events?: undefined; failed: true };
-
-/** The events on screen, and the month whose read they came from. */
-interface Shown { events: AppEvent[]; from: { month: string; loadedAt: Date } | null }
 const NOTHING_SHOWN: Shown = { events: [], from: null };
 
 /** Whether `month`'s read covers every day in `days` (in order; none drawn, nothing to miss). */
@@ -55,19 +52,24 @@ function view(entry: MonthEntry | undefined, shown: Shown, onScreen: readonly Da
 
 /**
  * The events of `visibleMonth` (a `monthKeyOf` key; null fetches nothing) for the days `onScreen`.
- * A new `generation` refetches the month even while a request for it is in flight, and an answer
- * from an older generation is dropped: a Save or a reconnect may have changed what the main process
- * reads. A new sign-in remounts the Dashboard (CalendarApp), so nothing here outlives an account.
+ * Generation 0 (the settings not read yet) fetches nothing either. A new `generation` refetches the
+ * month even while a request for it is in flight, and an answer from an older generation is dropped:
+ * a Save or a reconnect may have changed what the main process reads.
+ * What it has read starts from, and is kept in, the calendar session, so a return from Mission
+ * Control shows it at once. A sign-in or a sign-out empties the session, and a new sign-in remounts
+ * the Dashboard (CalendarApp), so nothing here outlives an account.
  */
 export function useCalendarData(visibleMonth: string | null, generation: number, onScreen: readonly Date[]) {
-    const [months, setMonths] = useState<Record<string, MonthEntry>>({});
+    const ticket = useSessionTicket();
+    const kept = ticket?.kept.calendar;
+    const [months, setMonths] = useState<Record<string, MonthEntry>>(kept?.months ?? {});
     const [pending, setPending] = useState<Record<string, number>>({}); // month → generation in flight
     const newest = useRef<Record<string, number>>({});                 // month → newest generation asked for
     const inFlight = useRef(new Set<string>());                        // `${month}@${generation}`
 
     const request = useCallback(async (month: string, gen: number) => {
         const id = `${month}@${gen}`;
-        if (gen < (newest.current[month] ?? gen) || inFlight.current.has(id)) return;
+        if (gen === 0 || gen < (newest.current[month] ?? gen) || inFlight.current.has(id)) return;
         inFlight.current.add(id);
         newest.current[month] = gen;
         setPending(p => ({ ...p, [month]: gen }));
@@ -105,10 +107,11 @@ export function useCalendarData(visibleMonth: string | null, generation: number,
 
     const entry = visibleMonth ? months[visibleMonth] : undefined;
     // A month not loaded yet keeps the events last shown (requirements → Enhanced Loading Indicator).
-    const [shown, setShown] = useState<Shown>(NOTHING_SHOWN);
+    const [shown, setShown] = useState<Shown>(kept?.shown ?? NOTHING_SHOWN);
     if (visibleMonth && entry?.events && entry.events !== shown.events) {
         setShown({ events: entry.events, from: { month: visibleMonth, loadedAt: entry.loadedAt } });
     }
+    useEffect(() => { ticket?.keepCalendar({ months, shown }); }, [ticket, months, shown]);
     const { events, failure } = view(entry, shown, onScreen);
     const activity: CalendarActivity = visibleMonth && pending[visibleMonth] !== undefined
         ? (entry?.events ? 'refreshing' : 'loading')
