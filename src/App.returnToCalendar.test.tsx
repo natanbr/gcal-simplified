@@ -33,6 +33,8 @@ const NOVEMBER = [addDays(new Date(2026, 10, 1), -7).toISOString(), addDays(new 
 
 let ipc: CalendarIpc;
 const notice = () => screen.queryByTestId('calendar-read-notice');
+/** What the Calendar asks the main process for. */
+const CALENDAR_READS = ['auth:check', 'settings:get', 'data:events', 'data:tasks', 'weather:get'];
 const firstDay = () => `${screen.getAllByTestId('day-header-name')[0].textContent} ${screen.getAllByTestId('day-header-number')[0].textContent}`;
 
 beforeEach(() => { ipc = installFamilyCalendar(); });
@@ -44,7 +46,8 @@ describe('Back from Mission Control', { timeout: 15_000 }, () => {
         await toMissionControl();
         const whileAway = ipc.order().length;
         await settle();
-        expect(ipc.order().slice(whileAway)).toEqual([]);  // nothing read for the Calendar while away
+        // Mission Control's own writes (the 1 s debounced remote sync and audit flush) may land here under load.
+        expect(ipc.order().slice(whileAway).filter(c => CALENDAR_READS.includes(c))).toEqual([]);
 
         ipc.events = [STANDUP, SWIM];
         ipc.holding = new Set(['settings:get', 'data:events', 'data:tasks', 'weather:get']);
