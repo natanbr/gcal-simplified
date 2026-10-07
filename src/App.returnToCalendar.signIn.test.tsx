@@ -4,10 +4,11 @@
 // The week the Calendar keeps while Mission Control is on screen
 // (App.returnToCalendar.test.tsx) outlives the remount that used to clear it
 // on a sign-in, so it has its own boundary: a sign-in or a sign-out heard on
-// either view empties it. Nothing read for one account may come back under the next.
+// either view empties it, and so does Settings → Reconnect, whose auth:logout
+// sends no event. Nothing read for one account may come back under the next.
 // ============================================================
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import App from './App';
 import { settle, type CalendarIpc } from './components/calendarTestKit';
@@ -50,6 +51,27 @@ describe('Back from Mission Control after the sign-in changed', { timeout: 15_00
 
         const seen = recordScreens();
         backToCalendar();
+        await settle();
+
+        expect(screen.getByTestId('login-button')).toBeTruthy();
+        expect(seen).not.toContain('week');
+    });
+
+    // Reconnect = auth:logout (no event), then the browser sign-in; the Settings modal goes with the Calendar.
+    it('Reconnect, then Mission Control, and the browser sign-in fails: Sign in, never the week before it', async () => {
+        await launch();
+        fireEvent.click(screen.getByTestId('settings-button'));
+        ipc.holding.add('auth:login');
+        ipc.failing.add('auth:login');
+        fireEvent.click(await screen.findByTestId('reconnect-google-button'));
+        await settle();
+        await toMissionControl();
+        ipc.failing.add('auth:check');                                 // signed out by auth:logout
+        await ipc.release('auth:login');                               // the sign-in failed
+
+        const seen = recordScreens();
+        backToCalendar();
+        expect(screen.queryByTestId('event-card-standup')).toBeNull();
         await settle();
 
         expect(screen.getByTestId('login-button')).toBeTruthy();
