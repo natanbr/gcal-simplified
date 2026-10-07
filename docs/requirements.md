@@ -2689,7 +2689,9 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   each minute, the Remote dot's pulse): about a quarter of each such frame's cost on the child's
   screen (measured 2026-10-04, `docs/performance.md`). The Logs button inside the bar had a small
   blur of its own (Tailwind `backdrop-blur-sm`), over the same still bar; it is gone too.
-- **On screen.** The same bar: translucent white over the background, its bottom border unchanged.
+- **On screen.** The same bar: translucent white over the background, its bottom border unchanged;
+  its text renders slightly crisper (subpixel smoothing). Measured idle on the built app (1280x720
+  at 150 %): 0.374 % → 0.298 % of one core, within noise.
   The blurs that stay are on overlays shown for a moment over busy content (the Logs and Settings
   dialogs, the celebration, the cheat trap, the game selector, the quiz, the mood toast), not on
   anything always on screen.
