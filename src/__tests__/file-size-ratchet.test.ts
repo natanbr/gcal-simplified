@@ -103,8 +103,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 504 → 478 on 2026-10-04 (the launch load reads settings first and no longer
     // needs the error state or the fetchData ref; the events effect does the fetching),
     // then 478 → 431 the same day (settings, tasks and weather loads moved to
-    // hooks/useDashboardLoad.ts; useCalendarData fetches the visible month itself).
-    'src/components/Dashboard.tsx': 431,
+    // hooks/useDashboardLoad.ts; useCalendarData fetches the visible month itself),
+    // then 431 → 430 on 2026-10-06 (the refresh icon is always rendered, hidden when idle: no conditional block).
+    'src/components/Dashboard.tsx': 430,
     // 493 → 481 on 2026-09-24 (the Minimize long-press that stopped a mission is
     // gone: only the phone stops one; the button now only minimizes).
     // 481 → 482 the same day (review fix: Minimize fires only for a press that began

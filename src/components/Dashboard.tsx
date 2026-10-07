@@ -237,11 +237,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onSwitchToMC }) 
 
              <UpdateNotification />
 
-             {status && (
-                 <div title={status.background ? "Background Refreshing..." : "Loading..."} className="flex items-center">
-                    <RefreshCw size={16} className={`text-zinc-600 ${status.background ? 'animate-pulse' : 'animate-spin'}`} />
-                 </div>
-             )}
+             {/* Always in place, so nothing in the header moves when a read starts or ends; hidden and still when idle. */}
+             <div data-testid="sync-icon" title={status ? (status.background ? "Background Refreshing..." : "Loading...") : undefined} className={`flex items-center ${status ? '' : 'invisible'}`}>
+                <RefreshCw size={16} className={`text-zinc-600 ${!status ? '' : status.background ? 'animate-pulse' : 'animate-spin'}`} />
+             </div>
 
              {onSwitchToMC && (
                <button
