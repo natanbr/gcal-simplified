@@ -113,7 +113,8 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 482 → 484 on 2026-09-28 (the auto-collect callback made stable: an inline
     // arrow re-fired the timer's expiry effect and wrote a third completion line),
     // then 484 → 485 the same day (Reset's hold is dropped when the phase changes).
-    'src/mission-control/components/MissionOverlay.tsx': 485,
+    // 485 → 437 on 2026-10-07 ("↺ Reset" and its 2 s hold are gone: Reset is phone-only).
+    'src/mission-control/components/MissionOverlay.tsx': 437,
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
     // committing it optimistically made coins vanish from the pile).
     'src/mission-control/components/GlobalBank.tsx': 407,

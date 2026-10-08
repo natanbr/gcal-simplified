@@ -52,7 +52,8 @@ describe('remote action allowlist', () => {
          */
         const ALLOWED_BUT_NOT_SENT: Partial<Record<MCAction['type'], string>> = {
             RESET_MISSION_WITH_TIMER: 'docs/requirements.md → Mission Streak Shield → "Reset re-arms the '
-                + 'occurrence" specifies the long-press reset as remote-reachable; no phone build sends it yet',
+                + 'occurrence" specifies the full Reset as remote-reachable, and since 2026-10-07 ("Reset is '
+                + 'phone-only") the remote is its only way in; no phone build sends it yet',
         };
 
         /** Every `type: '…'` literal in the phone's production sources under `dir`. */

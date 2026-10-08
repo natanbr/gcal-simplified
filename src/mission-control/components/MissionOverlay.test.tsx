@@ -56,9 +56,6 @@ function StateProbe({ onState }: { onState: (s: MCState) => void }) {
     return null;
 }
 
-const morning = (s: MCState) => s.missions.find(m => m.phase === 'morning')!;
-const tshirt = (s: MCState) => morning(s).tasks.find(t => t.id === 'tshirt')!;
-
 /** What useRemoteControl dispatches when the phone's Stop arrives. */
 function RemoteStop() {
     const dispatch = useMCDispatch();
@@ -68,16 +65,6 @@ function RemoteStop() {
             onClick={() => dispatch({ type: 'CANCEL_MISSION', missionPhase: 'morning', isRemote: true, origin: 'remote' })}
         >
             Remote stop
-        </button>
-    );
-}
-
-/** What the scheduler dispatches when the mission's window ends. */
-function ExpireMission() {
-    const dispatch = useMCDispatch();
-    return (
-        <button data-testid="expire-btn" onClick={() => dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler' })}>
-            Expire
         </button>
     );
 }
@@ -430,98 +417,8 @@ describe('MissionOverlay — whining toggle', () => {
     });
 });
 
-// ── Reset tasks button ─────────────────────────────────────────────────────────
-
-describe('MissionOverlay — reset tasks button', () => {
-    beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
-    afterEach(() => { cleanup(); localStorage.clear(); });
-
-    it('reset button is visible when mission is active', async () => {
-        renderOverlay(<TriggerMission phase="morning" />);
-        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
-        expect(screen.getByTestId('mc-reset-btn')).toBeInTheDocument();
-    });
-
-    it('short-pressing reset tasks clears completed task markers and keeps the timer', async () => {
-        vi.useFakeTimers();
-        let live: MCState | null = null;
-        renderOverlay(<><TriggerMission phase="morning" /><StateProbe onState={s => { live = s; }} /></>);
-        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
-        const startedAt = morning(live!).startedAt;
-        await act(async () => { fireEvent.click(screen.getByTestId('mc-task-card-tshirt')); });
-        expect(tshirt(live!).completed, 'the task tap must complete it first').toBe(true);
-        await act(async () => { vi.advanceTimersByTime(60_000); });
-
-        await act(async () => {
-            fireEvent.pointerDown(screen.getByTestId('mc-reset-btn'));
-            fireEvent.pointerUp(screen.getByTestId('mc-reset-btn'));
-        });
-
-        expect(tshirt(live!).completed).toBe(false);
-        expect((screen.getByTestId('mc-task-card-tshirt') as HTMLButtonElement).disabled).toBe(false);
-        expect(morning(live!).startedAt, 'a short press resets the tasks only').toBe(startedAt);
-        expect(live!.activityLogs.some(l => /fully reset/.test(l.message))).toBe(false);
-        vi.useRealTimers();
-    });
-
-    it('resetting tasks does NOT close the overlay', async () => {
-        renderOverlay(<TriggerMission phase="morning" />);
-        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
-        // short press reset
-        await act(async () => {
-            fireEvent.pointerDown(screen.getByTestId('mc-reset-btn'));
-            fireEvent.pointerUp(screen.getByTestId('mc-reset-btn'));
-        });
-        // Overlay must still be present
-        expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
-    });
-
-    it('long-pressing Reset (2s) triggers RESET_MISSION_WITH_TIMER — tasks and timer restart, overlay stays open', async () => {
-        vi.useFakeTimers();
-        let live: MCState | null = null;
-        renderOverlay(<><TriggerMission phase="morning" /><StateProbe onState={s => { live = s; }} /></>);
-        await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
-        const startedAt = morning(live!).startedAt;
-        await act(async () => { fireEvent.click(screen.getByTestId('mc-task-card-tshirt')); });
-        expect(tshirt(live!).completed, 'the task tap must complete it first').toBe(true);
-        await act(async () => { vi.advanceTimersByTime(60_000); });
-
-        await act(async () => {
-            fireEvent.pointerDown(screen.getByTestId('mc-reset-btn'));
-        });
-        await act(async () => {
-            vi.advanceTimersByTime(2000);
-        });
-
-        expect(screen.getByTestId('mc-mission-overlay')).toBeInTheDocument();
-        expect(tshirt(live!).completed).toBe(false);
-        expect(live!.activityLogs.filter(l => l.message === 'Mission fully reset (tasks + timer)')).toHaveLength(1);
-        expect(Date.parse(morning(live!).startedAt!), 'the timer restarted').toBeGreaterThan(Date.parse(startedAt!));
-        vi.useRealTimers();
-    });
-
-    // The hold's timer used to outlive the mission it began on: a hold still in
-    // progress when the mission ended fired RESET_MISSION_WITH_TIMER for it, which
-    // set it active again with nothing running — hidden, never expiring, and saved.
-    for (const [ending, button] of [['the phone stops it', 'remote-stop-btn'], ['it expires', 'expire-btn']] as const) {
-        it(`a Reset hold in progress when ${ending} does nothing once the mission is over`, async () => {
-            vi.useFakeTimers();
-            let live: MCState | null = null;
-            renderOverlay(<><TriggerMission phase="morning" /><RemoteStop /><ExpireMission /><StateProbe onState={s => { live = s; }} /></>);
-            await act(async () => { fireEvent.click(screen.getByTestId('trigger-btn')); });
-            await act(async () => { fireEvent.pointerDown(screen.getByTestId('mc-reset-btn')); });
-            await act(async () => { vi.advanceTimersByTime(1000); });
-            await act(async () => { fireEvent.click(screen.getByTestId(button)); });
-            expect(live!.activeMission).toBe('none');
-            expect(morning(live!).active, 'the ending itself deactivates it').toBe(false);
-            await act(async () => { vi.advanceTimersByTime(2000); });
-
-            expect(morning(live!).active, 'no mission may be active with nothing running').toBe(false);
-            expect(live!.activityLogs.filter(l => /fully reset/.test(l.message))).toEqual([]);
-            vi.useRealTimers();
-        });
-    }
-});
+// Reset is phone-only (2026-10-07): the overlay has no Reset control, see
+// MissionOverlay.reset-phone-only.test.tsx and hooks/useRemoteControl.reset.test.tsx.
 
 // ── Color token regression — overlay outside .mc-root ─────────────────────────
 // Bug: --mc-text & --mc-text-muted were only defined inside .mc-root.

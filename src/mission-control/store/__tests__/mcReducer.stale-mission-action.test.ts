@@ -97,7 +97,8 @@ describe('a Stop for a mission stuck active with nothing running', () => {
 // The overlay's 2 s Reset hold used to fire for the mission it began on even
 // after that mission had ended (expired, or stopped from the phone). The reducer
 // then set it active again with nothing running: hidden, never expiring, saved.
-// The overlay now drops the hold on a phase change; this is the reducer's half.
+// The hold is gone since 2026-10-07 (Reset is phone-only); a stale phone Reset
+// is the same case, and the reducer's refusal stands.
 describe('a full Reset (tasks + timer) for a mission that is not running', () => {
     const resetWithTimer = (missionPhase: 'morning' | 'evening'): MCAction =>
         ({ type: 'RESET_MISSION_WITH_TIMER', missionPhase, timestamp: T });
