@@ -20,15 +20,11 @@ interface UseLongPressResult {
  * @param onShortPress  Fired when the pointer is released before the threshold.
  * @param onLongPress   Fired when the pointer is held for ≥ `thresholdMs`.
  * @param thresholdMs   Hold duration in milliseconds (default 2000).
- * @param resetKey      When it changes, a press in flight is dropped: the thing it
- *                      began on is gone (MissionOverlay's Reset passed the mission
- *                      phase until 2026-10-07, when Reset became phone-only).
  */
 export function useLongPress(
     onShortPress: () => void,
     onLongPress:  () => void,
     thresholdMs = 2000,
-    resetKey?: unknown,
 ): UseLongPressResult {
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isPressedRef = useRef(false);
@@ -62,13 +58,12 @@ export function useLongPress(
         isPressedRef.current = false;
     }, []);
 
-    // On unmount, and when resetKey changes. A hold that outlived its mission
-    // once reset a mission that had already ended, making it active again.
+    // A hold in flight never fires after its component is gone.
     useEffect(() => () => {
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = null;
         isPressedRef.current = false;
-    }, [resetKey]);
+    }, []);
 
     return { onPointerDown, onPointerUp, onPointerLeave };
 }

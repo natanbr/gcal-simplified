@@ -8,7 +8,9 @@
 // back: the miss was erased. Before the end the same hold restarted the timer,
 // so the timer never bound. Like Stop, a Reset now comes only from the phone
 // (useRemoteControl.reset.test.tsx); the structural half is
-// src/__tests__/action-literal-boundary.test.ts.
+// src/__tests__/action-literal-boundary.test.ts. This covers the overlay only:
+// MC Settings' "▶ Start" still gives a fresh, paid attempt once a missed run has
+// ended (open owner decision).
 // ============================================================
 
 import React from 'react';
@@ -138,7 +140,7 @@ describe('MissionOverlay — no desktop Reset', () => {
     });
 });
 
-describe('MissionOverlay — after a miss, no desktop path gives a fresh paid attempt', () => {
+describe('MissionOverlay — after a miss, no overlay control gives a fresh paid attempt', () => {
     it('holding every control and then finishing every task pays nothing and keeps the miss', async () => {
         seedMorning(30); // over now, nothing done: the overlay logs the miss at once
         await launch();

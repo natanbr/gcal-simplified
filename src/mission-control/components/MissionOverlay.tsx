@@ -213,7 +213,7 @@ export function MissionOverlay() {
                                 onTimerExpiredInfo={handleTimerExpiredInfo}
                             />
 
-                            {/* RIGHT — Minimize only minimizes: only the phone stops (2026-09-24) or resets (2026-10-07) a mission. */}
+                            {/* RIGHT — Minimize only minimizes: only the phone stops a mission (2026-09-24) or sends a Reset (2026-10-07). */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
                                 <motion.button
                                     data-testid="mc-minimize-btn"

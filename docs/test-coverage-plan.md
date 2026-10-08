@@ -286,7 +286,7 @@ Covers explicit verification of effect cleanups and memory leak preventions in c
 | 1     | ✅ Done    | `weekNavigation.test.ts`, `monthUtils.test.ts`                              |
 | 2     | ✅ Done    | `eventKeywordIcons.ts`, `eventKeywordIcons.test.ts`                         |
 | 3     | ✅ Done    | `mcReducer.mission-tasks.test.ts`                                           |
-| 4     | ✅ Done    | `MissionOverlay.test.tsx` — whining toggle + reset button                   |
+| 4     | ✅ Done    | `MissionOverlay.test.tsx` — whining toggle (the reset button went 2026-10-07: Reset is phone-only, `MissionOverlay.reset-phone-only.test.tsx`) |
 | 5     | ✅ Done    | `MCSettingsOverlay.test.tsx`                                                |
 | 5b    | ✅ Done    | `mcReducer.settings.test.ts` — cream task inject/remove/decrement/auto-off  |
 | 6     | ✅ Done    | `GlobalBank.test.tsx`                                                       |

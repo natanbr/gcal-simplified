@@ -1,13 +1,11 @@
 // ============================================================
-// useLongPress — a hold does not outlive the thing it began on
+// useLongPress — tap vs hold, and a hold does not outlive its component
 // ------------------------------------------------------------
-// MissionOverlay is always mounted, so its Reset hold's timer used to survive
-// the mission it began on: a hold in progress when the mission expired or the
-// phone stopped it fired RESET_MISSION_WITH_TIMER for the ended mission and made
-// it active again, hidden and never expiring (review of 985592f, 2026-09-28).
-// The reducer now refuses that too (staleMissionAction.ts); this is the hook's half.
-// The overlay's Reset is gone since 2026-10-07 (Reset is phone-only); the hook
-// keeps the key for any hold whose target can disappear under the finger.
+// It once took a reset key: MissionOverlay's Reset hold outlived the mission it
+// began on and made an ended mission active again (review of 985592f,
+// 2026-09-28). The overlay's Reset is gone since 2026-10-07 (Reset is
+// phone-only), and with it the key's only caller; the reducer still refuses a
+// stale Reset (staleMissionAction.ts).
 // ============================================================
 
 import { renderHook, act } from '@testing-library/react';
@@ -20,37 +18,35 @@ afterEach(() => { vi.useRealTimers(); });
 function setup() {
     const onShort = vi.fn();
     const onLong = vi.fn();
-    const hook = renderHook(({ resetKey }: { resetKey: string }) => useLongPress(onShort, onLong, 2000, resetKey), {
-        initialProps: { resetKey: 'morning' },
-    });
+    const hook = renderHook(() => useLongPress(onShort, onLong, 2000));
     return { onShort, onLong, hook };
 }
 
 describe('useLongPress', () => {
-    it('a hold fires the long press at the threshold', () => {
-        const { onLong, hook } = setup();
-        act(() => { hook.result.current.onPointerDown(); });
-        act(() => { vi.advanceTimersByTime(2000); });
-        expect(onLong).toHaveBeenCalledTimes(1);
-    });
-
-    it('a hold in flight when the reset key changes never fires, and its release is no short press', () => {
+    it('a hold fires the long press at the threshold, and its release is no short press', () => {
         const { onShort, onLong, hook } = setup();
         act(() => { hook.result.current.onPointerDown(); });
-        act(() => { vi.advanceTimersByTime(1000); });
-        hook.rerender({ resetKey: 'none' });
-        act(() => { vi.advanceTimersByTime(5000); });
+        act(() => { vi.advanceTimersByTime(2000); });
         act(() => { hook.result.current.onPointerUp(); });
-
-        expect(onLong).not.toHaveBeenCalled();
+        expect(onLong).toHaveBeenCalledTimes(1);
         expect(onShort).not.toHaveBeenCalled();
     });
 
-    it('a re-render with the same key keeps the hold', () => {
+    it('a release before the threshold is a short press', () => {
+        const { onShort, onLong, hook } = setup();
+        act(() => { hook.result.current.onPointerDown(); });
+        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => { hook.result.current.onPointerUp(); });
+        expect(onShort).toHaveBeenCalledTimes(1);
+        expect(onLong).not.toHaveBeenCalled();
+    });
+
+    it('a hold in flight when the component unmounts never fires', () => {
         const { onLong, hook } = setup();
         act(() => { hook.result.current.onPointerDown(); });
-        hook.rerender({ resetKey: 'morning' });
-        act(() => { vi.advanceTimersByTime(2000); });
-        expect(onLong).toHaveBeenCalledTimes(1);
+        act(() => { vi.advanceTimersByTime(1000); });
+        hook.unmount();
+        act(() => { vi.advanceTimersByTime(5000); });
+        expect(onLong).not.toHaveBeenCalled();
     });
 });

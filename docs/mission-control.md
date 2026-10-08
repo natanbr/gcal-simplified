@@ -98,7 +98,7 @@ Default costs; the source of truth is `REWARDS` in `src/mission-control/rewardCa
 #### D. Mission Overlay
 
 - Slides down from top (`y: -100% → 0`) when a mission is active
-- Header: phase emoji + title, large countdown timer (center), "— Minimize" (right). No Stop or Reset: only the phone stops (2026-09-24) or resets (2026-10-07) a mission
+- Header: phase emoji + title, large countdown timer (center), "— Minimize" (right). No Stop or Reset: only the phone stops a mission (2026-09-24) or sends a Reset (2026-10-07)
 - Task cards: horizontal flex row, `flex: 1 1 auto`, max 20% width each (up to 5 cards fill the bar)
 - Whining toggle card: compact 80px card pinned to the right of the task row
   - Toggle on = −1 bonus star, shown as a small pill badge
