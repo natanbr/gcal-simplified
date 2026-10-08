@@ -6,6 +6,8 @@
 // phone stopped it fired RESET_MISSION_WITH_TIMER for the ended mission and made
 // it active again, hidden and never expiring (review of 985592f, 2026-09-28).
 // The reducer now refuses that too (staleMissionAction.ts); this is the hook's half.
+// The overlay's Reset is gone since 2026-10-07 (Reset is phone-only); the hook
+// keeps the key for any hold whose target can disappear under the finger.
 // ============================================================
 
 import { renderHook, act } from '@testing-library/react';

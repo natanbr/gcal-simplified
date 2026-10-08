@@ -10,7 +10,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCState, useMCDispatch, useMission } from '../store/useMCStore.tsx';
 import { MissionTimerDisplay, MissionDepletingBar } from './MissionTimerDisplay';
-import { useLongPress } from '../hooks/useLongPress';
 import { usePressRelease } from '../hooks/usePressRelease';
 import type { MissionPhase } from '../types';
 import { completableRun } from '../store/missionCompletion';
@@ -31,9 +30,6 @@ const PHASE_META: Record<Exclude<MissionPhase, 'none'>, { label: string; emoji: 
     },
 };
 
-// ── Long-press threshold (ms) ─────────────────────────────────────────────────
-const LONG_PRESS_MS = 2000;
-
 // ── Main Overlay ──────────────────────────────────────────────────────────────
 export function MissionOverlay() {
     const state    = useMCState();
@@ -46,22 +42,6 @@ export function MissionOverlay() {
     const minimizePress = usePressRelease(useCallback(() => setMinimized(true), []), phase);
     const mission = useMission(phase !== 'none' ? phase : 'morning');
     const whiningDetected = mission?.whiningDetected ?? false;
-
-    // ── Long-press: Reset (short = reset tasks, long = reset tasks + timer) ──
-    const resetHandlers = useLongPress(
-        () => {
-            if (phase !== 'none') {
-                dispatch({ type: 'RESET_MISSION', missionPhase: phase as Exclude<MissionPhase, 'none'> });
-            }
-        },
-        () => {
-            if (phase !== 'none') {
-                dispatch({ type: 'RESET_MISSION_WITH_TIMER', missionPhase: phase as Exclude<MissionPhase, 'none'> });
-            }
-        },
-        LONG_PRESS_MS,
-        phase, // a hold does not outlive its mission
-    );
 
     const handleBarAdjust = useCallback((deltaMinutes: number) => {
         if (phase !== 'none')
@@ -233,9 +213,8 @@ export function MissionOverlay() {
                                 onTimerExpiredInfo={handleTimerExpiredInfo}
                             />
 
-                            {/* RIGHT — Minimize + Reset (Reset has a long-press) */}
+                            {/* RIGHT — Minimize only minimizes: only the phone stops (2026-09-24) or resets (2026-10-07) a mission. */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
-                                {/* Minimize only minimizes: only the phone stops a mission (2026-09-24). */}
                                 <motion.button
                                     data-testid="mc-minimize-btn"
                                     whileHover={{ scale: 1.06 }}
@@ -258,33 +237,6 @@ export function MissionOverlay() {
                                     }}
                                 >
                                     — Minimize
-                                </motion.button>
-
-                                {/* Reset — looks like a simple reset button */}
-                                <motion.button
-                                    data-testid="mc-reset-btn"
-                                    whileHover={{ scale: 1.06 }}
-                                    onPointerDown={resetHandlers.onPointerDown}
-                                    onPointerUp={resetHandlers.onPointerUp}
-                                    onPointerLeave={resetHandlers.onPointerLeave}
-                                    style={{
-                                        background: 'rgba(255,255,255,0.6)',
-                                        border: '2px solid rgba(160,150,230,0.3)',
-                                        borderRadius: 14,
-                                        padding: '10px 20px',
-                                        cursor: 'pointer',
-                                        fontSize: 14,
-                                        fontWeight: 800,
-                                        color: 'var(--mc-text-muted)',
-                                        fontFamily: "'Nunito', sans-serif",
-                                        minWidth: 52,
-                                        minHeight: 44,
-                                        WebkitTapHighlightColor: 'transparent',
-                                        touchAction: 'manipulation',
-                                        userSelect: 'none',
-                                    }}
-                                >
-                                    ↺ Reset
                                 </motion.button>
                             </div>
                         </div>

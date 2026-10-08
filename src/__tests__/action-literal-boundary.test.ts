@@ -122,4 +122,28 @@ describe('action literal boundaries', () => {
             `${MC}types.ts`, // the union member
         ]);
     });
+
+    // Reset is phone-only too (decision 2026-10-07). A full Reset is a fresh attempt
+    // (freshAttempt clears loggedTimeoutAt while the charged miss stays), so the
+    // child's 2 s hold on the overlay's "↺ Reset" erased a miss after the end and
+    // restarted the timer before it: the timer never bound. Its tap (tasks only) went
+    // with it: one control, and resetting a run is the parent's call.
+    it('RESET_MISSION_WITH_TIMER reaches the store only from the remote: no desktop gesture restarts a mission', () => {
+        expect(filesNaming('RESET_MISSION_WITH_TIMER')).toEqual([
+            `${MC}hooks/useRemoteControl.ts`, // REMOTE_ALLOWED_ACTIONS (no phone build sends it yet)
+            `${MC}store/activityLog.ts`, // its log line
+            `${MC}store/mcReducer.ts`, // the case, and the cream-task resync list
+            `${MC}store/staleMissionAction.ts`, // refuses a Reset for a mission that is not running
+            `${MC}types.ts`, // the union member
+        ]);
+    });
+
+    it('RESET_MISSION reaches the store only from the phone: no desktop gesture resets the tasks', () => {
+        expect(filesNaming('RESET_MISSION')).toEqual([
+            `${MC}hooks/useRemoteControl.ts`, // REMOTE_ALLOWED_ACTIONS: the phone's Reset
+            `${MC}store/mcReducer.ts`, // the case, and the cream-task resync list
+            `${MC}store/staleMissionAction.ts`, // refuses a Reset for a mission that is not running
+            `${MC}types.ts`, // the union member
+        ]);
+    });
 });
