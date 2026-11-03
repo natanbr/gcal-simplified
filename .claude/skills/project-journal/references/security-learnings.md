@@ -272,3 +272,8 @@ shared and applies only if no sign-in or sign-out happened during the decrypt. G
 `src/__tests__/safe-storage-async-boundary.test.ts`.
 **Still open (owner decision):** when the encrypt fails, the tokens are still written in plain
 text, exactly as the synchronous code did; this change neither widened nor closed that fallback.
+**Not done yet (security review, 2026-11-03):** no timeout on the async encrypt or decrypt. A
+decrypt that never settles leaves `auth:check` unanswered; an encrypt that never settles holds
+every later save, a sign-in's included. Not worse than the synchronous call, which froze the main
+process. When a timeout is added, a timed-out encrypt must reject the save (nothing written),
+never return null: null is the plain-text branch, and the timeout would widen it.
