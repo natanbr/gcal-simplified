@@ -15,7 +15,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-    isAuthenticated: vi.fn(() => true),
+    isAuthenticated: vi.fn(async () => true),
     eventsList: vi.fn(),
     calendarListList: vi.fn(),
     calendarIds: ['family', 'school'],
@@ -26,7 +26,8 @@ vi.mock('googleapis', () => ({
         calendar: () => ({ calendarList: { list: mocks.calendarListList }, events: { list: mocks.eventsList } }),
     },
 }));
-vi.mock('./auth', () => ({ authService: { isAuthenticated: mocks.isAuthenticated, getAuthClient: () => ({}) } }));
+// authService's readers are async since 2026-11-03 (safeStorage's synchronous methods are gone in Electron 46): the mock answers with Promises.
+vi.mock('./auth', () => ({ authService: { isAuthenticated: mocks.isAuthenticated, getAuthClient: async () => ({}) } }));
 vi.mock('./store', () => ({ store: { get: () => ({ calendarIds: mocks.calendarIds, taskListIds: [] }) } }));
 
 import { ApiService } from './api';
@@ -43,7 +44,7 @@ const holidaysDown = () => ({ ok: false, json: async () => { throw new Error('no
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-    mocks.isAuthenticated.mockReturnValue(true);
+    mocks.isAuthenticated.mockResolvedValue(true);
     mocks.calendarListList.mockResolvedValue({ data: { items: [] } });
     mocks.eventsList.mockImplementation(async ({ calendarId }: { calendarId: string }) =>
         ({ data: { items: calendarId === 'school' ? [PRO_D] : [] } }));
@@ -86,7 +87,7 @@ describe('getEvents — the default (calendar view) answer is unchanged', () => 
     });
 
     it('answers [] when signed out', async () => {
-        mocks.isAuthenticated.mockReturnValue(false);
+        mocks.isAuthenticated.mockResolvedValue(false);
         expect(await new ApiService().getEvents(FROM, TO)).toEqual([]);
     });
 
@@ -105,7 +106,7 @@ describe('getEvents — strict (school-bag reader): a failure is a failure', () 
     });
 
     it('throws when signed out', async () => {
-        mocks.isAuthenticated.mockReturnValue(false);
+        mocks.isAuthenticated.mockResolvedValue(false);
         await expect(new ApiService().getEvents(FROM, TO, strict)).rejects.toThrow();
     });
 

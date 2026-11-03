@@ -100,10 +100,11 @@ describe('main.ts and the Google sign-in', () => {
 
     it('auth:check reads a held token file again and answers', async () => {
         vi.useFakeTimers();
+        // Since 2026-11-03 authService.isAuthenticated() is async: a held token file is a rejection, not a throw.
         mocks.isAuthenticated
-            .mockImplementationOnce(() => { throw held('EBUSY'); })
-            .mockImplementationOnce(() => { throw held('EPERM'); })
-            .mockReturnValue(true);
+            .mockRejectedValueOnce(held('EBUSY'))
+            .mockRejectedValueOnce(held('EPERM'))
+            .mockResolvedValue(true);
 
         const answer = authCheck()();
         await vi.runAllTimersAsync();
@@ -113,7 +114,7 @@ describe('main.ts and the Google sign-in', () => {
     });
 
     it('auth:check answers any other failure at once', async () => {
-        mocks.isAuthenticated.mockImplementation(() => { throw new Error('Google credentials were requested before the app is ready'); });
+        mocks.isAuthenticated.mockRejectedValue(new Error('Google credentials were requested before the app is ready'));
 
         await expect(authCheck()()).rejects.toThrow('before the app is ready');
         expect(mocks.isAuthenticated).toHaveBeenCalledTimes(1);

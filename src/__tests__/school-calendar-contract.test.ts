@@ -24,7 +24,7 @@ vi.mock('googleapis', () => ({
         }),
     },
 }));
-vi.mock('../../electron/auth', () => ({ authService: { isAuthenticated: () => true, getAuthClient: () => ({}) } }));
+vi.mock('../../electron/auth', () => ({ authService: { isAuthenticated: async () => true, getAuthClient: async () => ({}) } }));
 vi.mock('../../electron/store', () => ({ store: { get: () => ({ calendarIds: ['school'], taskListIds: [] }) } }));
 
 import { ApiService } from '../../electron/api';

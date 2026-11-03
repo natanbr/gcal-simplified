@@ -21,7 +21,7 @@ vi.mock('electron', () => kit.electronModule(fake));
 vi.mock('electron-store', () => kit.electronStoreModule(fake));
 vi.mock('googleapis', () => kit.googleapisModule(fake));
 
-const { REVOKED, readStored, stored } = kit;
+const { REVOKED, stored } = kit;
 const storeSession = (credentials: Credentials) => kit.storeEncrypted(fake, JSON.stringify(credentials));
 const relaunch = () => kit.relaunch(fake);
 const appReady = () => { fake.app.ready = true; };
@@ -46,7 +46,7 @@ function googleRoutes(token: [number, Record<string, unknown>], api: [number, Re
 async function calendarListAfterLaunch() {
     const authService = await relaunch();
     appReady();
-    return { authService, read: authService.getAuthClient().request({ url: CALENDAR_LIST }) };
+    return { authService, read: (await authService.getAuthClient()).request({ url: CALENDAR_LIST }) };
 }
 
 describe('a revoke that also kills the access token before it expires', () => {
@@ -59,7 +59,7 @@ describe('a revoke that also kills the access token before it expires', () => {
 
         await expect(read).rejects.toBeInstanceOf(Error);
 
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         expect(fake.storeData.has('tokens')).toBe(false);
         expect(calls(isTokenRequest)).toBe(1);
     });
@@ -76,8 +76,8 @@ describe('a revoke that also kills the access token before it expires', () => {
         const apiCalls = fake.tokenEndpoint.mock.calls.filter(([input]) => !isTokenRequest(input));
         expect(apiCalls).toHaveLength(2); // gaxios redacts the failed request's headers in place, so only the retry's is readable
         expect(new Headers(apiCalls[1][1]?.headers).get('authorization')).toBe('Bearer refreshed-access');
-        expect(authService.isAuthenticated()).toBe(true);
-        expect(readStored(fake)).toMatchObject({ access_token: 'refreshed-access', refresh_token: 'stored-refresh' });
+        expect(await authService.isAuthenticated()).toBe(true);
+        await kit.expectStoredEventually(fake, { access_token: 'refreshed-access', refresh_token: 'stored-refresh' }); // the save runs in the background
     });
 
     it('a 401 that keeps coming back with a valid grant is retried once, not forever', async () => {
@@ -94,7 +94,7 @@ describe('a revoke that also kills the access token before it expires', () => {
 
         expect(calls(isTokenRequest)).toBe(1);
         expect(calls(input => !isTokenRequest(input))).toBe(2);
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
     });
 
     it('a 401 from the token endpoint itself (invalid_client) asks it once, not twice', async () => {
@@ -106,7 +106,7 @@ describe('a revoke that also kills the access token before it expires', () => {
 
         expect(calls(isTokenRequest)).toBe(1);
         expect(calls(input => !isTokenRequest(input))).toBe(0);
-        expect(authService.isAuthenticated()).toBe(true); // a misconfigured app is not a sign-out
+        expect(await authService.isAuthenticated()).toBe(true); // a misconfigured app is not a sign-out
     });
 
     it.each([
@@ -122,6 +122,6 @@ describe('a revoke that also kills the access token before it expires', () => {
 
         expect(calls(isTokenRequest)).toBe(0);
         expect(calls(input => !isTokenRequest(input))).toBe(1);
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
     });
 });

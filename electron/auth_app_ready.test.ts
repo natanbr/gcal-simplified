@@ -10,8 +10,13 @@
 // "No access, refresh token, API key or refresh handler callback is set": an
 // empty week with no error on screen.
 //
+// Since 2026-11-03 the readers are async (Electron 46 removes safeStorage's
+// synchronous methods): before ready they REJECT, and the fake's synchronous
+// trio throws, so a call left on it fails here.
+//
 // Sign-in, sign-out and Google refusing the refresh token are in
-// auth_session.test.ts; the fakes are in authTestKit.ts.
+// auth_session.test.ts; the races of the async store are in
+// auth_async_store.test.ts; the fakes are in authTestKit.ts.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -25,7 +30,7 @@ vi.mock('electron', () => kit.electronModule(fake));
 vi.mock('electron-store', () => kit.electronStoreModule(fake));
 vi.mock('googleapis', () => kit.googleapisModule(fake));
 
-const { HOUR, NO_CREDENTIALS, authorization, googleAnswers, readStored, stored } = kit;
+const { HOUR, NO_CREDENTIALS, authorization, googleAnswers, stored } = kit;
 const storeEncrypted = (plain: string) => kit.storeEncrypted(fake, plain);
 const relaunch = () => kit.relaunch(fake);
 const appReady = () => { fake.app.ready = true; };
@@ -40,9 +45,24 @@ describe('Google credentials and the app-ready lifecycle', () => {
 
         await relaunch();
 
-        expect(fake.safeStorage.isEncryptionAvailable).not.toHaveBeenCalled();
-        expect(fake.safeStorage.decryptString).not.toHaveBeenCalled();
-        expect(fake.safeStorage.encryptString).not.toHaveBeenCalled();
+        for (const method of Object.values(fake.safeStorage)) expect(method).not.toHaveBeenCalled();
+        expect(Object.keys(fake.safeStorage).sort()).toEqual([
+            'decryptString', 'decryptStringAsync', 'encryptString', 'encryptStringAsync',
+            'isAsyncEncryptionAvailable', 'isEncryptionAvailable',
+        ]);
+    });
+
+    it('isAuthenticated() and getAuthClient() return Promises', async () => {
+        fake.storeData.set('tokens', stored()); // legacy plain text: no safeStorage call to blur the answer
+        fake.storeData.set('isEncrypted', false);
+        const authService = await relaunch();
+        appReady();
+
+        const authenticated = kit.promised('isAuthenticated()', () => authService.isAuthenticated());
+        const client = kit.promised('getAuthClient()', () => authService.getAuthClient());
+
+        expect(await authenticated).toBe(true);
+        expect((await client).credentials.refresh_token).toBe('stored-refresh');
     });
 
     it('a relaunch gives the OAuth client the stored credentials before the first Google call', async () => {
@@ -62,9 +82,9 @@ describe('Google credentials and the app-ready lifecycle', () => {
         expect(await authorization(authService)).toBe('Bearer refreshed-access');
         const refreshBody = new URLSearchParams(String(fake.tokenEndpoint.mock.calls[0][1]?.body));
         expect(refreshBody.get('refresh_token')).toBe('stored-refresh');
-        // The tokens listener persisted the refresh, and the refresh response
-        // (which carries no refresh_token) did not erase the stored one.
-        expect(readStored(fake)).toMatchObject({ access_token: 'refreshed-access', refresh_token: 'stored-refresh' });
+        // The tokens listener persisted the refresh (in the background: the read does not wait for its save),
+        // and the refresh response (which carries no refresh_token) did not erase the stored one.
+        await kit.expectStoredEventually(fake, { access_token: 'refreshed-access', refresh_token: 'stored-refresh' });
     });
 
     it('isAuthenticated() answers from the credentials the client holds, decrypted once', async () => {
@@ -72,10 +92,10 @@ describe('Google credentials and the app-ready lifecycle', () => {
         const authService = await relaunch();
         appReady();
 
-        expect([authService.isAuthenticated(), authService.isAuthenticated(), authService.isAuthenticated()])
-            .toEqual([true, true, true]);
-        expect(authService.getAuthClient().credentials.refresh_token).toBe('stored-refresh');
-        expect(fake.safeStorage.decryptString).toHaveBeenCalledTimes(1);
+        const answers = [await authService.isAuthenticated(), await authService.isAuthenticated(), await authService.isAuthenticated()];
+        expect(answers).toEqual([true, true, true]);
+        expect((await authService.getAuthClient()).credentials.refresh_token).toBe('stored-refresh');
+        expect(fake.safeStorage.decryptStringAsync).toHaveBeenCalledTimes(1);
     });
 
     it('a legacy plain-text blob still signs in', async () => {
@@ -84,7 +104,7 @@ describe('Google credentials and the app-ready lifecycle', () => {
         const authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(await authorization(authService)).toBe('Bearer stored-access');
     });
 
@@ -93,7 +113,7 @@ describe('Google credentials and the app-ready lifecycle', () => {
         const authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(await authorization(authService)).toBe('Bearer stored-access');
     });
 
@@ -119,7 +139,7 @@ describe('Google credentials and the app-ready lifecycle', () => {
         const authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         await expect(authorization(authService)).rejects.toThrow(NO_CREDENTIALS);
     });
 
@@ -129,21 +149,23 @@ describe('Google credentials and the app-ready lifecycle', () => {
         const authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         expect(logged).toHaveBeenCalled();
         expect(JSON.stringify(logged.mock.calls.map(call => call.map(String)))).not.toContain('SEEDED');
         logged.mockRestore();
     });
 
-    it('before the app is ready, the readers throw instead of answering "signed out"', async () => {
+    it('before the app is ready, the readers reject instead of answering "signed out"', async () => {
         storeEncrypted(JSON.stringify(stored()));
         const authService = await relaunch();
 
-        expect(() => authService.isAuthenticated()).toThrow(/before the app is ready/);
-        expect(() => authService.getAuthClient()).toThrow(/before the app is ready/);
+        // A rejection, not a throw: main.ts and api.ts await them, and readWhileHeld only sees a rejection.
+        await expect(kit.promised('isAuthenticated()', () => authService.isAuthenticated())).rejects.toThrow(/before the app is ready/);
+        await expect(kit.promised('getAuthClient()', () => authService.getAuthClient())).rejects.toThrow(/before the app is ready/);
+        for (const method of Object.values(fake.safeStorage)) expect(method).not.toHaveBeenCalled();
 
         appReady();
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
     });
 
     it('a store read that throws is retried by the next call, not remembered as "signed out"', async () => {
@@ -152,8 +174,8 @@ describe('Google credentials and the app-ready lifecycle', () => {
         appReady();
         fake.storeReadError.next = Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
 
-        expect(() => authService.isAuthenticated()).toThrow('EBUSY');
-        expect(authService.isAuthenticated()).toBe(true);
+        await expect(kit.promised('isAuthenticated()', () => authService.isAuthenticated())).rejects.toThrow('EBUSY');
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(await authorization(authService)).toBe('Bearer stored-access');
     });
 
@@ -164,7 +186,7 @@ describe('Google credentials and the app-ready lifecycle', () => {
         const authService = await relaunch(); // the store opens on first use, after ready
         appReady();
 
-        expect(() => authService.isAuthenticated()).toThrow('EBUSY');
-        expect(authService.isAuthenticated()).toBe(true);
+        await expect(kit.promised('isAuthenticated()', () => authService.isAuthenticated())).rejects.toThrow('EBUSY');
+        expect(await authService.isAuthenticated()).toBe(true);
     });
 });

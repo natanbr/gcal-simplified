@@ -16,6 +16,7 @@ export class AuthService {
     private oauth2Client: GoogleOAuthClient;
     private isAuthInProgress: boolean = false;
     private credentialsLoaded = false;
+    private loading: Promise<void> | null = null;
     private readonly signedOutListeners = new Set<() => void>();
 
     constructor() {
@@ -43,14 +44,13 @@ export class AuthService {
         // stored blob stays current and a rotated refresh_token survives a
         // restart. It runs inside the library's synchronous emit, before the
         // library installs the tokens, so a store error must not escape it: that
-        // would throw away a grant Google already made.
+        // would throw away a grant Google already made. The read that refreshed
+        // does not wait for the save.
         client.on('tokens', (granted) => {
             if (client !== this.oauth2Client) return;
-            try {
-                this.saveTokens(granted);
-            } catch (error) {
+            this.saveTokens(granted).catch((error: unknown) => {
                 console.error(`Failed to save the Google tokens (${errorSummary(error)}); they stay in memory until the next save`);
-            }
+            });
         });
         return client;
     }
@@ -89,23 +89,27 @@ export class AuthService {
      *
      * Never in the constructor: the singleton is built when main.js is imported,
      * before Electron's `app` is ready, and safeStorage cannot decrypt then (on
-     * Windows isEncryptionAvailable() is false and decryptString throws). Loading
-     * there started every relaunch with an empty client while isAuthenticated()
-     * said "signed in": an empty week with no error. Before ready this throws,
-     * because answering "signed out" would be a lie.
-     *
-     * Sign-in and sign-out mark the credentials loaded: a save can fail and leave
-     * the store behind the client, and a later first load must not overwrite them.
+     * Windows it reports no encryption and refuses to decrypt). Loading there
+     * started every relaunch with an empty client while isAuthenticated() said
+     * "signed in": an empty week with no error. Before ready this rejects,
+     * because answering "signed out" would be a lie. Concurrent callers share
+     * one load, forgotten once it settles, so a store read that fails (the file
+     * held by antivirus or a backup) is retried by the next call.
      */
-    private ensureCredentialsLoaded(): void {
+    private async ensureCredentialsLoaded(): Promise<void> {
         if (this.credentialsLoaded) return;
         if (!app.isReady()) {
             throw new Error('Google credentials were requested before the app is ready; safeStorage cannot decrypt them yet.');
         }
-        const tokens = readStoredTokens();
-        // Set only once the read returned: a store read that throws (the file
-        // held by antivirus or a backup) is retried by the next call instead of
-        // answering "signed out" until a restart.
+        this.loading ??= this.loadCredentials().finally(() => { this.loading = null; });
+        return this.loading;
+    }
+
+    private async loadCredentials(): Promise<void> {
+        const client = this.oauth2Client;
+        const tokens = await readStoredTokens();
+        // A sign-in or sign-out during the decrypt wins: a save can fail and leave the store behind the client.
+        if (this.credentialsLoaded || client !== this.oauth2Client) return;
         this.credentialsLoaded = true;
         if (tokens) this.oauth2Client.setCredentials(tokens);
     }
@@ -118,24 +122,24 @@ export class AuthService {
      * and every refresh response omits it, so writing the response verbatim
      * destroys the only long-lived credential we have — and the next start finds
      * an access token that is already expired with nothing to renew it from.
-     * The kept one comes from the client, which still holds the previous set
-     * when the library emits 'tokens' (as its own refresh does), never from a
-     * re-read of the store, which can fail and lose it.
+     * The kept one is read from the client before any await, while it still
+     * holds the previous set (the library installs the new one right after it
+     * emits 'tokens'), never from a re-read of the store, which can fail and lose it.
      */
-    private saveTokens(granted: Credentials) {
+    private async saveTokens(granted: Credentials): Promise<void> {
         const refreshToken = granted.refresh_token ?? this.oauth2Client.credentials.refresh_token;
         const tokens = refreshToken ? { ...granted, refresh_token: refreshToken } : granted;
-        writeStoredTokens(tokens);
+        await writeStoredTokens(tokens);
     }
 
-    getAuthClient() {
-        this.ensureCredentialsLoaded();
+    async getAuthClient(): Promise<GoogleOAuthClient> {
+        await this.ensureCredentialsLoaded();
         return this.oauth2Client;
     }
 
     /** Answers from the client's own credentials, so it never says "signed in" while the client holds none. */
-    isAuthenticated() {
-        this.ensureCredentialsLoaded();
+    async isAuthenticated(): Promise<boolean> {
+        await this.ensureCredentialsLoaded();
         return canAuthorize(this.oauth2Client.credentials);
     }
 
@@ -198,7 +202,7 @@ export class AuthService {
                         // refused or with the old account's token, and must not touch it.
                         const client = this.newClient();
                         const { tokens } = await client.getToken({ code, redirect_uri: redirectUri });
-                        this.signedIn(client, tokens);
+                        await this.signedIn(client, tokens);
 
                         res.setHeader('Content-Type', 'text/html; charset=utf-8');
                         res.end('<h1>Authentication successful!</h1><p>You can close this window.</p><script>window.close()</script>');
@@ -263,17 +267,18 @@ export class AuthService {
 
     /**
      * Makes `client` the sign-in and retires the one before it. Saved here, not
-     * by the 'tokens' listener (the exchange ran before the client was current).
+     * by the 'tokens' listener (the exchange ran before the client was current),
+     * and waited for, so auth:login answers once the tokens are on disk.
      * A failed save does not undo the sign-in; the next refresh saves again.
      */
-    private signedIn(client: GoogleOAuthClient, tokens: Credentials): void {
+    private async signedIn(client: GoogleOAuthClient, tokens: Credentials): Promise<void> {
         client.setCredentials(tokens);
         const previous = this.oauth2Client;
         this.oauth2Client = client;
         this.credentialsLoaded = true;
         previous.retire();
         try {
-            this.saveTokens(tokens);
+            await this.saveTokens(tokens);
         } catch (error) {
             console.error(`Failed to save the Google tokens (${errorSummary(error)}); they stay in memory until the next save`);
         }

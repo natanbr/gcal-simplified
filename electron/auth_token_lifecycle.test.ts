@@ -19,6 +19,11 @@
 // store could lose it), a failed write never falls back to plain text, a store
 // error never escapes the library's 'tokens' emit, and sign-out clears the
 // client before the store.
+//
+// Since 2026-11-03 a save is async (Electron 46 removes safeStorage's synchronous
+// encryptString): saveTokens() returns a Promise, and the 'tokens' listener
+// starts the save without waiting for it. The race cases (a sign-out or a newer
+// save overtaking an encrypt in flight) are in auth_async_store.test.ts.
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -39,9 +44,13 @@ const mocks = vi.hoisted(() => {
         },
         safeStorage: {
             // Plaintext path — keeps assertions about the stored value readable.
-            isEncryptionAvailable: vi.fn().mockReturnValue(false),
-            encryptString: vi.fn(),
-            decryptString: vi.fn(),
+            isAsyncEncryptionAvailable: vi.fn().mockResolvedValue(false),
+            encryptStringAsync: vi.fn(),
+            decryptStringAsync: vi.fn(),
+            // Removed in Electron 46: a call left on one fails the test.
+            isEncryptionAvailable: vi.fn((): never => { throw new Error('safeStorage.isEncryptionAvailable was removed in Electron 46'); }),
+            encryptString: vi.fn((): never => { throw new Error('safeStorage.encryptString was removed in Electron 46'); }),
+            decryptString: vi.fn((): never => { throw new Error('safeStorage.decryptString was removed in Electron 46'); }),
         },
         shell: { openExternal: vi.fn() },
         oauthCalls: {
@@ -107,10 +116,13 @@ function signedIn(credentials: Credentials) {
 }
 
 function encryptionOn(): void {
-    mocks.safeStorage.isEncryptionAvailable.mockReturnValue(true);
-    mocks.safeStorage.encryptString.mockImplementation((s: string) => Buffer.from(s, 'utf-8'));
-    mocks.safeStorage.decryptString.mockImplementation((b: Buffer) => b.toString('utf-8'));
+    mocks.safeStorage.isAsyncEncryptionAvailable.mockResolvedValue(true);
+    mocks.safeStorage.encryptStringAsync.mockImplementation(async (s: string) => Buffer.from(s, 'utf-8'));
+    mocks.safeStorage.decryptStringAsync.mockImplementation(async (b: Buffer) => ({ result: b.toString('utf-8'), shouldReEncrypt: false }));
 }
+
+/** The saves a 'tokens' listener starts run in the background: lets them finish. */
+const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 
 describe('OAuth token lifecycle', () => {
     beforeEach(() => {
@@ -118,39 +130,39 @@ describe('OAuth token lifecycle', () => {
         vi.clearAllMocks();
         mocks.storeInstance.set.mockReset();
         mocks.storeInstance.delete.mockReset();
-        mocks.safeStorage.isEncryptionAvailable.mockReturnValue(false);
+        mocks.safeStorage.isAsyncEncryptionAvailable.mockResolvedValue(false);
     });
 
     describe('refresh_token preservation', () => {
-        it('keeps the client\'s refresh_token when the new credentials omit one', () => {
+        it('keeps the client\'s refresh_token when the new credentials omit one', async () => {
             const service = signedIn({ access_token: 'old-access', refresh_token: 'THE-ONLY-REFRESH-TOKEN', expiry_date: 1 });
             // A refresh response: new access token, NO refresh token.
-            service['saveTokens']({ access_token: 'new-access', expiry_date: 2 });
+            await service['saveTokens']({ access_token: 'new-access', expiry_date: 2 });
 
             expect(storedTokens()?.refresh_token).toBe('THE-ONLY-REFRESH-TOKEN');
             expect(storedTokens()?.access_token).toBe('new-access');
         });
 
-        it('takes it from the client, not from a re-read of the store (here unreadable)', () => {
+        it('takes it from the client, not from a re-read of the store (here unreadable)', async () => {
             mocks.storeData.set('tokens', 'ciphertext this machine cannot decrypt');
             mocks.storeData.set('isEncrypted', true);
             const service = signedIn({ access_token: 'old-access', refresh_token: 'THE-ONLY-REFRESH-TOKEN' });
 
-            service['saveTokens']({ access_token: 'new-access' });
+            await service['saveTokens']({ access_token: 'new-access' });
 
             expect(storedTokens()?.refresh_token).toBe('THE-ONLY-REFRESH-TOKEN');
         });
 
-        it('accepts a new refresh_token when one IS supplied (first consent / rotation)', () => {
+        it('accepts a new refresh_token when one IS supplied (first consent / rotation)', async () => {
             const service = signedIn({ refresh_token: 'old-refresh' });
-            service['saveTokens']({ access_token: 'a', refresh_token: 'rotated-refresh' });
+            await service['saveTokens']({ access_token: 'a', refresh_token: 'rotated-refresh' });
 
             expect(storedTokens()?.refresh_token).toBe('rotated-refresh');
         });
 
-        it('stores cleanly on a first-ever login with nothing saved yet', () => {
+        it('stores cleanly on a first-ever login with nothing saved yet', async () => {
             const service = new AuthService();
-            service['saveTokens']({ access_token: 'a', refresh_token: 'first-refresh' });
+            await service['saveTokens']({ access_token: 'a', refresh_token: 'first-refresh' });
 
             expect(storedTokens()?.refresh_token).toBe('first-refresh');
         });
@@ -162,19 +174,19 @@ describe('OAuth token lifecycle', () => {
             expect(mocks.oauthCalls.on).toHaveBeenCalledWith('tokens', expect.any(Function));
         });
 
-        it('persists credentials handed to it by that listener', () => {
+        it('persists credentials handed to it by that listener', async () => {
             signedIn({ refresh_token: 'keep-me', access_token: 'stale' });
 
             tokensListener()({ access_token: 'freshly-refreshed', expiry_date: 999 });
 
-            expect(storedTokens()?.access_token).toBe('freshly-refreshed');
+            await vi.waitFor(() => expect(storedTokens()?.access_token).toBe('freshly-refreshed')); // the listener does not wait for its save
             // ...and the refresh token survives that write too.
             expect(storedTokens()?.refresh_token).toBe('keep-me');
         });
     });
 
     describe('a failed save', () => {
-        it('a write that fails leaves the file as it was: no plain-text token on disk', () => {
+        it('a write that fails leaves the file as it was: no plain-text token on disk', async () => {
             encryptionOn();
             mocks.storeData.set('tokens', 'previous-encrypted-blob');
             mocks.storeData.set('isEncrypted', true);
@@ -183,16 +195,23 @@ describe('OAuth token lifecycle', () => {
             mocks.storeInstance.set.mockImplementationOnce(() => { throw EPERM(); });
 
             tokensListener()({ access_token: 'refreshed-access' });
+            await vi.waitFor(() => expect(mocks.storeInstance.set).toHaveBeenCalled());
+            await settle();
 
             expect(mocks.storeData.get('tokens')).toBe('previous-encrypted-blob');
             expect(mocks.storeData.get('isEncrypted')).toBe(true);
         });
 
-        it('a store error never escapes the listener, so the library still installs the granted token', () => {
+        it('a store error never escapes the listener, so the library still installs the granted token', async () => {
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
             signedIn({ access_token: 'old-access', refresh_token: 'R' });
             mocks.storeInstance.set.mockImplementation(() => { throw EPERM(); });
 
             expect(() => tokensListener()({ access_token: 'refreshed-access' })).not.toThrow();
+
+            // The failure is logged, not left as a rejected promise nobody handles.
+            await vi.waitFor(() => expect(logged).toHaveBeenCalledWith('Failed to save the Google tokens (EPERM); they stay in memory until the next save'));
+            logged.mockRestore();
         });
 
         it('a sign-in whose save fails still signs in, and a later first read does not bring back the old store', async () => {
@@ -216,24 +235,24 @@ describe('OAuth token lifecycle', () => {
             });
 
             await expect(signingIn).resolves.toBeUndefined();
-            expect(service.isAuthenticated()).toBe(true);
-            expect(service.getAuthClient().credentials.access_token).toBe('new-access');
+            expect(await service.isAuthenticated()).toBe(true);
+            expect((await service.getAuthClient()).credentials.access_token).toBe('new-access');
         });
     });
 
     describe('sign-out', () => {
-        it('clears the client first, so a store delete that throws cannot leave it signed in', () => {
+        it('clears the client first, so a store delete that throws cannot leave it signed in', async () => {
             mocks.storeData.set('tokens', { refresh_token: 'R' });
             mocks.storeData.set('isEncrypted', false);
             const service = new AuthService();
-            expect(service.isAuthenticated()).toBe(true);
+            expect(await service.isAuthenticated()).toBe(true);
             // The client a read in flight already holds (api.ts keeps it across calls), not only its replacement.
-            const heldByARead = service.getAuthClient();
+            const heldByARead = await service.getAuthClient();
             mocks.storeInstance.delete.mockImplementationOnce(() => { throw EPERM(); });
 
             expect(() => service.logout()).toThrow('EPERM');
 
-            expect(service.isAuthenticated()).toBe(false);
+            expect(await service.isAuthenticated()).toBe(false);
             expect(heldByARead.credentials).toEqual({});
         });
     });
@@ -253,10 +272,10 @@ describe('OAuth token lifecycle', () => {
     });
 
     describe('encrypted storage path', () => {
-        it('preserves the refresh_token when safeStorage encryption is in use', () => {
+        it('preserves the refresh_token when safeStorage encryption is in use', async () => {
             encryptionOn();
             const service = signedIn({ access_token: 'old', refresh_token: 'encrypted-refresh' });
-            service['saveTokens']({ access_token: 'new' });
+            await service['saveTokens']({ access_token: 'new' });
 
             expect(mocks.storeData.get('isEncrypted')).toBe(true);
             const raw = JSON.parse(

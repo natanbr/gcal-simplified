@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-    isAuthenticated: vi.fn(() => true),
+    isAuthenticated: vi.fn(async () => true),
     calendarListList: vi.fn(),
     eventsList: vi.fn(),
     tasklistsList: vi.fn(),
@@ -31,7 +31,8 @@ vi.mock('googleapis', () => ({
         tasks: () => ({ tasklists: { list: mocks.tasklistsList }, tasks: { list: mocks.tasksList } }),
     },
 }));
-vi.mock('./auth', () => ({ authService: { isAuthenticated: mocks.isAuthenticated, getAuthClient: () => ({}) } }));
+// authService's readers are async since 2026-11-03 (safeStorage's synchronous methods are gone in Electron 46): the mock answers with Promises.
+vi.mock('./auth', () => ({ authService: { isAuthenticated: mocks.isAuthenticated, getAuthClient: async () => ({}) } }));
 vi.mock('./store', () => ({ store: { get: () => ({ calendarIds: ['family', 'school'], taskListIds: mocks.taskListIds }) } }));
 
 import { ApiService } from './api';
@@ -65,7 +66,7 @@ let warn: ReturnType<typeof vi.spyOn>;
 const titles = (events: Array<{ title: string }>) => events.map(e => e.title).sort();
 
 beforeEach(() => {
-    mocks.isAuthenticated.mockReturnValue(true);
+    mocks.isAuthenticated.mockResolvedValue(true);
     mocks.taskListIds = ['chores'];
     mocks.calendarListList.mockResolvedValue({ data: { items: [] } });
     calendars();
@@ -128,7 +129,7 @@ describe('getEvents (the Calendar view): what it still forgives', () => {
         });
 
     it('signed out: [] (the Sign in screen covers it)', async () => {
-        mocks.isAuthenticated.mockReturnValue(false);
+        mocks.isAuthenticated.mockResolvedValue(false);
 
         expect(await new ApiService().getEvents(FROM, TO)).toEqual([]);
     });
@@ -198,7 +199,7 @@ describe('getTasks: Google unreachable fails the read', () => {
     });
 
     it('signed out: []', async () => {
-        mocks.isAuthenticated.mockReturnValue(false);
+        mocks.isAuthenticated.mockResolvedValue(false);
 
         expect(await new ApiService().getTasks()).toEqual([]);
     });

@@ -252,3 +252,23 @@ refresh's request body, refresh token included, in its error object, which `api.
 log errors through `errorSummary` (`electron/log-safe.ts`), never as objects. Electron also logs
 the error object of every rejected `ipcMain.handle`, so `data:`/`auth:` handlers reject through
 `ipcSafe`.
+
+## 2026-11-03 — safeStorage goes async: a save can now be overtaken by a sign-out
+
+**Learning:** Electron 46 removes `safeStorage`'s synchronous methods (Electron 45 warns on each).
+Measured with the real binary on Windows: the key lives in `<userData>/Local State`
+(`os_crypt.encrypted_key`, wrapped by DPAPI) and is written only on a clean quit. A probe that
+ended with `app.exit()` never wrote it, and the next process could decrypt nothing: end a probe
+with `app.quit()` after a no-op `window-all-closed`. A blob from the synchronous encrypt
+(Electron 40, what v0.0.45 wrote) decrypts with `decryptStringAsync` in another process. The
+security change is a race: a synchronous save could never be overtaken, an async one can. A
+sign-out while a refresh's save was still encrypting would write the signed-out account back to
+disk, and two saves could land out of order.
+**Action:** `electron/auth-token-store.ts` runs every save on one promise chain in call order and
+takes a generation number when the save is asked for; `clearStoredTokens` (still synchronous)
+moves it on, and a save that finds it moved after its encrypt writes nothing. The first load is
+shared and applies only if no sign-in or sign-out happened during the decrypt. Guards:
+`electron/auth_async_store.test.ts`, `electron/safe-storage-compat.test.ts`,
+`src/__tests__/safe-storage-async-boundary.test.ts`.
+**Still open (owner decision):** when the encrypt fails, the tokens are still written in plain
+text, exactly as the synchronous code did; this change neither widened nor closed that fallback.

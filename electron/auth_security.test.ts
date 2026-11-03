@@ -12,9 +12,13 @@ const mocks = vi.hoisted(() => {
   return {
     electronStoreInstance: storeInstance,
     safeStorage: {
-      isEncryptionAvailable: vi.fn().mockReturnValue(false),
-      encryptString: vi.fn(),
-      decryptString: vi.fn(),
+      isAsyncEncryptionAvailable: vi.fn().mockResolvedValue(false),
+      encryptStringAsync: vi.fn(),
+      decryptStringAsync: vi.fn(),
+      // Removed in Electron 46: a call left on one fails the test.
+      isEncryptionAvailable: vi.fn((): never => { throw new Error('safeStorage.isEncryptionAvailable was removed in Electron 46'); }),
+      encryptString: vi.fn((): never => { throw new Error('safeStorage.encryptString was removed in Electron 46'); }),
+      decryptString: vi.fn((): never => { throw new Error('safeStorage.decryptString was removed in Electron 46'); }),
     },
     shell: {
       openExternal: vi.fn(),

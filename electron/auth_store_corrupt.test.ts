@@ -71,7 +71,7 @@ describe('a corrupt token file', () => {
         const authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         const aside = movedAside();
         expect(aside).toHaveLength(1);
         expect(fs.readFileSync(path.join(userData.dir, aside[0]), 'utf-8')).toBe(content);
@@ -85,7 +85,7 @@ describe('a corrupt token file', () => {
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
         let authService = await relaunch();
         appReady();
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         expect(movedAside()).toHaveLength(1);
         kit.googleAnswers(fake, SIGNED_IN);
 
@@ -94,8 +94,8 @@ describe('a corrupt token file', () => {
         authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(true);
-        expect(authService.getAuthClient().credentials.refresh_token).toBe('signed-in-refresh');
+        expect(await authService.isAuthenticated()).toBe(true);
+        expect((await authService.getAuthClient()).credentials.refresh_token).toBe('signed-in-refresh');
         expect(fs.existsSync(path.join(userData.dir, 'config.json.corrupt-2026-01-01T00-00-00-000Z'))).toBe(true);
     });
 
@@ -106,7 +106,7 @@ describe('a corrupt token file', () => {
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const authService = await relaunch();
         appReady();
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         expect(movedAside()).toHaveLength(2);
 
         authService.logout();
@@ -120,14 +120,14 @@ describe('a corrupt token file', () => {
         const output = consoleOutput();
         let authService = await relaunch();
         appReady();
-        expect(authService.isAuthenticated()).toBe(true); // opened and read
+        expect(await authService.isAuthenticated()).toBe(true); // opened and read
         fs.writeFileSync(tokenFile(), DAMAGED); // a hand edit while the app runs
         kit.googleAnswers(fake, SIGNED_IN);
 
         await kit.signIn(fake, authService); // the save re-reads the file first
         authService = await relaunch();
         appReady();
-        expect(authService.getAuthClient().credentials.refresh_token).toBe('signed-in-refresh');
+        expect((await authService.getAuthClient()).credentials.refresh_token).toBe('signed-in-refresh');
 
         fs.writeFileSync(tokenFile(), DAMAGED);
         expect(() => authService.logout()).not.toThrow();
@@ -141,7 +141,7 @@ describe('a corrupt token file', () => {
         const authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(movedAside()).toEqual([]);
     });
 
@@ -151,7 +151,7 @@ describe('a corrupt token file', () => {
         const authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(movedAside()).toEqual([]);
     });
 });
