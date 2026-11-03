@@ -8,7 +8,7 @@
 // the hour the clocks moved: the night they spring forward the window looks
 // an hour shorter than the run, the night they fall back an hour longer.
 //
-// This file pins a time zone with DST (America/Vancouver: 2026-03-08 02:00 →
+// This file pins a time zone with DST (America/Los_Angeles: 2026-03-08 02:00 →
 // 03:00, 2026-11-01 02:00 → 01:00), as mcReducer.occurrence-dst.test.ts does.
 // Vitest runs each file in its own process, so the zone does not leak.
 // ============================================================
@@ -16,7 +16,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { eveningOnlyAt, ranOnce, renderLiveScheduler, skippedLines, step } from './schedulerTestKit';
 
-process.env.TZ = 'America/Vancouver';
+process.env.TZ = 'America/Los_Angeles';
 
 describe('a relaunch inside last night’s window on a DST night', () => {
     beforeEach(() => { vi.useFakeTimers(); });

@@ -288,6 +288,13 @@ A simplified desktop calendar application inspired by Google Calendar, built wit
 - **Styling**: Tailwind CSS, Framer Motion for animations.
 - **State Management**: React `useState` / `useEffect` with IPC calls for data fetching.
 - **Testing**: Playwright for E2E tests, Vitest (implied) for unit tests.
+- **Local time** (2026-11-02): every clock and schedule (the MC dashboard clock, missions, the quick-game
+  window, the mood gauge) shows the family's real wall-clock time. The app takes the zone from Windows and
+  the zone's rules from the time zone database bundled with Electron (ICU tzdata), so both must know the
+  current rules: British Columbia stays on UTC-07:00 from 2026-11-01. That needs the Windows zone
+  "(UTC-07:00) Pacific Time (British Columbia)" and an Electron whose tzdata is 2026b or newer (Electron 43+;
+  Electron 40-42 carry 2025b/2025c and do not know the new Windows zone). The app runs Electron 45 (ICU 78.2,
+  tzdata 2026e), checked by `electron/bundled-tzdata.test.ts`. No offset is hard-coded in the app.
 
 ## Bug Fixes
 
@@ -2742,3 +2749,39 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   the 3 overlay cases and both boundary cases; the remote cases go red with both Resets taken off the
   allowlist. The overlay's old Reset cases (tap, hold, a hold in progress when the mission ended) went
   with the button.
+
+### 2026-11-02 Electron 45: British Columbia's permanent UTC-7
+
+- **Why.** British Columbia stays on UTC-07:00 all year from 2026-11-01. The app hard-codes no offset:
+  it takes the zone from Windows and the zone's rules from the ICU time zone data (tzdata) bundled
+  inside Electron. Electron 40 bundles tzdata 2025b (ICU 77.1), which still moves America/Vancouver
+  back to UTC-08:00 in November, and its ICU data does not know the new Windows zone "British Columbia
+  Standard Time". On 2026-11-02 the MC dashboard showed the time an hour behind, and so did everything
+  else that reads the local time (missions, the quick-game window, the mood gauge's active window).
+- **Now.** Electron 40.4.1 → 45.2.1 (Chromium 156, Node 24, ICU 78.2, tzdata 2026e; its ICU data
+  maps "British Columbia Standard Time"), and electron-builder 26.7.0 → 26.18.1, which renames
+  Electron 45's new `electron_wer.dll` (the Windows Error Reporting helper) together with the exe.
+  The caret range `^45.2.1` keeps Electron 46 out (see the follow-up). Playwright stays at 1.58.1:
+  `patches/apply-patches.js` patches its Electron launcher, and newer Playwright moved that file.
+  Since Electron 42 `npm install` no longer downloads the Electron binary; the first
+  `require('electron')` (the dev server, an E2E launch) or `npx install-electron` does.
+- **For the owner.** Windows must use the new zone: Settings → Time & language → Date & time → Time
+  zone "(UTC-07:00) Pacific Time (British Columbia)". The old "(UTC-08:00) Pacific Time (US & Canada)"
+  follows California and stays an hour behind BC until March, whatever Electron bundles. The fix
+  reaches the family's PC only with a release built on Electron 45.
+- **Known follow-up.** Electron 46 removes the synchronous `safeStorage` methods
+  (`isEncryptionAvailable`, `encryptString`, `decryptString`) that `electron/auth-token-store.ts`
+  uses to keep the Google tokens; Electron 45 still runs them, with a one-time deprecation warning.
+  They must move to the asynchronous API before Electron 46.
+- Tests: `electron/bundled-tzdata.test.ts` runs the installed Electron binary as Node
+  (`ELECTRON_RUN_AS_NODE=1`) and asks its ICU, with every zone named, never the host's: tzdata 2026b
+  or newer; America/Vancouver at 2026-11-05 18:00 UTC is GMT-07:00; America/Los_Angeles at the same
+  instant is still GMT-08:00 (the contrast); on Windows, its ICU data names "British Columbia Standard
+  Time"; and the binary it ran is the installed `electron` package's version. Red on Electron 40.4.1
+  (tzdata 2025b, GMT-08:00, the zone name missing), green on 45.2.1. A binary that is not installed
+  fails every case with how to install it; the suite never downloads it and never skips.
+- The unit suite pins `TZ=America/Los_Angeles` (`vitest.config.ts`). On a PC set to the BC Windows
+  zone, Node 22 (tzdata 2025b) names no zone and falls to a fixed GMT-08:00, and a date assertion in
+  `missionStreak.test.ts` moved a day. The two DST suites (`useMissionScheduler.dst.test.tsx`,
+  `mcReducer.occurrence-dst.test.ts`) moved from America/Vancouver, which under new tzdata no longer
+  falls back on 2026-11-01, to America/Los_Angeles, which keeps both 2026 DST nights.
