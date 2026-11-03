@@ -14,7 +14,7 @@ A simplified, beautiful Google Calendar desktop application built with Electron,
 ## Tech Stack 🛠️
 
 - **Frontend**: React 18 with TypeScript
-- **Desktop Framework**: Electron 30
+- **Desktop Framework**: Electron 45
 - **Build Tool**: Vite 5
 - **Styling**: Tailwind CSS with custom animations
 - **Animation**: Framer Motion

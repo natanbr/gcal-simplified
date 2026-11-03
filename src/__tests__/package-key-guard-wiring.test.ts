@@ -17,7 +17,7 @@
 // ============================================================
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { Packager } from 'app-builder-lib';
@@ -68,7 +68,10 @@ async function packagerFor(args: string[]): Promise<Packager> {
 
 /** Runs the hook electron-builder resolves for `packager`, as it would, on a synthetic build. */
 async function runHook(packager: Packager, role: string): Promise<void> {
-    const hook = await resolveFunction<unknown>('module', packager.config.beforePack ?? '', 'beforePack');
+    // Since electron-builder 26.18 a relative hook path must resolve inside the workspace root, which the
+    // Packager passes in (packager.js addPackagerEventHandlers). With no workspaces (pinned below) that root
+    // is the project dir; Packager.getWorkspaceRoot() spawns `npm prefix -w` (seconds on Windows) to say so.
+    const hook = await resolveFunction<unknown>('module', packager.config.beforePack ?? '', 'beforePack', packager.projectDir);
     if (typeof hook !== 'function') throw new Error(`beforePack resolved to ${JSON.stringify(hook)}, not a function`);
     const dir = projects.make(viteBuild(minifiedBundle(syntheticJwt(role))));
     const platform = new Map(Object.entries(packager.config)).get(PLATFORM_KEY) ?? {};
@@ -87,6 +90,11 @@ async function expectGuarded(args: string[]): Promise<void> {
 describe('package key guard — wiring', () => {
     it('is the beforePack hook electron-builder resolves from this repo, and it refuses an admin key', async () => {
         await expectGuarded([]);
+    });
+
+    it('resolves the hook against the project dir, as electron-builder does in a repo with no workspaces', () => {
+        expect(JSON.parse(readText('package.json')).workspaces, 'workspaces added: runHook must ask packager.getWorkspaceRoot()').toBeUndefined();
+        expect(existsSync(join(repoRoot, 'pnpm-workspace.yaml')), 'a pnpm workspace: runHook must ask packager.getWorkspaceRoot()').toBe(false);
     });
 
     it('relies on a precedence this repo keeps: no "build" key in package.json, which electron-builder would read instead', async () => {

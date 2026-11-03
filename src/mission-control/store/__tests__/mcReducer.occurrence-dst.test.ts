@@ -8,7 +8,7 @@
 // 20:00 end and today's 19:00 start is 07:30 on a normal day, 08:00 when the
 // clocks spring forward (the night lost an hour) and 07:00 when they fall back.
 //
-// This file pins a time zone with DST (America/Vancouver: 2026-03-08 02:00 →
+// This file pins a time zone with DST (America/Los_Angeles: 2026-03-08 02:00 →
 // 03:00, 2026-11-01 02:00 → 01:00). Vitest runs each file in its own process,
 // so the zone does not leak into other suites.
 // ============================================================
@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { mcReducer, initialState } from '../mcReducer';
 import type { MCAction } from '../../types';
 
-process.env.TZ = 'America/Vancouver';
+process.env.TZ = 'America/Los_Angeles';
 
 function eveningDay(startedAt: string): string | undefined {
     const action: MCAction = { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'local', timestamp: startedAt };
