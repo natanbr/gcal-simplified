@@ -35,7 +35,8 @@ vi.mock('googleapis', () => ({
         }),
     },
 }));
-vi.mock('./auth', () => ({ authService: { isAuthenticated: () => true, getAuthClient: () => ({}) } }));
+// authService's readers are async since 2026-11-03 (safeStorage's synchronous methods are gone in Electron 46): the mock answers with Promises.
+vi.mock('./auth', () => ({ authService: { isAuthenticated: async () => true, getAuthClient: async () => ({}) } }));
 vi.mock('./store', () => ({ store: { get: () => ({ calendarIds: mocks.calendarIds, taskListIds: mocks.taskListIds }) } }));
 
 import { ApiService } from './api';

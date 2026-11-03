@@ -5,6 +5,8 @@
 // authTestKit.ts). Loading the credentials on a relaunch is in
 // auth_app_ready.test.ts.
 //
+// Since 2026-11-03 the readers are async (Electron 46 removes safeStorage's synchronous methods).
+//
 // Google refusing the refresh token (invalid_grant: access revoked, or the
 // 7-day expiry while the OAuth consent screen is in Testing mode) left the
 // client and the file holding it. auth:check kept saying "signed in", the data
@@ -39,25 +41,25 @@ describe('Google sign-in sessions', () => {
     ])('a sign-in %s is what the client and isAuthenticated() see, stored encrypted', async (_case, checkFirst) => {
         const authService = await relaunch();
         appReady();
-        if (checkFirst) expect(authService.isAuthenticated()).toBe(false);
+        if (checkFirst) expect(await authService.isAuthenticated()).toBe(false);
         googleAnswers(fake, { access_token: 'signed-in-access', refresh_token: 'signed-in-refresh', expires_in: 3600 });
 
         await kit.signIn(fake, authService);
 
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(await authorization(authService)).toBe('Bearer signed-in-access');
-        expect(readStored(fake)).toMatchObject({ access_token: 'signed-in-access', refresh_token: 'signed-in-refresh' });
+        expect(readStored(fake)).toMatchObject({ access_token: 'signed-in-access', refresh_token: 'signed-in-refresh' }); // startAuth resolved after the write
     });
 
     it('a sign-out leaves no credentials in the client or the store', async () => {
         storeEncrypted(JSON.stringify(stored()));
         const authService = await relaunch();
         appReady();
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
 
         authService.logout();
 
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         await expect(authorization(authService)).rejects.toThrow(NO_CREDENTIALS);
         expect(fake.storeData.has('tokens')).toBe(false);
     });
@@ -78,7 +80,7 @@ describe('Google refusing the refresh token signs out', () => {
 
         await expect(authorization(authService)).rejects.toMatchObject({ status: 400 });
 
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         expect(fake.storeData.has('tokens')).toBe(false);
         await expect(authorization(authService)).rejects.toThrow(NO_CREDENTIALS);
     });
@@ -88,13 +90,13 @@ describe('Google refusing the refresh token signs out', () => {
         googleAnswers(fake, REVOKED, 400);
         let authService = await relaunch();
         appReady();
-        expect(authService.isAuthenticated()).toBe(true); // only Google can say the grant is gone
+        expect(await authService.isAuthenticated()).toBe(true); // only Google can say the grant is gone
         await expect(authorization(authService)).rejects.toMatchObject({ status: 400 });
 
         authService = await relaunch();
         appReady();
 
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         expect(fake.tokenEndpoint).toHaveBeenCalledTimes(1);
     });
 
@@ -117,7 +119,7 @@ describe('Google refusing the refresh token signs out', () => {
         googleAnswers(fake, REVOKED, 400);
         const authService = await relaunch();
         appReady();
-        const heldByAnEventsRead = authService.getAuthClient(); // api.ts keeps it across calendarList and events.list
+        const heldByAnEventsRead = await authService.getAuthClient(); // api.ts keeps it across calendarList and events.list
 
         await expect(heldByAnEventsRead.getRequestHeaders()).rejects.toMatchObject({ status: 400 });
         await expect(heldByAnEventsRead.getRequestHeaders()).rejects.toThrow(NO_CREDENTIALS);
@@ -153,7 +155,7 @@ describe('Google refusing the refresh token signs out', () => {
         await vi.runAllTimersAsync();
 
         expect(await refresh).toBeInstanceOf(Error);
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(readStored(fake).refresh_token).toBe('stored-refresh');
     });
 });
@@ -167,7 +169,7 @@ describe('a refresh still in flight when the user clicks Reconnect', () => {
         const late = kit.googleAnswersLater(fake);
         const authService = await relaunch();
         appReady();
-        const held = authService.getAuthClient();
+        const held = await authService.getAuthClient();
         const pending = held.getRequestHeaders().then(headers => headers.get('authorization'), (error: unknown) => error);
         await vi.waitFor(() => expect(fake.tokenEndpoint).toHaveBeenCalledTimes(1));
         return { authService, late, held, pending };
@@ -182,7 +184,7 @@ describe('a refresh still in flight when the user clicks Reconnect', () => {
         expect(await pending).toBeInstanceOf(Error); // the read stops instead of reaching Google as the old account
         expect(held.credentials).toEqual({});
         expect(fake.storeData.has('tokens')).toBe(false);
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         await expect(authorization(authService)).rejects.toThrow(NO_CREDENTIALS);
     });
 
@@ -215,7 +217,7 @@ describe('a sign-in while a read is still refreshing the saved grant', () => {
         const signedOut = vi.fn();
         authService.onSignedOut(signedOut);
         // The school calendar's read, started while Sign in was on screen (a held token file, say).
-        const held = authService.getAuthClient();
+        const held = await authService.getAuthClient();
         const pending = held.getRequestHeaders().then(headers => headers.get('authorization'), (error: unknown) => error);
         await vi.waitFor(() => expect(fake.tokenEndpoint).toHaveBeenCalledTimes(1));
         googleAnswers(fake, { access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600 });
@@ -226,7 +228,7 @@ describe('a sign-in while a read is still refreshing the saved grant', () => {
         expect(await pending).toBeInstanceOf(Error); // the client the sign-in replaced is retired
         expect(held.credentials).toEqual({});
         expect(signedOut).not.toHaveBeenCalled();
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(await authorization(authService)).toBe('Bearer new-access');
         expect(readStored(fake)).toMatchObject({ access_token: 'new-access', refresh_token: 'new-refresh' });
     });

@@ -18,7 +18,8 @@ import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest
 import net from 'node:net';
 
 const state = vi.hoisted(() => ({ client: null as unknown }));
-vi.mock('./auth', () => ({ authService: { isAuthenticated: () => true, getAuthClient: () => state.client } }));
+// authService's readers are async since 2026-11-03 (safeStorage's synchronous methods are gone in Electron 46): the mock answers with Promises.
+vi.mock('./auth', () => ({ authService: { isAuthenticated: async () => true, getAuthClient: async () => state.client } }));
 vi.mock('./store', () => ({ store: { get: () => ({ calendarIds: ['family'], taskListIds: ['chores'] }) } }));
 
 import { GoogleOAuthClient } from './auth-client';

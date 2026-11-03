@@ -60,8 +60,8 @@ export class ApiService {
     }
 
     async getCalendars() {
-        if (!authService.isAuthenticated()) return [];
-        const auth = authService.getAuthClient();
+        if (!(await authService.isAuthenticated())) return [];
+        const auth = await authService.getAuthClient();
         const calendar = google.calendar({ version: 'v3', auth });
         const res = await calendar.calendarList.list();
         return (res.data.items || []).map(item => ({
@@ -73,8 +73,8 @@ export class ApiService {
     }
 
     async getTaskLists() {
-        if (!authService.isAuthenticated()) return [];
-        const auth = authService.getAuthClient();
+        if (!(await authService.isAuthenticated())) return [];
+        const auth = await authService.getAuthClient();
         const service = google.tasks({ version: 'v1', auth });
         const res = await service.tasklists.list();
         return (res.data.items || []).map(item => ({
@@ -85,11 +85,11 @@ export class ApiService {
     }
 
     async getEvents(timeMin: Date, timeMax: Date, { strict = false }: EventFetchOptions = {}): Promise<AppEvent[]> {
-        if (!authService.isAuthenticated()) {
+        if (!(await authService.isAuthenticated())) {
             if (strict) throw new Error('Not signed in to Google Calendar');
             return [];
         }
-        const auth = authService.getAuthClient();
+        const auth = await authService.getAuthClient();
         const calendar = google.calendar({ version: 'v3', auth });
 
         // Read config
@@ -244,8 +244,8 @@ export class ApiService {
     }
 
     async getTasks(): Promise<AppTask[]> {
-        if (!authService.isAuthenticated()) return [];
-        const auth = authService.getAuthClient();
+        if (!(await authService.isAuthenticated())) return [];
+        const auth = await authService.getAuthClient();
         const service = google.tasks({ version: 'v1', auth });
 
         const config = store.get();

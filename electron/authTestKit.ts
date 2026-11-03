@@ -1,9 +1,13 @@
 // ============================================================
 // Test kit for the Google sign-in suites (auth_app_ready, auth_session,
-// auth_store_corrupt).
+// auth_store_corrupt, auth_unauthorized, auth_logging, auth_async_store, ...).
 // ------------------------------------------------------------
 // The fake safeStorage behaves like Electron's on Windows: unusable before
-// ready, a reversible cipher after it. The OAuth client is the real
+// ready (the async trio rejects, isAsyncEncryptionAvailable resolves false), a
+// reversible cipher after it. Electron 46 removes the synchronous trio
+// (isEncryptionAvailable, encryptString, decryptString), so the fakes of those
+// throw: a production call left on one fails a suite instead of passing on a
+// method the real app no longer has. The OAuth client is the real
 // google-auth-library one; only Google's token endpoint is faked, on the
 // client's own transporter, so no test can reach the network.
 //
@@ -25,9 +29,12 @@
 // counts against the 5 s timeout, and under a loaded full suite, where every
 // worker queues on the same transform server, it ran out (2026-10-01, twice).
 // At the top level it is paid at collection, which has no per-test timeout.
+//
+// A test that needs an async call to stay in flight (a save racing a sign-out)
+// gates it with holdNext() and lets the microtasks drain with settle().
 // ============================================================
 
-import { expect, vi } from 'vitest';
+import { expect, vi, type Mock } from 'vitest';
 import http from 'node:http';
 import type { Credentials, OAuth2Client, OAuth2ClientOptions } from 'google-auth-library';
 
@@ -39,24 +46,44 @@ export async function createAuthFakes() {
     const { OAuth2Client: RealOAuth2Client } = await import('google-auth-library');
     const app = { ready: false };
     const notReady = () => new Error('safeStorage cannot be used before app is ready');
+    const removed = (name: string) => vi.fn((): never => { throw new Error(`safeStorage.${name} was removed in Electron 46`); });
+    const cipher = {
+        isAvailable: async (): Promise<boolean> => app.ready,
+        encrypt: async (plain: string): Promise<Buffer> => {
+            if (!app.ready) throw notReady();
+            return Buffer.from(`enc:${plain}`, 'utf-8');
+        },
+        decrypt: async (blob: Buffer): Promise<{ result: string; shouldReEncrypt: boolean }> => {
+            if (!app.ready) throw notReady();
+            const text = blob.toString('utf-8');
+            if (!text.startsWith('enc:')) {
+                throw new Error('Error while decrypting the ciphertext provided to safeStorage.decryptStringAsync.');
+            }
+            return { result: text.slice('enc:'.length), shouldReEncrypt: false };
+        },
+    };
+    const safeStorage = {
+        isEncryptionAvailable: removed('isEncryptionAvailable'),
+        encryptString: removed('encryptString'),
+        decryptString: removed('decryptString'),
+        isAsyncEncryptionAvailable: vi.fn(cipher.isAvailable),
+        encryptStringAsync: vi.fn(cipher.encrypt),
+        decryptStringAsync: vi.fn(cipher.decrypt),
+    };
+    /** Puts an async fake back to the cipher above, dropping what a test queued on it. */
+    const restoreCipher = <A extends unknown[], R>(spy: Mock<(...args: A) => R>, behaviour: (...args: A) => R) => {
+        spy.mockReset();
+        spy.mockImplementation(behaviour);
+    };
     return {
         app,
         RealOAuth2Client,
         storeData: new Map<string, unknown>(),
-        safeStorage: {
-            isEncryptionAvailable: vi.fn(() => app.ready),
-            encryptString: vi.fn((plain: string): Buffer => {
-                if (!app.ready) throw notReady();
-                return Buffer.from(`enc:${plain}`, 'utf-8');
-            }),
-            decryptString: vi.fn((cipher: Buffer): string => {
-                if (!app.ready) throw notReady();
-                const text = cipher.toString('utf-8');
-                if (!text.startsWith('enc:')) {
-                    throw new Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.');
-                }
-                return text.slice('enc:'.length);
-            }),
+        safeStorage,
+        resetSafeStorage: () => {
+            restoreCipher(safeStorage.isAsyncEncryptionAvailable, cipher.isAvailable);
+            restoreCipher(safeStorage.encryptStringAsync, cipher.encrypt);
+            restoreCipher(safeStorage.decryptStringAsync, cipher.decrypt);
         },
         /** When set, the next store read throws it (a file held by antivirus or a backup). */
         storeReadError: { next: null as Error | null },
@@ -127,6 +154,7 @@ export function resetAuthFakes(fake: AuthFakes): void {
     fake.storeWriteError.next = null;
     fake.app.ready = false;
     vi.clearAllMocks();
+    fake.resetSafeStorage();
     // mockReset, not only clear: a one-time answer a test queued and never used must not reach the next test.
     fake.tokenEndpoint.mockReset();
     fake.tokenEndpoint.mockRejectedValue(new Error('this test expected no call to Google'));
@@ -154,6 +182,10 @@ export function readStored(fake: AuthFakes): Credentials {
     const credentials: Credentials = JSON.parse(plain.slice('enc:'.length));
     return credentials;
 }
+
+/** For a save that runs in the background (a refresh does not wait for its own save): waits until the store holds these. */
+export const expectStoredEventually = (fake: AuthFakes, expected: Credentials): Promise<void> =>
+    vi.waitFor(() => expect(readStored(fake)).toMatchObject(expected));
 
 /** What main.js does on every launch: import auth.ts while the app is not ready yet. */
 export async function relaunch(fake: AuthFakes) {
@@ -204,26 +236,63 @@ export function googleAnswersLater(fake: AuthFakes): { answer(body: Record<strin
     return { answer: (body, status = 200) => respond(googleResponse(body, status)) };
 }
 
+export function deferred<T = void>() {
+    let resolve!: (value: T) => void;
+    let reject!: (error: Error) => void;
+    const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+}
+
+/** The fakes use no timer, so one macrotask lets every pending continuation run. */
+export const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+/** The next call to this async fake stays in flight until released (then it does what the fake does) or failed. */
+export function holdNext<A extends unknown[], R>(fake: Mock<(...args: A) => Promise<R>>): { release(): void; fail(error: Error): void } {
+    const proceed = fake.getMockImplementation();
+    if (!proceed) throw new Error('holdNext: the fake has no implementation to run once released');
+    const gate = deferred();
+    fake.mockImplementationOnce(async (...args: A) => { await gate.promise; return proceed(...args); });
+    return { release: () => gate.resolve(), fail: error => gate.reject(error) };
+}
+
+/** `call` must hand back a Promise: a reader that throws or answers a plain value fails here, saying so. */
+export function promised<T>(name: string, call: () => Promise<T>): Promise<T> {
+    let result: unknown;
+    try {
+        result = call();
+    } catch (error) {
+        throw new Error(`${name} threw instead of returning a Promise: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!(result instanceof Promise)) throw new Error(`${name} returned ${typeof result}, not a Promise`);
+    return result;
+}
+
 function get(url: URL): Promise<void> {
     return new Promise((resolve, reject) => {
         http.get(url, res => { res.resume(); res.on('end', () => resolve()); }).on('error', reject);
     });
 }
 
-/** Runs the whole loopback sign-in: the consent page "redirects" back with a code. */
-export async function signIn(fake: AuthFakes, authService: Service): Promise<void> {
+/** Starts the loopback sign-in and "redirects" back with a code: `callback` ends with the HTTP answer, `signedIn` when startAuth settles. */
+export async function startSignIn(fake: AuthFakes, authService: Service): Promise<{ signedIn: Promise<void>; callback: Promise<void> }> {
     const signedIn = authService.startAuth();
     await vi.waitFor(() => expect(fake.openExternal).toHaveBeenCalled());
     const authUrl = new URL(String(fake.openExternal.mock.calls.at(-1)?.[0]));
     const callback = new URL(authUrl.searchParams.get('redirect_uri') ?? '');
     callback.searchParams.set('code', 'one-time-code');
     callback.searchParams.set('state', authUrl.searchParams.get('state') ?? '');
-    await get(callback);
+    return { signedIn, callback: get(callback) };
+}
+
+/** Runs the whole loopback sign-in to its end. */
+export async function signIn(fake: AuthFakes, authService: Service): Promise<void> {
+    const { signedIn, callback } = await startSignIn(fake, authService);
+    await callback;
     await signedIn;
 }
 
 /** The Authorization header the client would send to Google right now (refreshing first if it must). */
 export async function authorization(authService: Service): Promise<string | null> {
-    const client: OAuth2Client = authService.getAuthClient();
+    const client: OAuth2Client = await authService.getAuthClient();
     return (await client.getRequestHeaders()).get('authorization');
 }

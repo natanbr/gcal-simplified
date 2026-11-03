@@ -72,8 +72,12 @@ export function canAuthorize(value: unknown): value is Credentials {
         && value.expiry_date > Date.now() + REFRESH_MARGIN_MS;
 }
 
-/** The saved credentials, or null when there are none this client could use. */
-export function readStoredTokens(): Credentials | null {
+/**
+ * The saved credentials, or null when there are none this client could use.
+ * The file is read synchronously, so a held one (EBUSY/EPERM/EACCES) rejects
+ * and the caller tries again; only the decrypt waits.
+ */
+export async function readStoredTokens(): Promise<Credentials | null> {
     const store = authStore();
     // electron-store reads the file again on every get, so a file damaged since it was opened is handled here too.
     const [stored, isEncrypted] = parsedOrMovedAside(
@@ -83,15 +87,8 @@ export function readStoredTokens(): Credentials | null {
 
     if (!stored) return null;
 
-    if (isEncrypted && typeof stored === 'string' && safeStorage.isEncryptionAvailable()) {
-        try {
-            const buffer = Buffer.from(stored, 'base64');
-            const parsed: unknown = JSON.parse(safeStorage.decryptString(buffer));
-            return canAuthorize(parsed) ? parsed : null;
-        } catch (e) {
-            console.error(`Failed to decrypt tokens (${errorSummary(e)})`);
-            return null;
-        }
+    if (isEncrypted && typeof stored === 'string') {
+        return decrypted(stored);
     } else if (typeof stored === 'object') {
         // Unencrypted object (legacy or fallback)
         return canAuthorize(stored) ? stored : null;
@@ -101,31 +98,69 @@ export function readStoredTokens(): Credentials | null {
 }
 
 /**
+ * A blob this machine cannot decrypt is "signed out", never a rejection: the
+ * availability check is inside the try too, so no cipher failure reaches
+ * auth:check, and none is logged with its text (a parse message quotes it).
+ */
+async function decrypted(stored: string): Promise<Credentials | null> {
+    try {
+        if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
+        // shouldReEncrypt is ignored: the next 'tokens' save (every refresh,
+        // hourly) encrypts with the current key anyway, and a load never writes.
+        const { result } = await safeStorage.decryptStringAsync(Buffer.from(stored, 'base64'));
+        const parsed: unknown = JSON.parse(result);
+        return canAuthorize(parsed) ? parsed : null;
+    } catch (e) {
+        console.error(`Failed to decrypt tokens (${errorSummary(e)})`);
+        return null;
+    }
+}
+
+/** Every save, in the order they were asked for: a slow encrypt cannot let an older save land after a newer one. */
+let saving: Promise<void> = Promise.resolve();
+/** Moved on by every sign-out, so a save still encrypting when the user signed out is dropped. */
+let generation = 0;
+
+/**
  * Plain text only when this platform has no encryption (Linux without a
- * keyring) or encrypting throws. A failed write throws and leaves the file as
+ * keyring) or encrypting fails. A failed write rejects and leaves the file as
  * it was: falling back to plain text there wrote the refresh token to disk
  * unencrypted. electron-store re-reads the file before every write, so one
  * damaged since it was opened is moved aside here too, and the write goes to a
  * fresh file.
+ *
+ * The encrypt is async, so a sign-out can happen while it runs: the generation
+ * is taken now, when the save is asked for, and a save that finds it moved on
+ * writes nothing, or the signed-out account would come back on disk. A failed
+ * save does not stop the ones queued after it.
  */
-export function writeStoredTokens(tokens: Credentials): void {
-    const values = encrypted(tokens) ?? { tokens, isEncrypted: false };
-    const write = () => authStore().set(values);
-    parsedOrMovedAside(write, write);
-    removeMovedAsideCopies();
+export function writeStoredTokens(tokens: Credentials): Promise<void> {
+    const askedIn = generation;
+    const save = saving.then(async () => {
+        const values = (await encrypted(tokens)) ?? { tokens, isEncrypted: false };
+        if (askedIn !== generation) return;
+        const write = () => authStore().set(values);
+        parsedOrMovedAside(write, write);
+        removeMovedAsideCopies();
+    });
+    saving = save.catch(() => undefined);
+    return save;
 }
 
-function encrypted(tokens: Credentials): AuthStore | null {
-    if (!safeStorage.isEncryptionAvailable()) return null;
+async function encrypted(tokens: Credentials): Promise<AuthStore | null> {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
     try {
-        return { tokens: safeStorage.encryptString(JSON.stringify(tokens)).toString('base64'), isEncrypted: true };
+        const blob = await safeStorage.encryptStringAsync(JSON.stringify(tokens));
+        return { tokens: blob.toString('base64'), isEncrypted: true };
     } catch (error) {
         console.error(`Failed to encrypt tokens (${errorSummary(error)})`);
         return null;
     }
 }
 
+/** Synchronous, so the sign-out is on disk before logout() returns; every save asked for before it and not yet written is dropped. */
 export function clearStoredTokens(): void {
+    generation += 1;
     parsedOrMovedAside(() => {
         const store = authStore();
         store.delete('tokens');

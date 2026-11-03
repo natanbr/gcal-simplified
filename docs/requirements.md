@@ -2785,3 +2785,7 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
   `missionStreak.test.ts` moved a day. The two DST suites (`useMissionScheduler.dst.test.tsx`,
   `mcReducer.occurrence-dst.test.ts`) moved from America/Vancouver, which under new tzdata no longer
   falls back on 2026-11-01, to America/Los_Angeles, which keeps both 2026 DST nights.
+
+### 2026-11-03 Google sign-in moves to safeStorage's async API (nothing changes on screen)
+
+- **Why.** Electron 46 removes the synchronous `safeStorage` methods `electron/auth-token-store.ts` used (the 2026-11-02 known follow-up). **Now** the Google tokens are encrypted and decrypted only with `isAsyncEncryptionAvailable` / `encryptStringAsync` / `decryptStringAsync`. A token file saved by v0.0.45 (Electron 40) still decrypts, so the update keeps the family signed in; saves run one at a time, a sign-out drops a save still encrypting, and `auth:login` answers once the tokens are on disk. Tests: `electron/auth_async_store.test.ts`, `electron/safe-storage-compat.test.ts` (the real Electron binary, two processes) and `src/__tests__/safe-storage-async-boundary.test.ts`.

@@ -49,12 +49,13 @@ describe('auth.ts logs a failure it survives without the error object', () => {
         const output = consoleOutput();
         const authService = await relaunch();
         appReady();
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         fake.storeWriteError.next = seededError();
 
         expect(await kit.authorization(authService)).toBe('Bearer refreshed-access');
 
-        expect(output()).toContain('Failed to save the Google tokens (EPERM)');
+        // The save runs in the background: the read above did not wait for it.
+        await vi.waitFor(() => expect(output()).toContain('Failed to save the Google tokens (EPERM)'));
         expect(output()).not.toContain(SEED);
     });
 
@@ -67,7 +68,7 @@ describe('auth.ts logs a failure it survives without the error object', () => {
 
         await kit.signIn(fake, authService);
 
-        expect(authService.isAuthenticated()).toBe(true);
+        expect(await authService.isAuthenticated()).toBe(true);
         expect(output()).toContain('Failed to save the Google tokens (EPERM)');
         expect(output()).not.toContain(SEED);
     });
@@ -83,7 +84,7 @@ describe('auth.ts logs a failure it survives without the error object', () => {
 
         await expect(kit.authorization(authService)).rejects.toMatchObject({ status: 400 });
 
-        expect(authService.isAuthenticated()).toBe(false);
+        expect(await authService.isAuthenticated()).toBe(false);
         expect(output()).toContain('[auth] Could not clear the saved Google tokens (EPERM)');
         expect(output()).toContain('[auth] A signed-out listener failed (EPERM)');
         expect(output()).not.toContain(SEED);
