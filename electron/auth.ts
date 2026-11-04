@@ -150,11 +150,9 @@ export class AuthService {
         this.isAuthInProgress = true;
 
         const authPromise = new Promise<void>((resolve, reject) => {
-            // Generate a secure random state token for CSRF protection
             const state = crypto.randomBytes(32).toString('hex');
             let redirectUri = '';
 
-            // Spin up local server to catch callback
             const server = http.createServer(async (req, res) => {
                 try {
                     if (!req.url) {
@@ -217,7 +215,6 @@ export class AuthService {
                 }
             });
 
-            // Listen on random port (0) and loopback address
             const timeoutHandle = setTimeout(() => {
                 reject(new Error('Authentication timed out.'));
                 server.close();
@@ -229,7 +226,6 @@ export class AuthService {
                     const port = address.port;
                     redirectUri = `http://127.0.0.1:${port}/callback`;
 
-                    // Generate Auth URL
                     const authUrl = this.oauth2Client.generateAuthUrl({
                         access_type: 'offline', // Crucial for refresh token
                         // Force the consent screen. Without it a re-auth of an
@@ -242,7 +238,6 @@ export class AuthService {
                         state: state // Include state parameter
                     });
 
-                    // Open in System Browser
                     shell.openExternal(authUrl);
                 } else {
                     reject(new Error('Failed to get server address'));
@@ -269,7 +264,8 @@ export class AuthService {
      * Makes `client` the sign-in and retires the one before it. Saved here, not
      * by the 'tokens' listener (the exchange ran before the client was current),
      * and waited for, so auth:login answers once the tokens are on disk.
-     * A failed save does not undo the sign-in; the next refresh saves again.
+     * A failed save does not undo the sign-in (the next refresh saves again) but clears the file,
+     * or a restart would sign in the account before; a clear that fails is only logged.
      */
     private async signedIn(client: GoogleOAuthClient, tokens: Credentials): Promise<void> {
         client.setCredentials(tokens);
@@ -281,6 +277,11 @@ export class AuthService {
             await this.saveTokens(tokens);
         } catch (error) {
             console.error(`Failed to save the Google tokens (${errorSummary(error)}); they stay in memory until the next save`);
+            try {
+                clearStoredTokens();
+            } catch (clearError) {
+                console.error(`[auth] Could not clear the saved Google tokens (${errorSummary(clearError)})`);
+            }
         }
     }
 

@@ -279,3 +279,7 @@ instead of remembering "signed out"; a timed-out save rejects and writes nothing
 plain-text branch, and the chain moves on. The timer is cleared when the call settles; a late
 answer reaches handlers that change nothing. Guards: `electron/auth_store_timeout.test.ts`, and
 `electron/auth_store_overtake.test.ts` for the two sign-in races the review named.
+Round 2 of the review found an older gap: a sign-in whose save failed left the account before on
+disk until the next save, so a restart in between signed that account back in. A failed sign-in
+save now clears the file (`signedIn` in `electron/auth.ts`). Pattern: when the write of a new
+credential fails, remove the old one rather than leave it as the next launch's answer.
