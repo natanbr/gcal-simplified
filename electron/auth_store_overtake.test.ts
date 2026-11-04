@@ -88,3 +88,50 @@ describe('a sign-in whose save meets another change', () => {
         expect(await authService.isAuthenticated()).toBe(false);
     });
 });
+
+// A sign-in whose save fails (a held file, a keychain timeout) stays signed in in memory until the
+// next save. The file must not keep the account before it meanwhile: a restart would sign that one in.
+describe('a sign-in whose save fails', () => {
+    beforeEach(() => kit.resetAuthFakes(fake));
+    afterEach(() => vi.restoreAllMocks());
+
+    async function signInOverStoredAccount() {
+        kit.storeEncrypted(fake, JSON.stringify(kit.stored()));
+        const authService = await relaunch();
+        appReady();
+        expect(await authService.isAuthenticated()).toBe(true); // the account before is loaded
+        googleAnswers(fake, NEW_ACCOUNT);
+        return authService;
+    }
+
+    it('the account before is cleared from disk: a restart shows Sign in, not that account', async () => {
+        const output = consoleOutput();
+        const authService = await signInOverStoredAccount();
+        fake.storeWriteError.next = Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+
+        await kit.signIn(fake, authService);
+
+        expect(output()).toContain('Failed to save the Google tokens (EPERM)');
+        expect([...fake.storeData.keys()]).toEqual([]);
+        expect((await authService.getAuthClient()).credentials.refresh_token).toBe('new-refresh'); // still signed in now
+        const nextLaunch = await relaunch();
+        appReady();
+        expect(await nextLaunch.isAuthenticated()).toBe(false);
+    });
+
+    it('the clear failing too does not fail the sign-in: startAuth resolves and both failures are logged', async () => {
+        const output = consoleOutput();
+        const authService = await signInOverStoredAccount();
+        const held = Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+        Object.defineProperty(fake.storeWriteError, 'next', { get: () => held, set: () => undefined, configurable: true });
+        try {
+            await kit.signIn(fake, authService); // rejects if the clear's error escapes
+        } finally {
+            Object.defineProperty(fake.storeWriteError, 'next', { value: null, writable: true, configurable: true });
+        }
+
+        expect(output()).toContain('Failed to save the Google tokens (EBUSY)');
+        expect(output()).toContain('Could not clear the saved Google tokens (EBUSY)');
+        expect(await authService.isAuthenticated()).toBe(true);
+    });
+});
