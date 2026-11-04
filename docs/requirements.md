@@ -2789,3 +2789,7 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
 ### 2026-11-03 Google sign-in moves to safeStorage's async API (nothing changes on screen)
 
 - **Why.** Electron 46 removes the synchronous `safeStorage` methods `electron/auth-token-store.ts` used (the 2026-11-02 known follow-up). **Now** the Google tokens are encrypted and decrypted only with `isAsyncEncryptionAvailable` / `encryptStringAsync` / `decryptStringAsync`. A token file saved by v0.0.45 (Electron 40) still decrypts, so the update keeps the family signed in; saves run one at a time, a sign-out drops a save still encrypting, and `auth:login` answers once the tokens are on disk. Tests: `electron/auth_async_store.test.ts`, `electron/safe-storage-compat.test.ts` (the real Electron binary, two processes) and `src/__tests__/safe-storage-async-boundary.test.ts`.
+
+### 2026-11-04 A stuck system keychain shows Sign in after 15 s instead of waiting forever
+
+- **Now** each decrypt and each encrypt of the Google tokens (with its availability check) gets 15 s. If the system keychain does not answer, the Calendar shows Sign in after 15 s (the read is tried again on the next check, so the tokens are not given up), and a save that times out writes nothing, never plain text. Nothing else changes on screen. Tests: `electron/auth_store_timeout.test.ts`, and `electron/auth_store_overtake.test.ts` (a sign-in's save meeting another account's refresh save or a sign-out).
