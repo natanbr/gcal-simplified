@@ -72,10 +72,41 @@ export function canAuthorize(value: unknown): value is Credentials {
         && value.expiry_date > Date.now() + REFRESH_MARGIN_MS;
 }
 
+/** About as long as the held-file waits: a slow keychain still answers, a stuck one shows Sign in instead of nothing. */
+export const CIPHER_TIMEOUT_MS = 15_000;
+
+/** A fixed phrase, no data: it reaches the log and, through auth:check, the window. */
+class SafeStorageTimeout extends Error {
+    constructor() {
+        super('safeStorage did not answer in time');
+        this.name = 'SafeStorageTimeout';
+    }
+}
+
+/**
+ * What `cipher` answers, or a SafeStorageTimeout once it has taken
+ * CIPHER_TIMEOUT_MS. Each safeStorage call is a round trip to the OS keychain,
+ * and one that never answers would leave auth:check pending, or hold every
+ * later save behind it. The timer is cleared as soon as the call settles, so an
+ * idle app holds none. A call cannot be cancelled: an answer after the timeout
+ * reaches the handlers below and changes nothing, so a late rejection is never
+ * an unhandled one.
+ */
+function withinCipherTimeout<T>(cipher: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new SafeStorageTimeout()), CIPHER_TIMEOUT_MS);
+        cipher().then(
+            (value) => { clearTimeout(timer); resolve(value); },
+            (error: unknown) => { clearTimeout(timer); reject(error); },
+        );
+    });
+}
+
 /**
  * The saved credentials, or null when there are none this client could use.
  * The file is read synchronously, so a held one (EBUSY/EPERM/EACCES) rejects
- * and the caller tries again; only the decrypt waits.
+ * and the caller tries again; only the decrypt waits, and one that times out
+ * rejects the same way.
  */
 export async function readStoredTokens(): Promise<Credentials | null> {
     const store = authStore();
@@ -101,16 +132,23 @@ export async function readStoredTokens(): Promise<Credentials | null> {
  * A blob this machine cannot decrypt is "signed out", never a rejection: the
  * availability check is inside the try too, so no cipher failure reaches
  * auth:check, and none is logged with its text (a parse message quotes it).
+ * A timeout does reject: the tokens may be fine, so like a held file the next
+ * call decrypts again, where null would leave the app signed out until a restart.
  */
 async function decrypted(stored: string): Promise<Credentials | null> {
     try {
-        if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
-        // shouldReEncrypt is ignored: the next 'tokens' save (every refresh,
-        // hourly) encrypts with the current key anyway, and a load never writes.
-        const { result } = await safeStorage.decryptStringAsync(Buffer.from(stored, 'base64'));
-        const parsed: unknown = JSON.parse(result);
+        const plain = await withinCipherTimeout(async () => {
+            if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
+            // shouldReEncrypt is ignored: the next 'tokens' save (every refresh,
+            // hourly) encrypts with the current key anyway, and a load never writes.
+            const { result } = await safeStorage.decryptStringAsync(Buffer.from(stored, 'base64'));
+            return result;
+        });
+        if (plain === null) return null;
+        const parsed: unknown = JSON.parse(plain);
         return canAuthorize(parsed) ? parsed : null;
     } catch (e) {
+        if (e instanceof SafeStorageTimeout) throw e;
         console.error(`Failed to decrypt tokens (${errorSummary(e)})`);
         return null;
     }
@@ -123,16 +161,18 @@ let generation = 0;
 
 /**
  * Plain text only when this platform has no encryption (Linux without a
- * keyring) or encrypting fails. A failed write rejects and leaves the file as
- * it was: falling back to plain text there wrote the refresh token to disk
- * unencrypted. electron-store re-reads the file before every write, so one
- * damaged since it was opened is moved aside here too, and the write goes to a
- * fresh file.
+ * keyring) or encrypting fails, never when it times out: a slow keychain is not
+ * a missing one, so that save rejects and writes nothing. A failed write
+ * rejects and leaves the file as it was: falling back to plain text there wrote
+ * the refresh token to disk unencrypted. electron-store re-reads the file
+ * before every write, so one damaged since it was opened is moved aside here
+ * too, and the write goes to a fresh file.
  *
  * The encrypt is async, so a sign-out can happen while it runs: the generation
  * is taken now, when the save is asked for, and a save that finds it moved on
  * writes nothing, or the signed-out account would come back on disk. A failed
- * save does not stop the ones queued after it.
+ * or timed-out save does not stop the ones queued after it, and they do not
+ * wait for the stuck call.
  */
 export function writeStoredTokens(tokens: Credentials): Promise<void> {
     const askedIn = generation;
@@ -147,12 +187,23 @@ export function writeStoredTokens(tokens: Credentials): Promise<void> {
     return save;
 }
 
+/**
+ * null means plain text: this platform has no encryption, or the encrypt was
+ * asked and failed, as the synchronous API did when it threw. An availability
+ * check that fails and a timeout both reject the save: either as null would
+ * widen that fallback.
+ */
 async function encrypted(tokens: Credentials): Promise<AuthStore | null> {
-    if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
+    let asked = false;
     try {
-        const blob = await safeStorage.encryptStringAsync(JSON.stringify(tokens));
-        return { tokens: blob.toString('base64'), isEncrypted: true };
+        const blob = await withinCipherTimeout(async () => {
+            if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
+            asked = true;
+            return safeStorage.encryptStringAsync(JSON.stringify(tokens));
+        });
+        return blob && { tokens: blob.toString('base64'), isEncrypted: true };
     } catch (error) {
+        if (!asked || error instanceof SafeStorageTimeout) throw error;
         console.error(`Failed to encrypt tokens (${errorSummary(error)})`);
         return null;
     }
