@@ -12,8 +12,8 @@ export function isHeldFileError(error: unknown): boolean {
 /**
  * Runs `read`, and while it fails because the file is held, runs it again
  * after each wait. Any other failure, or a hold that outlasts the waits, is
- * thrown. Timers run only while a file is held, never on an idle app. An async
- * read is awaited here, so its rejection is retried exactly like a throw.
+ * thrown. Timers run only while a file is held, never on an idle app. The
+ * `await` stays inside the try, or an async read's rejection skips the retry.
  */
 export async function readWhileHeld<T>(read: () => T | Promise<T>): Promise<T> {
     for (const wait of [...HELD_FILE_WAITS_MS, null]) {
