@@ -23,11 +23,14 @@
 // app.quit(), after a no-op 'window-all-closed' handler (the default handler
 // quits when no window ever opened, which would race the work).
 //
+// A second case writes with encryptStringAsync, what every save writes now, and
+// reads it back in a later process.
+//
 // This suite characterizes the platform and is green before the app code
-// changes. It needs Electron 45 or older: from Electron 46 the synchronous
-// writer does not exist, and the suite then fails with that message. Retire it
-// (or write the blob with encryptStringAsync) when Electron 46 lands, once no
-// installed copy can still hold a v0.0.45 token file.
+// changes. The synchronous cases need Electron 45 or older: from Electron 46 the
+// synchronous writer does not exist, and they then fail with that message.
+// Retire them when Electron 46 lands, once no installed copy can still hold a
+// token file from a synchronous build; keep the async case.
 // ============================================================
 
 import { describe, it, expect, afterAll } from 'vitest';
@@ -68,6 +71,13 @@ async function encrypt() {
     return { ok: true };
 }
 
+async function encryptAsync() {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) return { ok: false, message: 'safeStorage reports async encryption unavailable' };
+    const blob = await safeStorage.encryptStringAsync(fs.readFileSync(env.COMPAT_PLAIN, 'utf8'));
+    fs.writeFileSync(env.COMPAT_BLOB, blob.toString('base64'));
+    return { ok: true };
+}
+
 async function decrypt() {
     if (!(await safeStorage.isAsyncEncryptionAvailable())) return { ok: false, message: 'safeStorage reports async encryption unavailable' };
     const blob = Buffer.from(fs.readFileSync(env.COMPAT_BLOB, 'utf8'), 'base64');
@@ -78,7 +88,7 @@ async function decrypt() {
 app.whenReady().then(async () => {
     let outcome;
     try {
-        outcome = await (env.COMPAT_MODE === 'encrypt' ? encrypt() : decrypt());
+        outcome = await ({ encrypt, 'encrypt-async': encryptAsync, decrypt })[env.COMPAT_MODE]();
     } catch (error) {
         outcome = { ok: false, message: error instanceof Error ? error.message : String(error) };
     }
@@ -110,7 +120,7 @@ const plainFile = join(root, 'plain.json');
 let runs = 0;
 
 /** One Electron process on `userData`, reading or writing `blobFile`. */
-function runProbe(mode: 'encrypt' | 'decrypt', userData: string, blobFile: string): Outcome {
+function runProbe(mode: 'encrypt' | 'encrypt-async' | 'decrypt', userData: string, blobFile: string): Outcome {
     const binary = electronBinary();
     const outcomeFile = join(root, `outcome-${++runs}.json`);
     // Electron given a script that does not exist waits on an error dialog, hidden, until the timeout.
@@ -177,5 +187,21 @@ describe('safeStorage: a blob from the synchronous API decrypts with the async A
         expect(read.ok).toBe(false);
         expect(read.result).toBeUndefined();
         expect(read.message).toContain('decryptStringAsync');
+    });
+});
+
+describe('safeStorage: a blob from the async API decrypts in a later process (what every save writes now)', { timeout: 60_000 }, () => {
+    it('round-trips a token-shaped JSON through encryptStringAsync and decryptStringAsync', () => {
+        const asyncUserData = join(root, 'async-user-data');
+        const asyncBlob = join(root, 'tokens-async.b64');
+        writeFileSync(plainFile, JSON.stringify(TOKENS));
+        const wrote = runProbe('encrypt-async', asyncUserData, asyncBlob);
+        expect(wrote.ok, `encryptStringAsync failed: ${wrote.message}`).toBe(true);
+
+        const read = runProbe('decrypt', asyncUserData, asyncBlob);
+
+        expect(read.ok, `decryptStringAsync failed: ${read.message}`).toBe(true);
+        expect(JSON.parse(read.result ?? 'null')).toEqual(TOKENS);
+        expect(read.shouldReEncrypt).toBe(false);
     });
 });
