@@ -44,8 +44,7 @@ export class AuthService {
         // stored blob stays current and a rotated refresh_token survives a
         // restart. It runs inside the library's synchronous emit, before the
         // library installs the tokens, so a store error must not escape it: that
-        // would throw away a grant Google already made. The read that refreshed
-        // does not wait for the save.
+        // would throw away a grant Google already made.
         client.on('tokens', (granted) => {
             if (client !== this.oauth2Client) return;
             this.saveTokens(granted).catch((error: unknown) => {
@@ -92,9 +91,8 @@ export class AuthService {
      * Windows it reports no encryption and refuses to decrypt). Loading there
      * started every relaunch with an empty client while isAuthenticated() said
      * "signed in": an empty week with no error. Before ready this rejects,
-     * because answering "signed out" would be a lie. Concurrent callers share
-     * one load, forgotten once it settles, so a store read that fails (the file
-     * held by antivirus or a backup) is retried by the next call.
+     * because answering "signed out" would be a lie. A load that fails (the file
+     * held by antivirus or a backup) is forgotten, so the next call retries.
      */
     private async ensureCredentialsLoaded(): Promise<void> {
         if (this.credentialsLoaded) return;

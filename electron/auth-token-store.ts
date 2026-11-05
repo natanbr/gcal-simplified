@@ -84,13 +84,10 @@ class SafeStorageTimeout extends Error {
 }
 
 /**
- * What `cipher` answers, or a SafeStorageTimeout once it has taken
- * CIPHER_TIMEOUT_MS. Each safeStorage call is a round trip to the OS keychain,
- * and one that never answers would leave auth:check pending, or hold every
- * later save behind it. The timer is cleared as soon as the call settles, so an
- * idle app holds none. A call cannot be cancelled: an answer after the timeout
- * reaches the handlers below and changes nothing, so a late rejection is never
- * an unhandled one.
+ * Each safeStorage call is a round trip to the OS keychain, and one that never
+ * answers would leave auth:check pending, or hold every later save behind it.
+ * A call cannot be cancelled: an answer after the timeout reaches the handlers
+ * below and changes nothing, so a late rejection is never an unhandled one.
  */
 function withinCipherTimeout<T>(cipher: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -104,9 +101,8 @@ function withinCipherTimeout<T>(cipher: () => Promise<T>): Promise<T> {
 
 /**
  * The saved credentials, or null when there are none this client could use.
- * The file is read synchronously, so a held one (EBUSY/EPERM/EACCES) rejects
- * and the caller tries again; only the decrypt waits, and one that times out
- * rejects the same way.
+ * A held file (EBUSY/EPERM/EACCES) or a decrypt that times out rejects, and the
+ * caller tries again.
  */
 export async function readStoredTokens(): Promise<Credentials | null> {
     const store = authStore();
@@ -168,11 +164,8 @@ let generation = 0;
  * before every write, so one damaged since it was opened is moved aside here
  * too, and the write goes to a fresh file.
  *
- * The encrypt is async, so a sign-out can happen while it runs: the generation
- * is taken now, when the save is asked for, and a save that finds it moved on
- * writes nothing, or the signed-out account would come back on disk. A failed
- * or timed-out save does not stop the ones queued after it, and they do not
- * wait for the stuck call.
+ * The generation is taken when the save is asked for, not when it writes: a
+ * sign-out during the encrypt would otherwise put the account back on disk.
  */
 export function writeStoredTokens(tokens: Credentials): Promise<void> {
     const askedIn = generation;
@@ -209,7 +202,7 @@ async function encrypted(tokens: Credentials): Promise<AuthStore | null> {
     }
 }
 
-/** Synchronous, so the sign-out is on disk before logout() returns; every save asked for before it and not yet written is dropped. */
+/** Synchronous, so the sign-out is on disk before logout() returns. */
 export function clearStoredTokens(): void {
     generation += 1;
     parsedOrMovedAside(() => {
