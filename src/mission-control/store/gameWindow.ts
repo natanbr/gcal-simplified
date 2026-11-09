@@ -30,8 +30,8 @@ import { hhmmToMins } from './hhmm';
  * the rule. The genuinely-skipped case (machine asleep at 06:00) has a human
  * escape hatch instead: the parent starts the mission by hand from Settings.
  *
- * Does NOT check mood or the game-token balance — separate, older gates that
- * still live at the pedestal.
+ * Does NOT check mood, the lock or the game-token balance: quickGameEligibility
+ * (store/quickGameEligibility.ts) adds those for the pedestal, around this rule.
  */
 export function isQuickGameWindowOpen(state: MCState, nowIso: string): boolean {
     if (state.activeMission !== 'none') return false;

@@ -11,7 +11,8 @@ import { describe, it, expect } from 'vitest';
 import { initialState } from './mcReducer';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { MISSED_LOCK_THRESHOLD } from './missionStreak';
-import { quickGameEligibility } from './quickGameEligibility';
+import { pickerRewards, quickGameEligibility } from './quickGameEligibility';
+import { REWARDS } from '../rewardCatalogue';
 import type { MCState } from '../types';
 
 const TODAY = '2026-09-02';
@@ -84,6 +85,28 @@ describe('quickGameEligibility — windowOpen is the reducer\'s own gate', () =>
                     .toBe(isQuickGameWindowOpen(state, at));
             }
         }
+    });
+});
+
+describe('pickerRewards — what the goal picker lists, and the trace records', () => {
+    const ids = (state: MCState, at = NOON) => pickerRewards(state, quickGameEligibility(state, at)).map(r => r.id);
+
+    it('lists the catalogue in order, 🐍 last, when every rule holds', () => {
+        expect(ids(eligible())).toEqual(REWARDS.map(r => r.id));
+    });
+
+    it('lists 🐍 exactly when the eligibility says pickerVisible', () => {
+        for (const state of [eligible(), eligible({ moodWind: -1 }), eligible({ gameTokens: 0 }), eligible({ missedMissionStreak: MISSED_LOCK_THRESHOLD })]) {
+            expect(ids(state).includes('quick-game')).toBe(quickGameEligibility(state, NOON).pickerVisible);
+        }
+        expect(ids(eligible(), local('19:00'))).not.toContain('quick-game');
+    });
+
+    it('leaves out a reward the parent switched off, and Game while phone games are suspended', () => {
+        expect(ids(withSettings({ rewardConfigs: { show: { enabled: false, targetCount: 8 } } }))).not.toContain('show');
+        const suspended = eligible({ privileges: initialState.privileges.map(p => (p.id === 'phone-games' ? { ...p, status: 'suspended', suspendedUntil: '2099-01-01T00:00:00.000Z' } : p)) });
+        expect(ids(suspended)).not.toContain('game');
+        expect(ids(suspended)).toContain('quick-game');
     });
 });
 

@@ -1,9 +1,10 @@
 // ============================================================
 // Mission Control — Quick-Game Eligibility
 // Every input the quick-game gate reads, beside the verdicts it reaches. The
-// pedestal decides with this object (the 🐍 in the goal picker, the "🎁 Use!"
-// button) and the diagnostics trace records the same object, so what the child
-// saw and what was recorded cannot disagree.
+// pedestal decides with this object (the goal picker's list through
+// pickerRewards, the "🎁 Use!" button), and the diagnostics trace records the
+// object and the list its render decided with: not a second read. (It records
+// the decision, not the pixels.)
 //
 // It holds no rule of its own: the window is isQuickGameWindowOpen (the
 // reducer's gate for START_GAME and CONSUME_CASE), the token and the catalogue
@@ -12,11 +13,12 @@
 // ============================================================
 
 import type { MCState, MissionPhase } from '../types';
-import { canSelectReward, isRewardEnabled } from '../rewardCatalogue';
+import { REWARDS, canSelectReward, isRewardEnabled } from '../rewardCatalogue';
 import { getLocalDateString } from './behaviorSync';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { hhmmToMins } from './hhmm';
 import { isEconomyLocked } from './missionStreak';
+import { isPhoneGamesSuspended } from './privileges';
 
 export interface QuickGameEligibility {
     /** The instant every verdict below was reached at. */
@@ -68,4 +70,15 @@ export function quickGameEligibility(state: MCState, nowIso: string): QuickGameE
         pickerVisible: useEnabled && canSelectReward(state, 'quick-game'),
         useEnabled,
     };
+}
+
+/**
+ * The goal picker's list, in catalogue order: what it renders and what the trace records. A reward
+ * shows unless phone games are suspended (Game), SELECT_CASE would refuse it (canSelectReward: the
+ * parent's switch, and the quick game's token), or it is the quick game and pickerVisible is false.
+ */
+export function pickerRewards(state: MCState, eligibility: QuickGameEligibility): typeof REWARDS {
+    return REWARDS.filter(r => !(r.id === 'game' && isPhoneGamesSuspended(state.privileges))
+        && canSelectReward(state, r.id)
+        && (r.id !== 'quick-game' || eligibility.pickerVisible));
 }

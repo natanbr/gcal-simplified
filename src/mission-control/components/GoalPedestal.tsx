@@ -7,14 +7,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch, useMCState } from '../store/useMCStore';
-import { quickGameEligibility } from '../store/quickGameEligibility';
-import { traceEligibility } from '../store/eligibilityTrace';
+import { pickerRewards, quickGameEligibility } from '../store/quickGameEligibility';
+import { sendEligibilityTrace, usePickerOpenTrace } from '../store/eligibilityTrace';
 import { isPhoneGamesSuspended } from '../store/privileges';
 import { Button3D } from './Button3D';
 import { MOOD_TOKEN } from '../moodTokenConfig';
 import { TokenSlots } from './PedestalTokenSlots';
 import type { DisplayCase, RewardIcon } from '../types';
-import { REWARDS, REWARD_MAP, canSelectReward, rewardCost } from '../rewardCatalogue';
+import { REWARD_MAP, rewardCost } from '../rewardCatalogue';
 
 let _caseTokenIdCounter = 0;
 const newCaseTokenId = (caseId: number) => `ct-${caseId}-${_caseTokenIdCounter++}`;
@@ -126,8 +126,9 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
   }, [case_.tokenCount, case_.id]);
 
-  // Every quick-game rule in one read, the one the trace records (store/quickGameEligibility.ts).
+  // Every quick-game rule in one read, and the picker's list from it: what the trace records (store/quickGameEligibility.ts).
   const quickGame = quickGameEligibility(state, new Date().toISOString());
+  const shownRewards = pickerRewards(state, quickGame);
   // Read outside the callback: capturing `state` in the closure let the drop
   // test a stale lock value.
   const economyLocked = quickGame.economyLocked;
@@ -224,17 +225,16 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
   };
 
-  const canUseQuickGame = quickGame.useEnabled;
   // Three distinct reasons: one label for all of them told a child with
   // perfect mood that their mood was too low, every evening.
   const blockedLabel = economyLocked ? '🔒 Bank locked'
     : !quickGame.windowOpen ? '⏰ Not right now'
     : '😡 Mood too low';
 
-  // Traced the locked one too, which opens nothing: what the picker was given, for the diagnostics folder.
+  // The locked "+" opens nothing, so its tap is traced instead, with the object this render decided with.
   const handleAddGoalTap = () => {
-    traceEligibility(state, { event: 'plus-tap', caseId: case_.id, pickerOpened: !economyLocked });
-    if (!economyLocked) setIsSelecting(true);
+    if (economyLocked) sendEligibilityTrace(quickGame, { event: 'locked-tap', caseId: case_.id });
+    else setIsSelecting(true);
   };
 
   // Pastel accent per pedestal — only used when ACTIVE
@@ -249,6 +249,8 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
   if (economyLocked && isSelecting) setIsSelecting(false);
   const isEmptySelecting = case_.status === 'empty' && isSelecting;
   const isEmptyIdle = case_.status === 'empty' && !isSelecting;
+  // The picker's opening, traced with the very object and list this render decided with.
+  usePickerOpenTrace(isEmptySelecting, { eligibility: quickGame, caseId: case_.id, shownRewards: shownRewards.map(r => r.id) });
 
   return (
     <div
@@ -359,10 +361,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-              {REWARDS.filter(r => !(r.id === 'game' && isPhoneGamesSuspended(state.privileges))).map(r => {
-                if (!canSelectReward(state, r.id)) return null; // the reducer's own refusal
-                if (r.id === 'quick-game' && !quickGame.pickerVisible) return null;
-
+              {shownRewards.map(r => {
                 const displayTargetCount = rewardCost(state.settings, r.id); // what SELECT_CASE charges
                 return (
                 <motion.button
@@ -465,21 +464,21 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
                 <>
                   <Button3D
                     variant="primary"
-                    onClick={canUseQuickGame ? handleUse : undefined}
+                    onClick={quickGame.useEnabled ? handleUse : undefined}
                     aria-label="Play snake game"
-                    disabled={!canUseQuickGame}
+                    disabled={!quickGame.useEnabled}
                     style={{
                       flex: 1, justifyContent: 'center', display: 'flex',
                       alignItems: 'center', gap: 4, fontSize: 11,
-                      background: canUseQuickGame
+                      background: quickGame.useEnabled
                         ? 'linear-gradient(180deg, #6de89e 0%, #3dce76 100%)'
                         : 'rgba(200,200,220,0.4)',
-                      borderColor: canUseQuickGame ? 'rgba(61,206,118,0.5)' : 'rgba(160,150,230,0.2)',
-                      color: canUseQuickGame ? '#0b4a20' : 'var(--mc-text-dim)',
-                      cursor: canUseQuickGame ? 'pointer' : 'not-allowed',
+                      borderColor: quickGame.useEnabled ? 'rgba(61,206,118,0.5)' : 'rgba(160,150,230,0.2)',
+                      color: quickGame.useEnabled ? '#0b4a20' : 'var(--mc-text-dim)',
+                      cursor: quickGame.useEnabled ? 'pointer' : 'not-allowed',
                     }}
                   >
-                    {canUseQuickGame ? '🎁 Use!' : blockedLabel}
+                    {quickGame.useEnabled ? '🎁 Use!' : blockedLabel}
                   </Button3D>
                   <motion.div
                     animate={{ rotate: leverTilted ? 45 : 0 }}
