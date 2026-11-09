@@ -66,11 +66,12 @@ const WRITERS: Record<string, { opens: RegExp; closes: RegExp; why: string } | n
 
 /**
  * Copies, not writes: the file puts the stored date into an object that is not the state, under
- * the same name, and never back. Allowed anywhere in the file; a copy that no longer names the
- * field is a stale entry and fails below.
+ * the same name, and never back. Allowed anywhere in the file, and counted exactly below: a new
+ * copy, or one that is gone, fails until this list is edited.
  */
-const COPIES: Record<string, string> = {
-    'store/quickGameEligibility.ts': 'the quick-game trace records the stored morning date beside the verdict it gave',
+const COPIES: Record<string, { why: string; copies: number }> = {
+    // The field of QuickGameEligibility and the line that fills it.
+    'store/quickGameEligibility.ts': { why: 'the quick-game trace records the stored morning date beside the verdict it gave', copies: 2 },
 };
 
 /** Readers that compare: each with the day it must compare against. */
@@ -141,9 +142,9 @@ describe('outcome dates have one writer and two comparing readers', () => {
             const writes = (lines ?? []).filter((l, i) => allowed.has(i + 1) && !isComment(l) && WRITE.test(l));
             expect(writes, `${rel}${block ? ` (${block.why})` : ''} no longer writes the outcome dates`).toHaveLength(2);
         }
-        for (const [rel, why] of Object.entries(COPIES)) {
-            const lines = files.get(rel) ?? [];
-            expect(lines.some(l => !isComment(l) && WRITE.test(l)), `${rel} (${why}) no longer copies an outcome date: drop it from COPIES`).toBe(true);
+        for (const [rel, { why, copies }] of Object.entries(COPIES)) {
+            const writes = (files.get(rel) ?? []).filter(l => !isComment(l) && WRITE.test(l));
+            expect(writes, `${rel} (${why}): a copy more or fewer is a change to review, then to this count`).toHaveLength(copies);
         }
     });
 
