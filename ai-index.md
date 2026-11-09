@@ -30,7 +30,7 @@ This directory houses isolated, feature-specific modules that bundle their own c
 ### `src/mission-control/` (Command Center)
 A strictly isolated application module — the kid-facing reward/mission app.
 * **Contract**: Does not import from the parent app's standard `src/components/` or `src/hooks/`. It relies on an injected `MCStoreProvider` — `src/App.tsx` provides it and also mounts the always-running bridges: `MissionSchedulerBridge` (exact-time daily mission triggers via recursive `setTimeout`), `RemoteControlBridge` (remote actions with 2-min-TTL deduplication and a 60s timestamp-validation window), and `MissionOverlay` (fixed-position overlay on top of the calendar view).
-* **State**: React Context + `useReducer` — no Zustand, no external state library. Persisted to `localStorage` key `mc-state-v5` with a debounced 500ms sync. `useMCDispatch` is a command interceptor: it injects `timestamp`, derives an activity-log entry, then dispatches the action followed by `ADD_LOG`.
+* **State**: React Context + `useReducer` — no Zustand, no external state library. Persisted to `localStorage` key `mc-state-v5` with a debounced 500ms sync, written at once on `pagehide` (window closed, app quit). `useMCDispatch` is a command interceptor: it injects `timestamp`, derives an activity-log entry, then dispatches the action followed by `ADD_LOG`.
 * **`store/`**: `mcReducer.ts` (pure reducer + the `MOOD_TOKENS_PER_DAY` token economy),
   `useMCStore.tsx` (context, persistence, the logging dispatch interceptor),
   `MCStoreProvider.tsx` (mounts the heartbeat, remote sync, audit bridge, suspension expiry and
