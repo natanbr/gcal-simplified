@@ -126,6 +126,23 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: 'proven 2026-10-06 (PR 196, review round 1), each mutation reverted. The provider hearing no auth event: 6 red (a sign-in and a sign-out on the Mission Control view, the remount and the commit-gap cases, both provider cases). A ticket from before a forget allowed to write: 3 red (the class case and both real-hook cases). The hooks writing through a fresh ticket: both real-hook cases red. A new ticket at every render: those two and the launch read-count case red (settings read twice once the session turned warm). CalendarApp not forgetting on a sign-out: 3 red (auth:check false, a failed check, Settings). No epoch check: the commit-gap case red. Reconnect not forgetting at auth:logout: the Reconnect case red. The whole settings answer kept: the pairing-by-value case red. The sign-in cases that pass against the code before the session (a sign-in or sign-out on the Mission Control view, an old account\'s answer in flight) were green guards.',
     },
     {
+        rule: 'The diagnostics folder has one writer: electron/diagnostics.ts, off until main\'s native folder dialog picks an existing absolute directory (diagnosticsDir, main-only: settings:save cannot write it, the window never names a path); it writes only <folder>/<host>/eligibility.ndjson and audit-log.ndjson (what AuditLog.append wrote, through onAppended), 4 MB + one generation; every trace line is rebuilt field by field from an allowlist (no spread), t/host/appVersion added in main; it names no pairing field, config.json or token file; EBUSY/EPERM/EACCES are silent results, a gone folder is not re-created, and the mirror never breaks the audit append; the diagnostics: handlers are registered from main.ts with one call, each through ipcSafe; GoalPedestal decides the 🐍 and "🎁 Use!" with quickGameEligibility, the object traced on each "+" tap (the locked one too), the session start and each mission end',
+        source: 'CLAUDE.md → Architecture → The diagnostics folder has one writer',
+        status: 'guarded',
+        guard: [
+            'src/__tests__/diagnostics-boundary.test.ts',
+            'electron/diagnostics.test.ts',
+            'electron/audit-log.test.ts',
+            'electron/api.save-settings.test.ts',
+            'electron/preload_contract.test.ts',
+            'src/mission-control/store/quickGameEligibility.test.ts',
+            'src/mission-control/store/eligibilityTrace.test.tsx',
+            'src/mission-control/components/GoalPedestal.trace.test.tsx',
+            'src/features/settings/components/DiagnosticsFolderRow.test.tsx',
+        ],
+        verifiedRedBy: 'proven 2026-11-09, each mutation reverted. Before the change: GoalPedestal.trace 5 of 5 red (no trace sent; its picker assertions were already green). Structural (diagnostics-boundary): `state.moodWind < 0 ||` back in the picker filter — "keeps no gate" red; a `const diagnosticsDir` in api.ts — "named only by" red; a `remoteKey` string in the writer — "never names the pairing" red; `...(raw as Record<…>)` into the line — the no-spread case red (a first version matched only `...raw` and stayed green: widened to any spread); diagnostics:status without ipcSafe — the handler case red; a path passed with choose-folder from the Settings row — the no-argument case red (and the row\'s own case). Behaviour: the same spread — diagnostics.test "rebuilds the line" and "finite numbers" red; the EBUSY/EPERM/EACCES branch removed — the three "swallows" cases red; mkdir recursive without the folder check — "does not re-create" red; rotation skipped — the rotation case red; isDirectory skipped — the file, missing and relative refusals red; the hostname unsanitized — "writes only the two fixed files" red; diagnosticsDir added to SETTINGS_FIELDS — api.save-settings red; the mirror notified before the write — both onAppended cases red; called without its try/catch — "a listener that throws" red; pickerVisible without canSelectReward — two eligibility cases and the GoalPedestal.trace "no game token" case red (the trace said shown, the picker hid it); the outcome-date condition dropped — the timeout trace case red; the StrictMode ref removed — the session-start case red; the locked "+" given no handler — the locked trace case red; diagnostics:status dropped from the preload whitelist — preload_contract red.',
+    },
+    {
         rule: 'Mission Control never imports from src/components, src/hooks, src/utils',
         source: 'CLAUDE.md → Conventions',
         status: 'guarded',
