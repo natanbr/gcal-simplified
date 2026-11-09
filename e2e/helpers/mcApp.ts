@@ -23,9 +23,15 @@
  * missionClock.ts). One visible consequence: with the morning concluded, the
  * quick-game window (`isQuickGameWindowOpen`) is OPEN until the evening start.
  * A spec that tests that gate must seed `lastCompletedOrFailedMorningDate`
- * itself. Seed what the test needs with `patchMCState` / `patchMCCollection` and
- * reload; do not assume anything carries over from a previous test or from the
- * developer's own app.
+ * itself. Seed what the test needs with `patchMCState` / `patchMCCollection`,
+ * then `gotoMC`; do not assume anything carries over from a previous test or
+ * from the developer's own app.
+ *
+ * Seeds are written on blank.html (`leaveApp`), never in the live app: the
+ * store saves what it holds as the page goes (pagehide, MCStoreProvider.tsx),
+ * so a seed written in the app was overwritten by the navigation meant to load
+ * it whenever a save was still waiting (the first 500 ms after a load, or after
+ * any change).
  */
 
 import { expect } from '@playwright/test';
@@ -33,7 +39,7 @@ import type { ElectronApplication, Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchApp, test as base } from './launchApp';
-import { STORAGE_KEY } from './missionClock';
+import { BLANK_URL, STORAGE_KEY } from './missionClock';
 import { createIsolatedUserData, removeUserData, userDataArg } from './userDataDir';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,11 +48,28 @@ const __dirname = path.dirname(__filename);
 export const ELECTRON_MAIN = path.join(__dirname, '../../dist-electron/main.js');
 export { STORAGE_KEY };
 
+/** The app page each page left for blank.html, so gotoMC can go back to it. */
+const appLeft = new WeakMap<Page, string>();
+
+const onBlank = (page: Page) => page.url() === BLANK_URL;
+
+/**
+ * Go to blank.html before writing a seed (see the header): the store's save as
+ * the app unloads lands first, and on blank.html no store can write over the
+ * seed. Every file:// document shares one localStorage. gotoMC goes back.
+ */
+export async function leaveApp(page: Page): Promise<void> {
+    if (onBlank(page)) return;
+    appLeft.set(page, page.url().split('?')[0]);
+    await page.goto(BLANK_URL);
+}
+
 /** Navigate the current window into Mission Control mode and let it settle. */
 export async function gotoMC(page: Page): Promise<void> {
     // Electron loads a file:/// URL, so navigate relative to the current one
-    // rather than constructing an absolute path.
-    const base = page.url().split('?')[0];
+    // (or, from blank.html, the app it left) rather than constructing an absolute path.
+    const base = onBlank(page) ? appLeft.get(page) : page.url().split('?')[0];
+    if (!base) throw new Error('gotoMC: the page is on blank.html, but not through leaveApp, so the app URL is unknown');
     await page.goto(`${base}?mc=1`);
     await page.waitForLoadState('domcontentloaded');
     // Deterministic readiness beats a fixed sleep: 2s per launch across a
@@ -120,8 +143,9 @@ export async function readMCField<T = unknown>(page: Page, field: string): Promi
     ) as Promise<T | null>;
 }
 
-/** Merge a partial state into the persisted blob without disturbing the rest. */
+/** Merge a partial state into the persisted blob without disturbing the rest. Leaves the page on blank.html: gotoMC next. */
 export async function patchMCState(page: Page, patch: Record<string, unknown>): Promise<void> {
+    await leaveApp(page);
     await page.evaluate(
         ({ key, value }: { key: string; value: Record<string, unknown> }) => {
             const raw = localStorage.getItem(key);
@@ -135,7 +159,7 @@ export async function patchMCState(page: Page, patch: Record<string, unknown>): 
 /**
  * Rewrite the entries of one array-valued top-level field, patching only the
  * rows whose `id` matches. Covers responsibilities, privileges and cases, which
- * every MC spec seeds the same way.
+ * every MC spec seeds the same way. Leaves the page on blank.html: gotoMC next.
  */
 export async function patchMCCollection(
     page: Page,
@@ -143,6 +167,7 @@ export async function patchMCCollection(
     id: string | number,
     patch: Record<string, unknown>,
 ): Promise<void> {
+    await leaveApp(page);
     const matched = await page.evaluate(
         ({ key, name, rowId, value }: { key: string; name: string; rowId: string | number; value: Record<string, unknown> }) => {
             const raw = localStorage.getItem(key);
