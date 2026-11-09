@@ -28,8 +28,11 @@ function clampString(value: unknown): string | undefined {
     return typeof value === 'string' ? value.slice(0, MAX_STRING_LEN) : undefined;
 }
 
+/** Rounded to 2 decimals, and still finite after that: 1e307 * 100 is Infinity, which JSON writes as null. */
 function finiteNumber(value: unknown): number | undefined {
-    return typeof value === 'number' && Number.isFinite(value) ? Math.round(value * 100) / 100 : undefined;
+    if (typeof value !== 'number') return undefined;
+    const rounded = Math.round(value * 100) / 100;
+    return Number.isFinite(rounded) ? rounded : undefined;
 }
 
 function rebuild(kind: 'string' | 'number' | 'boolean', value: unknown): TraceValue | undefined {

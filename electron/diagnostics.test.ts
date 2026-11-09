@@ -65,7 +65,10 @@ beforeEach(async () => {
     ({ auditLog } = await import('./audit-log'));
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+});
 
 describe('diagnostics — off until a folder is chosen', () => {
     it('reports off, writes nothing, and the audit log still works', async () => {
@@ -169,6 +172,37 @@ describe('diagnostics — the folder is read once and kept in main', () => {
         expect(await invoke('diagnostics:status')).toEqual({ enabled: false });
     });
 
+    // Antivirus or a backup holding config.json: each line would read it again, synchronously, on the main thread.
+    it('reads a held config.json again only after a few seconds, not at every line', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-09-02T12:00:00.000Z'));
+        fs.writeFileSync(CONFIG, JSON.stringify({ diagnosticsDir: folder }));
+        const realRead = fs.readFileSync;
+        let held = true;
+        const isConfig = (p: unknown) => typeof p === 'string' && path.resolve(p) === path.resolve(CONFIG);
+        const read = vi.spyOn(fs, 'readFileSync').mockImplementation(((...args: Parameters<typeof realRead>) => {
+            if (held && isConfig(args[0])) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+            return realRead(...args);
+        }) as typeof fs.readFileSync);
+        const configReads = () => read.mock.calls.filter(([p]) => isConfig(p)).length;
+
+        for (let i = 0; i < 5; i++) expect(await invoke('diagnostics:trace', TRACE)).toEqual({ ok: false, reason: 'off' });
+        for (let i = 0; i < 5; i++) auditLog.append([{ t: '2026-09-02T12:00:00.000Z', ev: 'A', src: 'local', msg: `m${i}` }]);
+        expect(await invoke('diagnostics:status')).toEqual({ enabled: false });
+        expect(configReads()).toBe(1);
+
+        held = false;
+        vi.setSystemTime(new Date('2026-09-02T12:00:04.000Z'));
+        expect(await invoke('diagnostics:trace', TRACE)).toEqual({ ok: false, reason: 'off' }); // still waiting
+        expect(configReads()).toBe(1);
+        vi.setSystemTime(new Date('2026-09-02T12:00:05.000Z'));
+        expect(await invoke('diagnostics:trace', TRACE)).toEqual({ ok: true });
+        await idle();
+
+        expect(configReads()).toBe(2);
+        expect(ndjson(traceFile())).toHaveLength(1);
+    });
+
     it.each([
         { what: 'a relative folder', saved: 'relative/dir' },
         { what: 'a network share', saved: '\\\\nas\\family\\diag' },
@@ -200,13 +234,14 @@ describe('diagnostics:trace — one allowlisted line', () => {
         await chooseFolder();
 
         await invoke('diagnostics:trace', {
-            ...TRACE, gameTokens: Number.NaN, moodWind: Number.POSITIVE_INFINITY, caseId: '2', nowMins: null,
+            ...TRACE, gameTokens: Number.NaN, moodWind: Number.POSITIVE_INFINITY, caseId: '2', nowMins: null, tzOffsetMins: 1e307,
             windowOpen: 'true', pickerVisible: 1, eveningStartMins: null, lastCompletedOrFailedMorningDate: null, activeMission: 7,
         });
         await idle();
 
         const [line] = ndjson(traceFile());
-        for (const dropped of ['gameTokens', 'moodWind', 'caseId', 'nowMins', 'windowOpen', 'pickerVisible', 'activeMission']) expect(line).not.toHaveProperty(dropped);
+        // tzOffsetMins 1e307 is finite, but rounding it to 2 decimals is not: it would be written as null.
+        for (const dropped of ['gameTokens', 'moodWind', 'caseId', 'nowMins', 'tzOffsetMins', 'windowOpen', 'pickerVisible', 'activeMission']) expect(line).not.toHaveProperty(dropped);
         expect(line).toMatchObject({ eveningStartMins: null, lastCompletedOrFailedMorningDate: null, useEnabled: true });
     });
 

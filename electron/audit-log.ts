@@ -48,9 +48,11 @@ function clampString(value: unknown, fallback = ''): string {
     return value.slice(0, MAX_STRING_LEN);
 }
 
+/** Rounded to 2 decimals, and still finite after that: 1e307 * 100 is Infinity, which JSON writes as null. */
 function clampNumber(value: unknown): number | undefined {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-    return Math.round(value * 100) / 100;
+    if (typeof value !== 'number') return undefined;
+    const rounded = Math.round(value * 100) / 100;
+    return Number.isFinite(rounded) ? rounded : undefined;
 }
 
 /**

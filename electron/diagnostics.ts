@@ -12,11 +12,15 @@
 // The folder leaves the machine, so it is chosen only in a native dialog here
 // (the window never names a path; a network share is refused), and the file
 // names are fixed. Nothing here may stop the main process: the folder is kept
-// in memory after one read, and one serialized async queue does every write, so
+// in memory after one read (a held settings file is tried again after 5 s, not
+// at every line), and one serialized async queue does every write, so
 // audit:append and diagnostics:trace only queue a line. A write that hangs holds
 // the queue, never the window, and a full queue drops the batch. It never writes
 // through a link. Failures stay here: EBUSY/EPERM/EACCES (OneDrive holding the
 // file) are silent, the rest are logged once by their code.
+// Only the UNC forms of a network path are refused: a mapped drive letter (Z:)
+// cannot be told from a local disk, so a write there may hang, which holds the
+// queue (serial-queue.ts), never the main thread.
 // See CLAUDE.md → "The diagnostics folder has one writer".
 // ============================================================
 
@@ -28,6 +32,7 @@ import path from 'node:path';
 import { auditLog, type AuditEntry } from './audit-log';
 import { droppedLine, TraceBudget, traceLine, type TraceStamp } from './diagnostics-trace';
 import { errorSummary, ipcSafe } from './log-safe';
+import { serialQueue } from './serial-queue';
 import { store, type StoreFailure } from './store';
 
 const TRACE_FILE = 'eligibility.ndjson';
@@ -36,7 +41,7 @@ type FileName = typeof TRACE_FILE | typeof AUDIT_MIRROR_FILE;
 /** Like the audit log: one previous generation, so at most ~8 MB per file name. */
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 /** Batches waiting behind the write in progress; beyond this a batch is dropped. */
-const MAX_PENDING = 32;
+const MAX_WAITING = 32;
 const LOCKED_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
 
 export type DiagnosticsStatus = { enabled: false } | { enabled: true; folder: string; hostFolder: string };
@@ -51,6 +56,10 @@ export type FolderChange =
 // ── The folder: read once, then kept here. Only chooseFolder and disable change it. ──
 /** undefined: not read yet; null: off. */
 let folderInUse: string | null | undefined;
+/** A settings file another program holds is read again after this, not at every line: each read
+ *  is synchronous, on the main thread. Clock-based, no timer: the next line after it reads. */
+const HELD_CONFIG_RETRY_MS = 5000;
+let heldConfigRetryAt = 0;
 
 /** \\server\share, \\?\UNC\…, //server: a write there holds for the network's timeout. */
 function isNetworkPath(folder: string): boolean {
@@ -59,8 +68,13 @@ function isNetworkPath(folder: string): boolean {
 
 function chosenFolder(): string | null {
     if (folderInUse === undefined) {
+        const wait = heldConfigRetryAt - Date.now();
+        if (wait > 0 && wait <= HELD_CONFIG_RETRY_MS) return null; // a clock set back does not stretch the wait
         const config = store.read();
-        if (config.kind === 'unreadable') return null; // held right now: read again next time
+        if (config.kind === 'unreadable') {
+            heldConfigRetryAt = Date.now() + HELD_CONFIG_RETRY_MS; // held right now: off until then
+            return null;
+        }
         const saved = config.config.diagnosticsDir;
         folderInUse = saved && path.isAbsolute(saved) && !isNetworkPath(saved) ? saved : null;
     }
@@ -83,9 +97,6 @@ function status(): DiagnosticsStatus {
 // ── The write queue: one write at a time, all async, never awaited by a caller ──
 interface Job { name: FileName; text: string }
 type Written = { ok: true } | { ok: false; reason: 'missing' | 'link' | 'locked' | 'write-failed'; code?: string };
-
-const queue: Job[] = [];
-let draining: Promise<void> | null = null;
 
 function errorCode(e: unknown): string | undefined {
     const code = typeof e === 'object' && e !== null ? Reflect.get(e, 'code') : undefined;
@@ -145,30 +156,18 @@ function report(written: Written): void {
     console.error(`[diagnostics] A line was not written to the diagnostics folder (${what}).`);
 }
 
-async function drain(): Promise<void> {
-    try {
-        for (let job = queue.shift(); job; job = queue.shift()) {
-            const target = chosenFolder(); // turned off meanwhile: the rest is dropped
-            if (target) report(await write(target, job));
-        }
-    } catch (e) {
-        console.error(`[diagnostics] The write queue stopped (${errorSummary(e)}).`);
-        queue.length = 0;
-    } finally {
-        draining = null;
-    }
-}
+const writes = serialQueue(MAX_WAITING, e => console.error(`[diagnostics] A write stopped (${errorSummary(e)}).`));
 
 function enqueue(job: Job): boolean {
-    if (queue.length >= MAX_PENDING) return false;
-    queue.push(job);
-    draining ??= drain();
-    return true;
+    return writes.add(async () => {
+        const target = chosenFolder(); // turned off meanwhile: dropped
+        if (target) report(await write(target, job));
+    });
 }
 
 /** Resolves once the queued writes are done. Nothing in the app waits on it: the tests do. */
 export function diagnosticsIdle(): Promise<void> {
-    return draining ?? Promise.resolve();
+    return writes.idle();
 }
 
 // ── What the window and the audit trail hand in ───────────────────────────────

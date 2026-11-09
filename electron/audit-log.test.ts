@@ -68,6 +68,16 @@ describe('auditLog', () => {
         expect(Object.keys(entry).sort()).toEqual(['ev', 'msg', 'src', 't']);
     });
 
+    // Finite, but rounding them to 2 decimals is not: JSON would write null where a number belongs.
+    it('drops a number too large to round', () => {
+        auditLog.append([{ t: '2026-08-19T10:00:00.000Z', ev: 'X', src: 'local', msg: 'huge', d: 1e307, bank: -1e307, game: 2 }]);
+        const [entry] = auditLog.read();
+        expect(entry).not.toHaveProperty('d');
+        expect(entry).not.toHaveProperty('bank');
+        expect(entry).toMatchObject({ game: 2 });
+        expect(fs.readFileSync(auditLog.filePath(), 'utf-8')).not.toContain('null');
+    });
+
     it('coerces an unknown source to system rather than trusting it', () => {
         auditLog.append([{ t: '2026-08-19T10:00:00.000Z', ev: 'X', src: 'administrator', msg: 'hi' }]);
         expect(auditLog.read()[0].src).toBe('system');
