@@ -22,9 +22,10 @@
  * missed window to report. Mission times and settings are left as they were.
  *
  * The write happens on blank.html in the same window. Every file:// document
- * shares one localStorage, so the store is not mounted there and none of its
- * debounced 500ms persists can land on top of the write. Then the app loads
- * again and reads the quiet blob.
+ * shares one localStorage, and the store is not mounted there: it saves what
+ * it holds as the app page goes (pagehide, MCStoreProvider.tsx), before
+ * blank.html loads, so nothing of it can land on top of the write. Then the app
+ * loads again and reads the quiet blob. mcApp.ts seeds the same way.
  *
  * Specs that TEST missions start one explicitly after launch (see
  * mission-control.spec.ts). Nothing here runs after the launch.
@@ -43,10 +44,10 @@
  * launched, so a spec that fails or times out restores too. The limits:
  *  - The first document loads inside electron.launch(): Playwright releases
  *    the app's `ready` before launch resolves, so it mounts before anything
- *    here runs. Inside a mission window it starts that mission. If its 500ms
- *    persist lands before the hop to blank.html (a slow machine), the fields
- *    read at launch contain it. A mission whose `startedAt` is at or after the
- *    launch is therefore recorded as NOT running and is not put back.
+ *    here runs. Inside a mission window it starts that mission, and the store
+ *    saves it at the latest as the hop to blank.html unloads the page, so the
+ *    fields read at launch contain it. A mission whose `startedAt` is at or
+ *    after the launch is therefore recorded as NOT running and is not put back.
  *  - `missedMissionStreak` is not restored and does not need to be: only a
  *    mission timing out moves it. A quieted launch has nothing running, and a
  *    mission the launch started is not put back to time out later in the dev app.
@@ -71,7 +72,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const STORAGE_KEY = 'mc-state-v5';
-const BLANK_URL = pathToFileURL(path.join(__dirname, 'blank.html')).href;
+/** A page with no store on it, sharing the app's localStorage: seeds are written here. */
+export const BLANK_URL = pathToFileURL(path.join(__dirname, 'blank.html')).href;
 const OVERLAY = '[data-testid="mc-mission-overlay"]';
 
 /**

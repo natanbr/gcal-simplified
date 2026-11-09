@@ -255,8 +255,6 @@ for (const { scale, width, height, tray } of SIZES) {
             await page.keyboard.press('Escape'); // the quiz
             await page.keyboard.press('Escape'); // the game
             await page.locator('[data-testid="blocks-grid"]').waitFor({ state: 'detached', timeout: 15_000 });
-            // The store persists 500 ms after a change; seed only once the game's end has landed.
-            await expect.poll(() => readMCField(page, 'snakeGameActive'), SETTLE).toBe(false);
             const done = new Date().toISOString();
             for (const id of ['recycling', 'activity']) {
                 await patchMCCollection(page, 'responsibilities', id, { pointsEarned: 3, completedAt: done });

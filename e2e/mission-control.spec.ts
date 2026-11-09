@@ -9,7 +9,7 @@
  * the ACTIVE mission these specs inject is never written to the developer's own
  * profile. Before that, the injected mission — 60 minutes long — kept the
  * overlay over the UI for every later spec and for the next hour of real use.
- * Each test starts from `initialState`; seed what you need and reload.
+ * Each test starts from `initialState`; seed what you need, then `gotoMC`.
  */
 
 import type { Page } from '@playwright/test';
@@ -19,18 +19,21 @@ import {
     STORAGE_KEY,
     expect,
     gotoMC,
+    leaveApp,
     mcTest as test,
     patchMCState,
     readMCField,
 } from './helpers/mcApp';
 
 /**
- * Helper: Inject a morning mission active state into localStorage.
+ * Helper: Inject a morning mission active state into localStorage, written on
+ * blank.html like every seed (helpers/mcApp.ts leaveApp); gotoMC next.
  * What keeps it running is `startedAt` + `durationMins`. The ±1 h window it
  * also writes is discarded on reload: since 2026-09-26 hydration re-derives
  * every mission window from the settings (store/hhmm.ts deriveMissionWindow).
  */
 async function injectActiveMission(page: Page, phase: 'morning' | 'evening' = 'morning'): Promise<void> {
+    await leaveApp(page);
     await page.evaluate(
         ({ key, targetPhase }: { key: string; targetPhase: string }) => {
             const raw = localStorage.getItem(key);
@@ -69,11 +72,10 @@ async function injectActiveMission(page: Page, phase: 'morning' | 'evening' = 'm
     );
 }
 
-/** Inject an active mission and reload so the store picks it up fresh. */
+/** Inject an active mission and load the app again so the store picks it up fresh. */
 async function withActiveMission(page: Page, phase: 'morning' | 'evening' = 'morning'): Promise<void> {
     await injectActiveMission(page, phase);
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
+    await gotoMC(page);
     await page.waitForTimeout(2500);
 }
 
@@ -161,7 +163,7 @@ test.describe('Mission Control', () => {
             ],
         });
 
-        // Reload so the injected state is picked up
+        // Load the app again, so the store starts from the seed
         await gotoMC(page);
         await page.waitForTimeout(1500);
 

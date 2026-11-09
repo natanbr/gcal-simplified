@@ -40,7 +40,7 @@ async function leaveProfileIn(dir: string, state: FailingState): Promise<void> {
     try {
         await seedFailingState(page, state);
         await expect(page.locator(OVERLAY), 'precondition: the mission covers the screen').toBeVisible({ timeout: 10_000 });
-        // The store persists 500ms after a change; closing sooner keeps the old blob.
+        // Proof the running mission reached the saved blob the next launch reads.
         await expect.poll(() => readMCField(page, 'activeMission'), { timeout: 5_000 }).not.toBe('none');
     } finally {
         await app.close();
