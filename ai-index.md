@@ -103,9 +103,11 @@ reaches the main process only through the preload bridge.
   never writes any of it (`PairingField` in `settings-dialog.ts`).
 * `audit-log.ts`: append-only NDJSON audit trail (no clear channel by design).
 * `diagnostics.ts`: the diagnostics folder the parent picks in a native dialog (`diagnosticsDir`,
-  main-only). Writes `<folder>/<host>/eligibility.ndjson` (the quick-game trace sent by
+  main-only, kept in memory). Writes `<folder>/<host>/eligibility.ndjson` (the quick-game trace sent by
   `store/eligibilityTrace.ts`) and `audit-log.ndjson` (the audit trail's lines, through
-  `auditLog.onAppended`); the `diagnostics:*` channels, registered by `registerDiagnosticsIpc()`.
+  `auditLog.onAppended`) through one async write queue, never through a link; the `diagnostics:*`
+  channels, registered by `registerDiagnosticsIpc()`. `diagnostics-trace.ts`: a trace line's allowlist
+  and its ~30-a-minute budget (pure).
 * `power-policy.ts`: night-time screen blanking.
 * `store.ts`: `config.json` (calendar selection, settings, remote pairing). `read()` says loaded /
   absent / unreadable; `update()` is the only writer and never writes over a file it cannot read.

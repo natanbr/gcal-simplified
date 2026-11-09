@@ -19,6 +19,10 @@ Event-triggered network work from the always-mounted MC tree (no timer): `useSch
 
 `CalendarSessionProvider` (`src/features/calendar-session/`, above `App.tsx`'s view switch, so mounted on both views) keeps the Calendar's last week while Mission Control is shown. It costs two IPC listeners (`auth:success`, `auth:signed-out`, which empty it) and nothing else: no timer, no read, no store write. The Calendar writes it from an effect when its own state changes (an object assignment, no re-render), and reads it when it mounts: CalendarApp (whether a week is kept, and the count of sign-ins it has heard) and the Dashboard's two hooks (2026-10-06).
 
+`useEligibilityTrace` (`src/mission-control/store/eligibilityTrace.ts`, mounted in `MCStoreProvider`, so on both views) sends one `diagnostics:trace` IPC at launch, then one at each mission end or recorded outcome (an effect keyed on the running mission and the two outcome dates). No timer, no store write, no render of its own; the picker's and the locked "+"'s traces happen only on a child's tap on the Mission Control view (2026-11-09).
+
+The diagnostics folder (`electron/diagnostics.ts`) costs nothing while no folder is chosen. While one is, every audit line and every trace is queued and appended by one serialized async queue (`fs.promises`; at most 32 batches waiting, the rest dropped; ~30 trace lines a minute), and the folder is kept in memory after one read of the settings file, so `audit:append` never waits on a disk, a held file or a cloud folder (2026-11-09).
+
 Main process (always-on by design, independent of view — `electron/`): the Supabase Realtime WebSocket (remote control), a 60 s power-policy check (`main.ts`, can spawn a screen-off command when idle in the sleep window), a 60 s de-dup cleanup, and a 4 h auto-update check.
 
 ## Fixes applied (2026-07)
