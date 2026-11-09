@@ -11,7 +11,7 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { MCState, ActivityLogEntry } from '../types';
 import { sourceOf } from './activityLog';
 
@@ -57,18 +57,33 @@ function toPayload(log: ActivityLogEntry, appVersion: string): AuditPayload {
     };
 }
 
+function send(batch: AuditPayload[]): void {
+    for (let i = 0; i < batch.length; i += MAX_BATCH) {
+        window.ipcRenderer?.invoke('audit:append', batch.slice(i, i + MAX_BATCH))
+            .catch(() => { /* best-effort */ });
+    }
+}
+
 export function useAuditTrail(state: MCState): void {
     /** Ids already written to disk, so a re-render never duplicates a line. */
     const writtenIds = useRef<Set<string>>(new Set());
     /** Entries restored from localStorage were mirrored by the session that
      *  wrote them; re-appending them every launch would duplicate the trail.
-     *  Seeding once at mount trades the previous session's unflushed tail
-     *  (≤1s of entries, indistinguishable without persistent ids) for
-     *  never double-writing history. */
+     *  Seeding once at mount trades the tail a previous session could not send
+     *  (≤1s of entries, only after a crash or a kill with no pagehide;
+     *  indistinguishable without persistent ids) for never double-writing history. */
     const seeded = useRef(false);
     const appVersion = useRef('');
     const pending = useRef<AuditPayload[]>([]);
     const flushTimer = useRef<ReturnType<typeof setTimeout>>();
+
+    /** The debounce, pagehide and unmount all send through here, so an entry is never sent twice. */
+    const flush = useCallback(() => {
+        clearTimeout(flushTimer.current);
+        const batch = pending.current;
+        pending.current = [];
+        send(batch);
+    }, []);
 
     // Session marker — the anchor a parent scrolls back to when asking
     // "what happened after the app restarted?".
@@ -95,7 +110,9 @@ export function useAuditTrail(state: MCState): void {
         return () => { cancelled = true; };
     }, []);
 
-    useEffect(() => {
+    // A layout effect queues the line as it commits. A passive one runs up to a frame
+    // later, and a pagehide in between (a scheduler or phone line, then a quit) sent without it.
+    useLayoutEffect(() => {
         const logs = state.activityLogs;
         if (!seeded.current) {
             seeded.current = true;
@@ -119,15 +136,8 @@ export function useAuditTrail(state: MCState): void {
         pending.current.push(...fresh);
 
         clearTimeout(flushTimer.current);
-        flushTimer.current = setTimeout(() => {
-            const batch = pending.current;
-            pending.current = [];
-            for (let i = 0; i < batch.length; i += MAX_BATCH) {
-                window.ipcRenderer?.invoke('audit:append', batch.slice(i, i + MAX_BATCH))
-                    .catch(() => { /* best-effort */ });
-            }
-        }, FLUSH_DEBOUNCE_MS);
-    }, [state.activityLogs]);
+        flushTimer.current = setTimeout(flush, FLUSH_DEBOUNCE_MS);
+    }, [state.activityLogs, flush]);
 
     // Bound the dedup set. The ring buffer holds 200 entries, so anything far
     // beyond that can never reappear in `activityLogs` and be double-written.
@@ -137,15 +147,14 @@ export function useAuditTrail(state: MCState): void {
         writtenIds.current = live;
     }, [state.activityLogs]);
 
-    // Flush whatever is still queued when the window goes away.
+    // Send whatever is still queued when the page goes away. Closing the window or
+    // a quit (the updater's included) fires pagehide but unmounts nothing, so the
+    // unmount flush alone lost the last second of lines (2026-11-08).
     useEffect(() => {
+        window.addEventListener('pagehide', flush);
         return () => {
-            clearTimeout(flushTimer.current);
-            const batch = pending.current;
-            pending.current = [];
-            for (let i = 0; i < batch.length; i += MAX_BATCH) {
-                window.ipcRenderer?.invoke('audit:append', batch.slice(i, i + MAX_BATCH)).catch(() => {});
-            }
+            window.removeEventListener('pagehide', flush);
+            flush();
         };
-    }, []);
+    }, [flush]);
 }

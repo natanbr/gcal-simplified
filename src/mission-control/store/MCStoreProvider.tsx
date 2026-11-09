@@ -1,4 +1,5 @@
-import React, { useReducer, useMemo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useReducer, useMemo, useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import type { MCState } from '../types';
 import { mcReducer } from './mcReducer';
 import { MCContext, loadPersistedStateWithRepairs, STORAGE_KEY } from './useMCStore';
 import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
@@ -74,19 +75,34 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     // Survives restarts, the CLEAR button, and the 200-entry ring buffer.
     useAuditTrail(state);
 
-    // Persist state to localStorage on every change (debounced 500ms)
+    // Persist state to localStorage on every change (debounced 500ms), and at once
+    // on pagehide: closing the window or a quit (the updater's included) unmounts
+    // nothing, and the change of the last half second was lost (2026-11-08).
+    const unsavedRef = useRef<MCState | null>(null);
     const persistTimerRef = useRef<ReturnType<typeof setTimeout>>();
-    useEffect(() => {
+    const saveNow = useCallback(() => {
         clearTimeout(persistTimerRef.current);
-        persistTimerRef.current = setTimeout(() => {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-            } catch {
-                // Storage quota — fail silently
-            }
-        }, 500);
+        const unsaved = unsavedRef.current;
+        if (!unsaved) return;
+        unsavedRef.current = null;
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(unsaved));
+        } catch {
+            // Storage quota — fail silently
+        }
+    }, []);
+    // A layout effect runs as the change commits. A passive one runs up to a frame
+    // later, and a pagehide in between (a scheduler or phone change, then a quit) saved the state before it.
+    useLayoutEffect(() => {
+        unsavedRef.current = state;
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = setTimeout(saveNow, 500);
         return () => clearTimeout(persistTimerRef.current);
-    }, [state]);
+    }, [state, saveNow]);
+    useEffect(() => {
+        window.addEventListener('pagehide', saveNow);
+        return () => window.removeEventListener('pagehide', saveNow);
+    }, [saveNow]);
 
     // Read when the settings:get below resolves, not at mount: logs may have moved on.
     const logsRef = useRef(state.activityLogs);
