@@ -83,6 +83,19 @@ describe('DiagnosticsFolderRow', () => {
         await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/in use/i));
     });
 
+    // A write to a network share can hold for the network's timeout: main refuses one.
+    it('says why a network folder is refused, and what to choose instead', async () => {
+        answer('diagnostics:status', OFF);
+        answer('diagnostics:choose-folder', { ok: false, reason: 'network-path' });
+        render(<DiagnosticsFolderRow />);
+        await screen.findByText('Off');
+
+        fireEvent.click(screen.getByRole('button', { name: /choose folder/i }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/network folder.*on this computer/i);
+        expect(screen.getByTestId('diagnostics-folder')).toHaveTextContent('Off');
+    });
+
     it('turns diagnostics off', async () => {
         answer('diagnostics:status', ON);
         answer('diagnostics:disable', { ok: true, status: OFF });

@@ -6,6 +6,7 @@ type DiagnosticsStatus = { enabled: false } | { enabled: true; folder: string; h
 
 const REFUSALS: Record<string, string> = {
     'not-a-directory': 'That is not a folder the app can open. Choose another one.',
+    'network-path': 'A network folder can make the app wait while the network is away. Choose a folder on this computer that OneDrive syncs.',
     locked: 'The settings file is in use by another program (antivirus or a backup). Try again in a moment.',
     unreadable: 'The settings file could not be read. Try again in a moment.',
     'write-failed': 'The settings file could not be written. Try again in a moment.',
