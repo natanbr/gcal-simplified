@@ -1025,3 +1025,19 @@ the other's.
 `active` flag) catches up, every other outcome of that run must ask the recorded one: put it in the
 shared decision (`completableRun`, `store/missionCompletion.ts`), and gate the UI's celebration on
 the same decision, not on "every task done", or it celebrates a payout the reducer then refuses.
+
+## 2026-11-08 — A debounced write needs a pagehide flush, and then nothing else may write in the live page
+
+**Learning:** Mission Control's localStorage save (500 ms) and audit lines (1 s) are debounced, and a
+window close or a quit (the updater's `quitAndInstall` included) unmounts nothing, so an unmount
+flush never runs and the last change was lost on every version (PR 204). Writing on `pagehide` fixed
+it, and immediately broke 7 E2E specs: they wrote a seed into the live page's localStorage and then
+reloaded, and the old page's pagehide save wrote the store's state over the seed. Two traps hid the
+bug from the first E2E attempt: Playwright's `app.close()` with `screenshot: 'on'` keeps the page
+alive ~2.8 s (every debounce fires), and a "kill after quit" test passes as a copy of the quit test
+whenever the app exits before the kill.
+**Action:** Any debounced persist gets a `pagehide` flush through the same function as its timer, with
+the latest value recorded at commit (layout effect), not a frame later. Seed storage only from
+blank.html (`leaveApp` in `e2e/helpers/mcApp.ts`), never in the running app. A close-timing E2E
+stops the app from its main process, asserts the tap-to-quit time, and asserts the kill landed
+(exit code), or it proves nothing.
