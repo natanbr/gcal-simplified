@@ -1,6 +1,7 @@
 import React from 'react';
 import { RefreshCw, Moon, Sun, Power, Calendar } from 'lucide-react';
 import { UserConfig } from '../../../types';
+import { DiagnosticsFolderRow } from './DiagnosticsFolderRow';
 
 interface GeneralSettingsTabProps {
     config: UserConfig;
@@ -172,6 +173,8 @@ export const GeneralSettingsTab: React.FC<GeneralSettingsTabProps> = ({ config, 
                                         </div>
                                     </div>
                                 </div>
+
+                                <DiagnosticsFolderRow />
 
                                 {/* About Section */}
                                 <div className="border-t border-zinc-200 dark:border-zinc-800 pt-8">
