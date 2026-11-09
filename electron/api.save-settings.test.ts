@@ -196,6 +196,16 @@ describe('ApiService.getSettings (settings:get)', () => {
         expect(new ApiService().getSettings()).toMatchObject({ calendarIds: ['primary'], taskListIds: [] });
     });
 
+    // Main's own field: diagnostics:status serves the Settings row, so the dialog's copy never holds it.
+    it('never hands out the diagnostics folder, with a v2 pairing or without', () => {
+        for (const marker of [{}, { remotePairingVersion: 2 }]) {
+            seed(JSON.stringify({ ...SEED, ...marker, diagnosticsDir: 'D:\\OneDrive\\diag' }, null, 2));
+            const settings = new ApiService().getSettings();
+            expect(settings).toMatchObject({ calendarIds: ['cal-a'] });
+            expect(settings).not.toHaveProperty('diagnosticsDir');
+        }
+    });
+
     // The dialog shows this sentence as it is (after Electron's IPC prefix), so it carries the
     // same reason classes as a refused save and names the file.
     it.each([

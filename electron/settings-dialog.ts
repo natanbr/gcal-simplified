@@ -42,8 +42,10 @@ export function loadSettingsForDialog(): UserConfig {
             ? `Settings could not be loaded: ${file} is in use by another program (antivirus or a backup). Try again in a moment.`
             : `Settings could not be loaded: ${file} could not be read${code ? ` (${code})` : ''}. Try again in a moment.`);
     }
-    if (current.config.remotePairingVersion === PAIRING_VERSION) return current.config;
     const settings = { ...current.config };
+    // Main's own: diagnostics:status shows it to the Settings row, so the dialog's copy never holds it.
+    delete settings.diagnosticsDir;
+    if (current.config.remotePairingVersion === PAIRING_VERSION) return settings;
     delete settings.remoteRoomId;
     delete settings.remoteKey;
     return settings;
