@@ -103,6 +103,8 @@ vi.mock('./audit-log', () => ({
   auditLog: { append: vi.fn(), read: vi.fn().mockReturnValue([]) },
 }));
 
+vi.mock('./diagnostics', () => ({ registerDiagnosticsIpc: vi.fn() }));
+
 describe('Single instance enforcement', () => {
   beforeEach(() => {
     vi.clearAllMocks();

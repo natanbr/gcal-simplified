@@ -36,8 +36,12 @@ const mainSource = readFileSync(join(here, 'main.ts'), 'utf-8');
 const allowedInvoke: string[] = [...ALLOWED_INVOKE_CHANNELS];
 const allowedOn: string[] = [...ALLOWED_ON_CHANNELS];
 
-/** Channels main.ts actually registers a handler for. */
-const registeredHandlers = [...mainSource.matchAll(/ipcMain\.handle\(\s*'([^']+)'/g)].map(m => m[1]);
+/** A domain whose handlers live in its own file, and the one call main.ts registers them with. */
+const DELEGATED = [{ file: 'diagnostics.ts', call: 'registerDiagnosticsIpc()' }];
+
+/** Channels main.ts actually registers a handler for, itself or through a delegated file. */
+const registeredHandlers = [mainSource, ...DELEGATED.map(({ file }) => readFileSync(join(here, file), 'utf-8'))]
+    .flatMap(source => [...source.matchAll(/ipcMain\.handle\(\s*'([^']+)'/g)].map(m => m[1]));
 
 /** Channels main.ts actually pushes to the renderer. */
 const sentChannels = [...mainSource.matchAll(/webContents\.send\(\s*'([^']+)'/g)].map(m => m[1]);
@@ -65,6 +69,11 @@ describe('IPC channel contract', () => {
             undeliverable,
             `main.ts sends these but preload will not let the renderer listen: ${undeliverable.join(', ')}`
         ).toEqual([]);
+    });
+
+    it('counts a delegated file\'s handlers only while main.ts registers it', () => {
+        // Otherwise a handler file main.ts stopped calling would still "handle" its channels here.
+        for (const { file, call } of DELEGATED) expect(mainSource, `main.ts must call ${call} (${file})`).toContain(call);
     });
 
     it('contains no duplicate entries in either whitelist', () => {

@@ -27,6 +27,10 @@ export interface UserConfig {
     /** ISO time of an AUTOMATIC renewal the phone has not yet answered: the
      *  Remote tab shows a notice until one verified message arrives. */
     remotePairingRenewedAt?: string;
+
+    /** The folder the parent picked for diagnostics (electron/diagnostics.ts), chosen only in
+     *  main's native dialog: settings:save cannot write it. Absent = diagnostics off. */
+    diagnosticsDir?: string;
 }
 
 
@@ -163,6 +167,7 @@ function readConfig(): ConfigRead {
             remoteKey: nonEmptyString(loaded.remoteKey),
             remotePairingVersion: typeof loaded.remotePairingVersion === 'number' ? loaded.remotePairingVersion : undefined,
             remotePairingRenewedAt: nonEmptyString(loaded.remotePairingRenewedAt),
+            diagnosticsDir: nonEmptyString(loaded.diagnosticsDir),
         } satisfies Record<keyof UserConfig, unknown>,
     };
 }

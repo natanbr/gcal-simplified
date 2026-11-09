@@ -63,6 +63,7 @@ vi.mock('./api', () => ({ apiService: mocks.api }));
 vi.mock('./weather', () => ({ weatherService: {} }));
 vi.mock('./remote-bridge', () => ({ remoteBridge: { init: vi.fn() } }));
 vi.mock('./audit-log', () => ({ auditLog: {} }));
+vi.mock('./diagnostics', () => ({ registerDiagnosticsIpc: vi.fn() }));
 
 await import('./main');
 await vi.waitFor(() => expect(mocks.onSignedOut).toHaveBeenCalledTimes(1));

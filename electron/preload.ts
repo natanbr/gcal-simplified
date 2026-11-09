@@ -23,6 +23,10 @@ export const ALLOWED_INVOKE_CHANNELS = [
   'remote:get-status',
   'audit:append',
   'audit:read',
+  'diagnostics:trace',
+  'diagnostics:status',
+  'diagnostics:choose-folder',
+  'diagnostics:disable',
 ];
 
 export const ALLOWED_ON_CHANNELS = [

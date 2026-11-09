@@ -15,6 +15,7 @@
 import { app } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import { errorSummary } from './log-safe';
 
 export interface AuditEntry {
     /** ISO timestamp of the event. */
@@ -90,8 +91,26 @@ function sanitize(raw: unknown): AuditEntry | null {
     return entry;
 }
 
+/** Handed the entries an append wrote, after the line is on disk. */
+export type AppendListener = (entries: readonly AuditEntry[]) => void;
+
 class AuditLog {
     private cachedPath = '';
+    private listener: AppendListener | null = null;
+
+    /** One listener: the diagnostics folder's mirror (diagnostics.ts). Nothing it does or
+     *  throws reaches append, which has already written its line. null removes it. */
+    onAppended(listener: AppendListener | null): void {
+        this.listener = listener;
+    }
+
+    private notify(entries: readonly AuditEntry[]): void {
+        try {
+            this.listener?.(entries);
+        } catch (e) {
+            console.error(`[AuditLog] Mirror failed (${errorSummary(e)}).`);
+        }
+    }
 
     /** `<userData>/audit-log.ndjson` — resolved lazily so tests can run headless. */
     filePath(): string {
@@ -129,11 +148,12 @@ class AuditLog {
             this.rotateIfNeeded();
             const payload = entries.map(e => JSON.stringify(e)).join('\n') + '\n';
             fs.appendFileSync(this.filePath(), payload, 'utf-8');
-            return entries.length;
         } catch (e) {
             console.error('[AuditLog] Append failed:', e);
             return 0;
         }
+        this.notify(entries);
+        return entries.length;
     }
 
     /**

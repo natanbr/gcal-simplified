@@ -8,6 +8,7 @@ import { apiService } from './api'
 import { weatherService } from './weather'
 import { remoteBridge } from './remote-bridge'
 import { auditLog } from './audit-log'
+import { registerDiagnosticsIpc } from './diagnostics'
 import { startPowerPolicy } from './power-policy'
 import { acquireSingleInstanceLock } from './single-instance'
 import { readWhileHeld } from './held-file'
@@ -188,6 +189,8 @@ function registerIpcHandlers(): void {
   // 'audit:clear' channel, so the in-app CLEAR button cannot erase this record.
   ipcMain.handle('audit:append', (_, entries) => auditLog.append(entries));
   ipcMain.handle('audit:read', (_, limit?: number) => auditLog.read(typeof limit === 'number' ? limit : 500));
+  // The diagnostics folder: the quick-game trace and a copy of the audit trail (diagnostics.ts).
+  registerDiagnosticsIpc();
 
   // Weather
   ipcMain.handle('weather:get', async (_, lat?: number, lng?: number) => {

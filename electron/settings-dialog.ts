@@ -14,10 +14,13 @@ import { PAIRING_VERSION } from './remote-pairing';
 /** Owned by the main process (remote-pairing.ts): the room and key, the marker saying the pairing
  *  was made for signed messages, and the re-scan notice of an automatic renewal. */
 type PairingField = 'remoteRoomId' | 'remoteKey' | 'remotePairingVersion' | 'remotePairingRenewedAt';
+/** Chosen in main's native folder dialog only (diagnostics.ts): a window that could name it
+ *  could point the app's writes anywhere on disk. */
+type MainOnlyField = PairingField | 'diagnosticsDir';
 
-/** The fields the Settings dialog may write. Typed over every field but the pairing, so a new
- *  UserConfig field is a tsc error here until someone decides which side it belongs to. */
-const SETTINGS_FIELDS: Record<Exclude<keyof UserConfig, PairingField>, true> = {
+/** The fields the Settings dialog may write. Typed over every field but the main-only ones, so a
+ *  new UserConfig field is a tsc error here until someone decides which side it belongs to. */
+const SETTINGS_FIELDS: Record<Exclude<keyof UserConfig, MainOnlyField>, true> = {
     calendarIds: true, taskListIds: true, activeHoursStart: true, activeHoursEnd: true, themeMode: true,
     manualDayStart: true, manualDayEnd: true, sleepEnabled: true, sleepStart: true, sleepEnd: true, weekStartDay: true,
 };

@@ -113,6 +113,21 @@ describe('ApiService.saveSettings', () => {
         }
     });
 
+    // The diagnostics folder is chosen only in main's native dialog (electron/diagnostics.ts):
+    // a renderer that could name it could point the app's writes anywhere on disk.
+    it('never writes the diagnostics folder, and keeps the one main chose', () => {
+        const fromRenderer: UserConfig = JSON.parse('{"calendarIds":["b"],"taskListIds":[],"diagnosticsDir":"C:\\\\Windows\\\\System32"}');
+
+        seed(JSON.stringify(SEED, null, 2));
+        expect(save(fromRenderer)).toEqual({ ok: true });
+        expect(onDisk()).not.toHaveProperty('diagnosticsDir');
+
+        seed(JSON.stringify({ ...SEED, diagnosticsDir: 'D:\\OneDrive\\diag' }, null, 2));
+        expect(save(fromRenderer)).toEqual({ ok: true });
+        expect(save(JSON.parse('{"calendarIds":["c"],"taskListIds":[],"diagnosticsDir":null}'))).toEqual({ ok: true });
+        expect(onDisk()).toMatchObject({ calendarIds: ['c'], diagnosticsDir: 'D:\\OneDrive\\diag' });
+    });
+
     it('a settings copy loaded before Regenerate Keys cannot revert the new pairing', () => {
         seed(JSON.stringify({ ...SEED, remotePairingVersion: 2 }, null, 2));
         const staleCopy = new ApiService().getSettings();

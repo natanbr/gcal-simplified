@@ -106,3 +106,48 @@ describe('auditLog', () => {
         expect(auditLog.read()).toEqual([]);
     });
 });
+
+// The diagnostics folder mirrors the trail (electron/diagnostics.ts). The mirror is
+// handed what append wrote, after its sanitize, and nothing it does reaches append.
+describe('auditLog.onAppended — the mirror hook', () => {
+    afterEach(() => {
+        auditLog.onAppended(null);
+        fs.rmSync(auditLog.filePath(), { force: true });
+        vi.restoreAllMocks();
+    });
+
+    it('hands the listener exactly the entries written, once per append', () => {
+        const seen: unknown[][] = [];
+        auditLog.onAppended(entries => seen.push([...entries]));
+
+        auditLog.append([
+            { t: '2026-08-19T10:00:00.000Z', ev: 'ADD_TOKENS', src: 'local', msg: 'ok', evil: 'dropped' },
+            { src: 'local', msg: 'no ev: not written' },
+        ]);
+
+        const written = fs.readFileSync(auditLog.filePath(), 'utf-8').split('\n').filter(Boolean).map(line => JSON.parse(line));
+        expect(seen).toEqual([written]);
+    });
+
+    it('is not called for an append that wrote nothing', () => {
+        const listener = vi.fn();
+        auditLog.onAppended(listener);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        auditLog.append([{ msg: 'no ev' }]);
+        vi.spyOn(fs, 'appendFileSync').mockImplementationOnce(() => { throw Object.assign(new Error('disk full'), { code: 'ENOSPC' }); });
+        expect(auditLog.append([{ t: '2026-08-19T10:00:00.000Z', ev: 'X', src: 'local', msg: 'lost' }])).toBe(0);
+
+        expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('a listener that throws never breaks the append', () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        auditLog.onAppended(() => { throw Object.assign(new Error('C:\\secret\\path'), { code: 'EIO' }); });
+
+        expect(auditLog.append([{ t: '2026-08-19T10:00:00.000Z', ev: 'X', src: 'local', msg: 'kept' }])).toBe(1);
+
+        expect(auditLog.read()).toEqual([expect.objectContaining({ msg: 'kept' })]);
+        expect(String(error.mock.calls[0])).not.toContain('secret');
+    });
+});

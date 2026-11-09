@@ -124,6 +124,9 @@ vi.mock('./audit-log', () => ({
   auditLog: { append: vi.fn(), read: vi.fn().mockReturnValue([]) }
 }));
 
+// Its handlers have their own suite (diagnostics.test.ts).
+vi.mock('./diagnostics', () => ({ registerDiagnosticsIpc: vi.fn() }));
+
 describe('Main Process Security Configuration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
