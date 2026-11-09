@@ -13,7 +13,7 @@
 //
 // Writes are allowed only where they are listed below, by block, not by file:
 // the declaration, the initial state, the one outcome writer, and the phone
-// payload's copy. Comparisons only in the scheduler (with the occurrence's
+// payload's copy; and the quick-game trace's copy (COPIES, 2026-11-09). Comparisons only in the scheduler (with the occurrence's
 // start day) and the quick-game window (with the morning of the day it is
 // asked about). e2e/helpers/missionClock.ts writes the fields too, in a test
 // profile, outside this tree on purpose.
@@ -64,6 +64,15 @@ const WRITERS: Record<string, { opens: RegExp; closes: RegExp; why: string } | n
     'store/useRemoteSync.ts': null, // the phone payload's copy, read by the phone's "Done Today"
 };
 
+/**
+ * Copies, not writes: the file puts the stored date into an object that is not the state, under
+ * the same name, and never back. Allowed anywhere in the file; a copy that no longer names the
+ * field is a stale entry and fails below.
+ */
+const COPIES: Record<string, string> = {
+    'store/quickGameEligibility.ts': 'the quick-game trace records the stored morning date beside the verdict it gave',
+};
+
 /** Readers that compare: each with the day it must compare against. */
 const COMPARERS = new Set([
     'hooks/useMissionScheduler.ts', // occurrenceHandled: the occurrence's own start day
@@ -110,7 +119,8 @@ describe('outcome dates have one writer and two comparing readers', () => {
     it('is written only in the listed blocks', () => {
         const offenders: string[] = [];
         for (const { rel, lines } of sourceLines()) {
-            const allowed = rel in WRITERS ? allowedLines(lines, WRITERS[rel]) : new Set<number>();
+            const allowed = rel in WRITERS ? allowedLines(lines, WRITERS[rel])
+                : rel in COPIES ? allowedLines(lines, null) : new Set<number>();
             lines.forEach((line, i) => {
                 if (!isComment(line) && WRITE.test(line) && !allowed.has(i + 1)) offenders.push(`${rel}:${i + 1} — ${line.trim()}`);
             });
@@ -130,6 +140,10 @@ describe('outcome dates have one writer and two comparing readers', () => {
             const allowed = allowedLines(lines ?? [], block);
             const writes = (lines ?? []).filter((l, i) => allowed.has(i + 1) && !isComment(l) && WRITE.test(l));
             expect(writes, `${rel}${block ? ` (${block.why})` : ''} no longer writes the outcome dates`).toHaveLength(2);
+        }
+        for (const [rel, why] of Object.entries(COPIES)) {
+            const lines = files.get(rel) ?? [];
+            expect(lines.some(l => !isComment(l) && WRITE.test(l)), `${rel} (${why}) no longer copies an outcome date: drop it from COPIES`).toBe(true);
         }
     });
 

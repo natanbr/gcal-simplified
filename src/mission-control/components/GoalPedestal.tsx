@@ -7,12 +7,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMCDispatch, useMCState } from '../store/useMCStore';
-import { isEconomyLocked } from '../store/missionStreak';
-import { isQuickGameWindowOpen } from '../store/gameWindow';
+import { quickGameEligibility } from '../store/quickGameEligibility';
+import { traceEligibility } from '../store/eligibilityTrace';
 import { isPhoneGamesSuspended } from '../store/privileges';
 import { Button3D } from './Button3D';
 import { MOOD_TOKEN } from '../moodTokenConfig';
-import { Token } from './Token';
+import { TokenSlots } from './PedestalTokenSlots';
 import type { DisplayCase, RewardIcon } from '../types';
 import { REWARDS, REWARD_MAP, canSelectReward, rewardCost } from '../rewardCatalogue';
 
@@ -78,67 +78,6 @@ function Confetti({ active }: { active: boolean }) {
   );
 }
 
-// ── Token slot row — matches bank coin size ────────────────────────────────────
-function TokenSlots({ filled, total, tokens, exitingIds, onDrop, onDragStateChange }: { filled: number; total: number; tokens: {id: string}[], exitingIds: Set<string>, onDrop: (id: string, x: number, y: number) => boolean, onDragStateChange: (isDragging: boolean) => void }) {
-  // Only overlap the placeholder tokens if there are more than 30 total.
-  // We'll stack them horizontally with negative margin to fit 16 per row.
-  const isLarge = total > 30;
-  const maxPerRow = isLarge ? 16 : 8;
-
-  return (
-    <div style={{
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: isLarge ? '6px 0' : 6,
-      justifyContent: 'center',
-      padding: '6px 4px',
-      maxWidth: '100%',
-    }}>
-      {Array.from({ length: total }, (_, i) => {
-        const token = i < tokens.length ? tokens[i] : null;
-        const isFilled = i < filled;
-        const isExiting = token ? exitingIds.has(token.id) : false;
-
-        return (
-          <motion.div
-            key={i}
-            initial={false}
-            animate={{ scale: isFilled ? 1 : 0.88, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 18 }}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: '50%',
-              background: isLarge ? 'rgba(255,255,255,0.85)' : 'transparent',
-              border: '2.5px dashed rgba(160,150,230,0.5)',
-              boxShadow: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 18,
-              marginLeft: isLarge && i % maxPerRow !== 0 ? -18 : 0,
-            }}
-          >
-            <AnimatePresence>
-              {isFilled && token && !isExiting && (
-                <motion.div
-                  key={token.id}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 18 }}
-                >
-                  <Token id={token.id} onDrop={onDrop} onDragStateChange={onDragStateChange} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 interface GoalPedestalProps {
   case_: DisplayCase;
@@ -187,9 +126,11 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     }
   }, [case_.tokenCount, case_.id]);
 
+  // Every quick-game rule in one read, the one the trace records (store/quickGameEligibility.ts).
+  const quickGame = quickGameEligibility(state, new Date().toISOString());
   // Read outside the callback: capturing `state` in the closure let the drop
   // test a stale lock value.
-  const economyLocked = isEconomyLocked(state);
+  const economyLocked = quickGame.economyLocked;
 
   const handleTokenDrop = useCallback((tokenId: string, x: number, y: number): boolean => {
     if (economyLocked) return false; // refuse before animating, or the token vanishes
@@ -276,21 +217,25 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
     // the hook's guard and START_GAME's. Separate clock reads let a tap at
     // 18:59:59.999 spend the goal and be refused the game a millisecond later.
     const at = new Date().toISOString();
-    if (rewardId === 'quick-game' && !isQuickGameWindowOpen(state, at)) return;
+    if (rewardId === 'quick-game' && !quickGameEligibility(state, at).useEnabled) return;
     dispatch({ type: 'CONSUME_CASE', caseId: case_.id, timestamp: at });
     if (rewardId === 'quick-game' && onQuickGameOpen) {
       onQuickGameOpen(at);
     }
   };
 
-  const isWithinSessionHours = isQuickGameWindowOpen(state, new Date().toISOString());
-  const shieldBroken = isEconomyLocked(state);
-  const canUseQuickGame = state.moodWind >= 0 && isWithinSessionHours && !shieldBroken;
+  const canUseQuickGame = quickGame.useEnabled;
   // Three distinct reasons: one label for all of them told a child with
   // perfect mood that their mood was too low, every evening.
-  const blockedLabel = shieldBroken ? '🔒 Bank locked'
-    : !isWithinSessionHours ? '⏰ Not right now'
+  const blockedLabel = economyLocked ? '🔒 Bank locked'
+    : !quickGame.windowOpen ? '⏰ Not right now'
     : '😡 Mood too low';
+
+  // Traced the locked one too, which opens nothing: what the picker was given, for the diagnostics folder.
+  const handleAddGoalTap = () => {
+    traceEligibility(state, { event: 'plus-tap', caseId: case_.id, pickerOpened: !economyLocked });
+    if (!economyLocked) setIsSelecting(true);
+  };
 
   // Pastel accent per pedestal — only used when ACTIVE
   const pastelAccents = [
@@ -361,7 +306,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
           <motion.button // frozen exactly like Button3D's `disabled`
             whileHover={economyLocked ? {} : { scale: 1.1, y: -2 }}
             whileTap={economyLocked ? {} : { scale: 0.92 }}
-            onClick={economyLocked ? undefined : () => setIsSelecting(true)}
+            onClick={handleAddGoalTap}
             aria-label={economyLocked ? 'Bank locked — finish your next mission' : 'Add a new goal'}
             aria-disabled={economyLocked}
             style={{
@@ -416,7 +361,7 @@ export function GoalPedestal({ case_, cases, innerRef, bankCount, layoutRects, o
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
               {REWARDS.filter(r => !(r.id === 'game' && isPhoneGamesSuspended(state.privileges))).map(r => {
                 if (!canSelectReward(state, r.id)) return null; // the reducer's own refusal
-                if (r.id === 'quick-game' && (state.moodWind < 0 || !isWithinSessionHours)) return null;
+                if (r.id === 'quick-game' && !quickGame.pickerVisible) return null;
 
                 const displayTargetCount = rewardCost(state.settings, r.id); // what SELECT_CASE charges
                 return (

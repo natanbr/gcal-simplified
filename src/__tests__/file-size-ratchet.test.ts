@@ -99,7 +99,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // drop callback — the prop is required and MissionControl always passes it),
     // 643 → 640 on 2026-09-23 (the picker's cost/enabled reads moved into
     // rewardCatalogue.ts's rewardCost / isRewardEnabled, shared with the reducer).
-    'src/mission-control/components/GoalPedestal.tsx': 640,
+    // 640 → 585 on 2026-11-09 (TokenSlots moved, unchanged, to PedestalTokenSlots.tsx, which
+    // paid for the "+" tap's diagnostics trace; the quick-game gates read quickGameEligibility).
+    'src/mission-control/components/GoalPedestal.tsx': 585,
     // 504 → 478 on 2026-10-04 (the launch load reads settings first and no longer
     // needs the error state or the fetchData ref; the events effect does the fetching),
     // then 478 → 431 the same day (settings, tasks and weather loads moved to

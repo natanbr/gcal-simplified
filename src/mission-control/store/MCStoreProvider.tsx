@@ -5,6 +5,7 @@ import { MCContext, loadPersistedStateWithRepairs, STORAGE_KEY } from './useMCSt
 import { useBehaviorHeartbeat } from './useBehaviorHeartbeat';
 import { useRemoteSync } from './useRemoteSync';
 import { useAuditTrail } from './useAuditTrail';
+import { useEligibilityTrace } from './eligibilityTrace';
 import { useSuspensionExpiry } from './useSuspensionExpiry';
 import { useGameTokenCapSettle } from './useGameTokenCapSettle';
 import { useStaleMissionRunEnd } from './useStaleMissionRunEnd';
@@ -74,6 +75,8 @@ export function MCStoreProvider({ children }: { children: React.ReactNode }): Re
     // Mirror every activity-log entry to the append-only file on disk.
     // Survives restarts, the CLEAR button, and the 200-entry ring buffer.
     useAuditTrail(state);
+    // The quick-game inputs at launch and at each mission end, for the diagnostics folder.
+    useEligibilityTrace(state);
 
     // Persist state to localStorage on every change (debounced 500ms), and at once
     // on pagehide: closing the window or a quit (the updater's included) unmounts
