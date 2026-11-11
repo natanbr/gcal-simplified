@@ -5,8 +5,8 @@
 // hold are gone, so the remote path is the one way in. These drive the REAL
 // remote path (allowlist, validators, timestamp scrub) into the real reducer
 // and pin that both Resets still reach the running mission from there. The
-// phone sends RESET_MISSION today; RESET_MISSION_WITH_TIMER stays allowlisted
-// for a phone button that does not exist yet (useRemoteControl.drift.test.ts).
+// phone sends RESET_MISSION for tasks only and RESET_MISSION_WITH_TIMER for a
+// confirmed Restart session (useRemoteControl.drift.test.ts).
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

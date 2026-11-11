@@ -84,7 +84,8 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // Remote tab's QR code and Regenerate Keys moved to RemotePairingPanel.tsx),
     // then 641 → 640 the same day (the Schedule select's inline `outline: 'none'`
     // line went; every field's focus ring is the .mc-field rule in mc.css).
-    'src/mission-control/components/MCSettingsOverlay.tsx': 640,
+    // 640 → 596 on 2026-11-10 (manual mission starts moved to the phone).
+    'src/mission-control/components/MCSettingsOverlay.tsx': 596,
     // 648 → 649 on 2026-09-03 (+1: dropping the mcReducer barrel splits one
     // import line into two, since the lock and the window now come from their
     // own modules),

@@ -132,15 +132,15 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   day's evening done, and it never started; re-derived at the outcome, a Settings save mid-run or a
   late start moved it again. Guarded by `mcReducer.occurrence-day.test.ts`,
   `useMissionScheduler.overnight.test.tsx` and `outcome-date-boundary.test.ts`.
-- **Only the phone stops a mission or sends a Reset**: no desktop *gesture* dispatches `CANCEL_MISSION` (a stop sticks for the
+- **Only the phone manually starts, stops or resets a mission**: no desktop *gesture* dispatches `CANCEL_MISSION` (a stop sticks for the
   window and spares the shield, so a desktop gesture let the child end one); "— Minimize" only minimizes.
   Nor `RESET_MISSION` / `RESET_MISSION_WITH_TIMER` (2026-10-07): a full Reset is a fresh attempt (`freshAttempt`
   clears `loggedTimeoutAt` while the charged miss stays), so the overlay's 2 s hold on "↺ Reset" let the child
   erase a miss and restart a timer that then never bound; no overlay control resets a mission now. The phone's
-  Stop and Reset reach the store through `REMOTE_ALLOWED_ACTIONS` (no phone build sends the full Reset yet).
-  Not closed: MC Settings' "▶ Start" (a tap behind ⚙️, `SET_ACTIVE_MISSION`) is a fresh attempt too. It is
-  ignored while a mission runs, but once a missed run has ended it gives the child a paid restart, and saving
-  a new start time (which ends a running mission) then "▶ Start" restarts its timer (open owner decision).
+  Stop and Resets reach the store through `REMOTE_ALLOWED_ACTIONS`.
+  Manual `SET_ACTIVE_MISSION` starts belong to the phone too (2026-11-10): MC Settings has no Start button.
+  The scheduler keeps its automatic starts; the phone may start another session after a failed, completed
+  or stopped session on the same day, with the previous miss kept and only one mission running at a time.
   Guarded by `action-literal-boundary.test.ts`.
   One desktop path still ends a mission: saving a new start time for the RUNNING mission in MC Settings
   (`SET_SETTINGS`). That is kept and logged, "⏹️ … mission ended: its start time was changed in Settings"

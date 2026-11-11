@@ -28,6 +28,8 @@
 //     in MissionOverlay.tsx turned the stripComments version red (it named
 //     MissionOverlay.tsx) and leaves this one green; the JSX-apostrophe case
 //     below is red on the stripComments version (2026-09-28).
+//   - SET_ACTIVE_MISSION: the Settings Start buttons still present made the new
+//     boundary case name components/MCSettingsOverlay.tsx (2026-11-10).
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
@@ -107,6 +109,18 @@ describe('action literal boundaries', () => {
         ]);
     });
 
+    it('SET_ACTIVE_MISSION reaches the store only through the scheduler or phone, with no desktop start gesture', () => {
+        expect(filesNaming('SET_ACTIVE_MISSION')).toEqual([
+            `${MC}hooks/schedulerTestKit.ts`, // test-only scheduler harness
+            `${MC}hooks/useMissionScheduler.ts`, // automatic starts and expiry
+            `${MC}hooks/useRemoteControl.ts`, // the phone's Start
+            `${MC}store/activityLog.ts`, // start and expiry lines
+            `${MC}store/mcReducer.ts`, // starts, expiry and task resync
+            `${MC}store/occurrenceDay.ts`, // scheduler/phone occurrence dating
+            `${MC}types.ts`, // the union member
+        ]);
+    });
+
     // Not the whole of "only the phone stops a mission": saving a new start time for
     // the running mission in MC Settings still ends it, through SET_SETTINGS, and
     // that is logged (settings-ends-mission.test.tsx; open decision, PR 170).
@@ -127,12 +141,11 @@ describe('action literal boundaries', () => {
     // (freshAttempt clears loggedTimeoutAt while the charged miss stays), so the
     // child's 2 s hold on the overlay's "↺ Reset" erased a miss after the end and
     // restarted the timer before it: the timer never bound. Its tap (tasks only) went
-    // with it: one control, and resetting a run is the parent's call. Not covered here:
-    // MC Settings' "▶ Start" (SET_ACTIVE_MISSION) is a fresh attempt once a run has
-    // ended, so a missed run can still be restarted and paid (open owner decision).
+    // with it: one control, and resetting a run is the parent's call. Settings' Start
+    // is phone-only too, pinned by SET_ACTIVE_MISSION above.
     it('RESET_MISSION_WITH_TIMER reaches the store only from the remote: no desktop gesture sends a full Reset', () => {
         expect(filesNaming('RESET_MISSION_WITH_TIMER')).toEqual([
-            `${MC}hooks/useRemoteControl.ts`, // REMOTE_ALLOWED_ACTIONS (no phone build sends it yet)
+            `${MC}hooks/useRemoteControl.ts`, // REMOTE_ALLOWED_ACTIONS: the phone's Restart session
             `${MC}store/activityLog.ts`, // its log line
             `${MC}store/mcReducer.ts`, // the case, and the cream-task resync list
             `${MC}store/staleMissionAction.ts`, // refuses a Reset for a mission that is not running
