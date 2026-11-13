@@ -58,8 +58,8 @@ Saving a new start time in MC Settings while a mission runs ends the run with no
 outcome and stamps `lastActiveAt` before the new time. The scheduler then reads
 the occurrence at the new time as not run and starts a fresh attempt with a full
 timer. It can be repeated, so a child can dodge a miss. Past midnight, after a
-miss in an overnight phase, a save that moves the start time a few minutes later
-can pull the next day's occurrence forward the same way. After a miss is logged, a
+miss in an overnight phase, a save that moves the start time to just after
+midnight can pull the next day's occurrence forward the same way. After a miss is logged, a
 same-day change of the start time starts nothing, because the scheduler reads
 `lastCompletedOrFailed*Date`; `useRemoteControl.start.test.tsx` pins that. So
 "only the phone starts a retry" holds for desktop gestures, not for this path.

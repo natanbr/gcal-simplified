@@ -151,7 +151,7 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   outcome and stamps `lastActiveAt` before the new time, so `occurrenceHandled` (`useMissionScheduler.ts`)
   is false for the occurrence at the new time and the scheduler starts a fresh attempt with a full timer
   there. It can be repeated, so a child can dodge a miss. Past midnight, after a miss in an overnight
-  phase, a save that moves the start time a few minutes later can pull the next day's occurrence forward
+  phase, a save that moves the start time to just after midnight can pull the next day's occurrence forward
   the same way. After a miss is logged, a same-day change of the start time starts nothing
   (`lastCompletedOrFailed*Date`, pinned by `useRemoteControl.start.test.tsx`). So "only the phone" holds
   for desktop gestures, not for this path.
