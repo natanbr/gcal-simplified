@@ -165,7 +165,7 @@ export type SchoolBagDecision =
 
 /**
  * The evening packs the night BEFORE a day. Started after midnight but before
- * the morning mission's start (Fri 00:20, by ▶ Start or the phone), it is
+ * the morning mission's start (Fri 00:20, started by hand from the phone), it is
  * still that night, so it packs for the same calendar day. A start time it
  * cannot read keeps the plain rule: the next calendar day.
  */

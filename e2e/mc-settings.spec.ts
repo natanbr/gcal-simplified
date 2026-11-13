@@ -38,11 +38,18 @@ test.describe('Mission Control — Settings Overlay', () => {
         await expect(page.locator('[data-testid="mc-settings-save"]')).toBeVisible({ timeout: 2000 });
     });
 
-    test('settings panel shows Morning and Evening Mission sections', async ({ mcPage: page }) => {
+    test('settings panel shows Morning and Evening Mission sections without manual starts', async ({ mcPage: page }, testInfo) => {
         await page.locator('[data-testid="mc-settings-btn"]').click();
 
         await expect(page.getByText('Morning Mission')).toBeVisible({ timeout: 2000 });
         await expect(page.getByText('Evening Mission')).toBeVisible();
+        const panel = page.locator('[data-testid="mc-settings-panel"]');
+        // Positive control: the role query sees this panel's buttons, so the empty result below means something.
+        await expect(panel.getByRole('button', { name: /save settings/i })).toBeVisible();
+        await expect(panel.getByRole('button', { name: /start|retry|reset/i })).toHaveCount(0);
+        const screenshot = testInfo.outputPath('phone-only-start-settings.png');
+        await page.screenshot({ path: screenshot });
+        await testInfo.attach('phone-only-start-settings', { path: screenshot, contentType: 'image/png' });
     });
 
     test('settings panel can be cancelled — store unchanged', async ({ mcPage: page }) => {

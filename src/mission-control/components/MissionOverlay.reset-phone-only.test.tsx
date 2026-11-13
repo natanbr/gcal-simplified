@@ -9,8 +9,10 @@
 // so the timer never bound. Like Stop, a Reset now comes only from the phone
 // (useRemoteControl.reset.test.tsx); the structural half is
 // src/__tests__/action-literal-boundary.test.ts. This covers the overlay only:
-// MC Settings' "▶ Start" still gives a fresh, paid attempt once a missed run has
-// ended (open owner decision).
+// MC Settings' Start buttons are gone too (2026-11-10,
+// MCSettingsOverlay.phone-start.test.tsx). The one desktop path left to a fresh
+// attempt is a Settings save that moves the running mission's start time (open
+// owner decision, CLAUDE.md).
 // ============================================================
 
 import React from 'react';

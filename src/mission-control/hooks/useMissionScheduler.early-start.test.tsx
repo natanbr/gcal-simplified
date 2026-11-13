@@ -21,12 +21,12 @@ import type { MCState } from '../types';
 
 const eveningOnly: MCState = { ...initialState, missions: initialState.missions.filter(m => m.phase === 'evening') };
 
-/** 18:30: the evening is started by hand, half an hour before its window. */
+/** 18:30: the evening is started by hand from the phone, half an hour before its window. */
 function startEveningEarly(state: MCState = eveningOnly) {
     vi.setSystemTime(at(18, 30));
     const harness = renderLiveScheduler(state);
-    harness.dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'local' });
-    expect(harness.live.state.activeMission, 'precondition: ▶ Start started it').toBe('evening');
+    harness.dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'remote', isRemote: true });
+    expect(harness.live.state.activeMission, "precondition: the phone's Start started it").toBe('evening');
     return harness;
 }
 

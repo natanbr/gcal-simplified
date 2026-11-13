@@ -6,7 +6,8 @@
 // remote path (allowlist, validators, timestamp scrub) into the real reducer
 // and pin that both Resets still reach the running mission from there. The
 // phone sends RESET_MISSION today; RESET_MISSION_WITH_TIMER stays allowlisted
-// for a phone button that does not exist yet (useRemoteControl.drift.test.ts).
+// for the phone's confirmed Restart session, coming with mc-remote PR 6 (not yet
+// merged; useRemoteControl.drift.test.ts).
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
