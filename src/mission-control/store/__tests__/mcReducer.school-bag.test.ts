@@ -6,7 +6,7 @@
 // packs for TODAY; the evening packs the night before, for TOMORROW.
 //
 // It is decided in exactly one place, SET_ACTIVE_MISSION's fresh start, which
-// the scheduler, the Settings Start buttons and the phone all go through, so
+// the scheduler and the phone both go through, so
 // the checklist a child sees never changes mid-run. "Now" is the action's own
 // instant, never the reducer reading the clock.
 // ============================================================

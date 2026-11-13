@@ -66,12 +66,12 @@ describe('stopping a scheduled mission inside its window', () => {
         unmount();
     });
 
-    it('▶ Start still starts a stopped mission, and stopping it again sticks', () => {
+    it("the phone's Start still starts a stopped mission, and stopping it again sticks", () => {
         const { live, dispatch, unmount } = launchInsideWindow('evening');
         dispatch({ type: 'CANCEL_MISSION', missionPhase: 'evening' });
         step(1_000);
 
-        dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'evening' }); // Settings → ▶ Start
+        dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'remote', isRemote: true });
         step(1_000);
         expect(live.state.activeMission).toBe('evening');
 

@@ -12,6 +12,8 @@ describe('MC Settings manual mission starts belong to the phone', () => {
         expect(screen.getByText('Morning Mission')).toBeInTheDocument();
         expect(screen.getByText('Evening Mission')).toBeInTheDocument();
         expect(screen.getAllByText('Auto-trigger at')).toHaveLength(2);
+        // Positive control: the role query does see this panel's buttons, so the empty result below means something.
+        expect(screen.getByRole('button', { name: /save settings/i })).toBeInTheDocument();
         expect(screen.queryAllByRole('button', { name: /start|retry|reset/i })).toHaveLength(0);
         expect(screen.queryByTestId('mc-settings-start-morning')).not.toBeInTheDocument();
         expect(screen.queryByTestId('mc-settings-start-evening')).not.toBeInTheDocument();

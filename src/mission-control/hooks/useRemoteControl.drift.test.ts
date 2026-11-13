@@ -21,9 +21,9 @@ describe('remote action allowlist', () => {
         // The companion remote app lives in a separate repo (mc-remote). If a
         // button is added there and not here, the button silently does nothing.
         // This is the list of action types that repo dispatches, captured
-        // 2026-08-19 and updated 2026-11-10 for the phone's confirmed Restart
-        // session control (RESET_MISSION_WITH_TIMER). Update BOTH sides together.
-        const CAPTURED_FROM = '742559f';
+        // 2026-08-19 and re-captured 2026-09-28 from mc-remote 7372b89 (its
+        // shield −1 / +1 buttons). Update BOTH sides together.
+        const CAPTURED_FROM = '7372b89';
         const TYPES_SENT_BY_REMOTE_APP = [
             'ADD_RESPONSIBILITY_POINT',
             'ADD_TOKENS',
@@ -37,7 +37,6 @@ describe('remote action allowlist', () => {
             'GRANT_GAME_TOKEN',
             'REMOVE_TOKEN',
             'RESET_MISSION',
-            'RESET_MISSION_WITH_TIMER',
             'SET_ACTIVE_MISSION',
             'SET_MOOD_WIND',
             'SET_PRIVILEGE_STATUS',
@@ -51,7 +50,11 @@ describe('remote action allowlist', () => {
          * dispatches itself is no reason, because a local dispatch never passes
          * the allowlist.
          */
-        const ALLOWED_BUT_NOT_SENT: Partial<Record<MCAction['type'], string>> = {};
+        const ALLOWED_BUT_NOT_SENT: Partial<Record<MCAction['type'], string>> = {
+            RESET_MISSION_WITH_TIMER: 'docs/requirements.md → Mission Streak Shield → "Reset re-arms the '
+                + 'occurrence" specifies the full Reset as remote-reachable, and since 2026-10-07 ("Reset is '
+                + 'phone-only") the remote is its only way in; no phone build sends it yet',
+        };
 
         /** Every `type: '…'` literal in the phone's production sources under `dir`. */
         function typesSentBy(dir: string, found = new Set<string>()): Set<string> {

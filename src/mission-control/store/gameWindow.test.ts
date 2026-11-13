@@ -38,7 +38,7 @@ describe('isQuickGameWindowOpen — the gap between the two missions', () => {
         // at 06:30 regardless would hand the day's games to a child who simply
         // kept the app closed through the routine. The genuinely-skipped case
         // (machine asleep) is recovered by the parent starting the mission by
-        // hand from Settings.
+        // hand from the phone.
         expect(isQuickGameWindowOpen(state(), local('06:45'))).toBe(false);
         expect(isQuickGameWindowOpen(state(), local('15:00'))).toBe(false);
     });

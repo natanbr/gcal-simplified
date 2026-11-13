@@ -67,7 +67,7 @@ describe('an evening whose window crosses midnight', () => {
         expect(s.missedMissionStreak, 'the miss still counts').toBe(1);
     });
 
-    it('started after midnight inside that window (a late timer or ▶ Start), it is still that evening', () => {
+    it('started after midnight inside that window (a late timer or a phone Start), it is still that evening', () => {
         const s = replay(lateEvening, start('evening', at(NEXT, '00:10'), 'local'), complete('evening', at(NEXT, '00:20')));
         expect(s.lastCompletedOrFailedEveningDate).toBe(D);
     });

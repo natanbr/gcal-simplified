@@ -137,14 +137,25 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   Nor `RESET_MISSION` / `RESET_MISSION_WITH_TIMER` (2026-10-07): a full Reset is a fresh attempt (`freshAttempt`
   clears `loggedTimeoutAt` while the charged miss stays), so the overlay's 2 s hold on "↺ Reset" let the child
   erase a miss and restart a timer that then never bound; no overlay control resets a mission now. The phone's
-  Stop and Resets reach the store through `REMOTE_ALLOWED_ACTIONS`.
+  Stop and Reset reach the store through `REMOTE_ALLOWED_ACTIONS`; the phone's confirmed full Reset
+  ("Restart session") is coming with mc-remote PR 6 (not yet merged), so until then
+  `RESET_MISSION_WITH_TIMER` stays allowlisted with no sender (`useRemoteControl.drift.test.ts`).
   Manual `SET_ACTIVE_MISSION` starts belong to the phone too (2026-11-10): MC Settings has no Start button.
   The scheduler keeps its automatic starts; the phone may start another session after a failed, completed
   or stopped session on the same day, with the previous miss kept and only one mission running at a time.
   Guarded by `action-literal-boundary.test.ts`.
   One desktop path still ends a mission: saving a new start time for the RUNNING mission in MC Settings
   (`SET_SETTINGS`). That is kept and logged, "⏹️ … mission ended: its start time was changed in Settings"
-  (open decision, PR 170). A Stop, a Reset (plain or full), a time adjustment, a whining toggle or a task
+  (open decision, PR 170).
+  Known gap on that path (open owner decision, found reviewing PR 206): the save ends the run with no
+  outcome and stamps `lastActiveAt` before the new time, so `occurrenceHandled` (`useMissionScheduler.ts`)
+  is false for the occurrence at the new time and the scheduler starts a fresh attempt with a full timer
+  there. It can be repeated, so a child can dodge a miss. Past midnight, after a miss in an overnight
+  phase, a save that moves the start time a few minutes later can pull the next day's occurrence forward
+  the same way. After a miss is logged, a same-day change of the start time starts nothing
+  (`lastCompletedOrFailed*Date`, pinned by `useRemoteControl.start.test.tsx`). So "only the phone" holds
+  for desktop gestures, not for this path.
+  A Stop, a Reset (plain or full), a time adjustment, a whining toggle or a task
   tap naming a mission that is not the running one is refused by the reducer and the log alike
   (`isStaleMissionAction`, `mcReducer.stale-mission-action.test.ts`, `mcReducer.stale-whining-task.test.ts`):
   the phone names it from a card that may be stale. `TaskCard` asks the same predicate before its burst.

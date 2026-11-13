@@ -28,7 +28,7 @@ import { hhmmToMins } from './hhmm';
  * is not enough — opening at 06:30 whether or not the routine ran hands the
  * whole day's games to a child who keeps the app closed until 07:00, deleting
  * the rule. The genuinely-skipped case (machine asleep at 06:00) has a human
- * escape hatch instead: the parent starts the mission by hand from Settings.
+ * escape hatch instead: the parent starts the mission by hand from the phone.
  *
  * Does NOT check mood or the game-token balance — separate, older gates that
  * still live at the pedestal.

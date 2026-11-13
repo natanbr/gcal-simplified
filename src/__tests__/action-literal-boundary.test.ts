@@ -123,7 +123,8 @@ describe('action literal boundaries', () => {
 
     // Not the whole of "only the phone stops a mission": saving a new start time for
     // the running mission in MC Settings still ends it, through SET_SETTINGS, and
-    // that is logged (settings-ends-mission.test.tsx; open decision, PR 170).
+    // that is logged (settings-ends-mission.test.tsx; open decision, PR 170). The
+    // scheduler then starts a fresh attempt at the new time (known gap, open owner decision).
     it('CANCEL_MISSION reaches the store only from the phone: no desktop gesture stops a mission', () => {
         // A stop sticks for the rest of the window and does not move the shield,
         // so a desktop gesture let the child end a mission (decision 2026-09-24).
@@ -145,7 +146,7 @@ describe('action literal boundaries', () => {
     // is phone-only too, pinned by SET_ACTIVE_MISSION above.
     it('RESET_MISSION_WITH_TIMER reaches the store only from the remote: no desktop gesture sends a full Reset', () => {
         expect(filesNaming('RESET_MISSION_WITH_TIMER')).toEqual([
-            `${MC}hooks/useRemoteControl.ts`, // REMOTE_ALLOWED_ACTIONS: the phone's Restart session
+            `${MC}hooks/useRemoteControl.ts`, // REMOTE_ALLOWED_ACTIONS (no phone build sends it yet; mc-remote PR 6, not yet merged, adds Restart session)
             `${MC}store/activityLog.ts`, // its log line
             `${MC}store/mcReducer.ts`, // the case, and the cream-task resync list
             `${MC}store/staleMissionAction.ts`, // refuses a Reset for a mission that is not running
