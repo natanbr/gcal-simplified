@@ -1041,3 +1041,8 @@ the latest value recorded at commit (layout effect), not a frame later. Seed sto
 blank.html (`leaveApp` in `e2e/helpers/mcApp.ts`), never in the running app. A close-timing E2E
 stops the app from its main process, asserts the tap-to-quit time, and asserts the kill landed
 (exit code), or it proves nothing.
+
+## 2026-11-13 — Removing a manual trigger does not remove the scheduler path a Settings save re-arms
+
+**Learning:** PR 206 removed MC Settings' "▶ Start" so a child could not give themselves a paid retry, and its action-literal boundary pinned every `SET_ACTIVE_MISSION` sender. The abuse review still found a fresh attempt from the desktop. Saving a new start time for the RUNNING mission (`SET_SETTINGS` in `mcReducer.ts`) ends it with no outcome, and `stampMissionActivity` stamps `lastActiveAt` before the new time. `occurrenceHandled` (`useMissionScheduler.ts`) then reads the occurrence at the new time as not run, and the scheduler starts it with a full timer, repeatably. A per-file literal guard cannot see this, because the start is sent by the scheduler, a legitimate sender. After a miss is LOGGED, `lastCompletedOrFailed*Date` holds same-day retimes; the gap is the running mission, plus a new start time just after midnight for an overnight phase.
+**Action:** When closing a "child must not start X" path, trace every route into the scheduler's `occurrenceHandled`, not only the files that name the action: Settings saves (time, duration), relaunch, midnight and clock change. Run a throwaway scenario against the real scheduler (`schedulerTestKit.renderLiveScheduler`) for each. Record what stays open in CLAUDE.md as a known gap; do not let the docs claim "only the phone".
