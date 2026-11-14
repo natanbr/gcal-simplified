@@ -82,10 +82,10 @@ export interface Mission {
     endsAt: string;
     durationMins?: number; // computed at trigger time
     startedAt?: string;
-    /** Tracks if we already logged the timeout so it doesn't log on remount */
-    loggedTimeoutAt?: string;
+    loggedTimeoutAt?: string; // the timeout is logged, so a remount does not log it again
     lastActiveAt?: string; // last start or end of a run; never cleared (store/missionActivity.ts)
     occurrenceDate?: string; // YYYY-MM-DD of the occurrence this run belongs to, set when it starts (store/occurrenceDay.ts)
+    startsAtChangedAt?: string; // the last save that moved startsAt; never cleared (stamped: store/missionActivity.ts, read: store/occurrenceDay.ts)
     baseDurationMins?: number; // the run's length at its start or full Reset; the +/- cap counts from it (store/missionEndAdjust.ts)
     tasks: MissionTask[];
     active: boolean;

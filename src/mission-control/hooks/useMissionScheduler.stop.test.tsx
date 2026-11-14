@@ -147,14 +147,18 @@ describe('stopped mission — restart and rollover', () => {
     });
 });
 
-describe('rescheduling a phase makes a new occurrence', () => {
+// DECISION (2026-11-13, owner, reversing the 2026-09-22 restart at the new time):
+// a Settings save that moves a phase which already ran today does not start it
+// again. Otherwise a child at the touchscreen moved the running mission a few
+// minutes ahead, again and again, and was never charged a miss. A parent who
+// wants another attempt starts it from the phone. More cases, the overnight one
+// included: useMissionScheduler.settings-retime.test.tsx.
+describe('rescheduling a phase that already ran today', () => {
     beforeEach(() => { vi.useFakeTimers(); });
     afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-    it('a running mission moved to a later start is started again at the new time', () => {
-        // SET_SETTINGS deactivates a running mission whose start time changes
-        // "so the scheduler can re-trigger at the new time". Pinned because the
-        // trigger stamp must not swallow that.
+    it('a running mission moved to a later start is not started again at the new time', () => {
+        // SET_SETTINGS still ends the running mission whose start time changes (PR 170, logged).
         const { live, dispatch, unmount } = launchInsideWindow('evening');
         dispatch({ type: 'SET_SETTINGS', settings: { eveningStartsAt: '19:30' } });
         step(1_000);
@@ -162,13 +166,12 @@ describe('rescheduling a phase makes a new occurrence', () => {
 
         jumpTo(at(19, 29));
         step(61_000);
-        expect(live.state.activeMission).toBe('evening');
+        expect(live.state.activeMission).toBe('none');
+        expect(startLogs(live.state, 'evening'), 'the 19:00 start only').toBe(1);
         unmount();
     });
 
-    it('a stopped mission moved to a later start is started at the new time', () => {
-        // DECISION (2026-09-22): a stop covers the occurrence it happened in. A
-        // parent who stops at 19:04 and moves the evening to 19:30 gets 19:30.
+    it('a stopped mission moved to a later start is not started at the new time', () => {
         const { live, dispatch, unmount } = launchInsideWindow('evening');
         dispatch({ type: 'CANCEL_MISSION', missionPhase: 'evening' });
         dispatch({ type: 'SET_SETTINGS', settings: { eveningStartsAt: '19:30' } });
@@ -177,7 +180,8 @@ describe('rescheduling a phase makes a new occurrence', () => {
 
         jumpTo(at(19, 29));
         step(61_000);
-        expect(live.state.activeMission).toBe('evening');
+        expect(live.state.activeMission).toBe('none');
+        expect(startLogs(live.state, 'evening'), 'the 19:00 start only').toBe(1);
         unmount();
     });
 });

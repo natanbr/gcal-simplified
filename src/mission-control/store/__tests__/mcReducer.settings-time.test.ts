@@ -76,7 +76,7 @@ describe('SET_SETTINGS — valid start times still apply (guard)', () => {
         expect(mission(next, 'morning').endsAt).toBe('07:45');
     });
 
-    it('a valid change still reschedules a running mission (it stops, to re-trigger at the new time)', () => {
+    it('a valid change still reschedules a running mission (it stops; since 2026-11-13 the scheduler does not start it again for that run)', () => {
         const running = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
 
         const next = mcReducer(running, { type: 'SET_SETTINGS', settings: { morningStartsAt: '07:15' } });

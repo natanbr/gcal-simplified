@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMCStore, useMCDispatch } from '../store/useMCStore.tsx';
 import { hhmmToMins } from '../store/hhmm';
+import { retimedOntoItsRun } from '../store/occurrenceDay';
 import {
     LATE_FIRE_TOLERANCE_MS, hasClosed, lastClosedOccurrence, nextOccurrence, nextTimeOfDay, openOccurrence,
     type Occurrence,
@@ -33,16 +34,20 @@ function lastActiveMs(s: MCState, phase: Phase): number {
  * stop is not a miss (the shield) and not a conclusion (the quick-game window).
  * Without it a stopped mission was restarted 8 ms later. A stamp in the future
  * is ignored: it was written under a clock set ahead, and trusting it would
- * skip every occurrence, silently, until the clock caught up.
+ * skip every occurrence, silently, until the clock caught up. Or a Settings
+ * save moved the start time onto the run it already had (retimedOntoItsRun):
+ * a save is never a fresh attempt (2026-11-13); the phone can start one.
  */
 function occurrenceHandled(s: MCState, phase: Phase, o: Occurrence): boolean {
     const concluded = phase === 'morning'
         ? s.lastCompletedOrFailedMorningDate === o.day
         : s.lastCompletedOrFailedEveningDate === o.day;
     const activeAt = lastActiveMs(s, phase);
+    const mission = s.missions.find(m => m.phase === phase);
     return concluded
         || s.activeMission === phase
-        || (activeAt >= o.startMs && activeAt <= Date.now());
+        || (activeAt >= o.startMs && activeAt <= Date.now())
+        || (mission !== undefined && retimedOntoItsRun(mission, s.settings, o, Date.now()));
 }
 
 /**

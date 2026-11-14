@@ -52,7 +52,14 @@ manual restart path, not all access to scheduling settings.
   `useRemoteControl.drift.test.ts` is unchanged from main (mc-remote 7372b89).
   Update the drift test's captured list in the same change that merges the phone.
 
-## Known gap (open owner decision)
+## Known gap (closed 2026-11-13)
+
+Closed by the owner's decision of 2026-11-13: a Settings save that moves a phase
+which already ran never starts it again as a fresh attempt. The save is stamped
+on the mission (`startsAtChangedAt`) and the scheduler asks `retimedOntoItsRun`
+(`store/occurrenceDay.ts`); pinned by
+`useMissionScheduler.settings-retime.test.tsx` and its `.dst` twin. The save
+still ends a running mission with no miss (PR 170, open). What it was:
 
 Saving a new start time in MC Settings while a mission runs ends the run with no
 outcome and stamps `lastActiveAt` before the new time. The scheduler then reads

@@ -20,6 +20,12 @@
 // Derived from the `activeMission` transition, whatever action caused it, so a
 // new way to end a mission cannot forget to stamp. Nothing else writes the
 // field and nothing clears it (activity-stamp-boundary.test.ts).
+//
+// `startsAtChangedAt` is stamped here the same way, from the `startsAt`
+// transition (a Settings save that moves it), at the same instant: a save
+// that ends the run is then never older than the run's end, which
+// retimedOntoItsRun (occurrenceDay.ts) relies on to refuse the scheduler a
+// fresh attempt at the moved time (2026-11-13). Nothing clears it either.
 // ============================================================
 
 import type { MCState, Mission } from '../types';
@@ -33,18 +39,30 @@ function endStamp(ended: Mission | undefined, prev: MCState, instant: string): s
     return Number.isFinite(due) && due < Date.parse(instant) ? new Date(due).toISOString() : instant;
 }
 
+/** Whether `m`'s start time differs from its phase's in `prev`. */
+function startMoved(prev: MCState, m: Mission): boolean {
+    const before = prev.missions.find(p => p.phase === m.phase);
+    return before !== undefined && before.startsAt !== m.startsAt;
+}
+
 /**
  * `next` with the mission that just started stamped at `instant` (the action's
- * timestamp, so the reducer stays pure) and the one that just ended at its end.
- * Same reference when nothing started or ended.
+ * timestamp, so the reducer stays pure), the one that just ended at its end, and
+ * one whose start time just moved stamped `startsAtChangedAt` at `instant`.
+ * Same reference when nothing started, ended or moved.
  */
 export function stampMissionActivity(prev: MCState, next: MCState, instant: string): MCState {
-    if (prev.activeMission === next.activeMission) return next;
+    const ran = prev.activeMission !== next.activeMission;
+    if (!ran && (next.missions === prev.missions || !next.missions.some(m => startMoved(prev, m)))) return next;
     // Read from `prev`: a Stop clears startedAt in `next`.
     const ended = endStamp(prev.missions.find(m => m.phase === prev.activeMission), prev, instant);
     return {
         ...next,
-        missions: next.missions.map(m => (m.phase === next.activeMission ? { ...m, lastActiveAt: instant }
-            : m.phase === prev.activeMission ? { ...m, lastActiveAt: ended } : m)),
+        missions: next.missions.map(m => {
+            const runStamp = !ran ? null : m.phase === next.activeMission ? instant : m.phase === prev.activeMission ? ended : null;
+            const moved = startMoved(prev, m);
+            if (runStamp === null && !moved) return m;
+            return { ...m, ...(runStamp === null ? {} : { lastActiveAt: runStamp }), ...(moved ? { startsAtChangedAt: instant } : {}) };
+        }),
     };
 }
