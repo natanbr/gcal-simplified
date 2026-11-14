@@ -16,7 +16,8 @@
 //      early `return` before it, and a catch that rethrows. Review found each
 //      of those passed an earlier version.
 //   3. Every blob field missionClock.ts writes is still declared on MCState,
-//      and the scheduler still reads the two "concluded today" dates. After a
+//      and the scheduler's check (store/occurrenceHandled.ts, which
+//      useMissionScheduler.ts imports) still reads the two "concluded today" dates. After a
 //      rename the helper would write a dead field, silently, and the suite
 //      would depend on the clock again.
 //   4. Nothing under e2e/ except launchApp.ts takes `test` from
@@ -43,6 +44,7 @@ const MISSION_CLOCK = join(E2E_DIR, 'helpers', 'missionClock.ts');
 const REGRESSION_SPEC = join(E2E_DIR, 'mission-clock-independence.spec.ts');
 const MC_TYPES = join(repoRoot, 'src', 'mission-control', 'types.ts');
 const SCHEDULER = join(repoRoot, 'src', 'mission-control', 'hooks', 'useMissionScheduler.ts');
+const OCCURRENCE_HANDLED = join(repoRoot, 'src', 'mission-control', 'store', 'occurrenceHandled.ts');
 
 /** Every TypeScript file under e2e/, recursively, keyed by POSIX path relative to e2e/. */
 function e2eSources(): Map<string, string> {
@@ -209,11 +211,15 @@ describe('E2E launch chokepoint', () => {
     });
 
     it('relies on a scheduler that still skips a phase already concluded today', () => {
-        const scheduler = readFileSync(SCHEDULER, 'utf-8');
+        expect(
+            readFileSync(SCHEDULER, 'utf-8'),
+            'useMissionScheduler.ts no longer asks occurrenceHandled (store/occurrenceHandled.ts), the check that skips a concluded phase',
+        ).toMatch(/import \{[^}]*\boccurrenceHandled\b[^}]*\} from '\.\.\/store\/occurrenceHandled'/);
+        const check = readFileSync(OCCURRENCE_HANDLED, 'utf-8');
         for (const field of ['lastCompletedOrFailedMorningDate', 'lastCompletedOrFailedEveningDate']) {
             expect(
-                scheduler.includes(field),
-                `useMissionScheduler.ts no longer reads ${field}. quietMissionClock marks today's ` +
+                check.includes(field),
+                `store/occurrenceHandled.ts no longer reads ${field}. quietMissionClock marks today's ` +
                 `missions concluded precisely so the scheduler skips them; rework the helper first.`
             ).toBe(true);
         }

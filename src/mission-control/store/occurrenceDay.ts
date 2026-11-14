@@ -13,19 +13,18 @@
 // 5 min late, a DST night moves the wall clock. The scheduler names the day of
 // the occurrence it starts; a start by hand or from the phone never belongs to
 // a future day's (handStartOccurrenceDay). An outcome (missionStreak.ts) writes the
-// stored day; the scheduler's occurrenceHandled compares with the day of the
+// stored day; occurrenceHandled (occurrenceHandled.ts) compares with the day of the
 // window start it is judging. The occurrences (start, window, day) come from
 // missionOccurrence.ts, which the scheduler asks too, so a start inside an open
 // window is that window's whoever starts it. Guarded by mcReducer.occurrence-day.test.ts,
 // mcReducer.occurrence-dst.test.ts and
-// __tests__/outcome-date-boundary.test.ts. retimedOntoItsRun (2026-11-13) dates
-// the last run against a start time a Settings save moved after it.
+// __tests__/outcome-date-boundary.test.ts.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
 import type { MCAction, MCSettings, Mission } from '../types';
 import { getLocalDateString } from './behaviorSync';
-import { occurrenceOn, openOccurrence, type Occurrence } from './missionOccurrence';
+import { occurrenceOn, openOccurrence } from './missionOccurrence';
 
 /** A local date key as getLocalDateString writes it. */
 export function isDateKey(value: unknown): value is string {
@@ -55,37 +54,6 @@ export function handStartOccurrenceDay(m: Mission, settings: MCSettings, instant
     const sinceYesterdaysEnd = at.getTime() - yesterday.endMs; // negative: still inside yesterday's window
     const untilTodaysStart = today.startMs - at.getTime();
     return sinceYesterdaysEnd < untilTodaysStart ? yesterday.day : today.day;
-}
-
-/**
- * Whether a Settings save moved `m`'s start time onto the run it already had
- * for `o`, so the scheduler must not start `o` (owner decision 2026-11-13).
- * Saving a new start time for the RUNNING mission ends it with no outcome
- * (missionReschedule.ts) and its end stamp lies before the new time, so the
- * occurrence there looked unrun: a child could take a fresh full-timer attempt
- * again and again and never be charged a miss.
- *
- * Only after a save made at or after the phase last ran: the save that ends a
- * run is stamped at the very instant of its end (missionActivity.ts). Without a save
- * since, a run that ended before its window covers none of it (decided
- * 2026-09-22), and a phone start after the save is judged that way again. Then
- * the run covers `o` when it was `o`'s (its stored day: a move the same day,
- * however far), or when its last activity, read with the hand-start rule
- * against the NEW start time, belongs to `o`'s day: an evening at 23:30 missed
- * at 00:30 and moved to 00:40 ran 10 min before the next day's 00:40, which is
- * covered; the night after, the run is nearer the night before, so it starts
- * as normal. That rule splits the gap between two windows at its middle in
- * real time, so a DST night or a move by an hour leaves the next day alone.
- * A stamp in the future (a clock set ahead) is ignored, as the scheduler
- * ignores such a lastActiveAt. Never asked for a phone start: the reducer does
- * not refuse one (useMissionScheduler.settings-retime.test.tsx).
- */
-export function retimedOntoItsRun(m: Mission, settings: MCSettings, o: Occurrence, nowMs: number): boolean {
-    const { lastActiveAt, startsAtChangedAt } = m;
-    if (lastActiveAt === undefined || startsAtChangedAt === undefined) return false;
-    const movedAt = Date.parse(startsAtChangedAt);
-    if (!(Date.parse(lastActiveAt) <= movedAt && movedAt <= nowMs)) return false; // NaN fails closed
-    return m.occurrenceDate === o.day || handStartOccurrenceDay(m, settings, lastActiveAt) === o.day;
 }
 
 /** The day a run starting now belongs to: the scheduler's own target, or else the hand-start rule. */

@@ -11,7 +11,8 @@
 // One answer to "which occurrence is open now". Every caller builds on the same
 // occurrences: the scheduler's arm (lastClosedOccurrence, openOccurrence,
 // nextOccurrence) and its fire (hasClosed), the hand-start rule (occurrenceOn,
-// occurrenceDay.ts) and a legacy run's dating (openOccurrence). The scheduler
+// occurrenceDay.ts), a legacy run's dating (openOccurrence) and the occurrence a
+// Settings save keeps the run for (nearerToStartOf, occurrenceHandled.ts). The scheduler
 // used to place the start on today's date itself, so a relaunch at 00:10 aimed
 // at tonight's 23:30 while last night's window was still open (fixed
 // 2026-10-06). Only this file places a mission's time on a date
@@ -93,6 +94,18 @@ export function nextOccurrence(m: MissionWindow, settings: MCSettings, instant: 
         if (o && o.startMs > instant.getTime()) return o;
     }
     return null;
+}
+
+/**
+ * Whether `atMs`, before `o` starts, is nearer `o`'s start than the end of the
+ * occurrence before it, in real time; a tie counts as nearer, as the
+ * hand-start rule's tie goes to the occurrence ahead (occurrenceDay.ts). So
+ * never from inside or before the window behind (its distance is not positive),
+ * and an instant leans toward one occurrence ahead at most.
+ */
+export function nearerToStartOf(o: Occurrence, m: MissionWindow, settings: MCSettings, atMs: number): boolean {
+    const behind = occurrenceOn(m, settings, new Date(o.startMs), -1);
+    return behind !== null && atMs < o.startMs && o.startMs - atMs <= atMs - behind.endMs;
 }
 
 /** The latest occurrence that has closed by `instant` (the day before yesterday's while yesterday's is still open). */

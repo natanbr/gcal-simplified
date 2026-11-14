@@ -1,12 +1,14 @@
 // ============================================================
 // Mission Control — a Settings save after a run, on the DST nights
 // ------------------------------------------------------------
-// The 2026-11-13 rule (retimedOntoItsRun, store/occurrenceDay.ts) reads the
-// phase's last activity against the new start time with the hand-start rule,
-// which measures real time. These pin it on both DST nights of 2026 in
-// America/Los_Angeles (2026-03-08 02:00 → 03:00, 2026-11-01 02:00 → 01:00), as
-// useMissionScheduler.dst.test.tsx does: a 23 h or 25 h day must neither cover
-// the next day's occurrence nor uncover the one the save moved onto the run.
+// The 2026-11-13 rule (retimedOntoItsRun, store/occurrenceHandled.ts) weighs
+// the phase's last activity against the new start time: it covers the next
+// occurrence when it is nearer that start than the end of the window behind,
+// in real time. These pin it on both DST nights of 2026 in America/Los_Angeles
+// (2026-03-08 02:00 → 03:00, 2026-11-01 02:00 → 01:00), as
+// useMissionScheduler.dst.test.tsx does. The first cases sit far from the
+// middle and pass under wall-clock sums too; the MIDPOINT cases sit within an
+// hour of it, so wall-clock sums flip both.
 // Vitest runs each file in its own process, so the zone does not leak.
 // ============================================================
 
@@ -78,6 +80,33 @@ describe('a Settings save after a run, across a DST night', () => {
         crossing(on(plusDays(eve, 2), moved.getHours(), moved.getMinutes()));
         expect(h.live.state.activeMission, 'the night after is a new occurrence').toBe('evening');
         expect(startLogs(h.live.state, 'evening')).toBe(2);
+        h.unmount();
+    });
+
+    /**
+     * An evening running at 19:20 when a save moves it to 07:00: the next 07:00 is covered when the
+     * run's end is nearer it than the end of the 07:00 window behind. Wall clock says 11 h 40 ahead
+     * on both nights; real time says 10 h 40 (spring) and 12 h 40 (fall), so each night flips.
+     */
+    const MIDPOINT: Array<{ name: string; eve: Day; durationMins: number; covered: boolean }> = [
+        { name: 'spring forward', eve: [2026, 2, 7], durationMins: 60, covered: true }, // 10 h 40 ahead, 11 h 20 behind
+        { name: 'fall back', eve: [2026, 9, 31], durationMins: 30, covered: false }, // 12 h 40 ahead, 11 h 50 behind
+    ];
+
+    it.each(MIDPOINT)('$name: a run ended at 19:20 by a move to 07:00 is weighed in real time', ({ eve, durationMins, covered }) => {
+        vi.setSystemTime(on(eve, 18, 59, 59));
+        const h = renderLiveScheduler(eveningOnlyAt('19:00', durationMins));
+        step(1_100);
+        jumpTo(on(eve, 19, 20));
+        h.dispatch({ type: 'SET_SETTINGS', settings: { eveningStartsAt: '07:00' } });
+        expect(h.live.state.activeMission, 'precondition: the save ended the run').toBe('none');
+
+        crossing(on(plusDays(eve, 1), 7, 0));
+        expect(h.live.state.activeMission, covered ? 'nearer the run than the window behind' : 'nearer the window behind').toBe(covered ? 'none' : 'evening');
+        if (covered) {
+            crossing(on(plusDays(eve, 2), 7, 0));
+            expect(h.live.state.activeMission, 'only one occurrence is covered').toBe('evening');
+        }
         h.unmount();
     });
 });

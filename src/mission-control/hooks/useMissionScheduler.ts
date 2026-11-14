@@ -9,61 +9,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMCStore, useMCDispatch } from '../store/useMCStore.tsx';
 import { hhmmToMins } from '../store/hhmm';
-import { retimedOntoItsRun } from '../store/occurrenceDay';
 import {
     LATE_FIRE_TOLERANCE_MS, hasClosed, lastClosedOccurrence, nextOccurrence, nextTimeOfDay, openOccurrence,
     type Occurrence,
 } from '../store/missionOccurrence';
+// Whether an occurrence still needs a start, and the "skipped" report's terms: pure, with the clock passed in.
+import { occurrenceHandled, skipOwed, skippedLineId, type Phase } from '../store/occurrenceHandled';
 import type { MissionPhase, MCState, Mission } from '../types';
-
-type Phase = Exclude<MissionPhase, 'none'>;
-
-/** When the mission last started or ended (store/missionActivity.ts), NaN for never. */
-function lastActiveMs(s: MCState, phase: Phase): number {
-    const stamp = s.missions.find(m => m.phase === phase)?.lastActiveAt;
-    return stamp === undefined ? Number.NaN : Date.parse(stamp);
-}
-
-/**
- * True when the occurrence `o` of `phase` needs no scheduler start: it
- * concluded (completed or failed; the outcome is dated by the day its window
- * started, store/occurrenceDay.ts, so a timer firing after midnight is judged
- * against the evening that began before it), or the mission ran at some point
- * since its start time — it is running now, or it last started or ended at or
- * after that time. The run is what covers a STOP, which records no outcome: a
- * stop is not a miss (the shield) and not a conclusion (the quick-game window).
- * Without it a stopped mission was restarted 8 ms later. A stamp in the future
- * is ignored: it was written under a clock set ahead, and trusting it would
- * skip every occurrence, silently, until the clock caught up. Or a Settings
- * save moved the start time onto the run it already had (retimedOntoItsRun):
- * a save is never a fresh attempt (2026-11-13); the phone can start one.
- */
-function occurrenceHandled(s: MCState, phase: Phase, o: Occurrence): boolean {
-    const concluded = phase === 'morning'
-        ? s.lastCompletedOrFailedMorningDate === o.day
-        : s.lastCompletedOrFailedEveningDate === o.day;
-    const activeAt = lastActiveMs(s, phase);
-    const mission = s.missions.find(m => m.phase === phase);
-    return concluded
-        || s.activeMission === phase
-        || (activeAt >= o.startMs && activeAt <= Date.now())
-        || (mission !== undefined && retimedOntoItsRun(mission, s.settings, o, Date.now()));
-}
-
-/**
- * Whether `passed`, a window that closed without the mission running, is the
- * scheduler's to report: it started while this session was up (the machine
- * slept through it), or after the mission last ran (the app was closed through
- * it). A profile on which the mission never ran says nothing about the app
- * existing at that window, so it gets no line.
- */
-function skipOwed(s: MCState, phase: Phase, passed: Occurrence, sessionStartMs: number): boolean {
-    return !occurrenceHandled(s, phase, passed)
-        && (passed.startMs >= sessionStartMs || lastActiveMs(s, phase) <= Date.now());
-}
-
-/** Names the occurrence, so its "skipped" line is written once: a later launch finds it in the log. */
-const skippedLineId = (phase: Phase, o: Occurrence) => `mission-skipped-${phase}-${o.day}`;
 
 export function useMissionScheduler(): void {
     const { state } = useMCStore();
@@ -174,11 +126,11 @@ export function useMissionScheduler(): void {
             const s = stateRef.current;
             const now = new Date();
             const passed = looksBack(phase, now) ? lastClosedOccurrence(m, s.settings, now) : null;
-            if (passed && skipOwed(s, phase, passed, sessionStart.current) && !isReported(skippedLineId(phase, passed))) {
+            if (passed && skipOwed(s, phase, passed, sessionStart.current, now.getTime()) && !isReported(skippedLineId(phase, passed))) {
                 return passed;
             }
             const open = openOccurrence(m, s.settings, now);
-            if (open && s.activeMission === 'none' && !occurrenceHandled(s, phase, open)) return open;
+            if (open && s.activeMission === 'none' && !occurrenceHandled(s, phase, open, now.getTime())) return open;
             return nextOccurrence(m, s.settings, now);
         }
 
@@ -193,7 +145,7 @@ export function useMissionScheduler(): void {
                 lastArm.current.set(phase, { token: rearmToken, target: null });
 
                 const s = stateRef.current;
-                const alreadyRun = occurrenceHandled(s, phase, target);
+                const alreadyRun = occurrenceHandled(s, phase, target, Date.now());
                 // On time while its window is open (waking at 06:10 starts the
                 // 06:00–06:30 mission); after that it was missed, and is reported.
                 if (!hasClosed(target, new Date())) {

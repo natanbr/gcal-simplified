@@ -9,12 +9,13 @@
 // a miss. Past midnight, after a miss in an overnight evening, a move to just
 // after midnight pulled the next day's occurrence forward the same way.
 //
-// The rule these pin (retimedOntoItsRun, store/occurrenceDay.ts): when the
-// start time was changed at or after the phase last ran, the run it already
-// had covers the occurrence it belongs to (its stored day) or the one its last
-// activity is nearer to, read against the new start time. The phone can still
-// start it (useRemoteControl.ts). Real reducer, real dispatch interceptor
-// (schedulerTestKit.ts).
+// The rule these pin (store/occurrenceHandled.ts): a save stamped at or after
+// the phase last ran, made when the run covered its occurrence at the old
+// time, keeps that run covering the occurrence of its stored day and the next
+// one when its last activity is nearer that start than the window behind.
+// The phone can still start it (useRemoteControl.ts). The review's holes (past
+// midnight, a run before the old window, a clock set back): the .coverage
+// twin. Real reducer, real dispatch interceptor (schedulerTestKit.ts).
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -236,12 +237,14 @@ describe('the stamp the scheduler reads (startsAtChangedAt)', () => {
         expect(saved.startsAtChangedAt, 'the move must not look older than the run it ended').toBe(saved.lastActiveAt);
     });
 
-    it('only a real change of the start time is stamped', () => {
+    it('only a real change of the start time, after a run it keeps, is stamped', () => {
         const stamp = { timestamp: '2026-11-10T12:00:00.000Z' };
+        const ran = ranOnce(initialState, 'morning', new Date(Date.parse(stamp.timestamp) - 60 * 60_000)); // concluded an hour before
         const morning = (s: MCState) => s.missions.find(m => m.phase === 'morning');
-        expect(morning(mcReducer(initialState, { ...retime('morning', '06:00'), ...stamp }))?.startsAtChangedAt, 'the same time').toBeUndefined();
-        expect(morning(mcReducer(initialState, { ...retime('morning', ''), ...stamp }))?.startsAtChangedAt, 'a refused time').toBeUndefined();
-        expect(morning(mcReducer(initialState, { ...retime('evening', '20:00'), ...stamp }))?.startsAtChangedAt, 'the other phase').toBeUndefined();
-        expect(morning(mcReducer(initialState, { ...retime('morning', '06:30'), ...stamp }))?.startsAtChangedAt).toBe(stamp.timestamp);
+        expect(morning(mcReducer(ran, { ...retime('morning', '06:00'), ...stamp }))?.startsAtChangedAt, 'the same time').toBeUndefined();
+        expect(morning(mcReducer(ran, { ...retime('morning', ''), ...stamp }))?.startsAtChangedAt, 'a refused time').toBeUndefined();
+        expect(morning(mcReducer(ran, { ...retime('evening', '20:00'), ...stamp }))?.startsAtChangedAt, 'the other phase').toBeUndefined();
+        expect(morning(mcReducer(initialState, { ...retime('morning', '06:30'), ...stamp }))?.startsAtChangedAt, 'no run to keep').toBeUndefined();
+        expect(morning(mcReducer(ran, { ...retime('morning', '06:30'), ...stamp }))?.startsAtChangedAt).toBe(stamp.timestamp);
     });
 });
