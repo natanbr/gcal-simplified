@@ -151,13 +151,15 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   the save ended the run with no outcome and the scheduler started a full-timer attempt at the new time,
   as often as the child saved. A save that moves a start time is stamped on the mission
   (`startsAtChangedAt`, written only by `stampMissionActivity`, never cleared) when the run covered its
-  occurrence at the old time: it was running, ran at or after the old start, or concluded (`saveKeepsRun`).
+  occurrence at the old time: it was running, ran at or after the old start, concluded, or an earlier save
+  kept it (`saveKeepsRun`).
   The stamp is the save's time, or the last activity if that is later (a clock set back). While the stamp
   is at or after `lastActiveAt` and not in the future, `occurrenceHandled` (`store/occurrenceHandled.ts`)
   counts as run the occurrence of the run's stored day and the next one when the run is nearer its start
   than the end of the window before it, in real time: a 23:30 evening moved at 23:50 to 00:10 starts
-  nothing that night. Known gap: a move made hours after the run is weighed the same way (an evening
-  missed at 00:30, moved at 08:00 to 08:30, skips that 08:30); the phone can start it. Guarded by the
+  nothing that night. Known gap: the rule weighs the run's last activity, not when the save was made, so
+  an evening that ended (missed or stopped) at 00:30 and was moved at 08:00 to 08:30 skips that 08:30,
+  silently; the phone can start it. Guarded by the
   `useMissionScheduler.settings-retime*` tests, `store/occurrenceHandled.test.ts` and
   `activity-stamp-boundary.test.ts`. The scheduler makes the scheduled starts and the phone every other
   start; the only desktop action that ends a run is this logged save.
