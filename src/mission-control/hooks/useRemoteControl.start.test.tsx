@@ -170,7 +170,10 @@ describe('phone mission starts keep repeat sessions available', () => {
             h.unmount();
         });
 
-        it(`${phase}: control, the same later start time does start it when no outcome was logged`, () => {
+        it(`${phase}: without the logged outcome, the same later start time still starts nothing (2026-11-13)`, () => {
+            // Until 2026-11-13 this control started a fresh attempt: only the outcome held it back.
+            // Now the save is stamped after today's run, so the run covers the moved occurrence
+            // (retimedOntoItsRun, useMissionScheduler.settings-retime.test.tsx).
             const reloaded = savedAndReloaded(phoneMiss(phase, at(opens, 0, 0, 30)), phase, false);
 
             vi.setSystemTime(at(opens, 0, 0, 50));
@@ -179,9 +182,7 @@ describe('phone mission starts keep repeat sessions available', () => {
 
             crossing(at(opens, 4));
             step(1_000);
-            // The 10-second run is already over by now (the expiry tick), so count the start lines.
-            expect(startLogs(next.live.state, phase), 'the phone start, then one from the scheduler at the retimed window').toBe(2);
-            expect(next.live.state.activityLogs.find(l => l.message.startsWith(`${phase} mission started`))?.source).toBe('scheduler');
+            expect(startLogs(next.live.state, phase), 'the phone start only').toBe(1);
             next.unmount();
         });
     }

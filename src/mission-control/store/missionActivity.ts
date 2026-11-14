@@ -20,10 +20,19 @@
 // Derived from the `activeMission` transition, whatever action caused it, so a
 // new way to end a mission cannot forget to stamp. Nothing else writes the
 // field and nothing clears it (activity-stamp-boundary.test.ts).
+//
+// `startsAtChangedAt` is stamped here the same way, from the `startsAt`
+// transition (a Settings save that moves it), at the same instant (or the
+// last activity, if a clock set back made that later), so a save that ends
+// the run is never older than the run's end, and only when the run covered its
+// occurrence at the old start time (saveKeepsRun, occurrenceHandled.ts). The
+// scheduler then refuses a fresh attempt at the moved time (retimedOntoItsRun,
+// 2026-11-13). Nothing clears it either (activity-stamp-boundary.test.ts).
 // ============================================================
 
 import type { MCState, Mission } from '../types';
 import { missionDurationMins } from './hhmm';
+import { saveKeepsRun } from './occurrenceHandled';
 
 /** `instant`, or the run's due end when that came earlier. */
 function endStamp(ended: Mission | undefined, prev: MCState, instant: string): string {
@@ -33,18 +42,43 @@ function endStamp(ended: Mission | undefined, prev: MCState, instant: string): s
     return Number.isFinite(due) && due < Date.parse(instant) ? new Date(due).toISOString() : instant;
 }
 
+/** Whether `m`'s start time differs from its phase's in `prev`. */
+function startMoved(prev: MCState, m: Mission): boolean {
+    const before = prev.missions.find(p => p.phase === m.phase);
+    return before !== undefined && before.startsAt !== m.startsAt;
+}
+
+/**
+ * `m` (its run already stamped) with the save that moved its start time
+ * stamped, when the run it had covered its occurrence at the old time
+ * (saveKeepsRun, read in `prev`); else as it was. At `instant`, or at the last
+ * activity when that is later: a save made with the clock set back must not
+ * look older than the run it follows.
+ */
+function movedStamp(prev: MCState, m: Mission, instant: string): Mission {
+    if (m.phase === 'none') return m;
+    const last = m.lastActiveAt;
+    const at = last !== undefined && Date.parse(last) > Date.parse(instant) ? last : instant;
+    return saveKeepsRun(prev, m.phase, Date.parse(at)) ? { ...m, startsAtChangedAt: at } : m;
+}
+
 /**
  * `next` with the mission that just started stamped at `instant` (the action's
- * timestamp, so the reducer stays pure) and the one that just ended at its end.
- * Same reference when nothing started or ended.
+ * timestamp, so the reducer stays pure), the one that just ended at its end, and
+ * one whose start time just moved stamped `startsAtChangedAt` (movedStamp).
+ * Same reference when nothing started, ended or moved.
  */
 export function stampMissionActivity(prev: MCState, next: MCState, instant: string): MCState {
-    if (prev.activeMission === next.activeMission) return next;
+    const ran = prev.activeMission !== next.activeMission;
+    if (!ran && (next.missions === prev.missions || !next.missions.some(m => startMoved(prev, m)))) return next;
     // Read from `prev`: a Stop clears startedAt in `next`.
     const ended = endStamp(prev.missions.find(m => m.phase === prev.activeMission), prev, instant);
     return {
         ...next,
-        missions: next.missions.map(m => (m.phase === next.activeMission ? { ...m, lastActiveAt: instant }
-            : m.phase === prev.activeMission ? { ...m, lastActiveAt: ended } : m)),
+        missions: next.missions.map(m => {
+            const runStamp = !ran ? null : m.phase === next.activeMission ? instant : m.phase === prev.activeMission ? ended : null;
+            const stamped = runStamp === null ? m : { ...m, lastActiveAt: runStamp };
+            return startMoved(prev, m) ? movedStamp(prev, stamped, instant) : stamped;
+        }),
     };
 }
