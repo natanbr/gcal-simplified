@@ -13,8 +13,9 @@
 //
 // Writes are allowed only where they are listed below, by block, not by file:
 // the declaration, the initial state, the one outcome writer, and the phone
-// payload's copy. Comparisons only in the scheduler (with the occurrence's
-// start day) and the quick-game window (with the morning of the day it is
+// payload's copy. Comparisons only in occurrenceHandled, which the scheduler
+// and a Settings save's stamp ask (with the occurrence's start day), and the
+// quick-game window (with the morning of the day it is
 // asked about). e2e/helpers/missionClock.ts writes the fields too, in a test
 // profile, outside this tree on purpose.
 //
@@ -66,7 +67,7 @@ const WRITERS: Record<string, { opens: RegExp; closes: RegExp; why: string } | n
 
 /** Readers that compare: each with the day it must compare against. */
 const COMPARERS = new Set([
-    'hooks/useMissionScheduler.ts', // occurrenceHandled: the occurrence's own start day
+    'store/occurrenceHandled.ts', // occurrenceHandled (the scheduler's and a save's): the occurrence's own start day
     'store/gameWindow.ts', // isQuickGameWindowOpen: the morning of the day it is asked about
 ]);
 
@@ -144,7 +145,7 @@ describe('outcome dates have one writer and two comparing readers', () => {
         expect(
             offenders,
             'These compare an outcome date. It names the day an occurrence STARTED, so compare it with an ' +
-            'occurrence\'s own day (useMissionScheduler occurrenceHandled), never with "today" at some other moment:\n  ' +
+            'occurrence\'s own day (store/occurrenceHandled.ts occurrenceHandled), never with "today" at some other moment:\n  ' +
             offenders.join('\n  '),
         ).toEqual([]);
     });

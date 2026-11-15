@@ -186,3 +186,25 @@ describe('hydration — a running mission’s stored day and base length', () =>
         expect(m.baseDurationMins).toBeUndefined();
     });
 });
+
+// A save that moves a start time is stamped (2026-11-13) and the scheduler reads
+// the stamp after a relaunch (useMissionScheduler.settings-retime.test.tsx), so a
+// real one survives; one in the future (a clock set back since) or anything that
+// is not an instant is dropped, as lastActiveAt is.
+describe('hydration — when a start time was last moved', () => {
+    beforeEach(() => { localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { localStorage.removeItem(STORAGE_KEY); });
+
+    function restartWith(startsAtChangedAt: unknown): MCState {
+        return restart({ ...initialState, missions: initialState.missions.map(m => (m.phase === 'evening' ? { ...m, startsAtChangedAt } as typeof m : m)) });
+    }
+
+    it('a past instant survives a restart', () => {
+        const iso = new Date(Date.now() - 60_000).toISOString();
+        expect(mission(restartWith(iso), 'evening').startsAtChangedAt).toBe(iso);
+    });
+
+    it.each([[new Date(Date.now() + 3_600_000).toISOString()], ['yesterday'], [12345], [null]])('anything else is dropped: %j', (value) => {
+        expect(mission(restartWith(value), 'evening').startsAtChangedAt).toBeUndefined();
+    });
+});

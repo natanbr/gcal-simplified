@@ -13,7 +13,7 @@
 // 5 min late, a DST night moves the wall clock. The scheduler names the day of
 // the occurrence it starts; a start by hand or from the phone never belongs to
 // a future day's (handStartOccurrenceDay). An outcome (missionStreak.ts) writes the
-// stored day; the scheduler's occurrenceHandled compares with the day of the
+// stored day; occurrenceHandled (occurrenceHandled.ts) compares with the day of the
 // window start it is judging. The occurrences (start, window, day) come from
 // missionOccurrence.ts, which the scheduler asks too, so a start inside an open
 // window is that window's whoever starts it. Guarded by mcReducer.occurrence-day.test.ts,

@@ -522,7 +522,7 @@ function _mcReducer(state: MCState, action: MCAction): MCState {
                 ...(activeIsBeingRescheduled ? { activeMission: 'none' as const } : {}),
                 // Live-update mission startsAt/endsAt from settings so scheduler picks them up.
                 // If the start time changes, clear startedAt, durationMins, and active
-                // so nothing hangs. The scheduler restarts it only at a start this run did not reach (lastActiveAt).
+                // so nothing hangs. The move is stamped (missionActivity.ts): no fresh attempt for a run it had (retimedOntoItsRun).
                 missions: state.missions.map(m => {
                     const timeChanged = (m.phase === 'morning' && mornTimeChanged) || (m.phase === 'evening' && evenTimeChanged);
                     return {

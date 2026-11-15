@@ -124,7 +124,7 @@ describe('action literal boundaries', () => {
     // Not the whole of "only the phone stops a mission": saving a new start time for
     // the running mission in MC Settings still ends it, through SET_SETTINGS, and
     // that is logged (settings-ends-mission.test.tsx; open decision, PR 170). The
-    // scheduler then starts a fresh attempt at the new time (known gap, open owner decision).
+    // scheduler starts no fresh attempt for it (useMissionScheduler.settings-retime.test.tsx, 2026-11-13).
     it('CANCEL_MISSION reaches the store only from the phone: no desktop gesture stops a mission', () => {
         // A stop sticks for the rest of the window and does not move the shield,
         // so a desktop gesture let the child end a mission (decision 2026-09-24).

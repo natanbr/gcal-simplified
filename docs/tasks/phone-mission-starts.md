@@ -52,7 +52,21 @@ manual restart path, not all access to scheduling settings.
   `useRemoteControl.drift.test.ts` is unchanged from main (mc-remote 7372b89).
   Update the drift test's captured list in the same change that merges the phone.
 
-## Known gap (open owner decision)
+## Known gap (closed 2026-11-13)
+
+Closed by the owner's decision of 2026-11-13: a Settings save that moves a phase
+which already ran never starts it again as a fresh attempt. The save is stamped
+on the mission (`startsAtChangedAt`) when the run covered its occurrence at the
+old time (it was running, ran at or after the old start, or concluded), and the
+scheduler then counts as run the occurrence of the run's day and the next one
+when the run is nearer its start than the window before it
+(`store/occurrenceHandled.ts`). A phone run that ended before the old window
+covers nothing, so the moved window still starts. Pinned by the
+`useMissionScheduler.settings-retime*` tests and
+`store/occurrenceHandled.test.ts`. Known gap: a move made hours after the run to
+a time early the next day is weighed the same way (an evening missed at 00:30,
+moved at 08:00 to 08:30, skips that 08:30); the phone can start it. The save
+still ends a running mission with no miss (PR 170, open). What it was:
 
 Saving a new start time in MC Settings while a mission runs ends the run with no
 outcome and stamps `lastActiveAt` before the new time. The scheduler then reads

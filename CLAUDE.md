@@ -147,14 +147,22 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   One desktop path still ends a mission: saving a new start time for the RUNNING mission in MC Settings
   (`SET_SETTINGS`). That is kept and logged, "⏹️ … mission ended: its start time was changed in Settings"
   (open decision, PR 170).
-  Known gap on that path (open owner decision, found reviewing PR 206): the save ends the run with no
-  outcome and stamps `lastActiveAt` before the new time, so `occurrenceHandled` (`useMissionScheduler.ts`)
-  is false for the occurrence at the new time and the scheduler starts a fresh attempt with a full timer
-  there. It can be repeated, so a child can dodge a miss. Past midnight, after a miss in an overnight
-  phase, a save that moves the start time to just after midnight can pull the next day's occurrence forward
-  the same way. After a miss is logged, a same-day change of the start time starts nothing
-  (`lastCompletedOrFailed*Date`, pinned by `useRemoteControl.start.test.tsx`). So "only the phone" holds
-  for desktop gestures, not for this path.
+  A Settings save never gives a fresh attempt (owner decision 2026-11-13, found reviewing PR 206). Before,
+  the save ended the run with no outcome and the scheduler started a full-timer attempt at the new time,
+  as often as the child saved. A save that moves a start time is stamped on the mission
+  (`startsAtChangedAt`, written only by `stampMissionActivity`, never cleared) when the run covered its
+  occurrence at the old time: it was running, ran at or after the old start, concluded, or an earlier save
+  kept it (`saveKeepsRun`).
+  The stamp is the save's time, or the last activity if that is later (a clock set back). While the stamp
+  is at or after `lastActiveAt` and not in the future, `occurrenceHandled` (`store/occurrenceHandled.ts`)
+  counts as run the occurrence of the run's stored day and the next one when the run is nearer its start
+  than the end of the window before it, in real time: a 23:30 evening moved at 23:50 to 00:10 starts
+  nothing that night. Known gap: the rule weighs the run's last activity, not when the save was made, so
+  an evening that ended (missed or stopped) at 00:30 and was moved at 08:00 to 08:30 skips that 08:30,
+  silently; the phone can start it. Guarded by the
+  `useMissionScheduler.settings-retime*` tests, `store/occurrenceHandled.test.ts` and
+  `activity-stamp-boundary.test.ts`. The scheduler makes the scheduled starts and the phone every other
+  start; the only desktop action that ends a run is this logged save.
   A Stop, a Reset (plain or full), a time adjustment, a whining toggle or a task
   tap naming a mission that is not the running one is refused by the reducer and the log alike
   (`isStaleMissionAction`, `mcReducer.stale-mission-action.test.ts`, `mcReducer.stale-whining-task.test.ts`):
