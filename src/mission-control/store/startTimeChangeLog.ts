@@ -10,9 +10,9 @@
 // "ended" line (the running mission's start moved) or the "not started" line (a
 // window put under the clock). So the change is folded into the line the save
 // writes: that line keeps its wording and the change follows after " — ", and
-// a save that changes two starts says both in one line. The "ended" line already
-// states that the running phase's start was changed, so only the other phase's
-// change is appended to it. A save that changes no start writes nothing here.
+// a save that changes two starts says both in one line. The "ended" line gets the
+// same fold, so it names the times too (owner decision 2026-11-16). A save that
+// changes no start writes nothing here.
 // "Changed" is the reducer's own check (startTimeChanged, missionReschedule.ts):
 // a time that is not HH:MM is kept by the reducer and so is no change. No
 // reducer pass is taken to decide any of this.
@@ -53,12 +53,11 @@ const say = (changes: StartTimeChange[]) => changes.map(c => `${LABEL[c.phase]} 
 /**
  * The line for a save: `base` (the "ended" or "not started" line it already
  * writes, or null) with `changes` folded in, or the plain change line when
- * there is no base. `named` is the phase whose change `base` already states.
+ * there is no base.
  * Null when the save writes nothing.
  */
-export function withStartChanges(base: SettingsLine | null, changes: StartTimeChange[], named?: Phase): SettingsLine | null {
-    const rest = changes.filter(c => c.phase !== named);
-    if (base !== null) return rest.length === 0 ? base : { ...base, message: `${base.message} — ${say(rest)}` };
-    if (rest.length === 0) return null;
-    return { icon: '✏️', message: say(rest), colorKey: rest.length === 1 ? rest[0].phase : undefined };
+export function withStartChanges(base: SettingsLine | null, changes: StartTimeChange[]): SettingsLine | null {
+    if (base !== null) return changes.length === 0 ? base : { ...base, message: `${base.message} — ${say(changes)}` };
+    if (changes.length === 0) return null;
+    return { icon: '✏️', message: say(changes), colorKey: changes.length === 1 ? changes[0].phase : undefined };
 }

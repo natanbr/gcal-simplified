@@ -120,7 +120,7 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
     it('a save that ends the running mission writes its own line, not this one', () => {
         const running: MCState = { ...initialState, activeMission: 'evening' };
         const entry = createLogEntry(save({ eveningStartsAt: '19:50' }, at(20, 0)), running);
-        expect(entry?.message).toBe('Evening mission ended: its start time was changed in Settings');
+        expect(entry?.message).toBe('Evening mission ended: its start time was changed in Settings — Evening start changed 19:00 → 19:50');
     });
 
     it('costs no reducer pass to decide it writes nothing', () => {
@@ -155,7 +155,7 @@ describe('the line follows the stamp (saveIntoWindow.test.ts rows, on a profile 
     it('known gap, pinned: a save that ends the running mission writes the "ended" line, and the other phase it opened is stamped with no "not started" line (its start change is still said)', () => {
         const running = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning', origin: 'remote', timestamp: at(19, 10) });
         const action = save({ morningStartsAt: '19:15', eveningStartsAt: '19:05' }, at(19, 20));
-        expect(createLogEntry(action, running)?.message).toBe('Morning mission ended: its start time was changed in Settings — Evening start changed 19:00 → 19:05');
+        expect(createLogEntry(action, running)?.message).toBe('Morning mission ended: its start time was changed in Settings — Morning start changed 06:00 → 19:15; Evening start changed 19:00 → 19:05');
         expect(mcReducer(running, action).missions.find(m => m.phase === 'evening')?.savedIntoWindowAt).toBe(at(19, 20));
     });
 });

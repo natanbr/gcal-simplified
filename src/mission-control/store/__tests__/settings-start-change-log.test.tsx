@@ -12,8 +12,8 @@
 // window put under the clock). The design (startTimeChangeLog.ts): the change
 // line is the base line; when one of those lines also applies it keeps its
 // wording and the change is appended after " — ", so no change is lost and no
-// save writes two lines. The "ended" line already states the running phase's
-// change, so only the OTHER phase's change is appended to it.
+// save writes two lines. The "ended" line gets the same fold, so it names the
+// times it moved between too (owner decision 2026-11-16).
 // A save that changes no start time (a duration, the Cream task, the renewal
 // marker, a time the reducer refuses, the same time again) writes nothing here.
 // Every instant is the action's own timestamp: no test reads the wall clock.
@@ -160,17 +160,17 @@ describe('the change is folded into the line a save already writes', () => {
         expect(createLogEntry(save({ eveningStartsAt: '19:20' }, at(19, 30)), state)?.message).toBe('Evening start changed 19:00 → 19:20');
     });
 
-    describe('the "ended" line wins and keeps its text', () => {
+    describe('the "ended" line wins and keeps its words, the changes follow', () => {
         const running: MCState = { ...initialState, activeMission: 'evening' };
 
-        it('the running mission moved: its own text alone (it already says the start time was changed)', () => {
+        it('the running mission moved: its own words, then the times it moved between', () => {
             const entry = createLogEntry(save({ eveningStartsAt: '20:30' }), running);
-            expect(entry).toMatchObject({ icon: '⏹️', message: 'Evening mission ended: its start time was changed in Settings', colorKey: 'evening' });
+            expect(entry).toMatchObject({ icon: '⏹️', message: 'Evening mission ended: its start time was changed in Settings — Evening start changed 19:00 → 20:30', colorKey: 'evening' });
         });
 
-        it('the other phase moved in the same save: its change is appended, not lost', () => {
+        it('the other phase moved in the same save: both changes are said, morning first', () => {
             const entry = createLogEntry(save({ eveningStartsAt: '20:30', morningStartsAt: '07:00' }), running);
-            expect(entry?.message).toBe('Evening mission ended: its start time was changed in Settings — Morning start changed 06:00 → 07:00');
+            expect(entry?.message).toBe('Evening mission ended: its start time was changed in Settings — Morning start changed 06:00 → 07:00; Evening start changed 19:00 → 20:30');
             expect(entry?.colorKey).toBe('evening');
         });
 

@@ -59,7 +59,7 @@ describe('SET_SETTINGS that ends the running mission', () => {
         expect(ended()).toHaveLength(1);
         expect(ended()[0]).toMatchObject({
             icon: '⏹️',
-            message: 'Evening mission ended: its start time was changed in Settings',
+            message: 'Evening mission ended: its start time was changed in Settings — Evening start changed 19:00 → 20:30',
             type: 'mission',
             colorKey: 'evening',
             source: 'local',
