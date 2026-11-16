@@ -737,11 +737,13 @@ row ≈ three days of earning nothing).
   (`MARK_MISSION_TIMEOUT`) increments the streak. A mission the parent cancelled
   (`CANCEL_MISSION`), and a mission the scheduler *skipped* because the machine was asleep, both
   leave the streak untouched — a weekend with the laptop closed must not freeze the bank.
-- **What resets it.** Any completed mission routine (`COMPLETE_MISSION_ROUTINE`) sets the streak
-  back to 0 — a single good morning clears the whole debt.
+- **What resets it.** Any completed mission routine (`COMPLETE_MISSION_ROUTINE`) gives one shield
+  back (the streak −1, never below 0; decided 2026-09-27 — not a reset to 0).
 - **Reliability.** The miss is recorded at the mission's real end, not at the overlay's. The
   scheduler's expiry tick marks the timeout before it clears `activeMission`, so a mission that
-  expired while minimized (or with Mission Control not on screen) still counts. The reducer holds
+  expired while minimized (or with Mission Control not on screen) still counts; and a run whose
+  tasks were all done (no timeout stamped) is paid by the tick if it notices the end before the
+  overlay's auto-collect (2026-11-14). The reducer holds
   the idempotency guard (`loggedTimeoutAt`), so the two dispatchers can never double-count.
 - **The lock.** At 6 consecutive misses the bank and the goal pedestals are **locked**: no
   depositing, no vacuuming, no moving tokens, no selecting a new goal, no consuming a completed
@@ -2814,6 +2816,12 @@ checks the notice on an upgrade; 3.12.7 lists the new `mc-state-v5.settings` dif
 - **Also changed**: a phone-stopped mission moved later the same day is no longer started at the new time (it was, by the 2026-09-22 decision). A mission the phone started early and stopped before its window still lets the scheduled one start, as decided on 2026-09-22, and a start-time save after that run does not change it (the run covered nothing at the old time).
 - **Review of the first fix, same day**: it covered nothing past midnight (a 23:30 evening moved at 23:50 to 00:10, or a 19:00 one moved at 19:10 to 00:05, started a fresh attempt that night); it covered the whole day after any save, even one following a phone run that ended before the window (the moved window never started and logged no "skipped" line); and a save made with the clock set back was dated before the run, so the moved window started once the clock was right. All three are fixed. **Known gap:** a move made hours after the run to a time early the next day is weighed the same way (an evening missed at 00:30, moved at 08:00 to 08:30, skips that 08:30); the phone can start it.
 - Tests: `useMissionScheduler.settings-retime.test.tsx`, `useMissionScheduler.settings-retime.coverage.test.tsx`, `useMissionScheduler.settings-retime.dst.test.tsx` (including two runs within an hour of the real-time middle on the DST nights), `store/occurrenceHandled.test.ts`, `persistence-time.test.ts` (the stamp survives a relaunch; a future or garbage one is dropped) and `activity-stamp-boundary.test.ts` (one writer, never cleared); updated: `useMissionScheduler.stop.test.tsx` (both "moved to a later start" cases) and `useRemoteControl.start.test.tsx` (the no-outcome retime control).
+
+### 2026-11-14 A mission finished in time is paid even when the machine slept through its end
+
+- **Before** a mission whose tasks were all done was paid only by the overlay's auto-collect, a timer due at the end. When the machine slept through the end (the overlay minimized or the Calendar view shown), the scheduler's 15 s check could run first after the wake: it ended the mission without paying it, and the overlay's collect was then refused because nothing was running. No bonus, no shield step back, and the morning was never marked done, so the quick game 🐍 stayed out of the picker for the whole day. The log showed "Morning mission expired" and no completion line. Same for the evening (its bonus and shield step were withheld).
+- **Now** the scheduler's check pays such a run itself, with the same bonus as the overlay (2, or 1 with whining), attributed ⚙️ Auto as the overlay's collect is, before it ends it. Whichever of the two runs second is refused and writes no line, so the run is paid once in either order. A run with a task left is still a miss, and a run whose timeout was logged before its last task was ticked is still never paid. A completion is still the way out of a broken shield.
+- The bonus and "every task done" are now decided in one place (`store/missionCompletion.ts`) for the overlay and the scheduler. Tests: `useMissionScheduler.completion.test.tsx`, `MissionOverlay.scheduler-race.test.tsx` and `store/missionCompletion.test.ts`.
 
 ### 2026-11-15 A Settings save no longer starts a mission on demand
 

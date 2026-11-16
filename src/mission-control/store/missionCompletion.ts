@@ -20,10 +20,30 @@
 // overlay asks it before it shows "Mission Complete!". Guarded by
 // store/__tests__/mcReducer.completion-after-timeout.test.ts and
 // components/MissionOverlay.late-finish.test.tsx.
+//
+// Two dispatchers pay a run finished in time at its end: the overlay's
+// auto-collect and the scheduler's expiry tick. After a sleep both are overdue
+// and either may run first; the tick used to end the run unpaid, so the
+// overlay's collect was refused (2026-11-14). Both decide "done" and the bonus
+// here, so the run is paid the same whoever runs first, and the second is
+// refused. Guarded by hooks/useMissionScheduler.completion.test.tsx and
+// components/MissionOverlay.scheduler-race.test.tsx.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
 import type { MCAction, MCState, Mission } from '../types';
+
+/** The bonus for a completed run: two tokens, one less when whining was flagged during it. */
+export const MISSION_BONUS_BASE = 2;
+
+export function completionBonus(run: Pick<Mission, 'whiningDetected'> | null | undefined): number {
+    return run?.whiningDetected ? Math.max(0, MISSION_BONUS_BASE - 1) : MISSION_BONUS_BASE;
+}
+
+/** Every task ticked. A run with no tasks is never done: it expires as a miss. */
+export function everyTaskDone(run: Pick<Mission, 'tasks'> | null | undefined): boolean {
+    return !!run && run.tasks.length > 0 && run.tasks.every(t => t.completed);
+}
 
 /**
  * The run this completion pays, or null when it is refused: no such mission,

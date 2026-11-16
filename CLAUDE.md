@@ -85,8 +85,10 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   mission gives one back (−1, never below 0 — not a reset). A run whose timeout is already logged
   (`loggedTimeoutAt`) is a miss and is never also paid: finishing it in the seconds before the
   scheduler ends it pays no bonus and gives nothing back, through `completableRun`
-  (`store/missionCompletion.ts`), which the reducer, the log and the overlay (before "Mission
-  Complete!") all ask. That is not a lock: a run finished in time is still the way out. At
+  (`store/missionCompletion.ts`), which the reducer, the log, the overlay (before "Mission
+  Complete!") and the scheduler's expiry tick all ask. That is not a lock: a run finished in time
+  is still the way out, and it is paid whichever of the overlay's auto-collect and the tick notices
+  its end first (both take the bonus from `completionBonus`; the second is refused). At
   `MISSED_LOCK_THRESHOLD` (6) the child's whole economy freezes. The locked flag is
   **derived** (`isEconomyLocked`), never stored, and `applyStreakChange` is the only writer of the
   counter *during a dispatch* — timeout, completion and the parent's `ADJUST_SHIELD` all go through
