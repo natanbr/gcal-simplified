@@ -7,13 +7,16 @@
 // written. Left silent, a child could skip an unstarted mission with no trace.
 // So the save writes one line (owner decision 2026-11-16), decided by the
 // stamp's own predicate (opensWindow) over the windows the reducer would
-// derive, with no reducer pass. createLogEntry asks it.
+// derive, minus a mission that already ran in that window (the stamp is
+// harmless there, but "not started" would be false). createLogEntry asks it.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
 import type { MCSettings, MCState } from '../types';
 import { deriveMissionWindow, withoutInvalidMissionTimes } from './hhmm';
 import { opensWindow } from './missionActivity';
+import { openOccurrence } from './missionOccurrence';
+import { ranOrConcluded } from './occurrenceHandled';
 
 type TimedPhase = 'morning' | 'evening';
 const LABEL: Record<TimedPhase, string> = { morning: 'Morning', evening: 'Evening' };
@@ -35,7 +38,11 @@ export function coveredWindowLine(state: MCState, patch: Partial<MCSettings>, in
         const phase = m.phase;
         if (phase === 'none') return [];
         const after = deriveMissionWindow(m, nextSettings);
-        return opensWindow(m, state.settings, after, nextSettings, instant) ? [{ phase, startsAt: after.startsAt }] : [];
+        if (!opensWindow(m, state.settings, after, nextSettings, instant)) return [];
+        // The window is stamped either way, but a mission that already ran in it was not "not started".
+        const occurrence = openOccurrence(after, nextSettings, new Date(instant));
+        if (occurrence === null || ranOrConcluded(state, phase, m, occurrence, Date.parse(instant))) return [];
+        return [{ phase, startsAt: after.startsAt }];
     });
     if (opened.length === 0) return null;
     if (opened.length === 1) {

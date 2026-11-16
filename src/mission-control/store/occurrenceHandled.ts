@@ -77,7 +77,7 @@ function savedIntoItsWindow(m: Mission, o: Occurrence, nowMs: number): boolean {
  * clock set ahead, trusting it would skip every occurrence, silently, until the
  * clock caught up.
  */
-function ranOrConcluded(s: MCState, phase: Phase, m: Mission | undefined, o: Occurrence, nowMs: number): boolean {
+export function ranOrConcluded(s: MCState, phase: Phase, m: Mission | undefined, o: Occurrence, nowMs: number): boolean {
     const concluded = phase === 'morning'
         ? s.lastCompletedOrFailedMorningDate === o.day
         : s.lastCompletedOrFailedEveningDate === o.day;

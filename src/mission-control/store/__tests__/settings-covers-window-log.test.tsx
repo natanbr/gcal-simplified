@@ -7,7 +7,8 @@
 // at all: no start, no miss, no "skipped" line. Owner decision 2026-11-16: the
 // save writes one attributed line. createLogEntry decides it from the same
 // predicate the stamp uses (opensWindow, missionActivity.ts) without a reducer
-// pass, so the line cannot disagree with the stamp.
+// pass to decide that it writes nothing, so the line follows the stamp (less a
+// mission that already ran in the window).
 // ============================================================
 
 import { render, act } from '@testing-library/react';
@@ -76,6 +77,31 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
     it('a window already open and pending that is only lengthened writes nothing', () => {
         // Morning 06:00 for 30 min is open at 06:10; 45 min keeps that same window.
         expect(createLogEntry(save({ morningDurationMins: 45 }, at(6, 10)), initialState)).toBeNull();
+    });
+
+    describe('a mission that already ran is not "not started"', () => {
+        const withEvening = (patch: Partial<MCState>, lastActiveAt?: string): MCState => ({
+            ...initialState,
+            ...patch,
+            missions: initialState.missions.map(m => (m.phase === 'evening' ? { ...m, lastActiveAt } : m)),
+        });
+
+        it('an evening completed at 19:20 and lengthened at 20:30 writes nothing', () => {
+            const state = withEvening({ lastCompletedOrFailedEveningDate: '2026-11-16' }, at(19, 20));
+            expect(createLogEntry(save({ eveningDurationMins: 120 }, at(20, 30)), state)).toBeNull();
+        });
+
+        it('an evening that ran (its last activity after the start) and was moved onto an open start writes nothing', () => {
+            const state = withEvening({}, at(19, 25));
+            expect(createLogEntry(save({ eveningStartsAt: '19:20' }, at(19, 30)), state)).toBeNull();
+        });
+
+        it('only the phase that did not run is named when both opened', () => {
+            const base = withEvening({ lastCompletedOrFailedEveningDate: '2026-11-16' }, at(11, 50));
+            const state = mcReducer(base, { type: 'SET_SETTINGS', settings: { morningDurationMins: 30, eveningDurationMins: 60 }, timestamp: at(3, 0) });
+            const entry = createLogEntry(save({ morningStartsAt: '12:00', eveningStartsAt: '11:50' }, at(12, 5)), { ...state, lastCompletedOrFailedEveningDate: '2026-11-16' });
+            expect(entry?.message).toMatch(/^Morning mission not started/);
+        });
     });
 
     it('a save that ends the running mission writes its own line, not this one', () => {
