@@ -18,6 +18,8 @@ import { responsibilityPointChange } from './responsibilityPoint';
 import { responsibilityClaim } from './responsibilityClaim';
 import { reschedulesRunningMission } from './missionReschedule';
 import { coveredWindowLine } from './savedIntoWindowLog';
+import { startTimeChanges, withStartChanges, type SettingsLine } from './startTimeChangeLog';
+import type { Phase } from './occurrenceHandled';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
 import { gameTokenCapNote, gameTokenRoom } from './moodGauge';
@@ -139,16 +141,24 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
         case 'CANCEL_MISSION':
             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'SET_SETTINGS': {
-            // A new start time for the RUNNING mission ends it (kept; open decision,
-            // PR 170). The reducer's own check, so no speculative pass and no drift.
+            // One line per save: the start-time change (startTimeChangeLog.ts) is folded into the
+            // line this save already writes, or stands alone. No speculative pass for a save that writes nothing.
+            const changes = startTimeChanges(state, action.settings);
             const phase = state.activeMission;
+            let base: SettingsLine | null = null;
+            let named: Phase | undefined;
             if (phase !== 'none' && reschedulesRunningMission(state, action.settings)) {
-                const label = phase === 'morning' ? 'Morning' : 'Evening';
-                return { id, timestamp: now, icon: '⏹️', message: `${label} mission ended: its start time was changed in Settings`, type: 'mission', colorKey: phase, ...snap() };
+                // A new start time for the RUNNING mission ends it (kept; open decision, PR 170).
+                // The reducer's own check, so no drift; the line already says that phase's start changed.
+                base = { icon: '⏹️', message: `${phase === 'morning' ? 'Morning' : 'Evening'} mission ended: its start time was changed in Settings`, colorKey: phase };
+                named = phase;
+            } else {
+                // A save that opens a window already open starts nothing (savedIntoWindowAt): say so.
+                const covered = coveredWindowLine(state, action, now);
+                base = covered && { icon: '⏭️', message: covered.message, colorKey: covered.colorKey };
             }
-            // A save that opens a window already open starts nothing (savedIntoWindowAt): say so.
-            const covered = coveredWindowLine(state, action, now);
-            return covered && { id, timestamp: now, icon: '⏭️', message: covered.message, type: 'mission', colorKey: covered.colorKey, ...snap() };
+            const line = withStartChanges(base, changes, named);
+            return line && { id, timestamp: now, icon: line.icon, message: line.message, type: 'mission', colorKey: line.colorKey, ...snap() };
         }
         case 'MARK_MISSION_TIMEOUT':
             return null; // SET_ACTIVE_MISSION phase 'none' logs the expiry with its phase; this would duplicate it
