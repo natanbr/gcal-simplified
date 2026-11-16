@@ -22,7 +22,7 @@ import { initialState, mcReducer } from '../mcReducer';
 import { createLogEntry } from '../activityLog';
 import { MAX_MISSION_EXTENSION_MINS } from '../missionEndAdjust';
 import { STORAGE_KEY, loadPersistedState } from '../useMCStore';
-import { launchInsideWindow } from '../../hooks/schedulerTestKit';
+import { SAVED_LONG_AGO, launchInsideWindow } from '../../hooks/schedulerTestKit';
 import { storeFileCalls } from './decisionCalls';
 import type { MCAction, MCState } from '../../types';
 
@@ -36,7 +36,7 @@ function evening(s: MCState) {
 
 /** The evening with these settings, started at `startsAt` on 2026-10-01. */
 function startedEvening(settings: Partial<MCState['settings']>, startsAt = '19:00'): MCState {
-    const configured = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: startsAt, ...settings } });
+    const configured = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: startsAt, ...settings }, timestamp: SAVED_LONG_AGO });
     return mcReducer(configured, { type: 'SET_ACTIVE_MISSION', phase: 'evening', timestamp: `2026-10-01T${startsAt}:00` });
 }
 
@@ -112,7 +112,7 @@ describe('what the cap refuses', () => {
     });
 
     it('the 10-second test duration gets the same 60 min on top', () => {
-        const tiny = mcReducer(mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 1 / 6 } }),
+        const tiny = mcReducer(mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 1 / 6 }, timestamp: SAVED_LONG_AGO }),
             { type: 'SET_ACTIVE_MISSION', phase: 'evening', timestamp: '2026-10-01T19:00:00' });
         const { state } = press(tiny, 10, 10, 10, 10, 10, 10);
         expect(evening(state).durationMins).toBeCloseTo(60 + 1 / 6);

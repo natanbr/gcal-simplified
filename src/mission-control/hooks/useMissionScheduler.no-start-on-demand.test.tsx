@@ -63,6 +63,7 @@ describe('a save that puts a window under the clock starts nothing', () => {
         crossing(closes);
         expect(h.live.state.activeMission).toBe('none');
         expect(startLogs(h.live.state, phase)).toBe(0);
+        expect(skippedLines(h.live.state, phase)).toBe(0);
         h.unmount();
     });
 

@@ -217,7 +217,9 @@ describe('a late start is dated by the scheduler’s own target', () => {
         // never crosses midnight, so re-deriving the day at the outcome said "tomorrow".
         const night = at(23, 50);
         vi.setSystemTime(night);
-        const tenSeconds = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:58', eveningDurationMins: 1 / 6 } });
+        const tenSeconds = mcReducer(initialState, {
+            type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:58', eveningDurationMins: 1 / 6 }, timestamp: SAVED_LONG_AGO,
+        });
         const { live, unmount } = renderLiveScheduler({ ...tenSeconds, missions: tenSeconds.missions.filter(m => m.phase === 'evening') });
         step(100);
         vi.setSystemTime(at(23, 54)); // the timer keeps its ~8 min: it fires at about 00:02

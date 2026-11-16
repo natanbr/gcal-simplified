@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState, mcReducer } from '../store/mcReducer';
 import { loadPersistedState } from '../store/useMCStore';
 import { getLocalDateString } from '../store/behaviorSync';
-import { at, crossing, renderLiveScheduler, saveAndClose, startLogs, step } from './schedulerTestKit';
+import { SAVED_LONG_AGO, at, crossing, renderLiveScheduler, saveAndClose, startLogs, step } from './schedulerTestKit';
 import type { MCState, Mission } from '../types';
 
 type Phase = 'morning' | 'evening';
@@ -26,6 +26,7 @@ function base(): MCState {
     return mcReducer({ ...initialState, bankCount: 0, missedMissionStreak: 2 }, {
         type: 'SET_SETTINGS',
         settings: { morningDurationMins: 10 / 60, eveningDurationMins: 10 / 60 },
+        timestamp: SAVED_LONG_AGO,
     });
 }
 
