@@ -96,7 +96,8 @@ start still ahead at the save stays automatic.
 Out of scope, stated: a start saved one minute ahead still starts a minute later;
 moving an open window that waits behind another running mission to a different
 open start is stamped, so the scheduler never starts it (the phone can); the
-covered window leaves no log line (open question for the owner); a clock set ahead
+covered window is never reported, with no log line at the save and no "skipped"
+line later (open question for the owner); a clock set ahead
 then back. Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
 `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`,
 `persistence-time.test.ts` and `activity-stamp-boundary.test.ts`.
