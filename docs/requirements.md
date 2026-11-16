@@ -737,11 +737,13 @@ row ≈ three days of earning nothing).
   (`MARK_MISSION_TIMEOUT`) increments the streak. A mission the parent cancelled
   (`CANCEL_MISSION`), and a mission the scheduler *skipped* because the machine was asleep, both
   leave the streak untouched — a weekend with the laptop closed must not freeze the bank.
-- **What resets it.** Any completed mission routine (`COMPLETE_MISSION_ROUTINE`) sets the streak
-  back to 0 — a single good morning clears the whole debt.
+- **What resets it.** Any completed mission routine (`COMPLETE_MISSION_ROUTINE`) gives one shield
+  back (the streak −1, never below 0; decided 2026-09-27 — not a reset to 0).
 - **Reliability.** The miss is recorded at the mission's real end, not at the overlay's. The
   scheduler's expiry tick marks the timeout before it clears `activeMission`, so a mission that
-  expired while minimized (or with Mission Control not on screen) still counts. The reducer holds
+  expired while minimized (or with Mission Control not on screen) still counts; and a run whose
+  tasks were all done (no timeout stamped) is paid by the tick if it notices the end before the
+  overlay's auto-collect (2026-11-14). The reducer holds
   the idempotency guard (`loggedTimeoutAt`), so the two dispatchers can never double-count.
 - **The lock.** At 6 consecutive misses the bank and the goal pedestals are **locked**: no
   depositing, no vacuuming, no moving tokens, no selecting a new goal, no consuming a completed
