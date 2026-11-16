@@ -5,10 +5,9 @@
 // (savedIntoWindowAt, missionActivity.ts): the scheduler counts that window as
 // handled. Left silent, a child could skip an unstarted mission with no trace
 // at all: no start, no miss, no "skipped" line. Owner decision 2026-11-16: the
-// save writes one attributed line. createLogEntry decides it from the same
-// predicate the stamp uses (opensWindow, missionActivity.ts) without a reducer
-// pass to decide that it writes nothing, so the line follows the stamp (less a
-// mission that already ran in the window).
+// save writes one attributed line for each mission it stamped, less a mission
+// that already ran in the window, read from the state the reducer produces
+// (savedIntoWindowLog.ts). A save that cannot open a window costs no reducer pass.
 // ============================================================
 
 import { render, act } from '@testing-library/react';
@@ -94,6 +93,12 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
         it('an evening that ran (its last activity after the start) and was moved onto an open start writes nothing', () => {
             const state = withEvening({}, at(19, 25));
             expect(createLogEntry(save({ eveningStartsAt: '19:20' }, at(19, 30)), state)).toBeNull();
+        });
+
+        it('an evening stopped from the phone at 19:10 and moved at 19:30 onto 19:20 writes nothing: the retime rule counts the run', () => {
+            const started = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'remote', timestamp: at(19, 0) });
+            const stopped = mcReducer(started, { type: 'CANCEL_MISSION', missionPhase: 'evening', origin: 'remote', timestamp: at(19, 10) });
+            expect(createLogEntry(save({ eveningStartsAt: '19:20' }, at(19, 30)), stopped)).toBeNull();
         });
 
         it('only the phase that did not run is named when both opened', () => {

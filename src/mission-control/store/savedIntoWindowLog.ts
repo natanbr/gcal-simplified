@@ -1,48 +1,58 @@
 // ============================================================
 // Mission Control — the log line for a save that covers an open window
 // ------------------------------------------------------------
-// A Settings save that puts a window under the clock is never a start
+// A Settings save that opens a window already open at the save is never a start
 // (savedIntoWindowAt, missionActivity.ts): the scheduler counts that window as
 // handled, so nothing starts, no miss is charged and no "skipped" line is
 // written. Left silent, a child could skip an unstarted mission with no trace.
-// So the save writes one line (owner decision 2026-11-16), decided by the
-// stamp's own predicate (opensWindow) over the windows the reducer would
-// derive, minus a mission that already ran in that window (the stamp is
-// harmless there, but "not started" would be false). createLogEntry asks it.
+// So the save writes one line (owner decision 2026-11-16) for each mission it
+// stamped, unless that mission already ran in the window ("not started" would
+// be false). Both are read from the state the reducer produces, so the line
+// follows the stamp and the scheduler's own answer, not a second reading of the
+// old state (a save that moves the start also writes startsAtChangedAt).
+// A cheap check comes first: a save that cannot open a window costs no reducer
+// pass. createLogEntry asks it.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import type { MCSettings, MCState } from '../types';
-import { deriveMissionWindow, withoutInvalidMissionTimes } from './hhmm';
-import { opensWindow } from './missionActivity';
+import type { MCAction, MCState } from '../types';
+import { deriveMissionWindow, missionDurationMins, withoutInvalidMissionTimes } from './hhmm';
+import { mcReducer } from './mcReducer';
 import { openOccurrence } from './missionOccurrence';
-import { ranOrConcluded } from './occurrenceHandled';
+import { ranOrConcluded, type Phase } from './occurrenceHandled';
 
-type TimedPhase = 'morning' | 'evening';
-const LABEL: Record<TimedPhase, string> = { morning: 'Morning', evening: 'Evening' };
+const LABEL: Record<Phase, string> = { morning: 'Morning', evening: 'Evening' };
 
 /** What the line says and which phase it is for (none when both phases opened). */
 export interface CoveredWindowLine {
     message: string;
-    colorKey: TimedPhase | undefined;
+    colorKey: Phase | undefined;
 }
 
 /**
- * The line for a SET_SETTINGS `patch` made at `instant`, or null when it opens no
- * window. Derives the windows as the reducer does (the validated patch, then
- * deriveMissionWindow) and asks opensWindow of each, so it agrees with the stamp.
+ * The line for a SET_SETTINGS `action` made at `instant`, or null when the save
+ * stamped no mission that had not run in its window.
  */
-export function coveredWindowLine(state: MCState, patch: Partial<MCSettings>, instant: string): CoveredWindowLine | null {
-    const nextSettings: MCSettings = { ...state.settings, ...withoutInvalidMissionTimes(patch) };
-    const opened = state.missions.flatMap(m => {
-        const phase = m.phase;
-        if (phase === 'none') return [];
+export function coveredWindowLine(state: MCState, action: Extract<MCAction, { type: 'SET_SETTINGS' }>, instant: string): CoveredWindowLine | null {
+    const at = new Date(instant);
+    const nextSettings = { ...state.settings, ...withoutInvalidMissionTimes(action.settings) };
+    // A superset of what the stamp needs: a changed window with one open at the save.
+    const candidates = state.missions.filter(m => {
+        if (m.phase === 'none') return false;
         const after = deriveMissionWindow(m, nextSettings);
-        if (!opensWindow(m, state.settings, after, nextSettings, instant)) return [];
-        // The window is stamped either way, but a mission that already ran in it was not "not started".
-        const occurrence = openOccurrence(after, nextSettings, new Date(instant));
-        if (occurrence === null || ranOrConcluded(state, phase, m, occurrence, Date.parse(instant))) return [];
-        return [{ phase, startsAt: after.startsAt }];
+        const changed = after.startsAt !== m.startsAt || missionDurationMins(after, nextSettings) !== missionDurationMins(m, state.settings);
+        return changed && openOccurrence(after, nextSettings, at) !== null;
+    });
+    if (candidates.length === 0) return null;
+    const next = mcReducer(state, action);
+    const opened = candidates.flatMap(m => {
+        const phase = m.phase;
+        const saved = next.missions.find(x => x.phase === phase);
+        if (phase === 'none' || saved?.savedIntoWindowAt === undefined || saved.savedIntoWindowAt === m.savedIntoWindowAt) return [];
+        const stampMs = Date.parse(saved.savedIntoWindowAt);
+        const occurrence = openOccurrence(saved, next.settings, new Date(stampMs));
+        if (occurrence === null || ranOrConcluded(next, phase, saved, occurrence, stampMs)) return [];
+        return [{ phase, startsAt: saved.startsAt }];
     });
     if (opened.length === 0) return null;
     if (opened.length === 1) {

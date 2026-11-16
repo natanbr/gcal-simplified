@@ -146,8 +146,8 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
                 const label = phase === 'morning' ? 'Morning' : 'Evening';
                 return { id, timestamp: now, icon: '⏹️', message: `${label} mission ended: its start time was changed in Settings`, type: 'mission', colorKey: phase, ...snap() };
             }
-            // A save that puts a window under the clock starts nothing (savedIntoWindowAt): say so.
-            const covered = coveredWindowLine(state, action.settings, now);
+            // A save that opens a window already open starts nothing (savedIntoWindowAt): say so.
+            const covered = coveredWindowLine(state, action, now);
             return covered && { id, timestamp: now, icon: '⏭️', message: covered.message, type: 'mission', colorKey: covered.colorKey, ...snap() };
         }
         case 'MARK_MISSION_TIMEOUT':

@@ -2,8 +2,9 @@
 // Mission Control — whether an occurrence still needs a scheduler start
 // ------------------------------------------------------------
 // The scheduler's one question (useMissionScheduler.ts asks it at every arm and
-// fire), and the question a Settings save asks before it is stamped
-// (missionActivity.ts): has this occurrence of the mission been handled? Pure,
+// fire), and, in its run-based part (ranOrConcluded), the question a Settings
+// save asks before it is stamped (missionActivity.ts): has this occurrence of the
+// mission been handled? Pure,
 // with the clock passed in, so the reducer can ask it with its action's instant.
 //
 // A Settings save that moves a start time is never a fresh attempt (owner

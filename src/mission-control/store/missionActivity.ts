@@ -31,18 +31,20 @@
 //
 // `savedIntoWindowAt` is stamped here too, from the window transition (a save
 // that moves the start time or changes the length), at the action's instant,
-// when the save put a window under the clock: one open at that instant that was
-// not open there before. Unstamped, the scheduler started it at once with a
-// full timer, a start on demand the phone alone may make (owner rule
-// 2026-11-10). A window already open and pending (behind another running
-// mission) that is only lengthened is not stamped, and still starts. Nothing
-// clears it (activity-stamp-boundary.test.ts).
+// when the save opened a window: one open at that instant that was not open at
+// that same start before, or one the old settings had counted as handled and
+// the new length would not (the retime rule weighs the window behind it, which
+// the length changes). Unstamped, the scheduler started it at once with a full
+// timer, a start on demand the phone alone may make (owner rule 2026-11-10). A
+// window already open and pending (behind another running mission) that is only
+// lengthened is not stamped, and still starts. Nothing clears it
+// (activity-stamp-boundary.test.ts).
 // ============================================================
 
 import type { MCSettings, MCState, Mission } from '../types';
 import { missionDurationMins } from './hhmm';
 import { openOccurrence } from './missionOccurrence';
-import { saveKeepsRun } from './occurrenceHandled';
+import { occurrenceHandled, saveKeepsRun } from './occurrenceHandled';
 
 /** `instant`, or the run's due end when that came earlier. */
 function endStamp(ended: Mission | undefined, prev: MCState, instant: string): string {
@@ -85,10 +87,10 @@ function windowChanged(prev: MCState, next: MCState, m: Mission): boolean {
 
 /**
  * Whether changing a mission from `before` (under `prevSettings`) to `after`
- * (under `nextSettings`) puts a window under the clock at `instant`: the window
+ * (under `nextSettings`) opens a window at `instant`: the window
  * changed, one is open then, and it was not open there at that same start before
- * the change (openOccurrence, read under both). The one decision of the stamp
- * below and of the log line the save writes (savedIntoWindowLog.ts).
+ * the change (openOccurrence, read under both). Half of the stamp below (the other
+ * half, a window uncovered by the save, needs the whole state).
  */
 export function opensWindow(before: Mission | undefined, prevSettings: MCSettings, after: Mission, nextSettings: MCSettings, instant: string): boolean {
     if (before === undefined || !windowDiffers(before, prevSettings, after, nextSettings)) return false;
@@ -98,10 +100,29 @@ export function opensWindow(before: Mission | undefined, prevSettings: MCSetting
     return openOccurrence(before, prevSettings, at)?.startMs !== opened.startMs;
 }
 
-/** `m` stamped `savedIntoWindowAt` at `instant` when its changed window opens one (opensWindow); else as it was. */
+/**
+ * Whether the save turned a window the scheduler counted as handled into one it
+ * would start: the same window (same start) is open before and after, handled in
+ * `prev` and not handled with `m` and the new settings. A save never uncovers a
+ * window. (Review: a duration-only save inside a window the retime rule covered
+ * started it at once.)
+ */
+function uncoversWindow(prev: MCState, next: MCState, before: Mission | undefined, m: Mission, instant: string): boolean {
+    if (before === undefined || m.phase === 'none') return false;
+    const at = new Date(instant);
+    const nowMs = at.getTime();
+    const opened = openOccurrence(m, next.settings, at);
+    const was = openOccurrence(before, prev.settings, at);
+    if (opened === null || was === null || was.startMs !== opened.startMs) return false;
+    const after: MCState = { ...next, missions: next.missions.map(x => (x.phase === m.phase ? m : x)) };
+    return occurrenceHandled(prev, m.phase, was, nowMs) && !occurrenceHandled(after, m.phase, opened, nowMs);
+}
+
+/** `m` stamped `savedIntoWindowAt` at `instant` when its changed window opens one (opensWindow, uncoversWindow); else as it was. */
 function openedStamp(prev: MCState, next: MCState, m: Mission, instant: string): Mission {
     const before = prev.missions.find(p => p.phase === m.phase);
-    return opensWindow(before, prev.settings, m, next.settings, instant) ? { ...m, savedIntoWindowAt: instant } : m;
+    const stamped = opensWindow(before, prev.settings, m, next.settings, instant) || uncoversWindow(prev, next, before, m, instant);
+    return stamped ? { ...m, savedIntoWindowAt: instant } : m;
 }
 
 /**

@@ -85,7 +85,7 @@ export interface Mission {
     lastActiveAt?: string; // last start or end of a run; never cleared (store/missionActivity.ts)
     occurrenceDate?: string; // YYYY-MM-DD of the occurrence this run belongs to, set when it starts (store/occurrenceDay.ts)
     startsAtChangedAt?: string; // the last save that moved startsAt; never cleared (stamped: store/missionActivity.ts, read: store/occurrenceHandled.ts)
-    savedIntoWindowAt?: string; // the last save that put a window under the clock (opened one not open before); never cleared (same files)
+    savedIntoWindowAt?: string; // the last save that opened a window (not open at that start before); never cleared (same files)
     baseDurationMins?: number; // the run's length at its start or full Reset; the +/- cap counts from it (store/missionEndAdjust.ts)
     tasks: MissionTask[];
     active: boolean;

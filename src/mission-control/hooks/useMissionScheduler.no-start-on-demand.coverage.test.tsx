@@ -11,6 +11,8 @@
 //   - a second save that moves a window the first save opened: a new window
 //     opened by the save, held back too ("was anything open before" would
 //     start it);
+//   - a duration-only save inside a window the retime rule had covered: the
+//     longer window must stay covered (a save never uncovers a covered window);
 //   - a wake after the covered window closed: no ⏭️ line, no start;
 //   - past midnight: a relaunch inside last night's covered window starts
 //     nothing, and the next night starts as normal.
@@ -114,5 +116,21 @@ describe('a save into the window: the review round', () => {
         expect(missionOf(next.live.state, 'evening')?.occurrenceDate).toBe('2026-11-11');
         expect(startLogs(next.live.state, 'evening')).toBe(1);
         next.unmount();
+    });
+
+    it('a duration-only save inside a window the retime rule covered does not uncover it (review: it started the evening on demand)', () => {
+        // Evening 19:00 for 30 min ran on the 10th; moved at 19:30 to 06:40, which the run covers by design.
+        const h = launchAt(nov(10, 19, 30), ranOnce(eveningOnlyAt('19:00', 30), 'evening', nov(10, 19, 0)));
+        h.dispatch({ type: 'SET_SETTINGS', settings: { eveningStartsAt: '06:40' } });
+        step(1_100);
+        jumpTo(nov(11, 6, 44));
+        step(1_100);
+        expect(h.live.state.activeMission, 'precondition: 06:40 on the 11th is covered by the retime rule').toBe('none');
+        // A longer window makes the run look farther from the start than from the window before it.
+        h.dispatch({ type: 'SET_SETTINGS', settings: { eveningDurationMins: 120 } });
+        step(2_000);
+        expect(h.live.state.activeMission, 'the duration save started the evening on demand').toBe('none');
+        expect(startLogs(h.live.state, 'evening')).toBe(0);
+        h.unmount();
     });
 });
