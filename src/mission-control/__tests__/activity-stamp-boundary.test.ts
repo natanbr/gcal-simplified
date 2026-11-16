@@ -2,7 +2,7 @@
 // Mission activity stamps — structural boundary pin (source-reading test,
 // streak-writer-boundary style).
 //
-// What this protects: two stamps on a mission, each with one writer,
+// What this protects: three stamps on a mission, each with one writer,
 // `stampMissionActivity` (missionActivity.ts), and nothing that clears them.
 //   - `Mission.lastActiveAt` is how the scheduler knows today's occurrence
 //     already ran: stamped on every start and end of a run, derived from the
@@ -13,8 +13,13 @@
 //     `startsAt` transition. Cleared (say in freshAttempt, beside the other
 //     per-attempt fields) and a save hands the child a fresh full-timer attempt
 //     again (2026-11-13).
+//   - `Mission.savedIntoWindowAt` is how the scheduler knows a Settings save put
+//     a window under the clock (moved the start time into the past, or
+//     lengthened it so a closed window opened): stamped from the window
+//     transition. Cleared, and a save starts a mission that has not run at
+//     once, with a full timer: a start on demand, the phone's alone (2026-11-10).
 //
-// Both sit right beside fields that every mission-ending or new-attempt path
+// All three sit right beside fields that every mission-ending or new-attempt path
 // clears. A tidy-up that clears or sets a stamp in a reducer case, in
 // CANCEL_MISSION, in freshAttempt or in some NEW action, brings the bug back or
 // splits the one writer in two. A new action is by definition not covered by
@@ -25,6 +30,7 @@
 // from missionStreak.ts — the second test names the file and line and fails.
 // Add `startsAtChangedAt: undefined` to freshAttempt (store/missionAttempt.ts)
 // — the second test names store/missionAttempt.ts and fails (proven 2026-11-13).
+// The same with `savedIntoWindowAt: undefined` (proven 2026-11-15).
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
@@ -56,6 +62,7 @@ const ALLOWED = new Set(['types.ts', 'store/missionActivity.ts', 'store/useMCSto
 const STAMPS = {
     lastActiveAt: 'a stopped mission restarts at once',
     startsAtChangedAt: 'a Settings save hands out a fresh attempt again',
+    savedIntoWindowAt: 'a Settings save starts a mission on demand again',
 } as const;
 
 /** A write of `field` in any form: a property in a literal, an assignment

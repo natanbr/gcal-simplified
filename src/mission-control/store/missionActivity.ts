@@ -28,10 +28,20 @@
 // occurrence at the old start time (saveKeepsRun, occurrenceHandled.ts). The
 // scheduler then refuses a fresh attempt at the moved time (retimedOntoItsRun,
 // 2026-11-13). Nothing clears it either (activity-stamp-boundary.test.ts).
+//
+// `savedIntoWindowAt` is stamped here too, from the window transition (a save
+// that moves the start time or changes the length), at the action's instant,
+// when the save put a window under the clock: one open at that instant that was
+// not open there before. Unstamped, the scheduler started it at once with a
+// full timer, a start on demand the phone alone may make (owner rule
+// 2026-11-10). A window already open and pending (behind another running
+// mission) that is only lengthened is not stamped, and still starts. Nothing
+// clears it (activity-stamp-boundary.test.ts).
 // ============================================================
 
 import type { MCState, Mission } from '../types';
 import { missionDurationMins } from './hhmm';
+import { openOccurrence } from './missionOccurrence';
 import { saveKeepsRun } from './occurrenceHandled';
 
 /** `instant`, or the run's due end when that came earlier. */
@@ -62,15 +72,37 @@ function movedStamp(prev: MCState, m: Mission, instant: string): Mission {
     return saveKeepsRun(prev, m.phase, Date.parse(at)) ? { ...m, startsAtChangedAt: at } : m;
 }
 
+/** Whether `m`'s window differs from its phase's in `prev`: a new start time or a new length. */
+function windowChanged(prev: MCState, next: MCState, m: Mission): boolean {
+    const before = prev.missions.find(p => p.phase === m.phase);
+    if (before === undefined || before === m) return false;
+    return before.startsAt !== m.startsAt || missionDurationMins(before, prev.settings) !== missionDurationMins(m, next.settings);
+}
+
+/**
+ * `m` stamped `savedIntoWindowAt` at `instant` when its changed window is open
+ * then and was not, at that same start, before the change (openOccurrence, read
+ * in `prev` and in `next`); else as it was.
+ */
+function openedStamp(prev: MCState, next: MCState, m: Mission, instant: string): Mission {
+    const at = new Date(instant);
+    const opened = openOccurrence(m, next.settings, at);
+    if (opened === null) return m;
+    const before = prev.missions.find(p => p.phase === m.phase);
+    const wasOpen = before === undefined ? null : openOccurrence(before, prev.settings, at);
+    return wasOpen?.startMs === opened.startMs ? m : { ...m, savedIntoWindowAt: instant };
+}
+
 /**
  * `next` with the mission that just started stamped at `instant` (the action's
- * timestamp, so the reducer stays pure), the one that just ended at its end, and
- * one whose start time just moved stamped `startsAtChangedAt` (movedStamp).
- * Same reference when nothing started, ended or moved.
+ * timestamp, so the reducer stays pure), the one that just ended at its end, one
+ * whose start time just moved stamped `startsAtChangedAt` (movedStamp), and one
+ * whose window a save just put under the clock stamped `savedIntoWindowAt`
+ * (openedStamp). Same reference when nothing started, ended or changed window.
  */
 export function stampMissionActivity(prev: MCState, next: MCState, instant: string): MCState {
     const ran = prev.activeMission !== next.activeMission;
-    if (!ran && (next.missions === prev.missions || !next.missions.some(m => startMoved(prev, m)))) return next;
+    if (!ran && (next.missions === prev.missions || !next.missions.some(m => windowChanged(prev, next, m)))) return next;
     // Read from `prev`: a Stop clears startedAt in `next`.
     const ended = endStamp(prev.missions.find(m => m.phase === prev.activeMission), prev, instant);
     return {
@@ -78,7 +110,8 @@ export function stampMissionActivity(prev: MCState, next: MCState, instant: stri
         missions: next.missions.map(m => {
             const runStamp = !ran ? null : m.phase === next.activeMission ? instant : m.phase === prev.activeMission ? ended : null;
             const stamped = runStamp === null ? m : { ...m, lastActiveAt: runStamp };
-            return startMoved(prev, m) ? movedStamp(prev, stamped, instant) : stamped;
+            const moved = startMoved(prev, m) ? movedStamp(prev, stamped, instant) : stamped;
+            return windowChanged(prev, next, m) ? openedStamp(prev, next, moved, instant) : moved;
         }),
     };
 }

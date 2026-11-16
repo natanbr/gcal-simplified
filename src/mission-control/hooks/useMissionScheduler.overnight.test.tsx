@@ -13,12 +13,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initialState, mcReducer } from '../store/mcReducer';
 import { getLocalDateString } from '../store/behaviorSync';
 import { STORAGE_KEY, loadPersistedState } from '../store/useMCStore';
-import { at, crossing, jumpTo, renderLiveScheduler, saveAndClose, startLogs, step } from './schedulerTestKit';
+import { SAVED_LONG_AGO, at, crossing, jumpTo, renderLiveScheduler, saveAndClose, startLogs, step } from './schedulerTestKit';
 import type { MCState } from '../types';
 
-/** Evening 23:30 for 60 min, derived the way Settings → Save derives it. */
+/**
+ * Evening 23:30 for 60 min, derived the way Settings → Save derives it, by a save made
+ * long ago. Saved at the test's clock (23:40, inside the window) it would put the window
+ * under the clock, and a save is no start (useMissionScheduler.no-start-on-demand.test.tsx).
+ */
 function lateEvening(): MCState {
-    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:30', eveningDurationMins: 60 } });
+    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:30', eveningDurationMins: 60 }, timestamp: SAVED_LONG_AGO });
     expect(s.missions.find(m => m.phase === 'evening')?.endsAt, 'precondition').toBe('24:30');
     return s;
 }
