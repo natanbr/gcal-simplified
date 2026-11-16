@@ -12,7 +12,7 @@ import { useMCState, useMCDispatch, useMission } from '../store/useMCStore.tsx';
 import { MissionTimerDisplay, MissionDepletingBar } from './MissionTimerDisplay';
 import { usePressRelease } from '../hooks/usePressRelease';
 import type { MissionPhase } from '../types';
-import { completableRun } from '../store/missionCompletion';
+import { completableRun, completionBonus, everyTaskDone } from '../store/missionCompletion';
 import { TaskCard } from './TaskCard';
 
 const PHASE_META: Record<Exclude<MissionPhase, 'none'>, { label: string; emoji: string; bg: string; accent: string }> = {
@@ -35,8 +35,6 @@ export function MissionOverlay() {
     const state    = useMCState();
     const dispatch = useMCDispatch();
     const [minimized,       setMinimized]      = useState(false);
-
-    const BONUS_BASE = 2;
 
     const phase   = state.activeMission;
     const minimizePress = usePressRelease(useCallback(() => setMinimized(true), []), phase);
@@ -67,9 +65,9 @@ export function MissionOverlay() {
 
     const doneCount    = mission?.tasks.filter(t => t.completed).length ?? 0;
     const totalCount   = mission?.tasks.length ?? 0;
-    const effectiveBonus = whiningDetected ? Math.max(0, BONUS_BASE - 1) : BONUS_BASE;
+    const effectiveBonus = completionBonus(mission); // the scheduler's expiry tick pays the same
     // Done only while finishing still pays: once its timeout is logged a run is a miss, so no celebration, no collect.
-    const allDone      = totalCount > 0 && doneCount === totalCount
+    const allDone      = everyTaskDone(mission)
         && completableRun(state, { type: 'COMPLETE_MISSION_ROUTINE', missionPhase: phase, bonusTokens: effectiveBonus }) !== null;
 
     const collectBonus = useCallback((origin?: 'auto') => {
