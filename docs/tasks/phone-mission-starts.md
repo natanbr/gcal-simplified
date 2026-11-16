@@ -34,7 +34,7 @@ The phone's prior Done Today badge described failed attempts as done too, which
 made the available repeat start unclear. Reuse SET_ACTIVE_MISSION for idle starts,
 RESET_MISSION for checklist resets and RESET_MISSION_WITH_TIMER for running
 restarts. Preserve the signed transport and the existing remote action allowlist.
-No new persistent state, timers, IPC channels or scheduler changes are needed.
+No new persistent state, timers, IPC channels or scheduler changes were needed for this first change (the follow-ups below added two stamps, `startsAtChangedAt` and `savedIntoWindowAt`, and a read in `occurrenceHandled`).
 
 Desktop start-time editing remains in MC Settings. Changing a running mission's
 start time can end it, as specified before this feature; this change removes the
@@ -77,6 +77,31 @@ midnight can pull the next day's occurrence forward the same way. After a miss i
 same-day change of the start time starts nothing, because the scheduler reads
 `lastCompletedOrFailed*Date`; `useRemoteControl.start.test.tsx` pins that. So
 "only the phone starts a retry" holds for desktop gestures, not for this path.
+
+## Known gap: a Settings save as a start on demand (closed 2026-11-15)
+
+Owner-approved follow-up. A mission that had not run could be started from MC
+Settings: save its start time as a minute ago, or lengthen its duration so a
+window that closed unseen opened again. The scheduler found the window open and
+its occurrence unrun, and started it with a full timer, a desktop-started mission.
+
+Now a save that moves a start time or changes a length stamps the mission
+(`savedIntoWindowAt`, written only by `stampMissionActivity`) when it opens a
+window that was not open before, and `occurrenceHandled` counts exactly that
+window as handled (start at or before the stamp, not closed at it, stamp not in
+the future). The stamp records no run, so `saveKeepsRun` ignores it. The phone
+start path (SET_ACTIVE_MISSION through REMOTE_ALLOWED_ACTIONS) is unchanged, and a
+start still ahead at the save stays automatic.
+
+Out of scope, stated: a start saved one minute ahead still starts a minute later;
+moving an open window that waits behind another running mission to a different
+open start is stamped, so the scheduler never starts it (the phone can); the
+covered window gets no "skipped" line, but the save writes one log line unless the mission already ran in it (owner
+decision 2026-11-16, `store/savedIntoWindowLog.ts`; a running mission ended by the same save gets only the "ended" line); a clock set ahead
+then back. Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
+`store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`,
+`store/__tests__/settings-covers-window-log.test.tsx`, `persistence-time.test.ts` and
+`activity-stamp-boundary.test.ts`.
 
 ## Verification and handoff
 

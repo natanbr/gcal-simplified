@@ -22,7 +22,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initialState, mcReducer } from '../store/mcReducer';
 import { loadPersistedState } from '../store/useMCStore';
 import {
-    crossing, eveningOnlyAt, jumpTo, loadEveningOnly, renderLiveScheduler, saveAndClose, skippedLines, startLogs, step,
+    SAVED_LONG_AGO, crossing, eveningOnlyAt, jumpTo, loadEveningOnly, renderLiveScheduler, saveAndClose, skippedLines, startLogs, step,
     type Phase,
 } from './schedulerTestKit';
 import type { MCState } from '../types';
@@ -37,7 +37,7 @@ const nov = (day: number, h: number, m: number, s = 0) => new Date(2026, 10, day
 
 /** Only the morning, 06:00 for `durationMins`. */
 function morningFor(durationMins: number): MCState {
-    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: durationMins } });
+    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: durationMins }, timestamp: SAVED_LONG_AGO });
     return { ...s, missions: s.missions.filter(m => m.phase === 'morning') };
 }
 

@@ -26,6 +26,8 @@ vi.mock('../mcReducer', async importOriginal => {
 const reducerSpy = vi.mocked(mcReducer);
 
 const ENDED = /ended: its start time was changed in Settings/;
+// A save puts a window under the clock when one is open at its instant (savedIntoWindowLog.ts): noon opens none.
+const NOON = new Date(2026, 10, 16, 12, 0, 0, 0).toISOString();
 
 let live: MCState = initialState;
 let dispatch: (a: MCAction) => void = () => {};
@@ -92,12 +94,12 @@ describe('SET_SETTINGS that ends nothing writes no such line', () => {
         // activityLog.ts's own rule: a path that writes no line must not pay a speculative reduce.
         const evening: MCState = { ...initialState, activeMission: 'evening' };
         reducerSpy.mockClear();
-        expect(createLogEntry({ type: 'SET_SETTINGS', settings: { eveningDurationMins: 45, morningStartsAt: '05:15' } }, evening)).toBeNull();
+        expect(createLogEntry({ type: 'SET_SETTINGS', settings: { eveningDurationMins: 45, morningStartsAt: '05:15' }, timestamp: NOON }, evening)).toBeNull();
         expect(reducerSpy).not.toHaveBeenCalled();
     });
 
     it('a start-time change with nothing running', () => {
-        const action: MCAction = { type: 'SET_SETTINGS', settings: { eveningStartsAt: '20:30' } };
+        const action: MCAction = { type: 'SET_SETTINGS', settings: { eveningStartsAt: '20:30' }, timestamp: NOON };
         expect(createLogEntry(action, initialState)).toBeNull();
     });
 });

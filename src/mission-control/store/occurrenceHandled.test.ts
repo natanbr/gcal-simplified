@@ -101,8 +101,44 @@ describe('occurrenceHandled: each clause alone', () => {
         ['ran before its start (2026-09-22)', withEvening({ lastActiveAt: iso(nov(10, 18, 59)) }), false],
         ['a last activity in the future is ignored', withEvening({ lastActiveAt: iso(nov(10, 22, 0)) }), false],
         ['a save kept the run', withEvening({ lastActiveAt: iso(nov(10, 18, 30)), startsAtChangedAt: iso(nov(10, 18, 40)) }), true],
+        ['a save put the window under the clock', withEvening({ savedIntoWindowAt: iso(nov(10, 19, 46)) }), true],
     ])('%s', (_name, s, expected) => {
         expect(occurrenceHandled(s, 'evening', o, now)).toBe(expected);
+    });
+});
+
+describe('occurrenceHandled: a save that put the window under the clock covers that window only', () => {
+    const base: MCState = { ...initialState, lastCompletedOrFailedEveningDate: null };
+    const savedAt = (stamp: string, fields: Partial<Mission> = {}): MCState =>
+        ({ ...base, missions: base.missions.map(m => (m.phase === 'evening' ? evening({ savedIntoWindowAt: stamp, ...fields }) : m)) });
+    const now = nov(10, 21, 0).getTime();
+
+    it.each<[string, string, number, boolean]>([
+        ['saved inside the window', iso(nov(10, 19, 46)), 10, true],
+        ['saved at the very instant it starts (the tie is covered)', iso(nov(10, 19, 0)), 10, true],
+        ['saved 1 ms before it starts (a start ahead)', iso(nov(10, 18, 59, 59, 999)), 10, false],
+        ['saved 1 ms before it closes', iso(nov(10, 19, 59, 59, 999)), 10, true],
+        ['saved as it closes', iso(nov(10, 20, 0)), 10, false],
+        ['an earlier occurrence, closed at the save, keeps its ⏭️ line', iso(nov(10, 19, 46)), 9, false],
+        ['a later occurrence, which starts after the save', iso(nov(10, 19, 46)), 11, false],
+        ['an unreadable stamp', 'yesterday', 10, false],
+    ])('%s', (_name, stamp, day, expected) => {
+        expect(occurrenceHandled(savedAt(stamp), 'evening', occ(evening(), day), now)).toBe(expected);
+    });
+
+    it('a stamp in the future at read time (saved under a clock set ahead) is ignored until the clock reaches it', () => {
+        // Trusted, a save made at a clock reading 19:46 would hold back the real 19:00 window read at 19:41.
+        const s = savedAt(iso(nov(10, 19, 46)));
+        expect(occurrenceHandled(s, 'evening', occ(evening(), 10), nov(10, 19, 41).getTime())).toBe(false);
+        expect(occurrenceHandled(s, 'evening', occ(evening(), 10), nov(10, 19, 46).getTime())).toBe(true);
+    });
+
+    it('a 5-minute grace: a window shorter than the late-start tolerance stays open as the scheduler reads it', () => {
+        const short = { startsAt: '19:00', endsAt: '19:01' };
+        const o = occurrenceOn(evening(short), settings, nov(10, 12, 0));
+        if (!o) throw new Error('no occurrence');
+        expect(occurrenceHandled(savedAt(iso(nov(10, 19, 4)), short), 'evening', o, now)).toBe(true);
+        expect(occurrenceHandled(savedAt(iso(nov(10, 19, 5)), short), 'evening', o, now)).toBe(false);
     });
 });
 
@@ -122,5 +158,14 @@ describe('saveKeepsRun: a save keeps the run only when it covered its occurrence
         ['never ran: no stamp', prevWith({ lastActiveAt: undefined }, { lastCompletedOrFailedEveningDate: '2026-11-10' }), false],
     ])('%s', (_name, prev, expected) => {
         expect(saveKeepsRun(prev, 'evening', savedAt)).toBe(expected);
+    });
+
+    it('a save that put the window under the clock is not a run: a second move keeps nothing', () => {
+        // A phone run 17:00–17:15, then a save at 17:20 moving the evening to 17:18: the run
+        // never covered 17:18, only the save's stamp does. Fed here, a move to 18:00 at 17:25
+        // would be stamped startsAtChangedAt and the run's own day would cover 18:00 too.
+        const prev = prevWith({ startsAt: '17:18', endsAt: '18:18', lastActiveAt: iso(nov(10, 17, 15)), savedIntoWindowAt: iso(nov(10, 17, 20)) });
+        expect(occurrenceHandled(prev, 'evening', occ(prev.missions[1], 10), nov(10, 17, 25).getTime()), 'precondition: the stamp covers 17:18').toBe(true);
+        expect(saveKeepsRun(prev, 'evening', nov(10, 17, 25).getTime())).toBe(false);
     });
 });

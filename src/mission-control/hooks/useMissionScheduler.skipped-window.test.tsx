@@ -18,7 +18,7 @@ import { initialState, mcReducer } from '../store/mcReducer';
 import { getLocalDateString } from '../store/behaviorSync';
 import { STORAGE_KEY, loadPersistedState } from '../store/useMCStore';
 import {
-    at, eveningOnlyAt, loadEveningOnly, ranOnce, renderLiveScheduler, saveAndClose, skippedLines, startLogs, step,
+    SAVED_LONG_AGO, at, eveningOnlyAt, loadEveningOnly, ranOnce, renderLiveScheduler, saveAndClose, skippedLines, startLogs, step,
 } from './schedulerTestKit';
 import type { MCState } from '../types';
 
@@ -181,9 +181,15 @@ describe('the 10-second test duration', () => {
     beforeEach(() => { vi.useFakeTimers(); });
     afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-    /** Evening 23:58 for 10 s, which ran the night before. A start up to 5 min late is on time. */
+    /**
+     * Evening 23:58 for 10 s, which ran the night before. A start up to 5 min late is on time.
+     * Saved long ago: saved at the real clock (fake timers start from it), a run between 23:58
+     * and midnight put tonight's window under the clock, and neither case below started it.
+     */
     function tenSeconds(): MCState {
-        const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:58', eveningDurationMins: 1 / 6 } });
+        const s = mcReducer(initialState, {
+            type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:58', eveningDurationMins: 1 / 6 }, timestamp: SAVED_LONG_AGO,
+        });
         return ranOnce({ ...s, missions: s.missions.filter(m => m.phase === 'evening') }, 'evening', at(23, 58, -1));
     }
 

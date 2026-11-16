@@ -18,7 +18,7 @@ import { act } from '@testing-library/react';
 import { initialState, mcReducer } from '../store/mcReducer';
 import { STORAGE_KEY, loadPersistedState } from '../store/useMCStore';
 import {
-    at, crossing, eveningOnlyAt, jumpTo, loadEveningOnly, ranOnce, renderLiveScheduler, saveAndClose, skippedLines, step,
+    SAVED_LONG_AGO, at, crossing, eveningOnlyAt, jumpTo, loadEveningOnly, ranOnce, renderLiveScheduler, saveAndClose, skippedLines, step,
 } from './schedulerTestKit';
 import type { MCState } from '../types';
 
@@ -125,7 +125,7 @@ describe('a Settings save is not a missed window', () => {
 
     /** The 08:00 morning, which ran yesterday, moved at 07:30 to 07:00: that window has closed. */
     function movedIntoThePast() {
-        const s = ranOnce(mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningStartsAt: '08:00' } }), 'morning', at(8, 0, -1));
+        const s = ranOnce(mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningStartsAt: '08:00' }, timestamp: SAVED_LONG_AGO }), 'morning', at(8, 0, -1));
         vi.setSystemTime(at(7, 30));
         const harness = renderLiveScheduler({ ...s, missions: s.missions.filter(m => m.phase === 'morning') });
         step(3_000);

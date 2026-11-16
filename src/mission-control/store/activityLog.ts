@@ -17,6 +17,7 @@ import { completableRun } from './missionCompletion';
 import { responsibilityPointChange } from './responsibilityPoint';
 import { responsibilityClaim } from './responsibilityClaim';
 import { reschedulesRunningMission } from './missionReschedule';
+import { coveredWindowLine } from './savedIntoWindowLog';
 import { effectivePrivilege, isPrivilegeSuspended } from './privileges';
 import { formatLogStamp, formatSuspensionLength, parseSuspensionEnd } from '../utils/timeUtils';
 import { gameTokenCapNote, gameTokenRoom } from './moodGauge';
@@ -141,9 +142,13 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             // A new start time for the RUNNING mission ends it (kept; open decision,
             // PR 170). The reducer's own check, so no speculative pass and no drift.
             const phase = state.activeMission;
-            if (phase === 'none' || !reschedulesRunningMission(state, action.settings)) return null;
-            const label = phase === 'morning' ? 'Morning' : 'Evening';
-            return { id, timestamp: now, icon: '⏹️', message: `${label} mission ended: its start time was changed in Settings`, type: 'mission', colorKey: phase, ...snap() };
+            if (phase !== 'none' && reschedulesRunningMission(state, action.settings)) {
+                const label = phase === 'morning' ? 'Morning' : 'Evening';
+                return { id, timestamp: now, icon: '⏹️', message: `${label} mission ended: its start time was changed in Settings`, type: 'mission', colorKey: phase, ...snap() };
+            }
+            // A save that opens a window already open starts nothing (savedIntoWindowAt): say so.
+            const covered = coveredWindowLine(state, action, now);
+            return covered && { id, timestamp: now, icon: '⏭️', message: covered.message, type: 'mission', colorKey: covered.colorKey, ...snap() };
         }
         case 'MARK_MISSION_TIMEOUT':
             return null; // SET_ACTIVE_MISSION phase 'none' logs the expiry with its phase; this would duplicate it

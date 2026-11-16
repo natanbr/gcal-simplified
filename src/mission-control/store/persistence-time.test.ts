@@ -208,3 +208,28 @@ describe('hydration — when a start time was last moved', () => {
         expect(mission(restartWith(value), 'evening').startsAtChangedAt).toBeUndefined();
     });
 });
+
+// A save that puts a window under the clock is stamped (2026-11-15) and the
+// scheduler reads the stamp after a relaunch inside that window
+// (useMissionScheduler.no-start-on-demand.test.tsx), so a real one survives; one
+// in the future (a clock set back since) or anything that is not an instant is
+// dropped, as lastActiveAt is.
+describe('hydration — when a save last put a window under the clock', () => {
+    beforeEach(() => { localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { localStorage.removeItem(STORAGE_KEY); });
+
+    function restartWith(savedIntoWindowAt: unknown): MCState {
+        return restart({ ...initialState, missions: initialState.missions.map(m => (m.phase === 'morning' ? { ...m, savedIntoWindowAt } as typeof m : m)) });
+    }
+
+    it('a past instant survives a restart, and a second one', () => {
+        const iso = new Date(Date.now() - 60_000).toISOString();
+        const once = restartWith(iso);
+        expect(mission(once, 'morning').savedIntoWindowAt).toBe(iso);
+        expect(mission(restart(once), 'morning').savedIntoWindowAt).toBe(iso);
+    });
+
+    it.each<[string, unknown]>([['an instant in the future', new Date(Date.now() + 3_600_000).toISOString()], ['a word', 'yesterday'], ['a number', 12345], ['null', null]])('anything else is dropped: %s', (_label, value) => {
+        expect(mission(restartWith(value), 'morning').savedIntoWindowAt).toBeUndefined();
+    });
+});

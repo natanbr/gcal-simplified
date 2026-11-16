@@ -165,6 +165,24 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   `useMissionScheduler.settings-retime*` tests, `store/occurrenceHandled.test.ts` and
   `activity-stamp-boundary.test.ts`. The scheduler makes the scheduled starts and the phone every other
   start; the only desktop action that ends a run is this logged save.
+  A Settings save is no start on demand either (owner rule, closed 2026-11-15): a mission that had not run
+  could be saved to start a minute ago, or lengthened so a closed window opened again, and the scheduler
+  then started that open window at once with a full timer. A save that moves a start time or changes a
+  length is stamped `savedIntoWindowAt` when it opens a window: one not open at that same start before, or one the old settings counted as handled and the new length would not (a save never uncovers a covered window: a duration save inside a window the retime rule covered started it) (`openedStamp`,
+  `missionActivity.ts`, the stamp's one writer, at the action's instant), and `occurrenceHandled` covers
+  exactly that window (`savedIntoItsWindow`: start at or before the stamp, not closed at it, stamp not in
+  the future). Nothing else is covered: a start still ahead at the save starts as scheduled, a later day
+  starts as normal, an earlier closed window keeps its "skipped" line, and a window already open and
+  pending (behind another running mission) that is only lengthened still starts. The stamp records no run,
+  so `saveKeepsRun` reads `ranOrConcluded`, never `occurrenceHandled`: otherwise a second save moving the
+  start ahead would count the first as a run and the whole day would start nothing. Hydration keeps the
+  stamp only as a past instant, so a relaunch inside the window starts nothing. Known gaps: a start saved
+  one minute ahead still starts a minute later (a time still ahead stays automatic by design), and moving
+  an open, pending window to another open start stamps it, so that window never starts from the
+  scheduler; the phone can start it. The covered window starts nothing, charges no miss and gets no "skipped" line, but the save writes one attributed line (owner decision 2026-11-16): "⏭️ Evening mission not started: its 19:00 window was already open when Settings was saved (start it from the phone)", built in `store/savedIntoWindowLog.ts` from the state the reducer produces: a line for each mission the save stamped, unless it already ran in that window (`ranOrConcluded`, read after the save, so a start moved onto a run the retime rule counts writes none, and a completed or missed evening that is only lengthened writes none: "not started" would be false). A save that cannot open a window costs no reducer pass; a written line costs one. Known gap: when the save also ends the running mission only that "ended" line is written, and the other phase's window, if the same save opened it, is stamped with no line of its own (the running mission can be a phone start outside its own window, so the windows need not overlap). Known gap: a clock set ahead and then corrected backward can release a window (a stamp in the future is ignored until the clock reaches it).
+  Guarded by `useMissionScheduler.no-start-on-demand*.test.tsx`, `store/__tests__/settings-covers-window-log.test.tsx`,
+  `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`, `persistence-time.test.ts`,
+  `src/__tests__/settings-fixture-clock-boundary.test.ts` and `activity-stamp-boundary.test.ts`.
   A Stop, a Reset (plain or full), a time adjustment, a whining toggle or a task
   tap naming a mission that is not the running one is refused by the reducer and the log alike
   (`isStaleMissionAction`, `mcReducer.stale-mission-action.test.ts`, `mcReducer.stale-whining-task.test.ts`):

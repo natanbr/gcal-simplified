@@ -100,10 +100,11 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                 const merged = {
                     ...defaultM,
                     ...savedM,
-                    // Both must survive a restart: a relaunch inside the window after a
-                    // stop, or after a save that moved the start time, would otherwise start the mission again.
+                    // All three must survive a restart: a relaunch inside the window after a stop, after a
+                    // save that moved the start time, or after one that opened the window would otherwise start it.
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
                     startsAtChangedAt: isPastInstant(savedM.startsAtChangedAt) ? savedM.startsAtChangedAt : undefined,
+                    savedIntoWindowAt: isPastInstant(savedM.savedIntoWindowAt) ? savedM.savedIntoWindowAt : undefined,
                     // The run's day and base length, kept only when real (missing: the derivations they replace).
                     occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,
                     baseDurationMins: isValidDurationMins(savedM.baseDurationMins) ? savedM.baseDurationMins : undefined,

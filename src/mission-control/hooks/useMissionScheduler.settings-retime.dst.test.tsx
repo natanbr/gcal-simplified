@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initialState, mcReducer } from '../store/mcReducer';
-import { crossing, eveningOnlyAt, jumpTo, renderLiveScheduler, startLogs, step } from './schedulerTestKit';
+import { SAVED_LONG_AGO, crossing, eveningOnlyAt, jumpTo, renderLiveScheduler, startLogs, step } from './schedulerTestKit';
 import type { MCState } from '../types';
 
 process.env.TZ = 'America/Los_Angeles';
@@ -30,7 +30,7 @@ const NIGHTS: Array<{ name: string; eve: Day }> = [
 ];
 
 function morningOnly(): MCState {
-    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 10 } });
+    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 10 }, timestamp: SAVED_LONG_AGO });
     return { ...s, missions: s.missions.filter(m => m.phase === 'morning') };
 }
 
