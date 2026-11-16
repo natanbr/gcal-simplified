@@ -179,7 +179,8 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   stamp only as a past instant, so a relaunch inside the window starts nothing. Known gaps: a start saved
   one minute ahead still starts a minute later (a time still ahead stays automatic by design), and moving
   an open, pending window to another open start stamps it, so that window never starts from the
-  scheduler; the phone can start it. The covered window is never reported (no start, no miss, no "skipped" line, no log line at the save): an open decision for the owner. Guarded by `useMissionScheduler.no-start-on-demand*.test.tsx`,
+  scheduler; the phone can start it. The covered window starts nothing, charges no miss and gets no "skipped" line, but the save writes one attributed line (owner decision 2026-11-16): "⏭️ Evening mission not started: its 19:00 window was already open when Settings was saved (start it from the phone)", built in `store/savedIntoWindowLog.ts` from `opensWindow`, the stamp's own predicate, so the two cannot disagree and no reducer pass is paid.
+  Guarded by `useMissionScheduler.no-start-on-demand*.test.tsx`, `store/__tests__/settings-covers-window-log.test.tsx`,
   `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`, `persistence-time.test.ts` and
   `activity-stamp-boundary.test.ts`.
   A Stop, a Reset (plain or full), a time adjustment, a whining toggle or a task
