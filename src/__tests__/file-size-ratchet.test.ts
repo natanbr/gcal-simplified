@@ -115,7 +115,9 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // arrow re-fired the timer's expiry effect and wrote a third completion line),
     // then 484 → 485 the same day (Reset's hold is dropped when the phase changes).
     // 485 → 437 on 2026-10-07 ("↺ Reset" and its 2 s hold are gone: Reset is phone-only).
-    'src/mission-control/components/MissionOverlay.tsx': 437,
+    // 437 → 435 on 2026-11-14 (the bonus and "every task done" moved to store/missionCompletion.ts,
+    // shared with the scheduler's expiry tick).
+    'src/mission-control/components/MissionOverlay.tsx': 435,
     // 400 → 407 on 2026-09-02 (refuse a locked drop BEFORE the exit animation;
     // committing it optimistically made coins vanish from the pile).
     'src/mission-control/components/GlobalBank.tsx': 407,

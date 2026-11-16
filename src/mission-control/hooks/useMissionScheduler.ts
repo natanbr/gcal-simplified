@@ -15,7 +15,8 @@ import {
 } from '../store/missionOccurrence';
 // Whether an occurrence still needs a start, and the "skipped" report's terms: pure, with the clock passed in.
 import { occurrenceHandled, skipOwed, skippedLineId, type Phase } from '../store/occurrenceHandled';
-import type { MissionPhase, MCState, Mission } from '../types';
+import { completableRun, completionBonus, everyTaskDone } from '../store/missionCompletion';
+import type { MCAction, MissionPhase, MCState, Mission } from '../types';
 
 export function useMissionScheduler(): void {
     const { state } = useMCStore();
@@ -225,15 +226,23 @@ export function useMissionScheduler(): void {
                 if (activeMission && activeMission.startedAt && activeMission.durationMins != null) {
                     const elapsedMins = (new Date().getTime() - new Date(activeMission.startedAt).getTime()) / 60000;
                     if (elapsedMins >= activeMission.durationMins) {
-                        // Record the miss BEFORE clearing the phase. MissionOverlay's
-                        // timer only exists while the overlay is on screen, so a
-                        // mission left minimized — or expiring on the Calendar view —
-                        // would end with no timeout marked and the shield would never
-                        // see it. The reducer's `loggedTimeoutAt` guard makes the
-                        // overlay also firing harmless.
-                        const allDone = activeMission.tasks.length > 0
-                            && activeMission.tasks.every(t => t.completed);
-                        if (!allDone && !activeMission.loggedTimeoutAt) {
+                        // Record the outcome BEFORE clearing the phase, whichever it is.
+                        // A miss: MissionOverlay's timer only exists while the overlay is
+                        // on screen, so a mission left minimized — or expiring on the
+                        // Calendar view — would end with no timeout marked and the shield
+                        // would never see it. A run finished in time: paid here as the
+                        // overlay's auto-collect pays it (same bonus, same 'auto'), since
+                        // after a sleep this tick may run first and a run ended unpaid
+                        // refuses the overlay's collect (2026-11-14). Whichever comes
+                        // second is refused by the reducer (`loggedTimeoutAt`,
+                        // completableRun) and writes no line.
+                        const allDone = everyTaskDone(activeMission);
+                        const completion: Extract<MCAction, { type: 'COMPLETE_MISSION_ROUTINE' }> = {
+                            type: 'COMPLETE_MISSION_ROUTINE', missionPhase: s.activeMission, bonusTokens: completionBonus(activeMission), origin: 'auto',
+                        };
+                        if (allDone && completableRun(s, completion)) {
+                            dispatch(completion);
+                        } else if (!allDone && !activeMission.loggedTimeoutAt) {
                             dispatch({ type: 'MARK_MISSION_TIMEOUT', missionPhase: s.activeMission, origin: 'scheduler' });
                         }
                         dispatch({ type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler' });

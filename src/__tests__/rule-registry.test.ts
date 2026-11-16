@@ -359,6 +359,17 @@ const REGISTRY: Rule[] = [
         verifiedRedBy: "delete the MARK_MISSION_TIMEOUT dispatch from the expiry tick in useMissionScheduler.ts — 'records the miss for a mission that expires with no overlay on screen' goes red (proven 2026-09-02).",
     },
     {
+        rule: 'A run finished in time is paid once, with the same bonus, whichever of the overlay\'s auto-collect and the scheduler\'s expiry tick notices its end first',
+        source: 'CLAUDE.md → Conventions → Mission streak shield',
+        status: 'guarded',
+        guard: [
+            'src/mission-control/hooks/useMissionScheduler.completion.test.tsx',
+            'src/mission-control/components/MissionOverlay.scheduler-race.test.tsx',
+            'src/mission-control/store/missionCompletion.test.ts',
+        ],
+        verifiedRedBy: "against ab425c2 (the tick ended an all-done run with SET_ACTIVE_MISSION 'none' alone): 4 of 6 cases of useMissionScheduler.completion.test.tsx red, 'one completion line: expected [] to have a length of 1 but got +0' (morning, evening, whining, shield broken; the 2 no-payment cases are controls, green), and both tick-first cases of MissionOverlay.scheduler-race.test.tsx red the same way, its 2 overlay-first controls green. The tick paying `bonusTokens: 2, origin: 'scheduler'` — the morning case ('to match object { delta: 2, source: auto }') and the whining case ('{ delta: 1 }') red (all proven 2026-11-14).",
+    },
+    {
         rule: 'The shield lock freezes the spend side only, and is derived from missedMissionStreak rather than stored',
         source: 'CLAUDE.md → Conventions → Mission streak shield',
         status: 'guarded',
