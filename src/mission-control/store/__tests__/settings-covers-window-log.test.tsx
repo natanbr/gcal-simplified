@@ -1,0 +1,119 @@
+// ============================================================
+// A settings save that covers an open window says so in the log
+// ------------------------------------------------------------
+// A save that opens a window that was not open before is never a start
+// (savedIntoWindowAt, missionActivity.ts): the scheduler counts that window as
+// handled. Left silent, a child could skip an unstarted mission with no trace
+// at all: no start, no miss, no "skipped" line. Owner decision 2026-11-16: the
+// save writes one attributed line. createLogEntry decides it from the same
+// predicate the stamp uses (opensWindow, missionActivity.ts) without a reducer
+// pass, so the line cannot disagree with the stamp.
+// ============================================================
+
+import { render, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { MCStoreProvider } from '../MCStoreProvider';
+import { useMCDispatch, useMCState } from '../useMCStore';
+import { initialState, mcReducer } from '../mcReducer';
+import { createLogEntry } from '../activityLog';
+import type { MCAction, MCSettings, MCState } from '../../types';
+
+// The real reducer, wrapped so a test can count the passes the log line costs.
+vi.mock('../mcReducer', async importOriginal => {
+    const actual = await importOriginal<typeof import('../mcReducer')>();
+    return { ...actual, mcReducer: vi.fn(actual.mcReducer) };
+});
+const reducerSpy = vi.mocked(mcReducer);
+
+const NOT_STARTED = /mission not started/;
+/** Local clock times: the unit tests pass them as the action's instant, so no real clock is read. */
+const at = (h: number, m: number) => new Date(2026, 10, 16, h, m, 0, 0).toISOString();
+const save = (settings: Partial<MCSettings>, timestamp: string): MCAction => ({ type: 'SET_SETTINGS', settings, timestamp });
+
+describe('createLogEntry for a save that puts a window under the clock', () => {
+    it('writes one attributed line: a morning that had not run, saved to start 10 min ago', () => {
+        const entry = createLogEntry(save({ morningStartsAt: '07:50' }, at(8, 0)), initialState);
+        expect(entry).toMatchObject({
+            icon: '⏭️',
+            message: 'Morning mission not started: its 07:50 window was already open when Settings was saved (start it from the phone)',
+            type: 'mission',
+            colorKey: 'morning',
+            source: 'local',
+        });
+    });
+
+    it('names the evening, and the phase it is for', () => {
+        const entry = createLogEntry(save({ eveningStartsAt: '19:50' }, at(20, 0)), initialState);
+        expect(entry?.message).toMatch(/^Evening mission not started: its 19:50 window/);
+        expect(entry?.colorKey).toBe('evening');
+    });
+
+    it('a duration-only save that reopens a window that closed unseen', () => {
+        // Evening 19:00 for 60 min is closed at 20:30; 120 min puts 19:00–21:00 under the clock.
+        const entry = createLogEntry(save({ eveningDurationMins: 120 }, at(20, 30)), initialState);
+        expect(entry?.message).toMatch(/^Evening mission not started: its 19:00 window/);
+    });
+
+    it('both phases opened by one save: one line naming both', () => {
+        const state = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 30, eveningDurationMins: 60 }, timestamp: at(3, 0) });
+        const entry = createLogEntry(save({ morningStartsAt: '12:00', eveningStartsAt: '11:50' }, at(12, 5)), state);
+        expect(entry?.message).toMatch(/^Morning and evening missions not started/);
+        expect(entry?.colorKey).toBeUndefined();
+    });
+
+    it.each<[string, Partial<MCSettings>, number, number]>([
+        ['a start still ahead at the save', { morningStartsAt: '08:30' }, 8, 0],
+        ['no window change (the Cream task)', { creamTaskEnabled: true }, 8, 0],
+        ['the same start time', { morningStartsAt: initialState.settings.morningStartsAt }, 8, 0],
+        ['a start time that is not a time (the reducer keeps the stored one)', { morningStartsAt: '999:00' }, 8, 0],
+        ['a start moved to a window that has already closed', { morningStartsAt: '07:00' }, 8, 0],
+        ['a shorter duration that opens nothing', { eveningDurationMins: 45 }, 8, 0],
+        ['the renewal marker the provider saves at startup', { remotePairingRenewalLogged: '2026-09-28T09:00:00.000Z' }, 6, 10],
+    ])('writes nothing for %s', (_label, settings, h, m) => {
+        expect(createLogEntry(save(settings, at(h, m)), initialState)).toBeNull();
+    });
+
+    it('a window already open and pending that is only lengthened writes nothing', () => {
+        // Morning 06:00 for 30 min is open at 06:10; 45 min keeps that same window.
+        expect(createLogEntry(save({ morningDurationMins: 45 }, at(6, 10)), initialState)).toBeNull();
+    });
+
+    it('a save that ends the running mission writes its own line, not this one', () => {
+        const running: MCState = { ...initialState, activeMission: 'evening' };
+        const entry = createLogEntry(save({ eveningStartsAt: '19:50' }, at(20, 0)), running);
+        expect(entry?.message).toBe('Evening mission ended: its start time was changed in Settings');
+    });
+
+    it('costs no reducer pass to decide it writes nothing', () => {
+        reducerSpy.mockClear();
+        expect(createLogEntry(save({ eveningDurationMins: 45, morningStartsAt: '09:15' }, at(8, 0)), initialState)).toBeNull();
+        expect(reducerSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('through the store: the line is written once, with the stamp', () => {
+    let live: MCState = initialState;
+    let dispatch: (a: MCAction) => void = () => {};
+    function Probe() {
+        live = useMCState();
+        dispatch = useMCDispatch();
+        return null;
+    }
+    const lines = () => live.activityLogs.filter(l => NOT_STARTED.test(l.message));
+
+    beforeEach(() => { localStorage.clear(); render(<MCStoreProvider><Probe /></MCStoreProvider>); });
+    afterEach(() => { localStorage.clear(); });
+
+    it('a save into an open window stamps the mission and writes exactly one line', () => {
+        act(() => { dispatch(save({ morningStartsAt: '07:50' }, at(8, 0))); });
+        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindowAt).toBe(at(8, 0));
+        expect(lines()).toHaveLength(1);
+        expect(lines()[0]).toMatchObject({ icon: '⏭️', colorKey: 'morning', source: 'local' });
+    });
+
+    it('a save that opens nothing writes none and stamps nothing', () => {
+        act(() => { dispatch(save({ morningStartsAt: '08:30' }, at(8, 0))); });
+        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindowAt).toBeUndefined();
+        expect(lines()).toEqual([]);
+    });
+});

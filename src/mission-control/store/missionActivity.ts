@@ -39,7 +39,7 @@
 // clears it (activity-stamp-boundary.test.ts).
 // ============================================================
 
-import type { MCState, Mission } from '../types';
+import type { MCSettings, MCState, Mission } from '../types';
 import { missionDurationMins } from './hhmm';
 import { openOccurrence } from './missionOccurrence';
 import { saveKeepsRun } from './occurrenceHandled';
@@ -72,25 +72,36 @@ function movedStamp(prev: MCState, m: Mission, instant: string): Mission {
     return saveKeepsRun(prev, m.phase, Date.parse(at)) ? { ...m, startsAtChangedAt: at } : m;
 }
 
-/** Whether `m`'s window differs from its phase's in `prev`: a new start time or a new length. */
+/** Whether a mission's window differs between two settings: a new start time or a new length. */
+function windowDiffers(before: Mission, prevSettings: MCSettings, after: Mission, nextSettings: MCSettings): boolean {
+    return before.startsAt !== after.startsAt || missionDurationMins(before, prevSettings) !== missionDurationMins(after, nextSettings);
+}
+
+/** Whether `m`'s window differs from its phase's in `prev`. */
 function windowChanged(prev: MCState, next: MCState, m: Mission): boolean {
     const before = prev.missions.find(p => p.phase === m.phase);
-    if (before === undefined || before === m) return false;
-    return before.startsAt !== m.startsAt || missionDurationMins(before, prev.settings) !== missionDurationMins(m, next.settings);
+    return before !== undefined && before !== m && windowDiffers(before, prev.settings, m, next.settings);
 }
 
 /**
- * `m` stamped `savedIntoWindowAt` at `instant` when its changed window is open
- * then and was not, at that same start, before the change (openOccurrence, read
- * in `prev` and in `next`); else as it was.
+ * Whether changing a mission from `before` (under `prevSettings`) to `after`
+ * (under `nextSettings`) puts a window under the clock at `instant`: the window
+ * changed, one is open then, and it was not open there at that same start before
+ * the change (openOccurrence, read under both). The one decision of the stamp
+ * below and of the log line the save writes (savedIntoWindowLog.ts).
  */
-function openedStamp(prev: MCState, next: MCState, m: Mission, instant: string): Mission {
+export function opensWindow(before: Mission | undefined, prevSettings: MCSettings, after: Mission, nextSettings: MCSettings, instant: string): boolean {
+    if (before === undefined || !windowDiffers(before, prevSettings, after, nextSettings)) return false;
     const at = new Date(instant);
-    const opened = openOccurrence(m, next.settings, at);
-    if (opened === null) return m;
+    const opened = openOccurrence(after, nextSettings, at);
+    if (opened === null) return false;
+    return openOccurrence(before, prevSettings, at)?.startMs !== opened.startMs;
+}
+
+/** `m` stamped `savedIntoWindowAt` at `instant` when its changed window opens one (opensWindow); else as it was. */
+function openedStamp(prev: MCState, next: MCState, m: Mission, instant: string): Mission {
     const before = prev.missions.find(p => p.phase === m.phase);
-    const wasOpen = before === undefined ? null : openOccurrence(before, prev.settings, at);
-    return wasOpen?.startMs === opened.startMs ? m : { ...m, savedIntoWindowAt: instant };
+    return opensWindow(before, prev.settings, m, next.settings, instant) ? { ...m, savedIntoWindowAt: instant } : m;
 }
 
 /**
