@@ -97,10 +97,10 @@ Out of scope, stated: a start saved one minute ahead still starts a minute later
 moving an open window that waits behind another running mission to a different
 open start is stamped, so the scheduler never starts it (the phone can); the
 covered window gets no "skipped" line, but the save writes one log line unless the mission already ran in it (owner
-decision 2026-11-16, `store/savedIntoWindowLog.ts`; a running mission ended by the same save gets only the "ended" line); a clock set ahead
+decision 2026-11-16, `store/savedIntoWindowLog.ts`; a running mission ended by the same save gets the "ended" line; every start-time change writes a line too, `store/startTimeChangeLog.ts`, folded into that one when the save writes one, or alone); a clock set ahead
 then back. Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
 `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`,
-`store/__tests__/settings-covers-window-log.test.tsx`, `persistence-time.test.ts` and
+`store/__tests__/settings-covers-window-log.test.tsx`, `store/__tests__/settings-start-change-log.test.tsx`, `start-change-log-boundary.test.ts`, `persistence-time.test.ts` and
 `activity-stamp-boundary.test.ts`.
 
 ## Verification and handoff
