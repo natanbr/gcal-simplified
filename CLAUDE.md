@@ -163,6 +163,23 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   `useMissionScheduler.settings-retime*` tests, `store/occurrenceHandled.test.ts` and
   `activity-stamp-boundary.test.ts`. The scheduler makes the scheduled starts and the phone every other
   start; the only desktop action that ends a run is this logged save.
+  A Settings save is no start on demand either (owner rule, closed 2026-11-15): a mission that had not run
+  could be saved to start a minute ago, or lengthened so a closed window opened again, and the scheduler
+  then started that open window at once with a full timer. A save that moves a start time or changes a
+  length is stamped `savedIntoWindowAt` when it opens a window that was not open before (`openedStamp`,
+  `missionActivity.ts`, the stamp's one writer, at the action's instant), and `occurrenceHandled` covers
+  exactly that window (`savedIntoItsWindow`: start at or before the stamp, not closed at it, stamp not in
+  the future). Nothing else is covered: a start still ahead at the save starts as scheduled, a later day
+  starts as normal, an earlier closed window keeps its "skipped" line, and a window already open and
+  pending (behind another running mission) that is only lengthened still starts. The stamp records no run,
+  so `saveKeepsRun` reads `ranOrConcluded`, never `occurrenceHandled`: otherwise a second save moving the
+  start ahead would count the first as a run and the whole day would start nothing. Hydration keeps the
+  stamp only as a past instant, so a relaunch inside the window starts nothing. Known gaps: a start saved
+  one minute ahead still starts a minute later (a time still ahead stays automatic by design), and moving
+  an open, pending window to another open start stamps it, so that window never starts from the
+  scheduler; the phone can start it. Guarded by `useMissionScheduler.no-start-on-demand*.test.tsx`,
+  `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`, `persistence-time.test.ts` and
+  `activity-stamp-boundary.test.ts`.
   A Stop, a Reset (plain or full), a time adjustment, a whining toggle or a task
   tap naming a mission that is not the running one is refused by the reducer and the log alike
   (`isStaleMissionAction`, `mcReducer.stale-mission-action.test.ts`, `mcReducer.stale-whining-task.test.ts`):
