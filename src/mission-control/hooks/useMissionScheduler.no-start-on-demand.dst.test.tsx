@@ -12,7 +12,8 @@
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { crossing, eveningOnlyAt, jumpTo, renderLiveScheduler, startLogs, step } from './schedulerTestKit';
+import { initialState, mcReducer } from '../store/mcReducer';
+import { SAVED_LONG_AGO, crossing, eveningOnlyAt, jumpTo, renderLiveScheduler, startLogs, step } from './schedulerTestKit';
 
 process.env.TZ = 'America/Los_Angeles';
 
@@ -66,5 +67,12 @@ describe('a Settings save across a DST night', () => {
         crossing(on(plusDays(eve, 1), 3, 30));
         expect(h.live.state.activeMission).toBe('evening');
         h.unmount();
+    });
+
+    it.each(NIGHTS)('$name: a save 10 real minutes after the 4 h window ended stamps nothing (a wall-clock window would still be open on the fall-back night)', ({ eve }) => {
+        const ends = new Date(on(eve, 23, 30).getTime() + 240 * 60_000);
+        const set = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '19:00', eveningDurationMins: 240 }, timestamp: SAVED_LONG_AGO });
+        const saved = mcReducer(set, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:30' }, timestamp: new Date(ends.getTime() + 10 * 60_000).toISOString() });
+        expect(saved.missions.find(m => m.phase === 'evening')?.savedIntoWindowAt).toBeUndefined();
     });
 });

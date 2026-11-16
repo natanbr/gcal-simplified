@@ -36,7 +36,9 @@
 // and line ("handed to mcReducer") and fails; remove it from `eveningOnlyAt` in
 // schedulerTestKit.ts — the same, naming the kit, and the scanning case fails;
 // drop useRemoteControl.start.test.tsx from DELIBERATE — the last case names
-// its `retime` ("built outside a dispatch") (all three proven 2026-11-15).
+// its `retime` ("built outside a dispatch") (all three proven 2026-11-15); make the
+// kit's `timestamp` `new Date().toISOString()` — the classifier case for the real
+// clock goes red (proven 2026-11-16).
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
@@ -74,6 +76,9 @@ function nameOf(p: ts.ObjectLiteralElementLike): string | undefined {
 
 const property = (o: ts.ObjectLiteralExpression, name: string) => o.properties.find(p => nameOf(p) === name);
 
+/** A `timestamp` that names an instant of its own: not the real clock (`new Date()`, `Date.now()`), which is what a missing one means. */
+const namesAnInstant = (p: ts.ObjectLiteralElementLike | undefined) => p !== undefined && !/\bDate\.now\b|new Date\(\s*\)/.test(p.getText());
+
 /** Whether a `settings` value may move a start time or change a length; true when the parser cannot see into it. */
 function mayChangeWindow(value: ts.Expression | undefined): boolean {
     if (value === undefined) return true; // the shorthand `{ settings }`
@@ -110,7 +115,7 @@ function settingsSaves(source: string, fileName = 'file.tsx'): Save[] {
                     line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1,
                     context: contextOf(node),
                     window: mayChangeWindow(settings && ts.isPropertyAssignment(settings) ? settings.initializer : undefined),
-                    timestamp: property(node, 'timestamp') !== undefined,
+                    timestamp: namesAnInstant(property(node, 'timestamp')),
                 });
             }
         }
@@ -156,6 +161,12 @@ describe('the classifier', () => {
         expect(one("const x = mcReducer(s, {\n    type: \"SET_SETTINGS\",\n    settings: { eveningDurationMins: 1 / 6 },\n} as const);").map(s => refused(s, true))).toEqual([true]);
         expect(one("ranOnce(mcReducer(initialState, { type: 'SET_SETTINGS', settings: { ...patch } }), 'morning', at(8, 0));").map(s => refused(s, false))).toEqual([true]);
         expect(one("mcReducer(s, { type: 'SET_SETTINGS', settings });").map(s => refused(s, false))).toEqual([true]);
+    });
+
+    it('refuses a timestamp that is the real clock, which is what no timestamp means', () => {
+        expect(one("mcReducer(s, { type: 'SET_SETTINGS', settings: { morningStartsAt: '07:00' }, timestamp: new Date().toISOString() });").map(s => refused(s, false))).toEqual([true]);
+        expect(one("mcReducer(s, { type: 'SET_SETTINGS', settings: { morningStartsAt: '07:00' }, timestamp: new Date(Date.now()).toISOString() });").map(s => refused(s, false))).toEqual([true]);
+        expect(one("mcReducer(s, { type: 'SET_SETTINGS', settings: { morningStartsAt: '07:00' }, timestamp: new Date(2026, 10, 16, 8, 0).toISOString() });").map(s => refused(s, false))).toEqual([false]);
     });
 
     it('accepts one with a timestamp, one that changes no window, and a dispatch', () => {

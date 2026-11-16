@@ -122,6 +122,36 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
     });
 });
 
+describe('the line follows the stamp (saveIntoWindow.test.ts rows, on a profile where nothing ran)', () => {
+    const day = (d: number, h: number, m: number, s = 0, ms = 0) => new Date(2026, 10, d, h, m, s, ms).toISOString();
+    it.each<[string, Partial<MCSettings>, string, boolean]>([
+        ['a start a minute in the past', { morningStartsAt: '06:59' }, day(16, 7, 0), true],
+        ['a start at the very instant of the save', { morningStartsAt: '07:00' }, day(16, 7, 0), true],
+        ['a longer duration that reopens a closed window', { morningDurationMins: 90 }, day(16, 7, 0), true],
+        ["past midnight, onto last night's window", { eveningStartsAt: '23:30' }, day(17, 0, 10), true],
+        ['a start moved within the open window it was in', { morningStartsAt: '06:05' }, day(16, 6, 10), true],
+        ['a start still ahead', { morningStartsAt: '07:10' }, day(16, 7, 0), false],
+        ['a start 1 ms ahead', { morningStartsAt: '07:00' }, day(16, 6, 59, 59, 999), false],
+        ['a longer duration for the window already open', { morningDurationMins: 60 }, day(16, 6, 10), false],
+        ['a shorter duration that closes the open window', { morningDurationMins: 5 }, day(16, 6, 10), false],
+        ['a duration that leaves the window closed', { morningDurationMins: 45 }, day(16, 7, 0), false],
+        ['no window change (the Cream task)', { creamTaskEnabled: true }, day(16, 6, 10), false],
+        ['a cleared start time', { morningStartsAt: '' }, day(16, 6, 10), false],
+        ['the same start time', { morningStartsAt: '06:00' }, day(16, 6, 10), false],
+    ])('%s', (_label, settings, timestamp, stamped) => {
+        const saved = mcReducer(initialState, save(settings, timestamp));
+        expect(saved.missions.some(m => m.savedIntoWindowAt !== undefined), 'the stamp').toBe(stamped);
+        expect(createLogEntry(save(settings, timestamp), initialState) !== null, 'the line').toBe(stamped);
+    });
+
+    it('known gap, pinned: a save that ends the running mission writes only the "ended" line, and the other phase it opened is stamped with no line', () => {
+        const running = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning', origin: 'remote', timestamp: at(19, 10) });
+        const action = save({ morningStartsAt: '19:15', eveningStartsAt: '19:05' }, at(19, 20));
+        expect(createLogEntry(action, running)?.message).toBe('Morning mission ended: its start time was changed in Settings');
+        expect(mcReducer(running, action).missions.find(m => m.phase === 'evening')?.savedIntoWindowAt).toBe(at(19, 20));
+    });
+});
+
 describe('through the store: the line is written once, with the stamp', () => {
     let live: MCState = initialState;
     let dispatch: (a: MCAction) => void = () => {};

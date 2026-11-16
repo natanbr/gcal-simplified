@@ -229,7 +229,7 @@ describe('hydration — when a save last put a window under the clock', () => {
         expect(mission(restart(once), 'morning').savedIntoWindowAt).toBe(iso);
     });
 
-    it.each([[new Date(Date.now() + 3_600_000).toISOString()], ['yesterday'], [12345], [null]])('anything else is dropped: %j', (value) => {
+    it.each<[string, unknown]>([['an instant in the future', new Date(Date.now() + 3_600_000).toISOString()], ['a word', 'yesterday'], ['a number', 12345], ['null', null]])('anything else is dropped: %s', (_label, value) => {
         expect(mission(restartWith(value), 'morning').savedIntoWindowAt).toBeUndefined();
     });
 });
