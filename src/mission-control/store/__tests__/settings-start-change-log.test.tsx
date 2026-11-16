@@ -46,11 +46,12 @@ const save = (settings: Partial<MCSettings>, timestamp: string = NOON): MCAction
 describe('createLogEntry for a save that changes a start time', () => {
     it('the evening, in the owner\'s words', () => {
         expect(createLogEntry(save({ eveningStartsAt: '17:00' }), initialState)).toMatchObject({
-            icon: '⏰',
+            icon: '✏️',
             message: 'Evening start changed 19:00 → 17:00',
             type: 'mission',
             colorKey: 'evening',
             source: 'local',
+            timestamp: NOON, // the action's own instant, never the wall clock
         });
     });
 
@@ -124,6 +125,7 @@ describe('the change is folded into the line a save already writes', () => {
             message: 'Morning mission not started: its 07:50 window was already open when Settings was saved (start it from the phone) — Morning start changed 06:00 → 07:50',
             colorKey: 'morning',
             source: 'local',
+            timestamp: at(8, 0),
         });
     });
 
@@ -192,11 +194,11 @@ describe('through the store: one line per save, none for a refused or empty save
     beforeEach(() => { localStorage.clear(); render(<MCStoreProvider><Probe /></MCStoreProvider>); });
     afterEach(() => { localStorage.clear(); });
 
-    it('a move to an earlier closed window: exactly one line, and nothing else happens (no start, no stamp)', () => {
+    it('a move to an earlier closed window: exactly one line, and nothing else is written (no stamp, no other line)', () => {
         const before = live.activityLogs.length;
         act(() => { dispatch(save({ eveningStartsAt: '17:00' }, at(18, 30))); });
         expect(lines()).toHaveLength(1);
-        expect(lines()[0]).toMatchObject({ icon: '⏰', message: 'Evening start changed 19:00 → 17:00', colorKey: 'evening', source: 'local' });
+        expect(lines()[0]).toMatchObject({ icon: '✏️', message: 'Evening start changed 19:00 → 17:00', colorKey: 'evening', source: 'local' });
         expect(live.activityLogs.length - before, 'no other line').toBe(1);
         expect(evening()?.savedIntoWindowAt).toBeUndefined();
         expect(live.activeMission).toBe('none');
@@ -212,6 +214,14 @@ describe('through the store: one line per save, none for a refused or empty save
         act(() => { dispatch(save({ eveningStartsAt: '17:00' })); });
         act(() => { dispatch(save({ eveningStartsAt: '18:00' }, at(12, 1))); });
         act(() => { dispatch(save({ eveningStartsAt: '18:00' }, at(12, 2))); });
+        expect(lines().map(l => l.message).reverse()).toEqual(['Evening start changed 19:00 → 17:00', 'Evening start changed 17:00 → 18:00']);
+    });
+
+    it('two saves dispatched in one batch: the second names the time the first left', () => {
+        act(() => {
+            dispatch(save({ eveningStartsAt: '17:00' }));
+            dispatch(save({ eveningStartsAt: '18:00' }, at(12, 1)));
+        });
         expect(lines().map(l => l.message).reverse()).toEqual(['Evening start changed 19:00 → 17:00', 'Evening start changed 17:00 → 18:00']);
     });
 

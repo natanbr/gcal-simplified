@@ -25,7 +25,7 @@ vi.mock('../mcReducer', async importOriginal => {
 });
 const reducerSpy = vi.mocked(mcReducer);
 
-const NOT_STARTED = /mission not started/;
+const NOT_STARTED = /missions? not started/;
 /** A save that changes a start time writes the change line (settings-start-change-log.test.tsx): what is asked here is only whether the "not started" line is written. */
 const notStarted = (entry: ReturnType<typeof createLogEntry>) => NOT_STARTED.test(entry?.message ?? '');
 /** Local clock times: the unit tests pass them as the action's instant, so no real clock is read. */
@@ -64,15 +64,21 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
     });
 
     it.each<[string, Partial<MCSettings>, number, number]>([
-        ['a start still ahead at the save', { morningStartsAt: '08:30' }, 8, 0],
         ['no window change (the Cream task)', { creamTaskEnabled: true }, 8, 0],
         ['the same start time', { morningStartsAt: initialState.settings.morningStartsAt }, 8, 0],
         ['a start time that is not a time (the reducer keeps the stored one)', { morningStartsAt: '999:00' }, 8, 0],
-        ['a start moved to a window that has already closed', { morningStartsAt: '07:00' }, 8, 0],
         ['a shorter duration that opens nothing', { eveningDurationMins: 45 }, 8, 0],
-        ['the renewal marker the provider saves at startup', { remotePairingRenewalLogged: '2026-09-28T09:00:00.000Z' }, 6, 10],
-    ])('writes no "not started" line for %s', (_label, settings, h, m) => {
-        expect(notStarted(createLogEntry(save(settings, at(h, m)), initialState))).toBe(false);
+        ['the renewal marker the provider saves at startup, with a window open', { remotePairingRenewalLogged: '2026-09-28T09:00:00.000Z' }, 6, 10],
+    ])('writes nothing for %s', (_label, settings, h, m) => {
+        expect(createLogEntry(save(settings, at(h, m)), initialState)).toBeNull();
+    });
+
+    // A start change writes its own line (settings-start-change-log.test.tsx); what is asked here is that it is not the "not started" line.
+    it.each<[string, Partial<MCSettings>, string]>([
+        ['a start still ahead at the save', { morningStartsAt: '08:30' }, 'Morning start changed 06:00 → 08:30'],
+        ['a start moved to a window that has already closed', { morningStartsAt: '07:00' }, 'Morning start changed 06:00 → 07:00'],
+    ])('writes only the start-change line for %s', (_label, settings, message) => {
+        expect(createLogEntry(save(settings, at(8, 0)), initialState)?.message).toBe(message);
     });
 
     it('a window already open and pending that is only lengthened writes nothing', () => {
@@ -94,13 +100,13 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
 
         it('an evening that ran (its last activity after the start) and was moved onto an open start writes no "not started" line', () => {
             const state = withEvening({}, at(19, 25));
-            expect(notStarted(createLogEntry(save({ eveningStartsAt: '19:20' }, at(19, 30)), state))).toBe(false);
+            expect(createLogEntry(save({ eveningStartsAt: '19:20' }, at(19, 30)), state)?.message).toBe('Evening start changed 19:00 → 19:20');
         });
 
         it('an evening stopped from the phone at 19:10 and moved at 19:30 onto 19:20 writes no "not started" line: the retime rule counts the run', () => {
             const started = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'remote', timestamp: at(19, 0) });
             const stopped = mcReducer(started, { type: 'CANCEL_MISSION', missionPhase: 'evening', origin: 'remote', timestamp: at(19, 10) });
-            expect(notStarted(createLogEntry(save({ eveningStartsAt: '19:20' }, at(19, 30)), stopped))).toBe(false);
+            expect(createLogEntry(save({ eveningStartsAt: '19:20' }, at(19, 30)), stopped)?.message).toBe('Evening start changed 19:00 → 19:20');
         });
 
         it('only the phase that did not run is named when both opened', () => {

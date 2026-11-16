@@ -15,6 +15,10 @@
 //      reducer's `startTimeChanged` (missionReschedule.ts), which is the check
 //      that refuses a time that is not HH:MM, so line and reducer disagree.
 //
+// Limit, stated: the check looks for the phrase "start changed", so a second site
+// worded differently ("start moved") passes it; the behavioural file's exact
+// messages and a review of any new hand-built ADD_LOG are the defence there.
+//
 // verifiedRedBy: put `message: 'Evening start changed'` in a file other than
 // store/startTimeChangeLog.ts — the first test names it; delete the
 // `withStartChanges` call from the SET_SETTINGS case in activityLog.ts — the
@@ -49,7 +53,7 @@ describe('the start-change line', () => {
     it('is worded in one file only', () => {
         const wording = walk(mcRoot).filter(f => /start changed/i.test(code(readFileSync(f, 'utf8')))).map(rel);
         expect(wording).toEqual([HELPER]);
-    });
+    }, 30_000); // reads every production file; slow while other suites run
 
     it("is asked by createLogEntry's SET_SETTINGS case", () => {
         const source = code(read('store/activityLog.ts'));

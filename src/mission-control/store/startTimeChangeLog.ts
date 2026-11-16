@@ -4,7 +4,7 @@
 // A Settings save that moves a mission's start time writes one attributed line
 // (owner decision 2026-11-16, found reviewing PR 209): "Evening start changed
 // 19:00 → 17:00". Without it, a start moved to an earlier window that has
-// already closed left no trace at all: no start, no miss, no "skipped" line.
+// already closed left no trace at the save: no start, no miss, no "skipped" line.
 //
 // createLogEntry returns ONE entry per action, and a save may already write the
 // "ended" line (the running mission's start moved) or the "not started" line (a
@@ -60,5 +60,5 @@ export function withStartChanges(base: SettingsLine | null, changes: StartTimeCh
     const rest = changes.filter(c => c.phase !== named);
     if (base !== null) return rest.length === 0 ? base : { ...base, message: `${base.message} — ${say(rest)}` };
     if (rest.length === 0) return null;
-    return { icon: '⏰', message: say(rest), colorKey: rest.length === 1 ? rest[0].phase : undefined };
+    return { icon: '✏️', message: say(rest), colorKey: rest.length === 1 ? rest[0].phase : undefined };
 }

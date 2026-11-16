@@ -142,7 +142,7 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'SET_SETTINGS': {
             // One line per save: the start-time change (startTimeChangeLog.ts) is folded into the
-            // line this save already writes, or stands alone. No speculative pass for a save that writes nothing.
+            // line this save already writes, or stands alone. No speculative pass for a save that changes no start and cannot open a window.
             const changes = startTimeChanges(state, action.settings);
             const phase = state.activeMission;
             let base: SettingsLine | null = null;
