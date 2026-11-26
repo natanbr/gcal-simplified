@@ -106,7 +106,7 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
 - **Refusals must be silent in the log and visible on screen**: `isRefusedByShieldLock` is the single
   predicate the reducer and `activityLog.ts` both call, so a refused action writes no derived log
   line. A **hand-built** `ADD_LOG` bypasses that mirror entirely. There are four such sites:
-  `useQuickGameSession` (its two game lines, the only ones that log a refusable action), the
+  `useQuickGameSession` (its game lines: start and end by the child, and the end a starting mission forces; only the start is refusable), the
   scheduler's skipped-mission line (`useMissionScheduler`), the pairing-renewal line
   (`MCStoreProvider`, built in `store/pairingRenewal.ts`) and the load-time mission-time repair line
   (`MCStoreProvider`, built in `store/missionTimeRepair.ts`); `shieldLog` in `missionStreak.ts` is built
@@ -178,7 +178,12 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   `gameWindow.ts`, enforced in the `START_GAME` **and** `CONSUME_CASE` reducer cases (they must
   agree, or redeeming at the boundary burns the goal for a game that is then refused), not only at
   the pedestal. It fails **closed** on a time it cannot parse. Keep it separate from `isWakingHour`,
-  which is the divisor of the mood-token accrual rate.
+  which is the divisor of the mood-token accrual rate. The window is judged when a game opens, so
+  `useQuickGameSession` also ends a game (or the picker) when `activeMission` is set: every overlay
+  is z-[1000], the mission banner z-100, and a game left open covered a running mission. Every game
+  overlay's `open` and the picker are built from the hook's derived `gameShowing`, never the raw
+  `snakeGameActive`; a new game copies that line (`game-under-mission-boundary.test.ts`). The end
+  writes one hand-built line, `source: 'system'`, with no score and no refund.
 - **HH:MM times**: `store/hhmm.ts` is the only place a time is parsed. An entered time (mission
   start, task lock) has one rule, `hhmmToMins` — strict `HH:MM`, 00:00–23:59, `null` otherwise —
   and every reader fails closed on `null` (a cleared time used to get past the others only

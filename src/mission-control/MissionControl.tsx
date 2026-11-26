@@ -17,6 +17,7 @@ import { GameTokenPanel } from './components/GameTokenPanel';
 import { GlobalBank } from './components/GlobalBank';
 import { GoalPedestal } from './components/GoalPedestal';
 import { LiveClockDisplay } from './components/LiveClockDisplay';
+import { MissionStartingCard } from './components/MissionStartingCard';
 import { MCSettingsOverlay } from './components/MCSettingsOverlay';
 import { PrivilegesPanel } from './components/PrivilegesPanel';
 import { ResponsibilityPanel } from './components/ResponsibilityPanel';
@@ -43,8 +44,10 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
   const dispatch  = useMCDispatch();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { activeGameType, setActiveGameType, handleQuickGameOpen, handleQuickGameClose } =
-    useQuickGameSession();
+  const {
+    activeGameType, setActiveGameType, handleQuickGameOpen, handleQuickGameClose,
+    gameShowing, missionEndedGame, dismissMissionEndedGame,
+  } = useQuickGameSession();
 
   // One quiz brain per game session, injected so game modules stay store-free.
   const quizEngine = useQuizEngine();
@@ -249,15 +252,18 @@ function MCLayout({ onBackToCalendar }: MCLayoutProps) {
       <CheatTrapOverlay show={showCheatTrap} />
 
       {/* ===== QUICK GAME SELECTOR & OVERLAYS ===== */}
-      {state.snakeGameActive && activeGameType === null && (
+      {gameShowing && activeGameType === null && (
         <GameSelectorOverlay
           onSelect={(game) => setActiveGameType(game)}
           onClose={() => handleQuickGameClose(0)}
         />
       )}
-      <SnakeGameOverlay open={state.snakeGameActive && activeGameType === 'snake'} onClose={handleQuickGameClose} engine={quizEngine} />
-      <BlocksGameOverlay open={state.snakeGameActive && activeGameType === 'blocks'} onClose={handleQuickGameClose} engine={quizEngine} />
-      <FruitMergeGameOverlay open={state.snakeGameActive && activeGameType === 'fruits'} onClose={handleQuickGameClose} engine={quizEngine} />
+      <SnakeGameOverlay open={gameShowing && activeGameType === 'snake'} onClose={handleQuickGameClose} engine={quizEngine} />
+      <BlocksGameOverlay open={gameShowing && activeGameType === 'blocks'} onClose={handleQuickGameClose} engine={quizEngine} />
+      <FruitMergeGameOverlay open={gameShowing && activeGameType === 'fruits'} onClose={handleQuickGameClose} engine={quizEngine} />
+
+      {/* A mission started under an open game: the hook already closed it; this says why. */}
+      {missionEndedGame && <MissionStartingCard onDismiss={dismissMissionEndedGame} />}
 
       {/* ===== REMOTE ANIMATIONS ===== */}
       <CelebrationOverlay />
