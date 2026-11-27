@@ -6,17 +6,36 @@
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMCDispatch, useMCStore } from '../store/useMCStore';
 import { isEconomyLocked } from '../store/missionStreak';
 import { isQuickGameWindowOpen } from '../store/gameWindow';
 import type { GameId } from '../skills/types';
+
+/** "3m 12s", or "5s" under a minute. */
+function playedFor(durationMs: number): string {
+    const mins = Math.floor(durationMs / 60000);
+    const secs = Math.floor((durationMs % 60000) / 1000);
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
 
 export function useQuickGameSession() {
     const dispatch = useMCDispatch();
     const { state } = useMCStore();
     const [activeGameType, setActiveGameType] = useState<GameId | null>(null);
     const gameStartRef = useRef<string | null>(null);
+    const [missionEndedGame, setMissionEndedGame] = useState(false);
+    const endedByMissionRef = useRef(false);
+
+    /**
+     * What every overlay's `open` and the selector are built from, never the raw
+     * `snakeGameActive`: a game must not stay on screen under a running mission
+     * (every game overlay is z-[1000], the mission banner z-100). Derived, so the
+     * game is gone in the SAME render the mission starts; the effect below then
+     * closes the session properly. Guarded by game-under-mission-boundary.test.ts.
+     */
+    const gameShowing = state.snakeGameActive && state.activeMission === 'none';
+    const gameUnderMission = state.snakeGameActive && state.activeMission !== 'none';
 
     /**
      * @param at The instant the child actually tapped. Redeeming a quick-game
@@ -55,13 +74,9 @@ export function useQuickGameSession() {
     const handleQuickGameClose = useCallback((score: number) => {
         const startedAt = gameStartRef.current;
         const endedAt = new Date().toISOString();
-        let durationLabel = '';
-        if (startedAt) {
-            const durationMs = new Date(endedAt).getTime() - new Date(startedAt).getTime();
-            const mins = Math.floor(durationMs / 60000);
-            const secs = Math.floor((durationMs % 60000) / 1000);
-            durationLabel = mins > 0 ? ` (${mins}m ${secs}s)` : ` (${secs}s)`;
-        }
+        const durationLabel = startedAt
+            ? ` (${playedFor(new Date(endedAt).getTime() - new Date(startedAt).getTime())})`
+            : '';
         dispatch({ type: 'END_GAME' });
         dispatch({
             type: 'ADD_LOG',
@@ -80,5 +95,46 @@ export function useQuickGameSession() {
         setActiveGameType(null);
     }, [dispatch]);
 
-    return { activeGameType, setActiveGameType, handleQuickGameOpen, handleQuickGameClose };
+    // A mission started (the scheduler, or the phone) while a game or the game
+    // selector was open: end the session once. END_GAME is not refusable, and it
+    // moves no tokens (what the child paid for the game is not refunded; open
+    // decision in the PR). The line is hand-built, so it sets `source` itself:
+    // the app ended it, not the child. No score: the overlays hold it, and a
+    // "Score: 0" for a game that was played would be false data in the audit trail.
+    useEffect(() => {
+        if (!gameUnderMission) {
+            endedByMissionRef.current = false;
+            return;
+        }
+        if (endedByMissionRef.current) return;
+        endedByMissionRef.current = true;
+        const startedAt = gameStartRef.current;
+        const endedAt = new Date().toISOString();
+        const played = startedAt
+            ? ` (${playedFor(new Date(endedAt).getTime() - new Date(startedAt).getTime())})`
+            : '';
+        dispatch({ type: 'END_GAME' });
+        dispatch({
+            type: 'ADD_LOG',
+            log: {
+                id: `game-end-mission-${Date.now()}`,
+                timestamp: endedAt,
+                icon: '🏁',
+                message: `Quick Game ended — a mission started${played}`,
+                type: 'reward',
+                colorKey: 'system',
+                source: 'system',
+            },
+        });
+        gameStartRef.current = null;
+        setActiveGameType(null);
+        setMissionEndedGame(true);
+    }, [gameUnderMission, dispatch]);
+
+    const dismissMissionEndedGame = useCallback(() => setMissionEndedGame(false), []);
+
+    return {
+        activeGameType, setActiveGameType, handleQuickGameOpen, handleQuickGameClose,
+        gameShowing, missionEndedGame, dismissMissionEndedGame,
+    };
 }

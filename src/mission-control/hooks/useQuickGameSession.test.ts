@@ -151,3 +151,89 @@ describe('useQuickGameSession attribution', () => {
         expect(mockDispatch).not.toHaveBeenCalled();
     });
 });
+// ---- Regression: a game must not outlive the start of a mission ----
+// Every game overlay is z-[1000]; the mission banner is z-100. The window was
+// judged only when a game OPENED, so a child already playing when the
+// scheduler (or the phone) started a mission kept playing under a running
+// timer and could let it time out: a streak miss. The hook now ends the
+// session itself, and says it was a mission that did it.
+describe('useQuickGameSession when a mission starts under an open game', () => {
+    const endGames = () =>
+        mockDispatch.mock.calls.map(([a]) => a as MCAction).filter(a => a.type === 'END_GAME');
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.setSystemTime(new Date(new Date().setHours(19, 0, 5, 0)));
+        mockState = playableState({ snakeGameActive: true, activeMission: 'evening' });
+    });
+
+    it('ends the game once and writes one system-attributed line that names the mission', () => {
+        const { result } = renderHook(() => useQuickGameSession());
+
+        expect(endGames()).toHaveLength(1);
+        const entries = loggedEntries();
+        expect(entries).toHaveLength(1);
+        expect(entries[0].message).toContain('mission');
+        expect(entries[0].message).not.toContain('Score');
+        // The child did not end it; the app did.
+        expect(entries[0].source).toBe('system');
+        expect(result.current.missionEndedGame).toBe(true);
+    });
+
+    it('hides the game in the same render, before the effect runs', () => {
+        const { result } = renderHook(() => useQuickGameSession());
+        expect(result.current.gameShowing).toBe(false);
+    });
+
+    it('is idempotent: a re-render with the same state ends nothing twice', () => {
+        const { rerender } = renderHook(() => useQuickGameSession());
+        rerender();
+        rerender();
+        expect(endGames()).toHaveLength(1);
+        expect(loggedEntries()).toHaveLength(1);
+    });
+
+    it('closes the game selector too, when no game was picked yet', () => {
+        // snakeGameActive with activeGameType null is the selector.
+        const { result } = renderHook(() => useQuickGameSession());
+        expect(result.current.activeGameType).toBeNull();
+        expect(endGames()).toHaveLength(1);
+    });
+
+    it('does nothing when a mission runs and no game is open', () => {
+        mockState = playableState({ snakeGameActive: false, activeMission: 'evening' });
+        const { result } = renderHook(() => useQuickGameSession());
+        expect(mockDispatch).not.toHaveBeenCalled();
+        expect(result.current.missionEndedGame).toBe(false);
+    });
+
+    it('leaves a game alone while no mission runs, and shows it', () => {
+        mockState = playableState({ snakeGameActive: true, activeMission: 'none' });
+        const { result } = renderHook(() => useQuickGameSession());
+        expect(mockDispatch).not.toHaveBeenCalled();
+        expect(result.current.gameShowing).toBe(true);
+    });
+
+    it('a normal close still writes exactly one line, and no mission card', () => {
+        mockState = playableState({ snakeGameActive: true, activeMission: 'none' });
+        const { result } = renderHook(() => useQuickGameSession());
+        act(() => { result.current.handleQuickGameClose(7); });
+        expect(loggedEntries()).toHaveLength(1);
+        expect(result.current.missionEndedGame).toBe(false);
+    });
+
+    it('the card can be dismissed, and a later game can open again', () => {
+        const { result, rerender } = renderHook(() => useQuickGameSession());
+        expect(result.current.missionEndedGame).toBe(true);
+        act(() => { result.current.dismissMissionEndedGame(); });
+        expect(result.current.missionEndedGame).toBe(false);
+
+        // Mission over, the game window is open again.
+        vi.setSystemTime(new Date(new Date().setHours(12, 0, 0, 0)));
+        mockState = playableState({ snakeGameActive: false, activeMission: 'none' });
+        rerender();
+        mockDispatch.mockClear();
+        act(() => { result.current.handleQuickGameOpen(); });
+        expect(mockDispatch.mock.calls.map(([a]) => (a as MCAction).type)).toContain('START_GAME');
+    });
+});

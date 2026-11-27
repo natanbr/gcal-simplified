@@ -218,7 +218,7 @@ const REGISTRY: Rule[] = [
         status: 'guarded',
         guard: 'src/mission-control/store/activityLog.attribution.test.ts',
         verifiedRedBy: 'remove `source` from deriveSnapshots',
-        defence: 'Covers only the entries createLogEntry DERIVES. An entry built by hand and dispatched straight as ADD_LOG never reaches it — which is exactly how the two useQuickGameSession entries shipped with source undefined (fixed 2026-08-21). There are now FIVE hand-building sites, as CLAUDE.md lists them: four dispatch a hand-built ADD_LOG (useQuickGameSession, the skipped-mission line, the pairing-renewal line and the mission-time repair line below) and shieldLog in missionStreak.ts builds one inside the reducer (asserted source === auto by mcReducer.streak-lock.test.ts). The skipped-mission line in useMissionScheduler (asserted source === scheduler by useMissionScheduler.resilience.test.tsx), the pairing-renewal line MCStoreProvider dispatches from store/pairingRenewal.ts (asserted source === system by pairingRenewal.test.tsx), and the line MCStoreProvider writes just after a load whose hydration reset a mission time or the length of a running mission, built in store/missionTimeRepair.ts (asserted source === system, in the app and in the audit trail, by missionTimeRepair.test.tsx). The hook carries its own guard: src/mission-control/hooks/useQuickGameSession.test.ts asserts source === local on both entries. A new hand-built entry anywhere else needs its own test; nothing catches one structurally.',
+        defence: 'Covers only the entries createLogEntry DERIVES. An entry built by hand and dispatched straight as ADD_LOG never reaches it — which is exactly how the two useQuickGameSession entries shipped with source undefined (fixed 2026-08-21). There are now FIVE hand-building sites, as CLAUDE.md lists them: four dispatch a hand-built ADD_LOG (useQuickGameSession, which now writes two kinds of end line: the child close, source local, and the one a starting mission forces, source system, the skipped-mission line, the pairing-renewal line and the mission-time repair line below) and shieldLog in missionStreak.ts builds one inside the reducer (asserted source === auto by mcReducer.streak-lock.test.ts). The skipped-mission line in useMissionScheduler (asserted source === scheduler by useMissionScheduler.resilience.test.tsx), the pairing-renewal line MCStoreProvider dispatches from store/pairingRenewal.ts (asserted source === system by pairingRenewal.test.tsx), and the line MCStoreProvider writes just after a load whose hydration reset a mission time or the length of a running mission, built in store/missionTimeRepair.ts (asserted source === system, in the app and in the audit trail, by missionTimeRepair.test.tsx). The hook carries its own guard: src/mission-control/hooks/useQuickGameSession.test.ts asserts source === local on both entries. A new hand-built entry anywhere else needs its own test; nothing catches one structurally.',
     },
     {
         rule: 'One game close, one 🏁 entry — END_GAME derives nothing because its dispatcher hand-writes the richer entry',
@@ -382,6 +382,16 @@ const REGISTRY: Rule[] = [
         status: 'guarded',
         guard: 'src/mission-control/store/gameWindow.test.ts',
         verifiedRedBy: 'replace the body of isQuickGameWindowOpen with the old isWakingHour span (morning start → evening end): 5 cases in gameWindow.test.ts and 2 reducer cases in mcReducer.streak-lock.test.ts go red — a game opens at 06:10 and at 19:30 (proven 2026-09-02).',
+    },
+    {
+        rule: 'A quick game or the game picker never stays open under a running mission: the hook ends it, and every overlay opens from gameShowing, not the raw store flag',
+        source: 'CLAUDE.md → Conventions → Quick-game window',
+        status: 'guarded',
+        guard: [
+            'src/__tests__/game-under-mission-boundary.test.ts',
+            'src/mission-control/hooks/useQuickGameSession.test.ts',
+        ],
+        verifiedRedBy: "build one overlay's open in MissionControl.tsx from state.snakeGameActive again: 3 cases in game-under-mission-boundary.test.ts go red (all four and the selector gate proven); stop the effect in useQuickGameSession ending the session: 4 cases in useQuickGameSession.test.ts go red (both proven 2026-11-26).",
     },
     {
         rule: 'Every HH:MM time is parsed in store/hhmm.ts: one strict rule for an entered time, a separate parser for the derived endsAt, and a duration check in SET_SETTINGS and at load',
