@@ -216,20 +216,8 @@ function restartMorningWith(fields: Record<string, unknown>): MCState {
     return loadPersistedState();
 }
 
-// The decision the same save made about the occurrence ahead (2026-11-27) rides
-// with that stamp: kept as a date, dropped otherwise.
-describe('hydration — the occurrence ahead a moved start time covers', () => {
-    beforeEach(() => { localStorage.removeItem(STORAGE_KEY); });
-    afterEach(() => { localStorage.removeItem(STORAGE_KEY); });
-
-    it('a date survives a restart', () => {
-        expect(mission(restartMorningWith({ retimeCoversDay: '2026-11-11' }), 'morning').retimeCoversDay).toBe('2026-11-11');
-    });
-
-    it.each<[string, unknown]>([['a word', 'tomorrow'], ['an instant', '2026-11-11T06:40:00.000Z'], ['a number', 20261111], ['null', null]])('anything else is dropped: %s', (_label, value) => {
-        expect(mission(restartMorningWith({ retimeCoversDay: value }), 'morning').retimeCoversDay).toBeUndefined();
-    });
-});
+// The decision the same save made about the occurrence ahead (retimeCoversDay)
+// across a restart and the upgrade from PR 207: persistence-retime-decision.test.ts.
 
 // Each window a save put under the clock is kept by its start (2026-11-15, by
 // window 2026-11-27), and the scheduler reads them after a relaunch inside that

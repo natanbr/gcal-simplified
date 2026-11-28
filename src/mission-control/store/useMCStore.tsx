@@ -6,8 +6,10 @@
 
 import React, { createContext, useContext, useRef } from 'react';
 import type {
+    MCSettings,
     MCState,
     MCAction,
+    Mission,
     MissionPhase,
     SavedWindow,
 } from '../types';
@@ -22,6 +24,7 @@ import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
 import { deriveMissionWindow, hydrateMissionTimes, isValidDurationMins, sanitizeMissionTimes } from './hhmm';
 import { isDateKey } from './occurrenceDay';
+import { retimeAheadDay } from './occurrenceHandled';
 import { runLengthRepair, settingRepairs, type MissionTimeRepair } from './missionTimeRepair';
 import { isStaleIncompleteRun } from './staleMissionRun';
 import { renewalLoggedMarker, withoutPairingCopy } from './pairingRenewal';
@@ -55,6 +58,19 @@ function savedWindows(value: unknown): SavedWindow[] | undefined {
         return isPastInstant(savedAt) && isPastInstant(windowStart) && Date.parse(windowStart) <= Date.parse(savedAt) ? [{ savedAt, windowStart }] : [];
     });
     return kept.length > 0 ? kept : undefined;
+}
+
+/**
+ * `m` with the decision about the occurrence ahead that its start-time save
+ * stamp carries (retimeCoversDay: a day, or null for none), made once now
+ * when the stamp has none: PR 207 wrote the stamp alone and decided at every
+ * read, so a profile it saved read as "none" and released the start it held.
+ * Decided with the loaded settings, as PR 207 read it; the window behind is
+ * the run's own length (retimeAheadDay), which differs from PR 207's read only
+ * when the length was saved again after the run.
+ */
+function withRetimeDecision(m: Mission, settings: MCSettings): Mission {
+    return m.startsAtChangedAt !== undefined && m.retimeCoversDay === undefined ? { ...m, retimeCoversDay: retimeAheadDay(m, settings) } : m;
 }
 
 export function loadPersistedState(): MCState {
@@ -122,7 +138,7 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                     // save that moved the start time, or after one that opened the window would otherwise start it.
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
                     startsAtChangedAt: isPastInstant(savedM.startsAtChangedAt) ? savedM.startsAtChangedAt : undefined,
-                    retimeCoversDay: isDateKey(savedM.retimeCoversDay) ? savedM.retimeCoversDay : undefined,
+                    retimeCoversDay: isDateKey(savedM.retimeCoversDay) || savedM.retimeCoversDay === null ? savedM.retimeCoversDay : undefined,
                     savedIntoWindows: savedWindows(savedM.savedIntoWindows),
                     // The run's day and base length, kept only when real (missing: the derivations they replace).
                     occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,
@@ -133,7 +149,7 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                 };
                 // A run from an earlier day with no readable duration is left as saved:
                 // useStaleMissionRunEnd ends it after load, logged (staleMissionRun.ts).
-                const derived = deriveMissionWindow(merged, settings);
+                const derived = withRetimeDecision(deriveMissionWindow(merged, settings), settings);
                 if (isStaleIncompleteRun(derived, settings, new Date())) return derived;
                 const hydrated = hydrateMissionTimes(derived, settings);
                 repairs.push(...runLengthRepair(derived, hydrated));

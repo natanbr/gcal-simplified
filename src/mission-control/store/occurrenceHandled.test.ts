@@ -78,23 +78,23 @@ describe('retimeAheadDay: the occurrence ahead a save that moves the start onto 
     it('a tie goes to the occurrence ahead, as the hand-start rule\'s does; 1 ms nearer the window behind does not', () => {
         // The gap from the 10th's 01:10 end to the 11th's 00:10 start is 23 h; its middle is 12:40 on the 10th.
         expect(retimeAheadDay(stamped(nov(10, 12, 40)), settings)).toBe('2026-11-11');
-        expect(retimeAheadDay(stamped(nov(10, 12, 39, 59, 999)), settings)).toBeUndefined();
+        expect(retimeAheadDay(stamped(nov(10, 12, 39, 59, 999)), settings)).toBeNull();
     });
 
     it('nothing from inside the window behind, and nothing with no readable last activity', () => {
-        expect(retimeAheadDay(stamped(nov(10, 1, 0)), settings)).toBeUndefined();
-        expect(retimeAheadDay(stamped(nov(10, 1, 0), { lastActiveAt: undefined }), settings)).toBeUndefined();
-        expect(retimeAheadDay(stamped(nov(10, 1, 0), { lastActiveAt: 'garbage' }), settings)).toBeUndefined();
+        expect(retimeAheadDay(stamped(nov(10, 1, 0)), settings)).toBeNull();
+        expect(retimeAheadDay(stamped(nov(10, 1, 0), { lastActiveAt: undefined }), settings)).toBeNull();
+        expect(retimeAheadDay(stamped(nov(10, 1, 0), { lastActiveAt: 'garbage' }), settings)).toBeNull();
     });
 
     it('weighs the window behind with the run\'s own length, whatever the mission\'s length is now', () => {
         // The evening moved to 06:40, last active at 19:30: 11 h 10 to 06:40; the 10th's window ends 07:40 (60 min) or 08:40 (120 min).
         const at0640 = (endsAt: string, run: Partial<Mission> = {}) => evening({ startsAt: '06:40', endsAt, lastActiveAt: iso(nov(10, 19, 30)), ...run });
         expect(retimeAheadDay(at0640('08:40', { baseDurationMins: 60 }), settings), 'a 60 min run, the mission now 120 min: 11 h 50 behind').toBe('2026-11-11');
-        expect(retimeAheadDay(at0640('07:40', { baseDurationMins: 120 }), settings), 'a 120 min run, the mission now 60 min: 10 h 50 behind').toBeUndefined();
+        expect(retimeAheadDay(at0640('07:40', { baseDurationMins: 120 }), settings), 'a 120 min run, the mission now 60 min: 10 h 50 behind').toBeNull();
         // A run saved before baseDurationMins: the mission's length stands in.
         expect(retimeAheadDay(at0640('07:40'), settings), '60 min: 11 h 50 behind').toBe('2026-11-11');
-        expect(retimeAheadDay(at0640('08:40'), settings), '120 min: 10 h 50 behind').toBeUndefined();
+        expect(retimeAheadDay(at0640('08:40'), settings), '120 min: 10 h 50 behind').toBeNull();
     });
 });
 

@@ -77,12 +77,13 @@ function startMoved(prev: MCState, m: Mission): boolean {
  * scheduler started it at once (review of PR 209). A move to the same start
  * never changes what is covered.
  */
-function aheadDecision(before: Mission, prevSettings: MCSettings, m: Mission, settings: MCSettings): string | undefined {
+function aheadDecision(before: Mission, prevSettings: MCSettings, m: Mission, settings: MCSettings): string | null {
     const activeAt = Date.parse(m.lastActiveAt ?? '');
     const sameRun = before.startsAtChangedAt !== undefined && activeAt <= Date.parse(before.startsAtChangedAt);
     const ahead = nextOccurrence(m, settings, new Date(activeAt));
     const sameAhead = ahead !== null && nextOccurrence(before, prevSettings, new Date(activeAt))?.startMs === ahead.startMs;
-    return sameRun && sameAhead ? before.retimeCoversDay : retimeAheadDay(m, settings);
+    const kept = before.retimeCoversDay;
+    return sameRun && sameAhead && kept !== undefined ? kept : retimeAheadDay(m, settings);
 }
 
 /**
