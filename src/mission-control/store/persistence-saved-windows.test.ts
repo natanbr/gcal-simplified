@@ -18,6 +18,8 @@ import { loadPersistedState, STORAGE_KEY } from './useMCStore';
 import type { SavedWindow } from '../types';
 
 const NOW = new Date(2026, 10, 20, 12, 0);
+/** The real clock, taken before vi.useFakeTimers() fakes performance.now too: a faked one measured a 2.1 s load as 0 ms (Codex). */
+const realNow = performance.now.bind(performance);
 const minsAgo = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
 
 function reloadMorningWith(savedIntoWindows: unknown): SavedWindow[] | undefined {
@@ -40,11 +42,11 @@ describe('hydration — the windows a save covered, as the writer keeps them', (
 
     it('10,000 entries load as 64 at most, the latest to start, in order of start', () => {
         const many = Array.from({ length: 10_000 }, (_, i) => ({ savedAt: minsAgo(i), windowStart: minsAgo(i + 1) }));
-        const startedAt = performance.now();
+        const startedAt = realNow();
         const kept = reloadMorningWith(many);
-        const elapsedMs = performance.now() - startedAt;
+        const elapsedMs = realNow() - startedAt;
         expect(kept).toEqual(many.slice(0, 64).reverse());
-        expect(elapsedMs, 'bounded work: the whole test takes about 90 ms alone, so 2 s is generous for a loaded machine').toBeLessThan(2_000);
+        expect(elapsedMs, 'bounded work: the load takes about 70 ms alone on the real clock, so 2 s is generous for a loaded machine').toBeLessThan(2_000);
     });
 
     it('every window of the four latest days is kept, however many a day has (Codex: nine on two days)', () => {
