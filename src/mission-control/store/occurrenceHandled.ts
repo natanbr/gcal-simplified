@@ -74,12 +74,14 @@ export function retimedOntoItsRun(m: Mission, o: Occurrence, nowMs: number): boo
  * field), so the decision depends only on the run and the new start: weighed
  * with the mission's length of the moment, a length save between two moves
  * changed what the second decided (review of PR 209). Stored, not read later,
- * for the same reason.
+ * for the same reason. `behindMins` overrides that length for a stamp PR 207
+ * saved without its decision: hydration passes the length in the profile,
+ * which PR 207 read (useMCStore.tsx).
  */
-export function retimeAheadDay(m: Mission, settings: MCSettings): string | null {
+export function retimeAheadDay(m: Mission, settings: MCSettings, behindMins?: number): string | null {
     const activeAt = stampMs(m.lastActiveAt);
     const ahead = nextOccurrence(m, settings, new Date(activeAt));
-    const runMins = isValidDurationMins(m.baseDurationMins) ? Number(m.baseDurationMins) : missionDurationMins(m, settings);
+    const runMins = behindMins ?? (isValidDurationMins(m.baseDurationMins) ? Number(m.baseDurationMins) : missionDurationMins(m, settings));
     return ahead !== null && nearerToStartOf(ahead, m, settings, activeAt, runMins) ? ahead.day : null;
 }
 

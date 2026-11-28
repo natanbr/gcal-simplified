@@ -22,7 +22,7 @@ import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
-import { deriveMissionWindow, hydrateMissionTimes, isValidDurationMins, sanitizeMissionTimes } from './hhmm';
+import { deriveMissionWindow, hydrateMissionTimes, isValidDurationMins, missionDurationMins, sanitizeMissionTimes } from './hhmm';
 import { keptWindows } from './missionActivity';
 import { isDateKey } from './occurrenceDay';
 import { retimeAheadDay } from './occurrenceHandled';
@@ -71,12 +71,15 @@ function savedWindows(value: unknown): SavedWindow[] | undefined {
  * stamp carries (retimeCoversDay: a day, or null for none), made once now
  * when the stamp has none: PR 207 wrote the stamp alone and decided at every
  * read, so a profile it saved read as "none" and released the start it held.
- * Decided with the loaded settings, as PR 207 read it; the window behind is
- * the run's own length (retimeAheadDay), which differs from PR 207's read only
- * when the length was saved again after the run.
+ * Decided as PR 207 read it: the window behind as long as the mission is in the
+ * loaded settings, not the run's own length a new save weighs it with. The two
+ * differ when the length was saved between the run and the move, and the run's
+ * length released what PR 207 held, or held what it let start (review of PR
+ * 209, Codex). Written, so a later load reads the same.
  */
 function withRetimeDecision(m: Mission, settings: MCSettings): Mission {
-    return m.startsAtChangedAt !== undefined && m.retimeCoversDay === undefined ? { ...m, retimeCoversDay: retimeAheadDay(m, settings) } : m;
+    if (m.startsAtChangedAt === undefined || m.retimeCoversDay !== undefined) return m;
+    return { ...m, retimeCoversDay: retimeAheadDay(m, settings, missionDurationMins(m, settings)) };
 }
 
 export function loadPersistedState(): MCState {

@@ -91,6 +91,45 @@ describe('the decision a start-time save stores', () => {
         }
     });
 
+    // Codex's two profiles, written as PR 207's reducer (ab425c2) wrote them: the evening at 19:00 ran, its length was saved
+    // at 06:15 on the 11th, and at 06:20 it was moved to 06:40. PR 207 weighed the window behind with the length IN THE
+    // PROFILE at every read; the run's own length decides otherwise, so a load must decide as PR 207 read it.
+    function pr207Profile(run: { lastActiveAt: Date; baseDurationMins: number; failed: boolean }, savedLengthMins: number): void {
+        const missions = initialState.missions.map(m => (m.phase !== 'evening' ? m : {
+            ...m,
+            startsAt: '06:40',
+            endsAt: savedLengthMins === 30 ? '07:10' : '08:40',
+            lastActiveAt: run.lastActiveAt.toISOString(),
+            startsAtChangedAt: nov(11, 6, 20).toISOString(),
+            occurrenceDate: '2026-11-10',
+            baseDurationMins: run.baseDurationMins,
+        }));
+        const settings = { ...initialState.settings, eveningStartsAt: '06:40', eveningDurationMins: savedLengthMins };
+        const lastCompletedOrFailedEveningDate = run.failed ? '2026-11-10' : null;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...initialState, settings, missions, lastCompletedOrFailedEveningDate }));
+    }
+    const handledAt0640 = (s: MCState) => {
+        const o = occurrenceOn(evening(s), s.settings, nov(11, 12, 0));
+        if (!o) throw new Error('no occurrence');
+        return occurrenceHandled(s, 'evening', o, nov(11, 6, 41).getTime());
+    };
+
+    it('Codex (a): a 120-min run stopped at 19:01, the length saved as 30: PR 207 covered 06:40, and so does the load', () => {
+        pr207Profile({ lastActiveAt: nov(10, 19, 1), baseDurationMins: 120, failed: false }, 30);
+        vi.setSystemTime(nov(11, 6, 41));
+        const { state } = loadPersistedStateWithRepairs();
+        expect(handledAt0640(state), 'released what PR 207 held: a fresh full-timer attempt').toBe(true);
+        expect(evening(state).retimeCoversDay, 'written, so a later load reads the same').toBe('2026-11-11');
+    });
+
+    it('Codex (b): a 30-min run timed out at 19:30, the length saved as 120: PR 207 let 06:40 start, and so does the load', () => {
+        pr207Profile({ lastActiveAt: nov(10, 19, 30), baseDurationMins: 30, failed: true }, 120);
+        vi.setSystemTime(nov(11, 6, 41));
+        const { state } = loadPersistedStateWithRepairs();
+        expect(handledAt0640(state), 'held back the start PR 207 let through').toBe(false);
+        expect(evening(state).retimeCoversDay, 'written, so a later load reads the same').toBeNull();
+    });
+
     it('with no stamp, nothing is decided: a stray value is dropped and an absent one stays absent', () => {
         vi.setSystemTime(nov(11, 0, 11));
         const unmoved = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:30' }, timestamp: LONG_AGO });
