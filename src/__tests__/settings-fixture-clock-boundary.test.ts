@@ -19,8 +19,9 @@
 // may change a window (a `*StartsAt` or `*DurationMins` key, a computed key, or
 // settings the parser cannot see into) carries a `timestamp` the test chose
 // (chosenInstant: SAVED_LONG_AGO from the kit, which is pinned before 2000, a
-// call that takes arguments, a date literal, or a `const` of one; never
-// `undefined`, a parameter or the real clock), except
+// call that takes arguments, a date literal, or a name that is, where it is
+// used, a `const` of one (helpers/constInScope.ts: the nearest declaration in
+// scope decides); never `undefined`, a parameter or the real clock), except
 //   - the argument of a `dispatch` call: the dispatch interceptor stamps it at
 //     the test's clock when the test dispatches it, which is what a save made
 //     mid-test means;
@@ -32,7 +33,8 @@
 // Limits (review matters): a DELIBERATE helper reduced into a fixture before the
 // test sets its clock is not seen, nor is a dispatch made before it; a pure
 // reducer test that never mounts the scheduler is not scanned; a call's
-// arguments are not followed (`new Date(t)` passes whatever `t` is).
+// arguments are not followed (`new Date(t)` passes whatever `t` is);
+// SAVED_LONG_AGO is trusted by name, even a local one that shadows the kit's.
 //
 // verifiedRedBy: remove `timestamp: SAVED_LONG_AGO` from `tenSeconds()` in
 // useMissionScheduler.skipped-window.test.tsx — the last case names that file
@@ -49,13 +51,19 @@
 // const of the real clock, its shorthand, the parameter, the `let`, the
 // zero-argument call and the word); drop the
 // computed-key clause from mayChangeWindow — the computed-key case goes red
-// (all proven 2026-11-27, review of PR 209).
+// (all proven 2026-11-27, review of PR 209). Put back the file-wide map of
+// `const`s by name (every initializer of the name must pass) in place of
+// constInitializer — both scope cases go red: the five shadowing rows (a
+// parameter, an arrow's parameter, a `let`, a hoisted `var`, a loop variable)
+// are accepted, and the nearest `const` shadowing a real-clock one is refused
+// (proven 2026-11-27, the same review).
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
 import ts from 'typescript';
 import { readdirSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
+import { constInitializer } from './helpers/constInScope';
 import { entryResolves, readSource, repoRoot, toRepoPath } from './helpers/sourceFiles';
 import { SAVED_LONG_AGO } from '../mission-control/hooks/schedulerTestKit';
 
@@ -88,51 +96,38 @@ function nameOf(p: ts.ObjectLiteralElementLike): string | undefined {
 
 const property = (o: ts.ObjectLiteralExpression, name: string) => o.properties.find(p => nameOf(p) === name);
 
-/** Every `const` in the file by name, each initializer it is given (a name declared twice must pass for each). */
-function constsOf(file: ts.SourceFile): Map<string, ts.Expression[]> {
-    const consts = new Map<string, ts.Expression[]>();
-    const visit = (node: ts.Node): void => {
-        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
-            && (ts.getCombinedNodeFlags(node) & ts.NodeFlags.Const) !== 0) {
-            consts.set(node.name.text, [...(consts.get(node.name.text) ?? []), node.initializer]);
-        }
-        ts.forEachChild(node, visit);
-    };
-    visit(file);
-    return consts;
-}
-
 /**
  * Whether a `timestamp` value is an instant the test chose: SAVED_LONG_AGO, a
  * literal that parses as a date, a call that takes arguments (`at(8, 0)`,
- * `new Date(2026, 10, 16)`, and a method of one: `.toISOString()`), or a
- * `const` that is one of these. Never the real clock (`new Date()`,
- * `Date.now()`) anywhere in it, never `undefined` or a parameter (the reducer
- * reads a missing instant as the real clock, and a parameter could carry it).
- * An argument is not followed: `new Date(t)` passes whatever `t` is.
+ * `new Date(2026, 10, 16)`, and a method of one: `.toISOString()`), or a name
+ * that is, where it is used, a `const` of one of these (constInitializer).
+ * Never the real clock (`new Date()`, `Date.now()`) anywhere in it, never
+ * `undefined` or a parameter (the reducer reads a missing instant as the real
+ * clock, and a parameter could carry it). An argument is not followed:
+ * `new Date(t)` passes whatever `t` is.
  */
-function chosenInstant(value: ts.Expression, consts: Map<string, ts.Expression[]>, depth = 0): boolean {
+function chosenInstant(value: ts.Expression, depth = 0): boolean {
     const e = skipWrappers(value);
     if (depth > 8 || /\bDate\.now\b|new Date\(\s*\)/.test(e.getText())) return false;
     if (ts.isIdentifier(e)) {
         if (e.text === 'SAVED_LONG_AGO') return true;
-        const inits = consts.get(e.text) ?? [];
-        return inits.length > 0 && inits.every(init => chosenInstant(init, consts, depth + 1));
+        const init = constInitializer(e);
+        return init !== null && chosenInstant(init, depth + 1);
     }
     if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return Number.isFinite(Date.parse(e.text));
     if (ts.isCallExpression(e) || ts.isNewExpression(e)) {
-        return (e.arguments?.length ?? 0) > 0 || chosenInstant(e.expression, consts, depth + 1);
+        return (e.arguments?.length ?? 0) > 0 || chosenInstant(e.expression, depth + 1);
     }
-    if (ts.isPropertyAccessExpression(e)) return chosenInstant(e.expression, consts, depth + 1);
-    if (ts.isConditionalExpression(e)) return chosenInstant(e.whenTrue, consts, depth + 1) && chosenInstant(e.whenFalse, consts, depth + 1);
+    if (ts.isPropertyAccessExpression(e)) return chosenInstant(e.expression, depth + 1);
+    if (ts.isConditionalExpression(e)) return chosenInstant(e.whenTrue, depth + 1) && chosenInstant(e.whenFalse, depth + 1);
     return false;
 }
 
-/** The action's `timestamp` names an instant the test chose (chosenInstant); `{ timestamp }` reads the const of that name. */
-function namesAnInstant(p: ts.ObjectLiteralElementLike | undefined, consts: Map<string, ts.Expression[]>): boolean {
+/** The action's `timestamp` names an instant the test chose (chosenInstant); `{ timestamp }` reads the name in scope there. */
+function namesAnInstant(p: ts.ObjectLiteralElementLike | undefined): boolean {
     if (p === undefined) return false;
-    if (ts.isShorthandPropertyAssignment(p)) return chosenInstant(p.name, consts);
-    return ts.isPropertyAssignment(p) && chosenInstant(p.initializer, consts);
+    if (ts.isShorthandPropertyAssignment(p)) return chosenInstant(p.name);
+    return ts.isPropertyAssignment(p) && chosenInstant(p.initializer);
 }
 
 /** Whether a `settings` value may move a start time or change a length; true when the parser cannot see into it. */
@@ -162,7 +157,6 @@ function settingsSaves(source: string, fileName = 'file.tsx'): Save[] {
     if (!source.includes('SET_SETTINGS')) return [];
     const kind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
     const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, kind);
-    const consts = constsOf(file);
     const saves: Save[] = [];
     const visit = (node: ts.Node): void => {
         if (ts.isObjectLiteralExpression(node)) {
@@ -174,7 +168,7 @@ function settingsSaves(source: string, fileName = 'file.tsx'): Save[] {
                     line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1,
                     context: contextOf(node),
                     window: mayChangeWindow(settings && ts.isPropertyAssignment(settings) ? settings.initializer : undefined),
-                    timestamp: namesAnInstant(property(node, 'timestamp'), consts),
+                    timestamp: namesAnInstant(property(node, 'timestamp')),
                 });
             }
         }
@@ -239,6 +233,28 @@ describe('the classifier', () => {
             save('timestamp: clockNow()'),
             save("timestamp: 'yesterday'"),
         ].map(src => one(src).map(s => refused(s, false)))).toEqual([[true], [true], [true], [true], [true], [true], [true]]);
+    });
+
+    it('reads a name where it is used: a parameter, a `let` or a hoisted `var` that shadows a chosen const is refused', () => {
+        const save = (timestamp: string) => `mcReducer(s, { type: 'SET_SETTINGS', settings: { morningStartsAt: '07:00' }, ${timestamp} });`;
+        const fixed = "const timestamp = '2026-11-16T08:00:00.000Z';";
+        expect([
+            // Called as seed(), the parameter is undefined, which the reducer reads as the real clock.
+            `${fixed}\nfunction seed(timestamp?: string) { ${save('timestamp')} }`,
+            `${fixed}\nconst seed = (timestamp?: string) => ${save('timestamp: timestamp')}`,
+            `${fixed}\nfunction seed() { { let timestamp = clockNow(); ${save('timestamp')} } }`,
+            `${fixed}\nfunction seed() { if (x) { var timestamp = clockNow(); } ${save('timestamp')} }`,
+            `${fixed}\nfunction seed() { for (const timestamp of stamps) { ${save('timestamp')} } }`,
+        ].map(src => one(src).map(s => refused(s, false)))).toEqual([[true], [true], [true], [true], [true]]);
+    });
+
+    it('reads a name where it is used: a chosen const in scope is accepted, the nearest one deciding', () => {
+        const save = (timestamp: string) => `mcReducer(s, { type: 'SET_SETTINGS', settings: { morningStartsAt: '07:00' }, ${timestamp} });`;
+        expect([
+            `const T = '2026-11-16T08:00:00.000Z';\nfunction seed() { ${save('timestamp: T')} }`,
+            `function seed(t: string) { const timestamp = at(8, 0); ${save('timestamp')} }`,
+            `const timestamp = new Date().toISOString();\nfunction seed() { const timestamp = at(8, 0); ${save('timestamp')} }`,
+        ].map(src => one(src).map(s => refused(s, false)))).toEqual([[false], [false], [false]]);
     });
 
     it('accepts SAVED_LONG_AGO, a call that takes arguments, a date literal, and a const of one', () => {
