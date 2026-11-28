@@ -9,7 +9,8 @@
 // read as "none" it released what PR 207 held: an evening at 23:30 moved at
 // 23:50 to 00:10 and closed, reopened at 00:11, started at once. Hydration now
 // decides such a stamp once (retimeAheadDay, with the loaded settings); a
-// stored null is a decision and stays.
+// stored null is a decision and stays. Only an ABSENT decision is PR 207's: one
+// present but unreadable is damage and reads as null, no day ahead.
 // (Separate file: persistence-time.test.ts is at the 300-line limit.)
 // ============================================================
 
@@ -81,13 +82,13 @@ describe('the decision a start-time save stores', () => {
         expect(evening(loadPersistedState()).retimeCoversDay).toBeNull();
     });
 
-    it('a date survives a restart; anything else that is not null reads as not decided, and the stamp beside it is decided again', () => {
+    it('a date survives a restart; anything else beside a stamp is damage, read as null (no day ahead), not as PR 207 absence', () => {
         vi.setSystemTime(nov(11, 0, 11));
         persistWith(movedPastMidnight(), { retimeCoversDay: '2026-11-12' });
         expect(evening(loadPersistedState()).retimeCoversDay, 'a date is kept as saved').toBe('2026-11-12');
-        for (const value of ['tomorrow', '2026-11-11T06:40:00.000Z', 20261111]) {
+        for (const value of ['tomorrow', '2026-11-11T06:40:00.000Z', 20261111, false, {}]) {
             persistWith(movedPastMidnight(), { retimeCoversDay: value });
-            expect(evening(loadPersistedState()).retimeCoversDay, String(value)).toBe('2026-11-11');
+            expect(evening(loadPersistedState()).retimeCoversDay, JSON.stringify(value)).toBeNull();
         }
     });
 
@@ -147,14 +148,33 @@ describe('the decision a start-time save stores', () => {
         }
     });
 
-    it('a day that does not exist reads as not decided, and the stamp beside it is decided again: 00:10 stays covered (Codex)', () => {
+    it('a day that does not exist is damage too: read as null, the scheduled start goes ahead, as on 70e3241 (Codex)', () => {
+        // Decided for a value present but unreadable: no day ahead (fail open to the scheduled start), never PR 207's read.
         vi.setSystemTime(nov(11, 0, 11));
         for (const impossible of ['2026-02-30', '2026-11-31', '2026-13-01']) {
             persistWith(movedPastMidnight(), { retimeCoversDay: impossible });
             const state = loadPersistedState();
-            expect(handledAt0010(state, nov(11, 0, 11)), `${impossible} was kept as a decision: the evening started at once`).toBe(true);
-            expect(evening(state).retimeCoversDay, impossible).toBe('2026-11-11');
+            expect(evening(state).retimeCoversDay, impossible).toBeNull();
+            expect(handledAt0010(state, nov(11, 0, 11)), impossible).toBe(false);
         }
+    });
+
+    it('Codex: a save that decided "none", damaged to an impossible day, still lets 06:40 start; absent, it is decided as PR 207 read it', () => {
+        // The 19:00 evening of 120 min ran on the 10th and was stopped at 19:01; at 06:15 on the 11th its length was saved as
+        // 30, at 06:20 it was moved to 06:40. Weighed with the run's 120 min, the run is nearer the window behind: none.
+        const fixture = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 120 }, timestamp: LONG_AGO });
+        const ran = act(fixture, { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'scheduler', occurrenceDate: '2026-11-10' }, nov(10, 19, 0));
+        const stopped = act(ran, { type: 'CANCEL_MISSION', missionPhase: 'evening', origin: 'remote' }, nov(10, 19, 1));
+        const shortened = act(stopped, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 30 } }, nov(11, 6, 15));
+        const moved = act(shortened, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '06:40' } }, nov(11, 6, 20));
+        expect(evening(moved).retimeCoversDay, 'precondition: the save decided none').toBeNull();
+        vi.setSystemTime(nov(11, 6, 41));
+        persistWith(moved, { retimeCoversDay: '2026-02-30' });
+        const damaged = loadPersistedState();
+        expect(evening(damaged).retimeCoversDay, 'read as absent, the profile length (30) decided the 11th').toBeNull();
+        expect(handledAt0640(damaged), '06:40 was suppressed').toBe(false);
+        persistWith(moved, {});
+        expect(evening(loadPersistedState()).retimeCoversDay, 'absent: the PR 207 read, with the profile length').toBe('2026-11-11');
     });
 
     it('with no stamp, nothing is decided: a stray value is dropped, a real day too, and an absent one stays absent', () => {

@@ -148,8 +148,10 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                     // save that moved the start time, or after one that opened the window would otherwise start it.
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
                     startsAtChangedAt,
-                    // A real day or null, and only beside a stamp: anything else is decided again (withRetimeDecision).
-                    retimeCoversDay: startsAtChangedAt !== undefined && (isCalendarDay(savedM.retimeCoversDay) || savedM.retimeCoversDay === null) ? savedM.retimeCoversDay : undefined,
+                    // Only beside a stamp. Absent is PR 207's, decided below (withRetimeDecision); a real day is kept;
+                    // anything else is damage, read as null (no day ahead), so the scheduled start goes ahead.
+                    retimeCoversDay: startsAtChangedAt === undefined || savedM.retimeCoversDay === undefined ? undefined
+                        : isCalendarDay(savedM.retimeCoversDay) ? savedM.retimeCoversDay : null,
                     savedIntoWindows: savedWindows(savedM.savedIntoWindows),
                     // The run's day and base length, kept only when real (missing: the derivations they replace).
                     occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,
