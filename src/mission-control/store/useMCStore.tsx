@@ -24,7 +24,7 @@ import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
 import { deriveMissionWindow, hydrateMissionTimes, isRunLengthMins, missionDurationMins, sanitizeMissionTimes } from './hhmm';
 import { keptWindows } from './missionActivity';
-import { isDateKey } from './occurrenceDay';
+import { isCalendarDay, isDateKey } from './occurrenceDay';
 import { retimeAheadDay } from './occurrenceHandled';
 import { runLengthRepair, settingRepairs, type MissionTimeRepair } from './missionTimeRepair';
 import { isStaleIncompleteRun } from './staleMissionRun';
@@ -149,7 +149,7 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
                     startsAtChangedAt,
                     // A real day or null, and only beside a stamp: anything else is decided again (withRetimeDecision).
-                    retimeCoversDay: startsAtChangedAt !== undefined && (isDateKey(savedM.retimeCoversDay) || savedM.retimeCoversDay === null) ? savedM.retimeCoversDay : undefined,
+                    retimeCoversDay: startsAtChangedAt !== undefined && (isCalendarDay(savedM.retimeCoversDay) || savedM.retimeCoversDay === null) ? savedM.retimeCoversDay : undefined,
                     savedIntoWindows: savedWindows(savedM.savedIntoWindows),
                     // The run's day and base length, kept only when real (missing: the derivations they replace).
                     occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,
