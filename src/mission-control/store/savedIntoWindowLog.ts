@@ -8,9 +8,15 @@
 // unstarted mission with no trace. So the save writes one line (owner decision
 // 2026-11-16), naming each mission it covered (both phases share the one line),
 // less a mission that already ran in the window ("not started" would be false).
-// Both are read from the state the reducer produces, so the line follows the
-// stamp and the scheduler's own answer, not a second reading of the old state
-// (a save that moves the start also writes startsAtChangedAt).
+// Which window the save opened is the stamp's own answer (openedWindow,
+// missionActivity.ts), asked with the same missions, settings and instant, so
+// the line and the stamp cannot disagree. It is never read off the stored list:
+// a window covered again keeps its earliest entry, so the list can be unchanged
+// by a save that covered it (06:59, then 07:01, then 06:59 at one instant wrote
+// no line), and comparing entries cost a pass over every pair of them. Whether
+// the mission already ran is read from the state the reducer produces, so it
+// follows the scheduler's own answer (a save that moves the start also writes
+// startsAtChangedAt).
 // A cheap check comes first: a save that cannot open a window costs no reducer
 // pass; one that may runs the reducer once here, and a written line runs it once
 // more for its balance snapshot (createLogEntry's snap). createLogEntry asks it.
@@ -20,6 +26,7 @@
 import type { MCAction, MCState } from '../types';
 import { deriveMissionWindow, missionDurationMins, withoutInvalidMissionTimes } from './hhmm';
 import { mcReducer } from './mcReducer';
+import { openedWindow } from './missionActivity';
 import { openOccurrence } from './missionOccurrence';
 import { ranOrConcluded, type Phase } from './occurrenceHandled';
 
@@ -46,16 +53,14 @@ export function coveredWindowLine(state: MCState, action: Extract<MCAction, { ty
         return changed && openOccurrence(after, nextSettings, at) !== null;
     });
     if (candidates.length === 0) return null;
-    const next = mcReducer(state, action);
+    // At `instant`, the instant the stamp is made at.
+    const next = mcReducer(state, { ...action, timestamp: instant });
     const opened = candidates.flatMap(m => {
         const phase = m.phase;
         const saved = next.missions.find(x => x.phase === phase);
-        // The window this save added, by content: a second save in the same millisecond adds its own.
-        const added = saved?.savedIntoWindows?.find(w => !m.savedIntoWindows?.some(o => o.savedAt === w.savedAt && o.windowStart === w.windowStart));
-        if (phase === 'none' || saved === undefined || added === undefined) return [];
-        const stampMs = Date.parse(added.savedAt);
-        const occurrence = openOccurrence(saved, next.settings, new Date(stampMs));
-        if (occurrence === null || ranOrConcluded(next, phase, saved, occurrence, stampMs)) return [];
+        const occurrence = saved === undefined ? null : openedWindow(m, state.settings, saved, next.settings, instant);
+        if (phase === 'none' || saved === undefined || occurrence === null) return [];
+        if (ranOrConcluded(next, phase, saved, occurrence, at.getTime())) return [];
         return [{ phase, startsAt: saved.startsAt }];
     });
     if (opened.length === 0) return null;

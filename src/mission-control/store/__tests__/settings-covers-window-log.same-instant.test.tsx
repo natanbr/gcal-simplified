@@ -31,6 +31,17 @@ describe('a second save at the same instant', () => {
         const first = mcReducer(initialState, save({ morningStartsAt: '06:59' }, at(7, 0)));
         expect(createLogEntry(save({ morningStartsAt: '07:30' }, at(7, 0)), first)).toBeNull();
     });
+
+    it('that covers again the window an earlier one covered writes its line (06:59, 07:01, 06:59 at 07:00)', () => {
+        // The third save opens 06:59 again; the window keeps its earliest save, here the identical
+        // {07:00, 06:59}, so a line that looked for a new entry by content found none (Codex).
+        const first = mcReducer(initialState, save({ morningStartsAt: '06:59' }, at(7, 0)));
+        const ahead = mcReducer(first, save({ morningStartsAt: '07:01' }, at(7, 0)));
+        expect(createLogEntry(save({ morningStartsAt: '07:01' }, at(7, 0)), first), 'precondition: 07:01 is still ahead').toBeNull();
+        const back = save({ morningStartsAt: '06:59' }, at(7, 0));
+        expect(mcReducer(ahead, back).missions[0].savedIntoWindows, 'precondition: the entry is unchanged').toEqual(first.missions[0].savedIntoWindows);
+        expect(createLogEntry(back, ahead)?.message).toMatch(/^Morning mission not started: its 06:59 window/);
+    });
 });
 
 describe('through the store', () => {

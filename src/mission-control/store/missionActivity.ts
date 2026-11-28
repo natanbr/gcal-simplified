@@ -118,9 +118,13 @@ function windowChanged(prev: MCState, next: MCState, m: Mission): boolean {
  * The window that changing a mission from `before` (under `prevSettings`) to
  * `after` (under `nextSettings`) opens at `instant`: the window changed, one is
  * open then, and it was not open there at that same start before the change
- * (openOccurrence, read under both); else null.
+ * (openOccurrence, read under both); else null. The one answer to "which
+ * window did this save open": the stamp below and the save's log line
+ * (savedIntoWindowLog.ts) both ask it, so they cannot disagree. The list it
+ * feeds cannot answer that: a window opened again keeps its earliest entry
+ * (keptWindows), so a save that covers it again leaves the list as it was.
  */
-function openedWindow(before: Mission | undefined, prevSettings: MCSettings, after: Mission, nextSettings: MCSettings, instant: string): Occurrence | null {
+export function openedWindow(before: Mission | undefined, prevSettings: MCSettings, after: Mission, nextSettings: MCSettings, instant: string): Occurrence | null {
     if (before === undefined || !windowDiffers(before, prevSettings, after, nextSettings)) return null;
     const at = new Date(instant);
     const opened = openOccurrence(after, nextSettings, at);
