@@ -8,6 +8,8 @@
 // back to the run's calendar date, and a phone start after midnight (yesterday's
 // evening, made up) marks TODAY's evening done before it ran. A round-trip day
 // check belongs only to the decision a start-time save stores (retimeCoversDay).
+// The run's length (baseDurationMins) is kept only when it is at least one
+// second: 5e-324 let the phone's +1 cap work from an empty run.
 // (Separate file: persistence-time.test.ts is near the 300-line limit.)
 // ============================================================
 
@@ -66,5 +68,29 @@ describe('a saved run’s day (occurrenceDate), damaged', () => {
         vi.setSystemTime(new Date(2028, 2, 1, 12, 0));
         persistEvening(initialState, { occurrenceDate: '2028-02-29', startsAtChangedAt: new Date(2028, 2, 1, 8, 0).toISOString(), retimeCoversDay: '2028-02-29' });
         expect(evening(loadPersistedState())).toMatchObject({ occurrenceDate: '2028-02-29', retimeCoversDay: '2028-02-29' });
+    });
+});
+
+describe('a saved run’s length (baseDurationMins), damaged', () => {
+    beforeEach(() => { vi.useFakeTimers(); localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { vi.useRealTimers(); localStorage.removeItem(STORAGE_KEY); });
+
+    /** The default 60-min evening, started at 19:00, persisted with `baseDurationMins` as given, reloaded at 19:10; then the phone's +1. */
+    function afterPhonePlusOne(baseDurationMins: number | undefined): { base: number | undefined; durationMins: number | undefined } {
+        const running = act(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'scheduler', occurrenceDate: '2026-11-10' }, nov(10, 19, 0));
+        expect(evening(running).baseDurationMins, 'precondition: the run stores its 60 min').toBe(60);
+        persistEvening(running, baseDurationMins === undefined ? {} : { baseDurationMins });
+        vi.setSystemTime(nov(10, 19, 10));
+        const loaded = loadPersistedState();
+        const pressed = act(loaded, { type: 'ADJUST_MISSION_END', missionPhase: 'evening', deltaMinutes: 1, origin: 'remote', isRemote: true }, nov(10, 19, 10));
+        return { base: evening(loaded).baseDurationMins, durationMins: evening(pressed).durationMins };
+    }
+
+    it('control: undamaged, the +1 reaches 61', () => {
+        expect(afterPhonePlusOne(undefined)).toEqual({ base: 60, durationMins: 61 });
+    });
+
+    it.each([5e-324, 1e-10])('%s is dropped, so the cap counts from the mission’s length and the +1 reaches 61 (Codex)', damaged => {
+        expect(afterPhonePlusOne(damaged), 'kept, the cap was 0 + 60 and the +1 was refused').toEqual({ base: undefined, durationMins: 61 });
     });
 });
