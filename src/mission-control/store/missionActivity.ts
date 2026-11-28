@@ -140,9 +140,12 @@ export function openedWindow(before: Mission | undefined, prevSettings: MCSettin
  * with a clock that can be wrong, and a save under a clock a week ahead
  * dropped the real window's entry, which was released once the clock was put
  * right (review of PR 209). A count also bounds a profile's growth. The window
- * a save just opened is always kept, and it stays the newest entry while it
- * is open (a later save that opens another window closes it), so a window
- * pushed out can at worst be reported "skipped" by a later look-back.
+ * a save just opened is always kept, and with a correct clock it is not pushed
+ * out while it is open: an entry added after it means the start time moved,
+ * and moving back opens it again. A closed window can be pushed out, and a
+ * later look-back may report it "skipped". Under a clock set days ahead,
+ * eight saves can push out the real open window, which starts once the clock
+ * is put right; the four-day age did that after one.
  */
 export const KEPT_WINDOWS = 8;
 

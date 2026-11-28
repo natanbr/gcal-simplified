@@ -115,8 +115,8 @@ an owner decision (the last four found reviewing PR 209):
 
 Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
 `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`,
-`store/__tests__/settings-covers-window-log*.test.tsx`, `persistence-time.test.ts` and
-`activity-stamp-boundary.test.ts`.
+`store/__tests__/settings-covers-window-log*.test.tsx`, `persistence-time.test.ts`,
+`persistence-saved-windows.test.ts` and `activity-stamp-boundary.test.ts`.
 
 ## A length-only save changed which window starts (fixed 2026-11-27)
 
@@ -138,7 +138,21 @@ The same review found a covered window reported missed: a wake after a save
 that shortened the covered window, or after a save that covered the next day's
 window at the same start (the only stamp was overwritten), wrote a "skipped"
 line beside the save's "not started" line. Each opened window now keeps its own
-entry; pinned by `hooks/useMissionScheduler.saved-window-kept.test.tsx`.
+entry, with its earliest save, and a mission keeps the eight that start latest;
+pinned by `hooks/useMissionScheduler.saved-window-kept.test.tsx` and
+`store/saveIntoWindow.test.ts`.
+
+The second review round (2026-11-27) found five more. A later start move onto
+the same instant (02:40 and 03:40 on the spring-forward night) cleared what the
+first had covered, and a length save between two moves changed what the second
+decided: the window behind is now as long as the run was (`baseDurationMins`),
+and a move onto the same instant keeps the decision. A profile saved by PR 207
+has the stamp and no decision, so load decides it once. Covered windows were
+kept by age, from a save a fast clock could misdate: a mission now keeps the
+eight that start latest, and hydration applies the same rule. A window opened
+again took its later save; it keeps its earliest. And the log line read the
+covered window off the list, which a save covering it again leaves unchanged; it
+now asks `openedWindow`, as the stamp does.
 
 ## Verification and handoff
 
@@ -146,9 +160,11 @@ Status: development and independent architecture, QA, security and UI review
 complete for the desktop change; the review follow-ups of 2026-11-13 and of PR
 209 (2026-11-27: the length-only save, a covered window reported missed, two
 saves at one instant, strict stamp hydration, the fixture-clock guard's holes,
-the log wording and known gaps) are in; the PR 209 follow-up awaits its own
-review. No merge or production release. The phone change is mc-remote #6, not
-yet merged.
+the log wording and known gaps) are in, and so is its second round (a later
+start move onto the same instant, the upgrade from PR 207, the count of covered
+windows, the earliest save, the log line's question, the property and the
+fixture-clock guard); the PR 209 follow-up awaits its own review. No merge or
+production release. The phone change is mc-remote #6, not yet merged.
 
 - Desktop: component and structural tests must fail with the old Start controls;
   remote lifecycle tests must prove repeat starts and overlap refusal, a relaunch

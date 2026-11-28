@@ -22,13 +22,14 @@
 // covers the window it opened (savedIntoItsWindow). That stamp records no run,
 // so the question a save asks (saveKeepsRun) never reads it.
 //
-// Nothing here reads a window's length, only where occurrences start: a save
-// that changes only the length must not change the answer for any occurrence,
-// except the window it opens, which it stamps. Both length-dependent decisions
-// are made at the save and stored (retimeCoversDay, savedIntoWindows): read
-// with the length of the moment, a length save the minute before a covered
-// start released it, and one that shortened a window held back a start that
-// was due (review of PR 209; occurrenceHandled.duration-*.test.ts).
+// occurrenceHandled reads no window's length, only where occurrences start: a
+// save that changes only the length must not change the answer for any
+// occurrence, except the window it opens, which it stamps. Both length-dependent
+// decisions are made at the save and stored (retimeCoversDay, weighed with the
+// run's own length by retimeAheadDay; savedIntoWindows): read with the length
+// of the moment, a length save the minute before a covered start released it,
+// and one that shortened a window held back a start that was due (review of
+// PR 209; occurrenceHandled.duration-*.test.ts).
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 

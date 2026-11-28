@@ -13,11 +13,11 @@
 //     `startsAt` transition. Cleared (say in freshAttempt, beside the other
 //     per-attempt fields) and a save hands the child a fresh full-timer attempt
 //     again (2026-11-13).
-//   - `Mission.retimeCoversDay` is the occurrence ahead that same save covers,
-//     decided at the save and written only with startsAtChangedAt. Re-derived
-//     at read time from the current length, a later length-only save released
-//     a start the save held back, or held back one it had let through (review
-//     of PR 209).
+//   - `Mission.retimeCoversDay` is the occurrence ahead that same save covers
+//     (a day, or null for none), decided at the save and written with every
+//     startsAtChangedAt. Re-derived at read time from the current length, a
+//     later length-only save released a start the save held back, or held
+//     back one it had let through (review of PR 209).
 //   - `Mission.savedIntoWindows` is how the scheduler knows a Settings save put
 //     a window under the clock (moved the start time into the past, or
 //     lengthened it so a closed window opened): one entry per window, by its
@@ -63,7 +63,8 @@ function walk(dir: string, out: string[] = []): string[] {
  * Files allowed to write any of the fields, each for a stated reason.
  *   types.ts               — the declaration.
  *   store/missionActivity.ts — the one writer.
- *   store/useMCStore.tsx   — hydration keeps a real past instant and drops anything else.
+ *   store/useMCStore.tsx   — hydration keeps a real past instant and drops anything else,
+ *                            and decides a stamp PR 207 saved without its retimeCoversDay.
  */
 const ALLOWED = new Set(['types.ts', 'store/missionActivity.ts', 'store/useMCStore.tsx']);
 
