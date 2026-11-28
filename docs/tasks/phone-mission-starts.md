@@ -101,7 +101,7 @@ covered window gets no "skipped" line, but the save writes one log line unless t
 decision 2026-11-16, `store/savedIntoWindowLog.ts`; a running mission ended by the same save gets only the "ended" line); a clock set ahead
 then back. Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
 `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`,
-`store/__tests__/settings-covers-window-log.test.tsx`, `persistence-time.test.ts` and
+`store/__tests__/settings-covers-window-log*.test.tsx`, `persistence-time.test.ts` and
 `activity-stamp-boundary.test.ts`.
 
 ## A length-only save changed which window starts (fixed 2026-11-27)
