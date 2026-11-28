@@ -8,7 +8,7 @@
 // occurrence not run, so the scheduler started it with a full timer.
 //
 // The rule these pin: a save that puts a window under the clock (one that was
-// not open just before it) is stamped on the mission (savedIntoWindowAt,
+// not open just before it) is stamped on the mission (savedIntoWindows,
 // store/missionActivity.ts), and the stamp covers the occurrence open at the
 // save, no other (store/occurrenceHandled.ts). A start still ahead at the save
 // stays automatic, and the phone still starts the mission. DST nights: the .dst
@@ -174,7 +174,7 @@ describe('what the stamp leaves alone', () => {
         jumpTo(nov(10, 19, 5));
         expect(h.live.state.activeMission, 'precondition: the evening window opened behind the running morning').toBe('morning');
         h.dispatch(save(settings));
-        expect(missionOf(h.live.state, 'evening')?.savedIntoWindowAt).toBeUndefined();
+        expect(missionOf(h.live.state, 'evening')?.savedIntoWindows).toBeUndefined();
 
         jumpTo(nov(10, 19, 10));
         h.emit('remote-control:action', { type: 'CANCEL_MISSION', missionPhase: 'morning' });

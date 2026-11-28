@@ -74,6 +74,9 @@ export interface MissionTask {
     locked: boolean;
 }
 
+/** A window a Settings save opened (Mission.savedIntoWindows): when the save was made and where the window starts, ISO. */
+export interface SavedWindow { savedAt: string; windowStart: string }
+
 export interface Mission {
     phase: MissionPhase;
     startsAt: string; // when the overlay slides in
@@ -85,7 +88,8 @@ export interface Mission {
     lastActiveAt?: string; // last start or end of a run; never cleared (store/missionActivity.ts)
     occurrenceDate?: string; // YYYY-MM-DD of the occurrence this run belongs to, set when it starts (store/occurrenceDay.ts)
     startsAtChangedAt?: string; // the last save that moved startsAt; never cleared (stamped: store/missionActivity.ts, read: store/occurrenceHandled.ts)
-    savedIntoWindowAt?: string; // the last save that opened a window (not open at that start before); never cleared (same files)
+    retimeCoversDay?: string; // YYYY-MM-DD of the occurrence ahead that save also covers, decided at it; written only with startsAtChangedAt (same files)
+    savedIntoWindows?: SavedWindow[]; // each window a save opened (not open at that start before), kept while the scheduler can look back at it (same files)
     baseDurationMins?: number; // the run's length at its start or full Reset; the +/- cap counts from it (store/missionEndAdjust.ts)
     tasks: MissionTask[];
     active: boolean;

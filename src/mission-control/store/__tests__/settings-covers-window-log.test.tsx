@@ -2,7 +2,7 @@
 // A settings save that covers an open window says so in the log
 // ------------------------------------------------------------
 // A save that opens a window that was not open before is never a start
-// (savedIntoWindowAt, missionActivity.ts): the scheduler counts that window as
+// (savedIntoWindows, missionActivity.ts): the scheduler counts that window as
 // handled. Left silent, a child could skip an unstarted mission with no trace
 // at all: no start, no miss, no "skipped" line. Owner decision 2026-11-16: the
 // save writes one attributed line for each mission it stamped, less a mission
@@ -140,7 +140,7 @@ describe('the line follows the stamp (saveIntoWindow.test.ts rows, on a profile 
         ['the same start time', { morningStartsAt: '06:00' }, day(16, 6, 10), false],
     ])('%s', (_label, settings, timestamp, stamped) => {
         const saved = mcReducer(initialState, save(settings, timestamp));
-        expect(saved.missions.some(m => m.savedIntoWindowAt !== undefined), 'the stamp').toBe(stamped);
+        expect(saved.missions.some(m => m.savedIntoWindows !== undefined), 'the stamp').toBe(stamped);
         expect(createLogEntry(save(settings, timestamp), initialState) !== null, 'the line').toBe(stamped);
     });
 
@@ -148,7 +148,7 @@ describe('the line follows the stamp (saveIntoWindow.test.ts rows, on a profile 
         const running = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning', origin: 'remote', timestamp: at(19, 10) });
         const action = save({ morningStartsAt: '19:15', eveningStartsAt: '19:05' }, at(19, 20));
         expect(createLogEntry(action, running)?.message).toBe('Morning mission ended: its start time was changed in Settings');
-        expect(mcReducer(running, action).missions.find(m => m.phase === 'evening')?.savedIntoWindowAt).toBe(at(19, 20));
+        expect(mcReducer(running, action).missions.find(m => m.phase === 'evening')?.savedIntoWindows).toEqual([{ savedAt: at(19, 20), windowStart: at(19, 5) }]);
     });
 });
 
@@ -167,14 +167,14 @@ describe('through the store: the line is written once, with the stamp', () => {
 
     it('a save into an open window stamps the mission and writes exactly one line', () => {
         act(() => { dispatch(save({ morningStartsAt: '07:50' }, at(8, 0))); });
-        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindowAt).toBe(at(8, 0));
+        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindows).toEqual([{ savedAt: at(8, 0), windowStart: at(7, 50) }]);
         expect(lines()).toHaveLength(1);
         expect(lines()[0]).toMatchObject({ icon: '⏭️', colorKey: 'morning', source: 'local' });
     });
 
     it('a save that opens nothing writes none and stamps nothing', () => {
         act(() => { dispatch(save({ morningStartsAt: '08:30' }, at(8, 0))); });
-        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindowAt).toBeUndefined();
+        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindows).toBeUndefined();
         expect(lines()).toEqual([]);
     });
 });

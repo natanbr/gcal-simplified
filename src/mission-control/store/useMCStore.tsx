@@ -9,6 +9,7 @@ import type {
     MCState,
     MCAction,
     MissionPhase,
+    SavedWindow,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { initialState, selectTotalWealth } from './mcReducer';
@@ -37,6 +38,17 @@ const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 /** A real instant that is not in the future (a stamp written under a clock set ahead). */
 function isPastInstant(value: unknown): value is string {
     return typeof value === 'string' && Date.parse(value) <= Date.now();
+}
+
+/** The windows a save opened, each kept only as two past instants with the window's start not after its save. */
+function savedWindows(value: unknown): SavedWindow[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const kept = value.flatMap((w: unknown): SavedWindow[] => {
+        if (typeof w !== 'object' || w === null || !('savedAt' in w) || !('windowStart' in w)) return [];
+        const { savedAt, windowStart } = w;
+        return isPastInstant(savedAt) && isPastInstant(windowStart) && Date.parse(windowStart) <= Date.parse(savedAt) ? [{ savedAt, windowStart }] : [];
+    });
+    return kept.length > 0 ? kept : undefined;
 }
 
 export function loadPersistedState(): MCState {
@@ -100,11 +112,12 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                 const merged = {
                     ...defaultM,
                     ...savedM,
-                    // All three must survive a restart: a relaunch inside the window after a stop, after a
+                    // All must survive a restart: a relaunch inside the window after a stop, after a
                     // save that moved the start time, or after one that opened the window would otherwise start it.
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
                     startsAtChangedAt: isPastInstant(savedM.startsAtChangedAt) ? savedM.startsAtChangedAt : undefined,
-                    savedIntoWindowAt: isPastInstant(savedM.savedIntoWindowAt) ? savedM.savedIntoWindowAt : undefined,
+                    retimeCoversDay: isDateKey(savedM.retimeCoversDay) ? savedM.retimeCoversDay : undefined,
+                    savedIntoWindows: savedWindows(savedM.savedIntoWindows),
                     // The run's day and base length, kept only when real (missing: the derivations they replace).
                     occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,
                     baseDurationMins: isValidDurationMins(savedM.baseDurationMins) ? savedM.baseDurationMins : undefined,

@@ -34,7 +34,7 @@ The phone's prior Done Today badge described failed attempts as done too, which
 made the available repeat start unclear. Reuse SET_ACTIVE_MISSION for idle starts,
 RESET_MISSION for checklist resets and RESET_MISSION_WITH_TIMER for running
 restarts. Preserve the signed transport and the existing remote action allowlist.
-No new persistent state, timers, IPC channels or scheduler changes were needed for this first change (the follow-ups below added two stamps, `startsAtChangedAt` and `savedIntoWindowAt`, and a read in `occurrenceHandled`).
+No new persistent state, timers, IPC channels or scheduler changes were needed for this first change (the follow-ups below added three fields, `startsAtChangedAt`, `retimeCoversDay` and `savedIntoWindows`, and a read in `occurrenceHandled`).
 
 Desktop start-time editing remains in MC Settings. Changing a running mission's
 start time can end it, as specified before this feature; this change removes the
@@ -85,11 +85,12 @@ Settings: save its start time as a minute ago, or lengthen its duration so a
 window that closed unseen opened again. The scheduler found the window open and
 its occurrence unrun, and started it with a full timer, a desktop-started mission.
 
-Now a save that moves a start time or changes a length stamps the mission
-(`savedIntoWindowAt`, written only by `stampMissionActivity`) when it opens a
-window that was not open before, and `occurrenceHandled` counts exactly that
-window as handled (start at or before the stamp, not closed at it, stamp not in
-the future). The stamp records no run, so `saveKeepsRun` ignores it. The phone
+Now a save that moves a start time or changes a length records the window it
+opens, one that was not open at that start before, by its start
+(`savedIntoWindows`, written only by `stampMissionActivity`), and
+`occurrenceHandled` counts exactly the window that starts there as handled (an
+entry in the future is ignored until the clock reaches it). The entry records no
+run, so `saveKeepsRun` ignores it. The phone
 start path (SET_ACTIVE_MISSION through REMOTE_ALLOWED_ACTIONS) is unchanged, and a
 start still ahead at the save stays automatic.
 
@@ -102,6 +103,22 @@ then back. Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
 `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`,
 `store/__tests__/settings-covers-window-log.test.tsx`, `persistence-time.test.ts` and
 `activity-stamp-boundary.test.ts`.
+
+## A length-only save changed which window starts (fixed 2026-11-27)
+
+Found reviewing PR 209. Two decisions were read with the mission's length at the
+time of reading: the retime rule's occurrence ahead (nearer its start than the
+end of the window behind it, which is as long as the mission) and whether a save
+was made before the window it covered closed. So a later save that changed only
+the length changed them: an evening missed at 19:30 and moved at 06:20 to 06:40
+(held back, rightly) was released by lengthening it at 06:39, a fresh full-timer
+attempt after the miss; and shortening a 120-min evening the phone stopped at
+19:01 held back the 06:40 start that was due. Both are now decided at the save
+and stored, `retimeCoversDay` beside `startsAtChangedAt` and the opened window's
+start in `savedIntoWindows`, and `occurrenceHandled` reads no length. Pinned by
+`store/occurrenceHandled.duration-save.test.ts`,
+`hooks/useMissionScheduler.duration-save.test.tsx` and the property test
+`store/occurrenceHandled.duration-property.test.ts`.
 
 ## Verification and handoff
 

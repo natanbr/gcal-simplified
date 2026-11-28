@@ -2,7 +2,7 @@
 // Mission Control — the log line for a save that covers an open window
 // ------------------------------------------------------------
 // A Settings save that opens a window already open at the save is never a start
-// (savedIntoWindowAt, missionActivity.ts): the scheduler counts that window as
+// (savedIntoWindows, missionActivity.ts): the scheduler counts that window as
 // handled, so nothing starts, no miss is charged and no "skipped" line is
 // written. Left silent, a child could skip an unstarted mission with no trace.
 // So the save writes one line (owner decision 2026-11-16) for each mission it
@@ -48,8 +48,10 @@ export function coveredWindowLine(state: MCState, action: Extract<MCAction, { ty
     const opened = candidates.flatMap(m => {
         const phase = m.phase;
         const saved = next.missions.find(x => x.phase === phase);
-        if (phase === 'none' || saved?.savedIntoWindowAt === undefined || saved.savedIntoWindowAt === m.savedIntoWindowAt) return [];
-        const stampMs = Date.parse(saved.savedIntoWindowAt);
+        // The window this save added, by content: a second save in the same millisecond adds its own.
+        const added = saved?.savedIntoWindows?.find(w => !m.savedIntoWindows?.some(o => o.savedAt === w.savedAt && o.windowStart === w.windowStart));
+        if (phase === 'none' || saved === undefined || added === undefined) return [];
+        const stampMs = Date.parse(added.savedAt);
         const occurrence = openOccurrence(saved, next.settings, new Date(stampMs));
         if (occurrence === null || ranOrConcluded(next, phase, saved, occurrence, stampMs)) return [];
         return [{ phase, startsAt: saved.startsAt }];

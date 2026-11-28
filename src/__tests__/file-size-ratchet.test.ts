@@ -144,7 +144,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 302 → 304 on 2026-09-29: the END_STALE_MISSION_RUN member and its doc comment.
     // 304 → 302 on 2026-10-03: MCSettings no longer declares a copy of the remote pairing.
     // 302 → 304 on 2026-10-05: a run's stored occurrence day and base length (Mission).
-    'src/mission-control/types.ts': 304,
+    // 304 → 308 on 2026-11-27: a save's decisions stored at the save, not re-derived
+    // from the length later (Mission.retimeCoversDay, savedIntoWindows and the
+    // SavedWindow type; review of PR 209). The split candidate above still stands.
+    'src/mission-control/types.ts': 308,
 };
 
 interface Measured {

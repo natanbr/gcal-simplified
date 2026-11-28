@@ -2,7 +2,7 @@
 // Mission Control — a Settings save never starts a mission on demand: the
 // review round's cases (the rule: useMissionScheduler.no-start-on-demand.test.tsx)
 // ------------------------------------------------------------
-// The stamp (savedIntoWindowAt, store/missionActivity.ts) is written when a
+// The stamp (savedIntoWindows, store/missionActivity.ts) is written when a
 // save's window is open at the save and was not open AT THAT START before it,
 // and it covers only that window (store/occurrenceHandled.ts). These pin:
 //   - a known gap: a window already open and pending behind another running
@@ -55,7 +55,8 @@ describe('a save into the window: the review round', () => {
         jumpTo(nov(10, 19, 10));
         expect(h.live.state.activeMission, 'precondition: the evening window opened behind the running morning').toBe('morning');
         h.dispatch({ type: 'SET_SETTINGS', settings: { eveningStartsAt: '19:05' } });
-        expect(missionOf(h.live.state, 'evening')?.savedIntoWindowAt, 'precondition: the move is stamped').toBe(nov(10, 19, 10).toISOString());
+        expect(missionOf(h.live.state, 'evening')?.savedIntoWindows, 'precondition: the move is stamped')
+            .toEqual([{ savedAt: nov(10, 19, 10).toISOString(), windowStart: nov(10, 19, 5).toISOString() }]);
 
         jumpTo(nov(10, 19, 12));
         h.emit('remote-control:action', { type: 'CANCEL_MISSION', missionPhase: 'morning' });
