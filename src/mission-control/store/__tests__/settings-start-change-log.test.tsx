@@ -117,6 +117,49 @@ describe('createLogEntry for a save that changes nothing about a start time', ()
     });
 });
 
+// The reducer passes a save costs, as CLAUDE.md states them. A save that may open a window pays one pass to
+// decide it (coveredWindowLine); every written line pays one more for its balance snapshot (snap).
+describe('the reducer passes a save costs', () => {
+    const passes = (action: MCAction, state: MCState) => {
+        reducerSpy.mockClear();
+        const entry = createLogEntry(action, state);
+        return { message: entry?.message ?? null, passes: reducerSpy.mock.calls.length };
+    };
+
+    it('none: no start change and no window that could open', () => {
+        expect(passes(save({ eveningDurationMins: 45 }), initialState)).toEqual({ message: null, passes: 0 });
+    });
+
+    it('one: a save that may open a window and opens none writes nothing', () => {
+        // Morning 06:00 for 30 min is open at 06:10; 45 min keeps that same window.
+        expect(passes(save({ morningDurationMins: 45 }, at(6, 10)), initialState)).toEqual({ message: null, passes: 1 });
+    });
+
+    it('one: a plain change line with no window that could open', () => {
+        expect(passes(save({ eveningStartsAt: '17:00' }), initialState)).toEqual({ message: 'Evening start changed 19:00 → 17:00', passes: 1 });
+    });
+
+    it('two: a plain change line from a save that also may open a window and opens none (one save, both kinds of change)', () => {
+        // The open morning is only lengthened (a candidate that opens nothing), and the evening moves.
+        expect(passes(save({ morningDurationMins: 45, eveningStartsAt: '17:00' }, at(6, 10)), initialState)).toEqual({ message: 'Evening start changed 19:00 → 17:00', passes: 2 });
+    });
+
+    it('two: a plain change line for a start moved onto a run the retime rule counts', () => {
+        const started = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'remote', timestamp: at(19, 0) });
+        const stopped = mcReducer(started, { type: 'CANCEL_MISSION', missionPhase: 'evening', origin: 'remote', timestamp: at(19, 10) });
+        expect(passes(save({ eveningStartsAt: '19:20' }, at(19, 30)), stopped)).toEqual({ message: 'Evening start changed 19:00 → 19:20', passes: 2 });
+    });
+
+    it('one: the ended line (no covered-window check)', () => {
+        const running: MCState = { ...initialState, activeMission: 'evening' };
+        expect(passes(save({ eveningStartsAt: '20:30' }), running).passes).toBe(1);
+    });
+
+    it('two: a covered-window line', () => {
+        expect(passes(save({ morningStartsAt: '07:50' }, at(8, 0)), initialState).passes).toBe(2);
+    });
+});
+
 describe('the change is folded into the line a save already writes', () => {
     it('a start moved into an open window: the "not started" line keeps its words, the change follows', () => {
         const entry = createLogEntry(save({ morningStartsAt: '07:50' }, at(8, 0)), initialState);

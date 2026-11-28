@@ -114,7 +114,7 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
             const base = withEvening({ lastCompletedOrFailedEveningDate: '2026-11-16' }, at(11, 50));
             const state = mcReducer(base, { type: 'SET_SETTINGS', settings: { morningDurationMins: 30, eveningDurationMins: 60 }, timestamp: at(3, 0) });
             const entry = createLogEntry(save({ morningStartsAt: '12:00', eveningStartsAt: '11:50' }, at(12, 5)), { ...state, lastCompletedOrFailedEveningDate: '2026-11-16' });
-            expect(entry?.message).toMatch(/^Morning mission not started/);
+            expect(entry?.message).toBe('Morning mission not started: its 12:00 window was open when Settings was saved (start it from the phone) — Morning start changed 06:00 → 12:00; Evening start changed 19:00 → 11:50');
         });
     });
 

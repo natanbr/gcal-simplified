@@ -66,11 +66,14 @@ describe('SET_SETTINGS that ends the running mission', () => {
         });
     });
 
-    it('a second start-time change, once nothing runs, writes nothing more', () => {
+    it('a second start-time change, once nothing runs, writes the plain change line and no second "ended" line', () => {
         launchWithEveningRunning();
         save({ eveningStartsAt: '20:30' });
         save({ eveningStartsAt: '20:40' });
         expect(ended()).toHaveLength(1);
+        // Newest first: the plain change line, then the ended line with its times.
+        expect(live.activityLogs.filter(l => /start changed/.test(l.message)).map(l => l.message))
+            .toEqual(['Evening start changed 20:30 → 20:40', 'Evening mission ended: its start time was changed in Settings — Evening start changed 19:00 → 20:30']);
     });
 });
 
