@@ -84,4 +84,30 @@ describe('a covered window is never reported missed', () => {
         expect(skippedLines(h.live.state, 'morning'), "the wake called the 10th's covered window missed").toBe(1);
         h.unmount();
     });
+
+    it("Codex: eight windows covered on the 10th, then a length save opening the 11th's: a wake writes no ⏭️ line for the 10th", () => {
+        // A 15-min morning. At 07:08 on the 10th the start goes to 07:00, 07:01 … 07:07 and back to 07:00: eight windows.
+        vi.setSystemTime(nov(10, 6, 40));
+        const h = renderLiveScheduler(morningOnly, { ipc: true });
+        h.dispatch({ type: 'SET_SETTINGS', settings: { morningDurationMins: 15 } });
+        step(1_100);
+        jumpTo(nov(10, 7, 8));
+        for (const m of [0, 1, 2, 3, 4, 5, 6, 7, 0]) h.dispatch({ type: 'SET_SETTINGS', settings: { morningStartsAt: `07:0${m}` } });
+        step(2_000);
+        expect(h.live.state.activeMission, 'precondition: the saves started nothing').toBe('none');
+
+        // Asleep through the 11th's 07:00–07:15: the wake reports that window, rightly.
+        sleepUntil(h, nov(11, 7, 30));
+        expect(skippedLines(h.live.state, 'morning'), "precondition: the 11th's window was missed").toBe(1);
+        // Only the length, 15 → 60 min: the 11th's 07:00–08:00 opens again and is covered.
+        h.dispatch({ type: 'SET_SETTINGS', settings: { morningDurationMins: 60 } });
+        step(2_000);
+        expect(h.live.state.activeMission, 'precondition: the save started nothing').toBe('none');
+
+        // The newest window that has closed is the 10th's 07:00–08:00, which the first saves covered.
+        sleepUntil(h, nov(11, 7, 35));
+        expect(skippedLines(h.live.state, 'morning'), "the ninth window pushed out the 10th's, and the wake called it missed").toBe(1);
+        expect(h.live.state.activeMission).toBe('none');
+        h.unmount();
+    });
 });

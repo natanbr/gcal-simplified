@@ -53,8 +53,8 @@ function isPastInstant(value: unknown): value is string {
 /**
  * The windows a save opened, each kept only as two past instants with the
  * window's start not after its save, then as the writer keeps them (keptWindows:
- * once per window, the eight that start latest): a profile of 10,000 entries
- * made every Settings save compare pairs of them.
+ * once per window, those of the four latest days, 64 at most): a profile of
+ * 10,000 entries made every Settings save compare pairs of them.
  */
 function savedWindows(value: unknown): SavedWindow[] | undefined {
     if (!Array.isArray(value)) return undefined;

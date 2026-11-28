@@ -107,28 +107,53 @@ describe('a recorded window is kept', () => {
         expect(occurrenceHandled(reopened, 'morning', o, nov(10, 7, 10).getTime()), 'released while open').toBe(true);
     });
 
-    it('until eight windows that start later are kept: a ninth window drops the one that starts first', () => {
-        // A window opened at 07:00 on each of nine days, the start moved between 06:58 and 06:59 every time.
+    it('on the four latest days that have one: a window on a fifth day drops the first day\'s', () => {
+        // A window opened at 07:00 on each of five days, the start moved between 06:58 and 06:59 every time.
         let s = initialState;
-        for (let day = 10; day <= 18; day += 1) s = saveAt(s, { morningStartsAt: day % 2 === 0 ? '06:59' : '06:58' }, nov(day, 7, 0));
+        for (let day = 10; day <= 14; day += 1) s = saveAt(s, { morningStartsAt: day % 2 === 0 ? '06:59' : '06:58' }, nov(day, 7, 0));
         const starts = windowsOf(s, 'morning')?.map(w => w.windowStart);
-        expect(starts, 'the eight that start latest, in order of start').toEqual([11, 12, 13, 14, 15, 16, 17, 18].map(d => iso(nov(d, 6, d % 2 === 0 ? 59 : 58))));
+        expect(starts, 'the four latest days, in order of start').toEqual([11, 12, 13, 14].map(d => iso(nov(d, 6, d % 2 === 0 ? 59 : 58))));
     });
 
-    it('the window a save just opened is kept even when it starts before the eight already kept', () => {
-        // Eight saves at 08:00 each move the start a minute further back (07:59 … 07:52), then one opens 06:00–09:00.
+    it('Codex: eight windows covered on the 10th, then a length save that opens the 11th: the 10th stays covered for the look-back', () => {
+        // The morning at 15 min. At 07:08 on the 10th the start goes to 07:00, 07:01 … 07:07 and back to 07:00 (eight windows);
+        // the 11th's 07:00–07:15 passes unseen, and at 07:30 the length goes to 60 min, which opens it. Kept by count, the
+        // ninth window dropped the 10th's 07:00, the one the scheduler's look-back asks about.
+        let s = saveAt(initialState, { morningDurationMins: 15 }, nov(10, 6, 40));
+        for (const m of [0, 1, 2, 3, 4, 5, 6, 7, 0]) s = saveAt(s, { morningStartsAt: `07:0${m}` }, nov(10, 7, 8));
+        expect(windowsOf(s, 'morning'), 'precondition: eight windows covered').toHaveLength(8);
+        const lengthened = saveAt(s, { morningDurationMins: 60 }, nov(11, 7, 30));
+        const tenth = { day: '2026-11-10', startMs: nov(10, 7, 0).getTime(), endMs: nov(10, 8, 0).getTime() };
+        expect(occurrenceHandled(lengthened, 'morning', tenth, nov(11, 7, 31).getTime()), 'the 10th read as missed').toBe(true);
+        expect(windowsOf(lengthened, 'morning'), 'the 11th is covered too').toHaveLength(9);
+    });
+
+    it('64 at most, the latest to start, and the window a save just opened among them', () => {
+        // 70 saves at 13:00 on the 10th move a 90-min morning from 11:50 to 12:59, one minute at a time; then back to 11:50.
+        let s = saveAt(initialState, { morningDurationMins: 90 }, nov(10, 6, 40));
+        for (let m = 0; m < 70; m += 1) s = saveAt(s, { morningStartsAt: `${11 + Math.floor((50 + m) / 60)}:${String((50 + m) % 60).padStart(2, '0')}` }, nov(10, 13, 0));
+        const capped = windowsOf(s, 'morning') ?? [];
+        expect(capped, 'a damaged clock or a busy parent cannot grow the list').toHaveLength(64);
+        expect(capped[0]?.windowStart, 'the six that start first are dropped').toBe(iso(nov(10, 11, 56)));
+        const reopened = windowsOf(saveAt(s, { morningStartsAt: '11:50' }, nov(10, 13, 0)), 'morning') ?? [];
+        expect(reopened, 'still 64').toHaveLength(64);
+        expect(reopened.slice(0, 2).map(w => w.windowStart), 'the open window kept, the next to start first dropped').toEqual([iso(nov(10, 11, 50)), iso(nov(10, 11, 57))]);
+    });
+
+    it('the window a save just opened is kept even on a day before the four already kept', () => {
+        // Four saves under a clock running days ahead (the 14th … 17th), then one with the clock put right on the 10th.
         let s = initialState;
-        for (let m = 59; m >= 52; m -= 1) s = saveAt(s, { morningStartsAt: `07:${m}` }, nov(10, 8, 0, 59 - m));
-        const opened = saveAt(s, { morningStartsAt: '06:00', morningDurationMins: 180 }, nov(10, 8, 1));
+        for (let day = 14; day <= 17; day += 1) s = saveAt(s, { morningStartsAt: day % 2 === 0 ? '06:59' : '06:58' }, nov(day, 7, 0));
+        const opened = saveAt(s, { morningStartsAt: '06:57' }, nov(10, 7, 0));
         const windows = windowsOf(opened, 'morning') ?? [];
-        expect(windows, 'eight at most').toHaveLength(8);
-        expect(windows[0], 'the open window, first in order of start').toEqual({ savedAt: iso(nov(10, 8, 1)), windowStart: iso(nov(10, 6, 0)) });
-        expect(windows.map(w => w.windowStart), 'the one dropped is the 07:52 window, the next to start first').not.toContain(iso(nov(10, 7, 52)));
+        expect(windows[0], 'the open window, first in order of start').toEqual({ savedAt: iso(nov(10, 7, 0)), windowStart: iso(nov(10, 6, 57)) });
+        expect(windows, 'beside the four later days').toHaveLength(5);
     });
 
     it('a length save made under a clock a week ahead keeps the real window, which stays covered once the clock is put right', () => {
         // Covered at 07:00 on the 10th (06:59 for 30 min). The clock jumps to the 17th at 07:35 and the length goes to 60 min,
-        // which opens the 17th's 06:59 window. Kept by age, the 10th's entry fell more than four days behind it and was dropped.
+        // which opens the 17th's 06:59 window. Kept by age (an earlier build), the 10th's entry fell more than four days behind it
+        // and was dropped; kept by day, the two days each keep theirs.
         const fastClock = saveAt(stamped, { morningDurationMins: 60 }, nov(17, 7, 35));
         expect(windowsOf(fastClock, 'morning')).toEqual([first, { savedAt: iso(nov(17, 7, 35)), windowStart: iso(nov(17, 6, 59)) }]);
         const o = { day: '2026-11-10', startMs: nov(10, 6, 59).getTime(), endMs: nov(10, 7, 59).getTime() };

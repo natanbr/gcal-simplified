@@ -39,14 +39,15 @@
 // that same start before. Unstamped, the scheduler started it at once with a
 // full timer, a start on demand the phone alone may make (owner rule
 // 2026-11-10). The entry names the window by its start, so a later length save
-// cannot move it out, and earlier entries stay (the eight that start latest,
-// KEPT_WINDOWS), so covering the next day's window cannot uncover the
+// cannot move it out, and earlier entries stay (those of the four latest days,
+// KEPT_DAYS), so covering the next day's window cannot uncover the
 // first. A window already open and pending (behind another running mission)
 // that is only lengthened is not stamped, and still starts. Nothing else
 // writes it (activity-stamp-boundary.test.ts).
 // ============================================================
 
 import type { MCSettings, MCState, Mission, SavedWindow } from '../types';
+import { getLocalDateString } from './behaviorSync';
 import { missionDurationMins } from './hhmm';
 import { nextOccurrence, openOccurrence, type Occurrence } from './missionOccurrence';
 import { retimeAheadDay, saveKeepsRun } from './occurrenceHandled';
@@ -139,32 +140,34 @@ export function openedWindow(before: Mission | undefined, prevSettings: MCSettin
 }
 
 /**
- * How many covered windows a mission keeps: the ones that start latest. The
- * scheduler asks only about the open window and looks back two local days at
- * most (lastClosedOccurrence), both at the current start time, so eight leave
- * room for saving again and again. A count, not an age: an age is measured
- * with a clock that can be wrong, and a save under a clock a week ahead
- * dropped the real window's entry, which was released once the clock was put
- * right (review of PR 209). A count also bounds a profile's growth. The window
- * a save just opened is always kept, and with a correct clock it is not pushed
- * out while it is open: an entry added after it means the start time moved,
- * and moving back opens it again. A closed window can be pushed out, and a
- * later look-back may report it "skipped". Under a clock set days ahead,
- * eight saves can push out the real open window, which starts once the clock
- * is put right; the four-day age did that after one.
+ * Which covered windows a mission keeps: those that start on the KEPT_DAYS
+ * latest local days that have one, at most MAX_KEPT_WINDOWS of them (the latest
+ * to start). The scheduler asks only about the open window and looks back two
+ * local days at most (lastClosedOccurrence), so four days hold every window it
+ * can still ask about, however many a day has. Not a count of windows: eight
+ * saves on one day, then a length save the next day that opened a ninth,
+ * dropped the first day's window, which the look-back then reported missed
+ * (review of PR 209, Codex). Not an age either: an age is measured with a clock
+ * that can be wrong, and a save under a clock a week ahead dropped the real
+ * window's entry. MAX_KEPT_WINDOWS only bounds a damaged or oversized profile.
+ * The window a save just opened is always kept. Known limit: saves made under
+ * a clock running ahead on four later days push out the real windows, which
+ * then start once the clock is put right.
  */
-export const KEPT_WINDOWS = 8;
+export const KEPT_DAYS = 4;
+export const MAX_KEPT_WINDOWS = 64;
 
 const byStartTime = (a: SavedWindow, b: SavedWindow) => Date.parse(a.windowStart) - Date.parse(b.windowStart);
+const startDay = (w: SavedWindow) => getLocalDateString(new Date(w.windowStart));
 
 /**
- * `windows` once per window, the KEPT_WINDOWS that start latest, the window
- * that starts at `keep` among them whatever its start, in order of start. A
- * window saved again keeps its earliest save: taking the later one, a reopening
- * made under a clock running ahead put the entry in the future, and the window
- * was released while open once the clock was put right (review of PR 209).
- * The writer's rule, which hydration applies to a saved profile too
- * (useMCStore.tsx).
+ * `windows` once per window, those of the KEPT_DAYS latest days (the
+ * MAX_KEPT_WINDOWS latest to start), the window that starts at `keep` among them
+ * whatever its day, in order of start. A window saved again keeps its earliest
+ * save: taking the later one, a reopening made under a clock running ahead put
+ * the entry in the future, and the window was released while open once the
+ * clock was put right (review of PR 209). The writer's rule, which hydration
+ * applies to a saved profile too (useMCStore.tsx).
  */
 export function keptWindows(windows: readonly SavedWindow[], keep?: string): SavedWindow[] {
     const byStart = new Map<string, SavedWindow>();
@@ -173,9 +176,11 @@ export function keptWindows(windows: readonly SavedWindow[], keep?: string): Sav
         if (seen === undefined || Date.parse(w.savedAt) < Date.parse(seen.savedAt)) byStart.set(w.windowStart, w);
     }
     const pinned = keep === undefined ? undefined : byStart.get(keep);
-    const others = [...byStart.values()].filter(w => w !== pinned).sort(byStartTime);
-    if (pinned === undefined) return others.slice(-KEPT_WINDOWS);
-    return [...others.slice(-(KEPT_WINDOWS - 1)), pinned].sort(byStartTime);
+    const all = [...byStart.values()].sort(byStartTime);
+    const days = new Set([...new Set(all.map(startDay))].slice(-KEPT_DAYS));
+    const others = all.filter(w => w !== pinned && days.has(startDay(w)));
+    if (pinned === undefined) return others.slice(-MAX_KEPT_WINDOWS);
+    return [...others.slice(-(MAX_KEPT_WINDOWS - 1)), pinned].sort(byStartTime);
 }
 
 /** `windows` with `opened`, saved at `instant`, added (keptWindows: an earlier save of the same window kept). */
