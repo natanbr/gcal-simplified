@@ -106,7 +106,21 @@ an owner decision (the last four found reviewing PR 209):
 - a clock moved backward past a save's time releases the window it covered (an
   entry in the future is ignored until the clock reaches it), and a restart while
   the clock is still behind makes that permanent: hydration drops an entry in the
-  future, so the window stays released once the clock is put right;
+  future, so the window stays released once the clock is put right; only the
+  save made under the wrong clock: a later save made with the clock ahead keeps
+  an earlier save's coverage;
+- the first start move on the spring-forward night onto another name of the
+  same instant (03:40 to 02:40) can change whether that occurrence is handled,
+  as the same-instant keep needs a decision to keep (PR 207 did the same);
+- after the clock is set back, a new run whose activity is older than an earlier
+  save's stamp is read as the run that save kept and inherits its covered day;
+- a mission whose last run predates `baseDurationMins` (v0.0.45) and has not run
+  since weighs the window behind with the length of the moment;
+- a covered window pushed out of the four kept days (or past 64) is covered no
+  more: a later look-back may report it "skipped", and saves under a clock
+  running ahead on four later days can push out the real open window;
+- the fixture-clock guard reads a spread after the timestamp (`...overrides`) as
+  the timestamp, though the spread can set it back to undefined;
 - a skip made through Settings costs the child nothing: no start, no miss, no
   shield step and no "skipped" line; the save's one "not started" line (owner
   decision 2026-11-16, `store/savedIntoWindowLog.ts`, left out for a mission that
@@ -138,7 +152,7 @@ The same review found a covered window reported missed: a wake after a save
 that shortened the covered window, or after a save that covered the next day's
 window at the same start (the only stamp was overwritten), wrote a "skipped"
 line beside the save's "not started" line. Each opened window now keeps its own
-entry, with its earliest save, and a mission keeps the eight that start latest;
+entry, with its earliest save, and a mission keeps those of its four latest days;
 pinned by `hooks/useMissionScheduler.saved-window-kept.test.tsx` and
 `store/saveIntoWindow.test.ts`.
 
@@ -148,11 +162,27 @@ first had covered, and a length save between two moves changed what the second
 decided: the window behind is now as long as the run was (`baseDurationMins`),
 and a move onto the same instant keeps the decision. A profile saved by PR 207
 has the stamp and no decision, so load decides it once. Covered windows were
-kept by age, from a save a fast clock could misdate: a mission now keeps the
-eight that start latest, and hydration applies the same rule. A window opened
+kept by age, from a save a fast clock could misdate: a mission kept the
+eight that start latest (by day since the third round), and hydration applies
+the same rule. A window opened
 again took its later save; it keeps its earliest. And the log line read the
 covered window off the list, which a save covering it again leaves unchanged; it
 now asks `openedWindow`, as the stamp does.
+
+The third round (2026-11-28) found five more and a weak test. A later start
+move made with the clock ahead wrote a stamp in the future over the first
+save's, so the covered window started once the clock was put right: the older
+stamp of the same run now stays. Kept by a count of eight, eight saves in a day
+and a ninth window the next pushed out a window the look-back still asks
+about: a mission now keeps every window of its four latest local days, 64 at
+most. A PR 207 stamp is decided as PR 207 read it (the length in the profile).
+A one-second run's own length read as invalid; a run's length is now any real
+length under a day. A stored decision on an impossible day was kept; it must be
+a real day beside a stamp. And the property file gained two fixed cases of the
+nearness. Pinned by `store/occurrenceHandled.retime-clock-ahead.test.ts`,
+`store/saveIntoWindow.test.ts`, `hooks/useMissionScheduler.saved-window-kept.test.tsx`,
+`store/persistence-saved-windows.test.ts`, `store/persistence-retime-decision.test.ts`,
+`store/occurrenceHandled.duration-save.test.ts` and the property file.
 
 ## Verification and handoff
 
@@ -163,7 +193,9 @@ saves at one instant, strict stamp hydration, the fixture-clock guard's holes,
 the log wording and known gaps) are in, and so is its second round (a later
 start move onto the same instant, the upgrade from PR 207, the count of covered
 windows, the earliest save, the log line's question, the property and the
-fixture-clock guard); the PR 209 follow-up awaits its own review. No merge or
+fixture-clock guard) and its third (a clock-ahead move, covered windows by day,
+the upgrade as PR 207 read it, a one-second run's length, an impossible stored
+day, the nearness pinned); the PR 209 follow-up awaits its own review. No merge or
 production release. The phone change is mc-remote #6, not yet merged.
 
 - Desktop: component and structural tests must fail with the old Start controls;

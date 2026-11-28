@@ -155,7 +155,9 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   (`startsAtChangedAt`, written only by `stampMissionActivity`, never cleared) when the run covered its
   occurrence at the old time: it was running, ran at or after the old start, concluded, or an earlier save
   kept it (`saveKeepsRun`).
-  The stamp is the save's time, or the last activity if that is later (a clock set back). While the stamp
+  The stamp is the save's time, or the last activity if that is later (a clock set back), and a later move
+  for the same run keeps an older stamp of it (written over by a move made with the clock ahead, the stamp
+  was in the future and the window it covered started once the clock was put right). While the stamp
   is at or after `lastActiveAt` and not in the future, `occurrenceHandled` (`store/occurrenceHandled.ts`)
   counts as run the occurrence of the run's stored day and the next one when the run is nearer its start
   than the end of the window before it, in real time, that window as long as the run was
@@ -164,9 +166,17 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   starts nothing that night. A later move for the same run that leaves the occurrence ahead at the same
   instant keeps that decision (`aheadDecision`, `missionActivity.ts`: on the spring-forward night 02:40,
   which does not exist, is read as 03:40, and deciding again on a move from one to the other uncovered
-  it), and a stamp saved by PR 207, which stored no decision, is decided once at load. Known gap: the
-  rule weighs the run's last activity, not when the save was made, so an evening that ended (missed or
-  stopped) at 00:30 and was moved at 08:00 to 08:30 skips that 08:30, silently; the phone can start it.
+  it), and a stamp saved by PR 207, which stored no decision, is decided once at load as PR 207 read it
+  (the window behind as long as the mission is in the loaded settings). A run's stored length is read by
+  `isRunLengthMins` (above zero, under a day): a one-second run stores a hair under 1/60 min. Known gaps:
+  the rule weighs the run's last activity, not when the save was made, so an evening that ended (missed or
+  stopped) at 00:30 and was moved at 08:00 to 08:30 skips that 08:30, silently; the phone can start it;
+  the first move on the spring-forward night onto another name of the same instant (03:40 to 02:40) can
+  change whether that occurrence is handled, as the same-instant keep needs a decision to keep (PR 207
+  did the same); after the clock is set back, a new run whose activity is older than an earlier save's
+  stamp is read as the run that save kept and inherits its covered day; and a mission whose last run
+  predates `baseDurationMins` (v0.0.45) and has not run since weighs the window behind with the length of
+  the moment, so a length save between two moves can still change what the second decides.
   Guarded by the `useMissionScheduler.settings-retime*` tests, `store/occurrenceHandled.test.ts` and
   `activity-stamp-boundary.test.ts`. The scheduler makes the scheduled starts and the phone every other
   start; the only desktop action that ends a run is this logged save.
@@ -182,23 +192,27 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   length of the moment, a length save the minute before a start the retime rule held back released it
   (a fresh full-timer attempt after a miss), and one that shortened a window held back a start that was
   due. A covered window stays covered: each keeps its own entry with its earliest save, which no later save
-  replaces (taking the later one, a reopening under a clock running ahead put the entry in the future),
-  so a launch or a wake never writes a "skipped" line for a window the save explained (shortening the
-  window after the save, or covering the next day's window at the same start, did). A mission keeps
-  the eight windows that start latest (`KEPT_WINDOWS`, `keptWindows`): a count, not an age, which a
-  clock running a week ahead measured wrong; the window a save just opened is always kept, and a window
-  pushed out by eight that start later is covered no more (eight saves under a clock set days ahead can
-  push out the real open window, which then starts once the clock is put right).
+  replaces (taking the later one, a reopening under a clock running ahead put the entry in the future).
+  A mission keeps every window of the four latest local days that have one (`KEPT_DAYS`, `keptWindows`),
+  64 at most (`MAX_KEPT_WINDOWS`, the latest to start, for a damaged profile), and always the window a
+  save just opened. The scheduler's look-back reaches two local days, so a launch or a wake writes no
+  "skipped" line for a window a save explained (shortening it after the save, covering the next day's
+  window at the same start, or eight saves in one day and a ninth window the next, each did) unless 64
+  that start later, or windows on four later days, pushed it out: a window pushed out is covered no
+  more, and saves made under a clock running ahead on four later days can push out the real open window,
+  which then starts once the clock is put right. Kept by a count, eight saves in a day pushed out a window
+  the look-back asks about; kept by an age, a clock running a week ahead measured it wrong.
   Nothing else is covered: a start still ahead at the save starts as scheduled, a later day
   starts as normal, an earlier closed window keeps its "skipped" line, and a window already open and
   pending (behind another running mission) that is only lengthened still starts. An entry records no run,
   so `saveKeepsRun` reads `ranOrConcluded`, never `occurrenceHandled`: otherwise a second save moving the
   start ahead would count the first as a run and the whole day would start nothing. Hydration keeps an
   entry only when both instants are past and the window starts at or before the save, then as the
-  writer keeps them (`keptWindows`: a profile of 10,000 entries loads as eight), and `retimeCoversDay`
-  only as a date or null, deciding a stamp that has none or one it cannot read (`retimeAheadDay`, with
-  the loaded settings), so a relaunch inside the window starts nothing, after the upgrade from PR 207
-  too. Every stamp
+  writer keeps them (`keptWindows`: a profile of 10,000 entries loads as 64), `baseDurationMins` as a
+  run length (`isRunLengthMins`), and `retimeCoversDay` only beside a stamp, as a real day (`isDateKey`,
+  by round trip: '2026-02-30' was kept) or null, deciding a stamp that has none or one it cannot read as
+  PR 207 read it, so a relaunch inside the window starts nothing, after the upgrade from PR 207 too.
+  Every stamp
   (`lastActiveAt`, `startsAtChangedAt`, both instants of an entry) is kept only in the exact form
   `toISOString` writes (`isPastInstant`, `useMCStore.tsx`): `Date.parse` rolls '2026-02-30' over to
   2 March and reads other shapes too. Known gaps, each an owner decision (review of PR 209): (i) a save
@@ -207,7 +221,9 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   time releases the window it covered (an entry in the future is ignored until the clock reaches it,
   as a `lastActiveAt` is), and a restart while the clock is still behind makes that permanent:
   hydration drops an entry in the future, as it drops a future `lastActiveAt` or `startsAtChangedAt`,
-  so the window stays released once the clock is put right; (iii) the rule is no start into the past, not no start from Settings: a
+  so the window stays released once the clock is put right. That is the save made under the wrong clock
+  only: a later save made with the clock ahead keeps an earlier save's coverage (the older stamp of the
+  same run, and each window's earliest entry); (iii) the rule is no start into the past, not no start from Settings: a
   start saved one minute ahead still starts a minute later with a full timer (a time still ahead stays
   automatic by design); (iv) a skip made through Settings costs the child nothing: the covered window
   starts nothing, charges no miss, moves no shield and gets no "skipped" line, and only the log line
@@ -218,9 +234,12 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   `store/__tests__/settings-covers-window-log*.test.tsx`, `store/saveIntoWindow.test.ts`,
   `store/occurrenceHandled.test.ts`, `store/occurrenceHandled.duration-save.test.ts`,
   `store/occurrenceHandled.duration-property.test.ts` (the property over random histories of length saves
-  and start moves, and a sweep of the spring-forward eve), `store/occurrenceHandled.retime-same-start.dst.test.ts`,
+  and start moves, a sweep of the spring-forward eve, and two fixed cases of the nearness),
+  `store/occurrenceHandled.retime-same-start.dst.test.ts`, `store/occurrenceHandled.retime-clock-ahead.test.ts`,
   `persistence-time.test.ts`, `store/persistence-retime-decision.test.ts`, `store/persistence-saved-windows.test.ts`,
-  `src/__tests__/settings-fixture-clock-boundary.test.ts` and `activity-stamp-boundary.test.ts`.
+  `src/__tests__/settings-fixture-clock-boundary.test.ts` (known gap: it reads a spread after the
+  timestamp, `...overrides`, as the timestamp, though the spread can set it back to undefined) and
+  `activity-stamp-boundary.test.ts`.
   A Stop, a Reset (plain or full), a time adjustment, a whining toggle or a task
   tap naming a mission that is not the running one is refused by the reducer and the log alike
   (`isStaleMissionAction`, `mcReducer.stale-mission-action.test.ts`, `mcReducer.stale-whining-task.test.ts`):

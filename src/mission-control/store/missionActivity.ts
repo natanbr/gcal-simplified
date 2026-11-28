@@ -23,7 +23,8 @@
 //
 // `startsAtChangedAt` is stamped here the same way, from the `startsAt`
 // transition (a Settings save that moves it), at the same instant (or the
-// last activity, if a clock set back made that later), so a save that ends
+// last activity, if a clock set back made that later; or an older stamp of the
+// same run, which a later move keeps), so a save that ends
 // the run is never older than the run's end, and only when the run covered its
 // occurrence at the old start time (saveKeepsRun, occurrenceHandled.ts). The
 // scheduler then refuses a fresh attempt at the moved time (retimedOntoItsRun,

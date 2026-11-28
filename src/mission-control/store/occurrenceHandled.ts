@@ -55,7 +55,9 @@ const stampMs = (stamp: string | undefined): number => (stamp === undefined ? Nu
  * 00:10 covers that night's 00:10, and the night after starts as normal. Known
  * gap: a move made long after the run, to a time early the next day, is
  * covered the same way (an evening missed at 00:30 and moved at 08:00 to 08:30
- * skips that 08:30); the phone can start it.
+ * skips that 08:30); the phone can start it. And after the clock is set back,
+ * a new run whose activity is older than an earlier save's stamp passes the
+ * gate as if that save had kept it, and inherits its covered day.
  */
 export function retimedOntoItsRun(m: Mission, o: Occurrence, nowMs: number): boolean {
     const activeAt = stampMs(m.lastActiveAt);

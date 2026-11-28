@@ -34,7 +34,10 @@
 // test sets its clock is not seen, nor is a dispatch made before it; a pure
 // reducer test that never mounts the scheduler is not scanned; a call's
 // arguments are not followed (`new Date(t)` passes whatever `t` is);
-// SAVED_LONG_AGO is trusted by name, even a local one that shadows the kit's.
+// SAVED_LONG_AGO is trusted by name, even a local one that shadows the kit's;
+// a spread after the timestamp (`{ timestamp: SAVED_LONG_AGO, ...overrides }`)
+// is read as the timestamp, though the spread can set it back to undefined
+// (review of PR 209, Codex).
 //
 // verifiedRedBy: remove `timestamp: SAVED_LONG_AGO` from `tenSeconds()` in
 // useMissionScheduler.skipped-window.test.tsx — the last case names that file
