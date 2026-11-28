@@ -92,7 +92,11 @@ function aheadDecision(before: Mission, prevSettings: MCSettings, m: Mission, se
  * (saveKeepsRun, read in `prev`), and that save's decision about the
  * occurrence ahead (aheadDecision); else as it was. At `instant`, or at the
  * last activity when that is later: a save made with the clock set back must
- * not look older than the run it follows.
+ * not look older than the run it follows. An earlier stamp of the same run (at
+ * or after its last activity) that is older stays: a later move made with the
+ * clock ahead wrote its instant over it, so the stamp was in the future, the
+ * window the first save covered started once the clock was put right, and a
+ * restart before then dropped the stamp for good (review of PR 209).
  */
 function movedStamp(prev: MCState, next: MCState, m: Mission, instant: string): Mission {
     const before = prev.missions.find(p => p.phase === m.phase);
@@ -100,7 +104,9 @@ function movedStamp(prev: MCState, next: MCState, m: Mission, instant: string): 
     const last = m.lastActiveAt;
     const at = last !== undefined && Date.parse(last) > Date.parse(instant) ? last : instant;
     if (!saveKeepsRun(prev, m.phase, Date.parse(at))) return m;
-    return { ...m, startsAtChangedAt: at, retimeCoversDay: aheadDecision(before, prev.settings, m, next.settings) };
+    const prior = m.startsAtChangedAt;
+    const keepPrior = prior !== undefined && Date.parse(last ?? '') <= Date.parse(prior) && Date.parse(prior) < Date.parse(at);
+    return { ...m, startsAtChangedAt: keepPrior ? prior : at, retimeCoversDay: aheadDecision(before, prev.settings, m, next.settings) };
 }
 
 /** Whether a mission's window differs between two settings: a new start time or a new length. */

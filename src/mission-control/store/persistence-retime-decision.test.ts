@@ -62,7 +62,7 @@ describe('the decision a start-time save stores', () => {
         expect(evening(moved).retimeCoversDay, 'nearer 00:10 on the 11th than the window behind').toBe('2026-11-11');
         // Moved instead at 23:50 to 12:00: the window behind (12:00–13:00 on the 10th) ended 10 h 50 before, 12:00 on the 11th is 12 h 10 ahead.
         const far = act(movedPastMidnight(), { type: 'SET_SETTINGS', settings: { eveningStartsAt: '12:00' } }, nov(10, 23, 55));
-        expect(evening(far).startsAtChangedAt, 'precondition: the second save is stamped too').toBe(nov(10, 23, 55).toISOString());
+        expect(evening(far).startsAtChangedAt, 'precondition: the second save keeps the run, the first stamp of it stays').toBe(nov(10, 23, 50).toISOString());
         expect(evening(far).retimeCoversDay).toBeNull();
     });
 
