@@ -39,8 +39,8 @@
 // that same start before. Unstamped, the scheduler started it at once with a
 // full timer, a start on demand the phone alone may make (owner rule
 // 2026-11-10). The entry names the window by its start, so a later length save
-// cannot move it out, and earlier entries stay while the scheduler can still
-// look back at them, so covering the next day's window cannot uncover the
+// cannot move it out, and earlier entries stay (the eight that start latest,
+// KEPT_WINDOWS), so covering the next day's window cannot uncover the
 // first. A window already open and pending (behind another running mission)
 // that is only lengthened is not stamped, and still starts. Nothing else
 // writes it (activity-stamp-boundary.test.ts).
@@ -129,18 +129,40 @@ function openedWindow(before: Mission | undefined, prevSettings: MCSettings, aft
 }
 
 /**
- * How long a covered window is kept: the scheduler looks back two local days
- * at most (lastClosedOccurrence), so four days of windows leave a day to spare
- * on a DST night. Older ones can never be asked about again.
+ * How many covered windows a mission keeps: the ones that start latest. The
+ * scheduler asks only about the open window and looks back two local days at
+ * most (lastClosedOccurrence), both at the current start time, so eight leave
+ * room for saving again and again. A count, not an age: an age is measured
+ * with a clock that can be wrong, and a save under a clock a week ahead
+ * dropped the real window's entry, which was released once the clock was put
+ * right (review of PR 209). A count also bounds a profile's growth. The window
+ * a save just opened is always kept, and it stays the newest entry while it
+ * is open (a later save that opens another window closes it), so a window
+ * pushed out can at worst be reported "skipped" by a later look-back.
  */
-const KEPT_FOR_MS = 4 * 24 * 60 * 60_000;
+export const KEPT_WINDOWS = 8;
 
-/** `windows` with `opened`, saved at `instant`, added (an earlier save of the same window replaced), less the ones too old to be asked about. */
+const byStartTime = (a: SavedWindow, b: SavedWindow) => Date.parse(a.windowStart) - Date.parse(b.windowStart);
+
+/**
+ * `windows` once per window (the last entry of a window wins), the
+ * KEPT_WINDOWS that start latest, the window that starts at `keep` among them
+ * whatever its start, in order of start. The writer's rule, which hydration
+ * applies to a saved profile too (useMCStore.tsx).
+ */
+export function keptWindows(windows: readonly SavedWindow[], keep?: string): SavedWindow[] {
+    const byStart = new Map<string, SavedWindow>();
+    for (const w of windows) byStart.set(w.windowStart, w);
+    const pinned = keep === undefined ? undefined : byStart.get(keep);
+    const others = [...byStart.values()].filter(w => w !== pinned).sort(byStartTime);
+    if (pinned === undefined) return others.slice(-KEPT_WINDOWS);
+    return [...others.slice(-(KEPT_WINDOWS - 1)), pinned].sort(byStartTime);
+}
+
+/** `windows` with `opened`, saved at `instant`, added (keptWindows: an earlier save of the same window replaced). */
 function withSavedWindow(windows: SavedWindow[] | undefined, opened: Occurrence, instant: string): SavedWindow[] {
     const windowStart = new Date(opened.startMs).toISOString();
-    const oldest = Date.parse(instant) - KEPT_FOR_MS;
-    const kept = (windows ?? []).filter(w => w.windowStart !== windowStart && Date.parse(w.windowStart) >= oldest);
-    return [...kept, { savedAt: instant, windowStart }];
+    return keptWindows([...(windows ?? []), { savedAt: instant, windowStart }], windowStart);
 }
 
 /** `m` with the window its changed settings open at `instant` added to `savedIntoWindows` (openedWindow); else as it was. */

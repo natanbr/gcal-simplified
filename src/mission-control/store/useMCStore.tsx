@@ -23,6 +23,7 @@ import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
 import { deriveMissionWindow, hydrateMissionTimes, isValidDurationMins, sanitizeMissionTimes } from './hhmm';
+import { keptWindows } from './missionActivity';
 import { isDateKey } from './occurrenceDay';
 import { retimeAheadDay } from './occurrenceHandled';
 import { runLengthRepair, settingRepairs, type MissionTimeRepair } from './missionTimeRepair';
@@ -49,7 +50,12 @@ function isPastInstant(value: unknown): value is string {
     return Number.isFinite(ms) && new Date(ms).toISOString() === value && ms <= Date.now();
 }
 
-/** The windows a save opened, each kept only as two past instants with the window's start not after its save. */
+/**
+ * The windows a save opened, each kept only as two past instants with the
+ * window's start not after its save, then as the writer keeps them (keptWindows:
+ * once per window, the eight that start latest): a profile of 10,000 entries
+ * made every Settings save compare pairs of them.
+ */
 function savedWindows(value: unknown): SavedWindow[] | undefined {
     if (!Array.isArray(value)) return undefined;
     const kept = value.flatMap((w: unknown): SavedWindow[] => {
@@ -57,7 +63,7 @@ function savedWindows(value: unknown): SavedWindow[] | undefined {
         const { savedAt, windowStart } = w;
         return isPastInstant(savedAt) && isPastInstant(windowStart) && Date.parse(windowStart) <= Date.parse(savedAt) ? [{ savedAt, windowStart }] : [];
     });
-    return kept.length > 0 ? kept : undefined;
+    return kept.length > 0 ? keptWindows(kept) : undefined;
 }
 
 /**

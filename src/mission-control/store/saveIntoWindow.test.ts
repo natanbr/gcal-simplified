@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { initialState, mcReducer } from './mcReducer';
 import { stampMissionActivity } from './missionActivity';
+import { occurrenceHandled } from './occurrenceHandled';
 import type { MCSettings, MCState, MissionPhase } from '../types';
 
 const nov = (day: number, h: number, m: number, s = 0, ms = 0) => new Date(2026, 10, day, h, m, s, ms);
@@ -98,10 +99,31 @@ describe('a recorded window is kept', () => {
             .toEqual([{ savedAt: iso(nov(10, 7, 20)), windowStart: iso(nov(10, 6, 59)) }]);
     });
 
-    it('until it is four days older than a new entry, when no look-back can reach it', () => {
-        const within = saveAt(stamped, { morningStartsAt: '06:58' }, nov(14, 6, 59));
-        expect(windowsOf(within, 'morning'), 'four days to the minute').toHaveLength(2);
-        const beyond = saveAt(stamped, { morningStartsAt: '06:58' }, nov(14, 7, 0));
-        expect(windowsOf(beyond, 'morning')).toEqual([{ savedAt: iso(nov(14, 7, 0)), windowStart: iso(nov(14, 6, 58)) }]);
+    it('until eight windows that start later are kept: a ninth window drops the one that starts first', () => {
+        // A window opened at 07:00 on each of nine days, the start moved between 06:58 and 06:59 every time.
+        let s = initialState;
+        for (let day = 10; day <= 18; day += 1) s = saveAt(s, { morningStartsAt: day % 2 === 0 ? '06:59' : '06:58' }, nov(day, 7, 0));
+        const starts = windowsOf(s, 'morning')?.map(w => w.windowStart);
+        expect(starts, 'the eight that start latest, in order of start').toEqual([11, 12, 13, 14, 15, 16, 17, 18].map(d => iso(nov(d, 6, d % 2 === 0 ? 59 : 58))));
+    });
+
+    it('the window a save just opened is kept even when it starts before the eight already kept', () => {
+        // Eight saves at 08:00 each move the start a minute further back (07:59 … 07:52), then one opens 06:00–09:00.
+        let s = initialState;
+        for (let m = 59; m >= 52; m -= 1) s = saveAt(s, { morningStartsAt: `07:${m}` }, nov(10, 8, 0, 59 - m));
+        const opened = saveAt(s, { morningStartsAt: '06:00', morningDurationMins: 180 }, nov(10, 8, 1));
+        const windows = windowsOf(opened, 'morning') ?? [];
+        expect(windows, 'eight at most').toHaveLength(8);
+        expect(windows[0], 'the open window, first in order of start').toEqual({ savedAt: iso(nov(10, 8, 1)), windowStart: iso(nov(10, 6, 0)) });
+        expect(windows.map(w => w.windowStart), 'the one dropped is the 07:52 window, the next to start first').not.toContain(iso(nov(10, 7, 52)));
+    });
+
+    it('a length save made under a clock a week ahead keeps the real window, which stays covered once the clock is put right', () => {
+        // Covered at 07:00 on the 10th (06:59 for 30 min). The clock jumps to the 17th at 07:35 and the length goes to 60 min,
+        // which opens the 17th's 06:59 window. Kept by age, the 10th's entry fell more than four days behind it and was dropped.
+        const fastClock = saveAt(stamped, { morningDurationMins: 60 }, nov(17, 7, 35));
+        expect(windowsOf(fastClock, 'morning')).toEqual([first, { savedAt: iso(nov(17, 7, 35)), windowStart: iso(nov(17, 6, 59)) }]);
+        const o = { day: '2026-11-10', startMs: nov(10, 6, 59).getTime(), endMs: nov(10, 7, 59).getTime() };
+        expect(occurrenceHandled(fastClock, 'morning', o, nov(10, 7, 10).getTime()), 'the clock put right at 07:10: the open window started on demand').toBe(true);
     });
 });
