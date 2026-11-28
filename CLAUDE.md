@@ -168,7 +168,8 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   which does not exist, is read as 03:40, and deciding again on a move from one to the other uncovered
   it), and a stamp saved by PR 207, which stored no decision, is decided once at load as PR 207 read it
   (the window behind as long as the mission is in the loaded settings). A run's stored length is read by
-  `isRunLengthMins` (above zero, under a day): a one-second run stores a hair under 1/60 min. Known gaps:
+  `isRunLengthMins` (at least one second in whole seconds, under a day): a one-second run stores a hair
+  under 1/60 min, and above zero alone let 5e-324 work the +/- cap from an empty run. Known gaps:
   the rule weighs the run's last activity, not when the save was made, so an evening that ended (missed or
   stopped) at 00:30 and was moved at 08:00 to 08:30 skips that 08:30, silently; the phone can start it;
   the first move on the spring-forward night onto another name of the same instant (03:40 to 02:40) can
@@ -199,8 +200,10 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   "skipped" line for a window a save explained (shortening it after the save, covering the next day's
   window at the same start, or eight saves in one day and a ninth window the next, each did) unless 64
   that start later, or windows on four later days, pushed it out: a window pushed out is covered no
-  more, and saves made under a clock running ahead on four later days can push out the real open window,
-  which then starts once the clock is put right. Kept by a count, eight saves in a day pushed out a window
+  more (known gap: 64 distinct starts saved in one day and a length-only save the next day push out a
+  window the look-back still asks about, and a launch writes its "skipped" line, a log line only), and
+  saves made under a clock running ahead on four later days can push out the real open window, which then
+  starts once the clock is put right (known gap (ii) below). Kept by a count, eight saves in a day pushed out a window
   the look-back asks about; kept by an age, a clock running a week ahead measured it wrong.
   Nothing else is covered: a start still ahead at the save starts as scheduled, a later day
   starts as normal, an earlier closed window keeps its "skipped" line, and a window already open and
@@ -209,9 +212,12 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   start ahead would count the first as a run and the whole day would start nothing. Hydration keeps an
   entry only when both instants are past and the window starts at or before the save, then as the
   writer keeps them (`keptWindows`: a profile of 10,000 entries loads as 64), `baseDurationMins` as a
-  run length (`isRunLengthMins`), and `retimeCoversDay` only beside a stamp, as a real day (`isDateKey`,
-  by round trip: '2026-02-30' was kept) or null, deciding a stamp that has none or one it cannot read as
-  PR 207 read it, so a relaunch inside the window starts nothing, after the upgrade from PR 207 too.
+  run length (`isRunLengthMins`), the run's day (`occurrenceDate`) by its shape (`isDateKey`: dropped, a
+  damaged day dated the outcome by the calendar, and a phone start at 00:30 for the 19:00 evening marked
+  that day's evening done before it ran), and `retimeCoversDay` only beside a stamp: a real day
+  (`isCalendarDay`, by round trip) or null is kept, an absent one (PR 207 stored none) is decided once as
+  PR 207 read it, so a relaunch inside the window starts nothing after the upgrade too, and anything else
+  is damage and reads as null, no day ahead (the scheduled start goes ahead).
   Every stamp
   (`lastActiveAt`, `startsAtChangedAt`, both instants of an entry) is kept only in the exact form
   `toISOString` writes (`isPastInstant`, `useMCStore.tsx`): `Date.parse` rolls '2026-02-30' over to
@@ -223,7 +229,14 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   hydration drops an entry in the future, as it drops a future `lastActiveAt` or `startsAtChangedAt`,
   so the window stays released once the clock is put right. That is the save made under the wrong clock
   only: a later save made with the clock ahead keeps an earlier save's coverage (the older stamp of the
-  same run, and each window's earliest entry); (iii) the rule is no start into the past, not no start from Settings: a
+  same run, and each window's earliest entry), with two exceptions: saves that open windows on four or more
+  later days under a clock days ahead push out an earlier covered window that is still valid, as the four
+  days are those in the list, not the real clock's (Monday 07:00 covered, saves on the 17th to the 20th
+  under a clock ahead, the clock put back at Monday 07:01, a relaunch: a scheduler start); and a save made
+  once the clock is right does not always replace a stamp left in the future, as `saveKeepsRun` refuses
+  before `movedStamp` compares them (the 06:00 morning stopped at 06:10, moved to 07:00 under a clock
+  reading tomorrow 06:15, then today at 06:20 to 07:10: 07:10 reads unhandled despite the run; so on
+  70e3241 too); (iii) the rule is no start into the past, not no start from Settings: a
   start saved one minute ahead still starts a minute later with a full timer (a time still ahead stays
   automatic by design); (iv) a skip made through Settings costs the child nothing: the covered window
   starts nothing, charges no miss, moves no shield and gets no "skipped" line, and only the log line

@@ -95,7 +95,7 @@ start path (SET_ACTIVE_MISSION through REMOTE_ALLOWED_ACTIONS) is unchanged, and
 start still ahead at the save stays automatic.
 
 The rule is no start into the past, not no start from Settings. Known gaps, each
-an owner decision (the last four found reviewing PR 209):
+an owner decision (most found reviewing PR 209):
 - a start saved one minute ahead still starts a minute later, with a full timer
   (a time still ahead stays automatic by design);
 - moving an open window that waits behind another running mission to a different
@@ -119,6 +119,19 @@ an owner decision (the last four found reviewing PR 209):
 - a covered window pushed out of the four kept days (or past 64) is covered no
   more: a later look-back may report it "skipped", and saves under a clock
   running ahead on four later days can push out the real open window;
+- saves that open windows on four or more later days under a clock days ahead
+  push out an earlier covered window that is still valid: the four days are
+  those in the list, not the real clock's (Monday 07:00 covered, saves on the
+  17th to the 20th under a clock ahead, the clock put back at Monday 07:01, a
+  relaunch: a scheduler start);
+- 64 distinct starts saved in one day and a length-only save the next day push
+  out a window the look-back still asks about: a launch writes its "skipped"
+  line (a log line only);
+- a save made once the clock is right does not always replace a stamp left in
+  the future, as `saveKeepsRun` refuses before `movedStamp` compares them (the
+  06:00 morning stopped at 06:10, moved to 07:00 under a clock reading tomorrow
+  06:15, then today at 06:20 to 07:10: 07:10 reads unhandled despite the run;
+  so on 70e3241 too);
 - the fixture-clock guard reads a spread after the timestamp (`...overrides`) as
   the timestamp, though the spread can set it back to undefined;
 - a skip made through Settings costs the child nothing: no start, no miss, no
@@ -184,6 +197,19 @@ nearness. Pinned by `store/occurrenceHandled.retime-clock-ahead.test.ts`,
 `store/persistence-saved-windows.test.ts`, `store/persistence-retime-decision.test.ts`,
 `store/occurrenceHandled.duration-save.test.ts` and the property file.
 
+The final round (2026-11-28) fixed four things the third introduced. The round
+trip also dropped a damaged run day, and the outcome fell back to the calendar:
+a phone start at 00:30 for the 19:00 evening (yesterday's, made up) marked that
+day's evening done before it ran; a run's day is kept by its shape again, and
+the round trip is for the stored decision only. A decision present but
+unreadable was decided again like an absent one, with the length in the
+profile, and held back a start that was due; only an absent one is PR 207's,
+anything else reads as none. A run's length above zero let 5e-324 work the +/-
+cap from an empty run; it must be at least one second. And the 10,000-entry
+load was timed with the faked clock; it uses the real one. Pinned by
+`store/persistence-run-fields.test.ts`, `store/persistence-retime-decision.test.ts`,
+`store/hhmm.test.ts` and `store/persistence-saved-windows.test.ts`.
+
 ## Verification and handoff
 
 Status: development and independent architecture, QA, security and UI review
@@ -195,7 +221,8 @@ start move onto the same instant, the upgrade from PR 207, the count of covered
 windows, the earliest save, the log line's question, the property and the
 fixture-clock guard) and its third (a clock-ahead move, covered windows by day,
 the upgrade as PR 207 read it, a one-second run's length, an impossible stored
-day, the nearness pinned); the PR 209 follow-up awaits its own review. No merge or
+day, the nearness pinned) and its final round (a damaged run day, a damaged
+stored decision, a run length under a second, the load timing); the PR 209 follow-up awaits its own review. No merge or
 production release. The phone change is mc-remote #6, not yet merged.
 
 - Desktop: component and structural tests must fail with the old Start controls;
