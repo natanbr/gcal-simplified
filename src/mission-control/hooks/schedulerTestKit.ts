@@ -129,7 +129,8 @@ export function skippedLines(state: MCState, phase: Phase): number {
 /**
  * When a fixture's Settings save was made: long before any clock a test sets. Stamped
  * at the test's clock instead, a save that sets up a window already open then puts it
- * under the clock (savedIntoWindowAt), and the scheduler rightly starts nothing there.
+ * under the clock (savedIntoWindows), and the scheduler rightly starts nothing there.
+ * settings-fixture-clock-boundary.test.ts trusts it by name and pins it before 2000.
  */
 export const SAVED_LONG_AGO = new Date(0).toISOString();
 
