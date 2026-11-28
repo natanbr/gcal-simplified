@@ -194,7 +194,9 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   that ends the running mission (a new start time for it, above) lets the other phase's window, open and
   waiting behind it, start at once (`.coverage.test.tsx`); (ii) a clock moved backward past a save's
   time releases the window it covered (an entry in the future is ignored until the clock reaches it,
-  as a `lastActiveAt` is); (iii) the rule is no start into the past, not no start from Settings: a
+  as a `lastActiveAt` is), and a restart while the clock is still behind makes that permanent:
+  hydration drops an entry in the future, as it drops a future `lastActiveAt` or `startsAtChangedAt`,
+  so the window stays released once the clock is put right; (iii) the rule is no start into the past, not no start from Settings: a
   start saved one minute ahead still starts a minute later with a full timer (a time still ahead stays
   automatic by design); (iv) a skip made through Settings costs the child nothing: the covered window
   starts nothing, charges no miss, moves no shield and gets no "skipped" line, and only the log line

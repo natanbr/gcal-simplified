@@ -104,7 +104,9 @@ an owner decision (the last four found reviewing PR 209):
   phase's window, open and waiting behind it, start at once (pinned in
   `useMissionScheduler.no-start-on-demand.coverage.test.tsx`);
 - a clock moved backward past a save's time releases the window it covered (an
-  entry in the future is ignored until the clock reaches it);
+  entry in the future is ignored until the clock reaches it), and a restart while
+  the clock is still behind makes that permanent: hydration drops an entry in the
+  future, so the window stays released once the clock is put right;
 - a skip made through Settings costs the child nothing: no start, no miss, no
   shield step and no "skipped" line; the save's one "not started" line (owner
   decision 2026-11-16, `store/savedIntoWindowLog.ts`, left out for a mission that
