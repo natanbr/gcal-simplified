@@ -120,6 +120,12 @@ start in `savedIntoWindows`, and `occurrenceHandled` reads no length. Pinned by
 `hooks/useMissionScheduler.duration-save.test.tsx` and the property test
 `store/occurrenceHandled.duration-property.test.ts`.
 
+The same review found a covered window reported missed: a wake after a save
+that shortened the covered window, or after a save that covered the next day's
+window at the same start (the only stamp was overwritten), wrote a "skipped"
+line beside the save's "not started" line. Each opened window now keeps its own
+entry; pinned by `hooks/useMissionScheduler.saved-window-kept.test.tsx`.
+
 ## Verification and handoff
 
 Status: development and independent architecture, QA, security and UI review

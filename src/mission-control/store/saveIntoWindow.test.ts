@@ -3,7 +3,8 @@
 // its start (stampMissionActivity, missionActivity.ts), read by the scheduler
 // (occurrenceHandled.ts). Through the real reducer, with the action's
 // timestamp, as the app dispatches it. Scheduler-level cases:
-// hooks/useMissionScheduler.no-start-on-demand*.test.tsx.
+// hooks/useMissionScheduler.no-start-on-demand*.test.tsx and
+// hooks/useMissionScheduler.saved-window-kept.test.tsx.
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
