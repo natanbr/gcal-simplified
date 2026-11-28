@@ -140,14 +140,16 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
             missions: initialState.missions.map(defaultM => {
                 const savedM = parsed.missions?.find(m => m.phase === defaultM.phase);
                 if (!savedM) return defaultM;
+                const startsAtChangedAt = isPastInstant(savedM.startsAtChangedAt) ? savedM.startsAtChangedAt : undefined;
                 const merged = {
                     ...defaultM,
                     ...savedM,
                     // All must survive a restart: a relaunch inside the window after a stop, after a
                     // save that moved the start time, or after one that opened the window would otherwise start it.
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
-                    startsAtChangedAt: isPastInstant(savedM.startsAtChangedAt) ? savedM.startsAtChangedAt : undefined,
-                    retimeCoversDay: isDateKey(savedM.retimeCoversDay) || savedM.retimeCoversDay === null ? savedM.retimeCoversDay : undefined,
+                    startsAtChangedAt,
+                    // A real day or null, and only beside a stamp: anything else is decided again (withRetimeDecision).
+                    retimeCoversDay: startsAtChangedAt !== undefined && (isDateKey(savedM.retimeCoversDay) || savedM.retimeCoversDay === null) ? savedM.retimeCoversDay : undefined,
                     savedIntoWindows: savedWindows(savedM.savedIntoWindows),
                     // The run's day and base length, kept only when real (missing: the derivations they replace).
                     occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,

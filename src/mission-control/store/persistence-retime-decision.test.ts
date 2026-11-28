@@ -147,11 +147,23 @@ describe('the decision a start-time save stores', () => {
         }
     });
 
-    it('with no stamp, nothing is decided: a stray value is dropped and an absent one stays absent', () => {
+    it('a day that does not exist reads as not decided, and the stamp beside it is decided again: 00:10 stays covered (Codex)', () => {
+        vi.setSystemTime(nov(11, 0, 11));
+        for (const impossible of ['2026-02-30', '2026-11-31', '2026-13-01']) {
+            persistWith(movedPastMidnight(), { retimeCoversDay: impossible });
+            const state = loadPersistedState();
+            expect(handledAt0010(state, nov(11, 0, 11)), `${impossible} was kept as a decision: the evening started at once`).toBe(true);
+            expect(evening(state).retimeCoversDay, impossible).toBe('2026-11-11');
+        }
+    });
+
+    it('with no stamp, nothing is decided: a stray value is dropped, a real day too, and an absent one stays absent', () => {
         vi.setSystemTime(nov(11, 0, 11));
         const unmoved = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:30' }, timestamp: LONG_AGO });
         persistWith(unmoved, { retimeCoversDay: 'tomorrow' });
         expect(evening(loadPersistedState()).retimeCoversDay).toBeUndefined();
+        persistWith(unmoved, { retimeCoversDay: '2026-11-11' });
+        expect(evening(loadPersistedState()).retimeCoversDay, 'a decision belongs to a stamp').toBeUndefined();
         persistWith(unmoved, {});
         expect(evening(loadPersistedState()).retimeCoversDay).toBeUndefined();
     });
