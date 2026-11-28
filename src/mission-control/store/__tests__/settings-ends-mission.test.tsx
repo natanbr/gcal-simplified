@@ -59,18 +59,21 @@ describe('SET_SETTINGS that ends the running mission', () => {
         expect(ended()).toHaveLength(1);
         expect(ended()[0]).toMatchObject({
             icon: '⏹️',
-            message: 'Evening mission ended: its start time was changed in Settings',
+            message: 'Evening mission ended: its start time was changed in Settings — Evening start changed 19:00 → 20:30',
             type: 'mission',
             colorKey: 'evening',
             source: 'local',
         });
     });
 
-    it('a second start-time change, once nothing runs, writes nothing more', () => {
+    it('a second start-time change, once nothing runs, writes the plain change line and no second "ended" line', () => {
         launchWithEveningRunning();
         save({ eveningStartsAt: '20:30' });
         save({ eveningStartsAt: '20:40' });
         expect(ended()).toHaveLength(1);
+        // Newest first: the plain change line, then the ended line with its times.
+        expect(live.activityLogs.filter(l => /start changed/.test(l.message)).map(l => l.message))
+            .toEqual(['Evening start changed 20:30 → 20:40', 'Evening mission ended: its start time was changed in Settings — Evening start changed 19:00 → 20:30']);
     });
 });
 
@@ -94,12 +97,12 @@ describe('SET_SETTINGS that ends nothing writes no such line', () => {
         // activityLog.ts's own rule: a path that writes no line must not pay a speculative reduce.
         const evening: MCState = { ...initialState, activeMission: 'evening' };
         reducerSpy.mockClear();
-        expect(createLogEntry({ type: 'SET_SETTINGS', settings: { eveningDurationMins: 45, morningStartsAt: '05:15' }, timestamp: NOON }, evening)).toBeNull();
+        expect(createLogEntry({ type: 'SET_SETTINGS', settings: { eveningDurationMins: 45, creamTaskEnabled: true }, timestamp: NOON }, evening)).toBeNull();
         expect(reducerSpy).not.toHaveBeenCalled();
     });
 
-    it('a start-time change with nothing running', () => {
+    it('a start-time change with nothing running writes the plain change line (settings-start-change-log.test.tsx), not this one', () => {
         const action: MCAction = { type: 'SET_SETTINGS', settings: { eveningStartsAt: '20:30' }, timestamp: NOON };
-        expect(createLogEntry(action, initialState)).toBeNull();
+        expect(createLogEntry(action, initialState)?.message).toBe('Evening start changed 19:00 → 20:30');
     });
 });

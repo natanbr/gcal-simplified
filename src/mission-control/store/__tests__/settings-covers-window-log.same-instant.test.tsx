@@ -27,9 +27,9 @@ describe('a second save at the same instant', () => {
             .toMatch(/^Morning mission not started: its 06:50 window/);
     });
 
-    it('that covers nothing writes none', () => {
+    it('that covers nothing writes no "not started" line, only its start change', () => {
         const first = mcReducer(initialState, save({ morningStartsAt: '06:59' }, at(7, 0)));
-        expect(createLogEntry(save({ morningStartsAt: '07:30' }, at(7, 0)), first)).toBeNull();
+        expect(createLogEntry(save({ morningStartsAt: '07:30' }, at(7, 0)), first)?.message).toBe('Morning start changed 06:59 → 07:30');
     });
 
     it('that covers again the window an earlier one covered writes its line (06:59, 07:01, 06:59 at 07:00)', () => {
@@ -37,7 +37,7 @@ describe('a second save at the same instant', () => {
         // {07:00, 06:59}, so a line that looked for a new entry by content found none (Codex).
         const first = mcReducer(initialState, save({ morningStartsAt: '06:59' }, at(7, 0)));
         const ahead = mcReducer(first, save({ morningStartsAt: '07:01' }, at(7, 0)));
-        expect(createLogEntry(save({ morningStartsAt: '07:01' }, at(7, 0)), first), 'precondition: 07:01 is still ahead').toBeNull();
+        expect(createLogEntry(save({ morningStartsAt: '07:01' }, at(7, 0)), first)?.message, 'precondition: 07:01 is still ahead').toBe('Morning start changed 06:59 → 07:01');
         const back = save({ morningStartsAt: '06:59' }, at(7, 0));
         expect(mcReducer(ahead, back).missions[0].savedIntoWindows, 'precondition: the entry is unchanged').toEqual(first.missions[0].savedIntoWindows);
         expect(createLogEntry(back, ahead)?.message).toMatch(/^Morning mission not started: its 06:59 window/);

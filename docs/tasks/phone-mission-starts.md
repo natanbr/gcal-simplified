@@ -137,13 +137,15 @@ an owner decision (most found reviewing PR 209):
 - a skip made through Settings costs the child nothing: no start, no miss, no
   shield step and no "skipped" line; the save's one "not started" line (owner
   decision 2026-11-16, `store/savedIntoWindowLog.ts`, left out for a mission that
-  already ran in the window; a running mission ended by the same save gets only
-  the "ended" line) is the only trace.
+  already ran in the window; a running mission ended by the same save gets the
+  "ended" line, and every start-time change writes a line too, `store/startTimeChangeLog.ts`,
+  folded into that one when the save writes one, or alone) is the only trace.
 
 Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
 `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`,
 `store/__tests__/settings-covers-window-log*.test.tsx`, `persistence-time.test.ts`,
-`persistence-saved-windows.test.ts` and `activity-stamp-boundary.test.ts`.
+`persistence-saved-windows.test.ts`, `store/__tests__/settings-start-change-log.test.tsx`,
+`start-change-log-boundary.test.ts` and `activity-stamp-boundary.test.ts`.
 
 ## A length-only save changed which window starts (fixed 2026-11-27)
 
