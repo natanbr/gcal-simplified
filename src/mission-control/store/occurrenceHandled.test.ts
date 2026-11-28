@@ -87,9 +87,12 @@ describe('retimeAheadDay: the occurrence ahead a save that moves the start onto 
         expect(retimeAheadDay(stamped(nov(10, 1, 0), { lastActiveAt: 'garbage' }), settings)).toBeUndefined();
     });
 
-    it('weighs the window behind with the length the mission has at the save, which is why it is stored', () => {
+    it('weighs the window behind with the run\'s own length, whatever the mission\'s length is now', () => {
         // The evening moved to 06:40, last active at 19:30: 11 h 10 to 06:40; the 10th's window ends 07:40 (60 min) or 08:40 (120 min).
-        const at0640 = (endsAt: string) => evening({ startsAt: '06:40', endsAt, lastActiveAt: iso(nov(10, 19, 30)) });
+        const at0640 = (endsAt: string, run: Partial<Mission> = {}) => evening({ startsAt: '06:40', endsAt, lastActiveAt: iso(nov(10, 19, 30)), ...run });
+        expect(retimeAheadDay(at0640('08:40', { baseDurationMins: 60 }), settings), 'a 60 min run, the mission now 120 min: 11 h 50 behind').toBe('2026-11-11');
+        expect(retimeAheadDay(at0640('07:40', { baseDurationMins: 120 }), settings), 'a 120 min run, the mission now 60 min: 10 h 50 behind').toBeUndefined();
+        // A run saved before baseDurationMins: the mission's length stands in.
         expect(retimeAheadDay(at0640('07:40'), settings), '60 min: 11 h 50 behind').toBe('2026-11-11');
         expect(retimeAheadDay(at0640('08:40'), settings), '120 min: 10 h 50 behind').toBeUndefined();
     });

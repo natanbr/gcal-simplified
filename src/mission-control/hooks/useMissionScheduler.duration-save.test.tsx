@@ -73,3 +73,43 @@ describe('a length save the minute before a moved start', () => {
         h.unmount();
     });
 });
+
+// A later start move decides again; the window behind is weighed with the run's own
+// length (baseDurationMins), so the length save in between cannot move the answer.
+describe('a start move after a length save', () => {
+    beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); });
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear(); delete window.ipcRenderer; });
+
+    /** Moves the evening at 06:20 to 06:40, saves its length `mins` at 06:25 and moves it at 06:30 to 06:45. */
+    function moveLengthMove(h: ReturnType<typeof eveningStarted>, mins: number) {
+        jumpTo(nov(11, 6, 20));
+        h.dispatch({ type: 'SET_SETTINGS', settings: { eveningStartsAt: '06:40' } });
+        jumpTo(nov(11, 6, 25));
+        h.dispatch({ type: 'SET_SETTINGS', settings: { eveningDurationMins: mins } });
+        jumpTo(nov(11, 6, 30));
+        h.dispatch({ type: 'SET_SETTINGS', settings: { eveningStartsAt: '06:45' } });
+        crossing(nov(11, 6, 45));
+    }
+
+    it('after a miss (19:00 for 30 min, timed out), lengthened 30 → 120 min between the moves: nothing starts at 06:45', () => {
+        const h = eveningStarted(30);
+        crossing(nov(10, 19, 30));
+        expect(h.live.state.lastCompletedOrFailedEveningDate, 'precondition: a miss').toBe('2026-11-10');
+        moveLengthMove(h, 120);
+        expect(h.live.state.activeMission, 'the second move released 06:45: a fresh attempt after the miss').toBe('none');
+        expect(startLogs(h.live.state, 'evening')).toBe(1);
+        h.unmount();
+    });
+
+    it('a run the phone stopped at 19:01 (19:00 for 120 min), shortened 120 → 30 min between the moves: 06:45 starts', () => {
+        const h = eveningStarted(120);
+        jumpTo(nov(10, 19, 1));
+        h.emit('remote-control:action', { type: 'CANCEL_MISSION', missionPhase: 'evening' });
+        step(1_100);
+        expect(h.live.state.activeMission, 'precondition: the phone stopped it').toBe('none');
+        moveLengthMove(h, 30);
+        expect(h.live.state.activeMission, 'the second move held back the start that was due').toBe('evening');
+        expect(startLogs(h.live.state, 'evening')).toBe(2);
+        h.unmount();
+    });
+});

@@ -28,8 +28,9 @@
 // occurrence at the old start time (saveKeepsRun, occurrenceHandled.ts). The
 // scheduler then refuses a fresh attempt at the moved time (retimedOntoItsRun,
 // 2026-11-13). With it goes `retimeCoversDay`, that save's decision about the
-// occurrence ahead (retimeAheadDay), made with the length of the save so a
-// later length save cannot move it. Nothing clears either
+// occurrence ahead (retimeAheadDay), weighed with the run's own length and
+// stored, so a later length save cannot move it; a later move to the same
+// instant keeps it (aheadDecision). Nothing clears either
 // (activity-stamp-boundary.test.ts).
 //
 // `savedIntoWindows` gains an entry here, from the window transition (a save
@@ -47,7 +48,7 @@
 
 import type { MCSettings, MCState, Mission, SavedWindow } from '../types';
 import { missionDurationMins } from './hhmm';
-import { openOccurrence, type Occurrence } from './missionOccurrence';
+import { nextOccurrence, openOccurrence, type Occurrence } from './missionOccurrence';
 import { retimeAheadDay, saveKeepsRun } from './occurrenceHandled';
 
 /** `instant`, or the run's due end when that came earlier. */
@@ -65,19 +66,40 @@ function startMoved(prev: MCState, m: Mission): boolean {
 }
 
 /**
+ * The decision about the occurrence ahead for a save that moves `m` (under
+ * `settings`, the saved ones) from `before` (under `prevSettings`) onto its run:
+ * the one the save before it made, when that save stamped this same run (no
+ * activity since, as retimedOntoItsRun reads it) and the occurrence ahead starts
+ * at the same instant under both start times; else a new one (retimeAheadDay).
+ * On the spring-forward night 02:40 and 03:40 name one instant, while the
+ * window behind them, the day before, is an hour apart: decided again, a move
+ * from one to the other uncovered the window the first had covered, and the
+ * scheduler started it at once (review of PR 209). A move to the same start
+ * never changes what is covered.
+ */
+function aheadDecision(before: Mission, prevSettings: MCSettings, m: Mission, settings: MCSettings): string | undefined {
+    const activeAt = Date.parse(m.lastActiveAt ?? '');
+    const sameRun = before.startsAtChangedAt !== undefined && activeAt <= Date.parse(before.startsAtChangedAt);
+    const ahead = nextOccurrence(m, settings, new Date(activeAt));
+    const sameAhead = ahead !== null && nextOccurrence(before, prevSettings, new Date(activeAt))?.startMs === ahead.startMs;
+    return sameRun && sameAhead ? before.retimeCoversDay : retimeAheadDay(m, settings);
+}
+
+/**
  * `m` (its run already stamped) with the save that moved its start time
  * stamped, when the run it had covered its occurrence at the old time
  * (saveKeepsRun, read in `prev`), and that save's decision about the
- * occurrence ahead (retimeAheadDay, under `settings`, the saved ones); else as
- * it was. At `instant`, or at the last activity when that is later: a save made
- * with the clock set back must not look older than the run it follows.
+ * occurrence ahead (aheadDecision); else as it was. At `instant`, or at the
+ * last activity when that is later: a save made with the clock set back must
+ * not look older than the run it follows.
  */
-function movedStamp(prev: MCState, m: Mission, settings: MCSettings, instant: string): Mission {
-    if (m.phase === 'none') return m;
+function movedStamp(prev: MCState, next: MCState, m: Mission, instant: string): Mission {
+    const before = prev.missions.find(p => p.phase === m.phase);
+    if (m.phase === 'none' || before === undefined) return m;
     const last = m.lastActiveAt;
     const at = last !== undefined && Date.parse(last) > Date.parse(instant) ? last : instant;
     if (!saveKeepsRun(prev, m.phase, Date.parse(at))) return m;
-    return { ...m, startsAtChangedAt: at, retimeCoversDay: retimeAheadDay(m, settings) };
+    return { ...m, startsAtChangedAt: at, retimeCoversDay: aheadDecision(before, prev.settings, m, next.settings) };
 }
 
 /** Whether a mission's window differs between two settings: a new start time or a new length. */
@@ -144,7 +166,7 @@ export function stampMissionActivity(prev: MCState, next: MCState, instant: stri
         missions: next.missions.map(m => {
             const runStamp = !ran ? null : m.phase === next.activeMission ? instant : m.phase === prev.activeMission ? ended : null;
             const stamped = runStamp === null ? m : { ...m, lastActiveAt: runStamp };
-            const moved = startMoved(prev, m) ? movedStamp(prev, stamped, next.settings, instant) : stamped;
+            const moved = startMoved(prev, m) ? movedStamp(prev, next, stamped, instant) : stamped;
             return windowChanged(prev, next, m) ? openedStamp(prev, next, moved, instant) : moved;
         }),
     };

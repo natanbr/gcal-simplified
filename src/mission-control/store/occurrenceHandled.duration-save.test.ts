@@ -81,3 +81,33 @@ describe('a length save cannot hold back an occurrence the retime rule left to s
         expect(handledAt(after, 11, nov(11, 6, 40)), 'the length save held back a start that was due').toBe(false);
     });
 });
+
+// A later start move decides again, and decided with the CURRENT length a length
+// save in between still moved the answer (review of PR 209, Opus): the window
+// behind is now as long as the run was (baseDurationMins), whatever was saved since.
+describe('a start move after a length save weighs the window behind with the run\'s own length', () => {
+    it.each<[string, number, End, number]>([
+        ['after a miss: 19:00 for 30 min, timed out at 19:30, lengthened 30 → 120 min', 30, 'timeout', 120],
+        ['the default 60 min, stopped by the phone at 19:30, lengthened 60 → 120 min', 60, 'phone stop', 120],
+    ])('%s at 06:25, moved at 06:20 to 06:40 and at 06:30 to 06:45: 06:45 is handled', (_name, durationMins, end, longer) => {
+        const moved = save(eveningRan(durationMins, end, nov(10, 19, 30)), { eveningStartsAt: '06:40' }, nov(11, 6, 20));
+        expect(handledAt(moved, 11, nov(11, 6, 40)), 'precondition: the run covers 06:40 on the 11th').toBe(true);
+
+        const lengthened = save(moved, { eveningDurationMins: longer }, nov(11, 6, 25));
+        const movedAgain = save(lengthened, { eveningStartsAt: '06:45' }, nov(11, 6, 30));
+        expect(handledAt(movedAgain, 11, nov(11, 6, 45)), 'the move after the length save released 06:45: a fresh attempt').toBe(true);
+        expect(handledAt(movedAgain, 12, nov(12, 6, 45)), 'the night after is still a new occurrence').toBe(false);
+    });
+
+    it.each<[string, number]>([
+        ['shortened 120 → 30 min', 30],
+        ['shortened 120 → 5 min', 5],
+    ])('a run the phone stopped at 19:01 (19:00 for 120 min), moved at 06:20 to 06:40, %s at 06:25, moved at 06:30 to 06:45: 06:45 starts', (_name, shorter) => {
+        const moved = save(eveningRan(120, 'phone stop', nov(10, 19, 1)), { eveningStartsAt: '06:40' }, nov(11, 6, 20));
+        expect(handledAt(moved, 11, nov(11, 6, 40)), 'precondition: the run is nearer the window behind').toBe(false);
+
+        const shortened = save(moved, { eveningDurationMins: shorter }, nov(11, 6, 25));
+        const movedAgain = save(shortened, { eveningStartsAt: '06:45' }, nov(11, 6, 30));
+        expect(handledAt(movedAgain, 11, nov(11, 6, 45)), 'the move after the length save held back a start that was due').toBe(false);
+    });
+});

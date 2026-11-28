@@ -33,6 +33,7 @@
 // ============================================================
 
 import type { MCSettings, MCState, Mission, MissionPhase } from '../types';
+import { isValidDurationMins, missionDurationMins } from './hhmm';
 import { nearerToStartOf, nextOccurrence, occurrenceOn, type Occurrence } from './missionOccurrence';
 
 export type Phase = Exclude<MissionPhase, 'none'>;
@@ -67,13 +68,18 @@ export function retimedOntoItsRun(m: Mission, o: Occurrence, nowMs: number): boo
  * the stamp (retimeCoversDay): the day of the first occurrence after the run's
  * last activity when the run is nearer that start than the end of the window
  * behind it, in real time (nearerToStartOf; never more than one ahead), else
- * none. Made once, with the length of the save: the window behind is as long
- * as the mission is, so read later it moved with every length save.
+ * none. The window behind is as long as the RUN was (baseDurationMins, which
+ * Settings never changes; the mission's length for a run saved before the
+ * field), so the decision depends only on the run and the new start: weighed
+ * with the mission's length of the moment, a length save between two moves
+ * changed what the second decided (review of PR 209). Stored, not read later,
+ * for the same reason.
  */
 export function retimeAheadDay(m: Mission, settings: MCSettings): string | undefined {
     const activeAt = stampMs(m.lastActiveAt);
     const ahead = nextOccurrence(m, settings, new Date(activeAt));
-    return ahead !== null && nearerToStartOf(ahead, m, settings, activeAt) ? ahead.day : undefined;
+    const runMins = isValidDurationMins(m.baseDurationMins) ? Number(m.baseDurationMins) : missionDurationMins(m, settings);
+    return ahead !== null && nearerToStartOf(ahead, m, settings, activeAt, runMins) ? ahead.day : undefined;
 }
 
 /**
