@@ -146,7 +146,9 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
                 const label = phase === 'morning' ? 'Morning' : 'Evening';
                 return { id, timestamp: now, icon: '⏹️', message: `${label} mission ended: its start time was changed in Settings`, type: 'mission', colorKey: phase, ...snap() };
             }
-            // A save that opens a window already open starts nothing (savedIntoWindows): say so.
+            // A save that opens a window starts nothing (savedIntoWindows): say so. A save
+            // that may open one pays a speculative pass to decide (coveredWindowLine), and a
+            // written line a second one for its snapshot (snap): two reducer passes in all.
             const covered = coveredWindowLine(state, action, now);
             return covered && { id, timestamp: now, icon: '⏭️', message: covered.message, type: 'mission', colorKey: covered.colorKey, ...snap() };
         }

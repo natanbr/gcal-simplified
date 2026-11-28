@@ -166,8 +166,8 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   `useMissionScheduler.settings-retime*` tests, `store/occurrenceHandled.test.ts` and
   `activity-stamp-boundary.test.ts`. The scheduler makes the scheduled starts and the phone every other
   start; the only desktop action that ends a run is this logged save.
-  A Settings save is no start on demand either (owner rule, closed 2026-11-15): a mission that had not run
-  could be saved to start a minute ago, or lengthened so a closed window opened again, and the scheduler
+  A Settings save is no start on demand either, in the sense of no start into the past (owner rule, closed
+  2026-11-15): a mission that had not run could be saved to start a minute ago, or lengthened so a closed window opened again, and the scheduler
   then started that open window at once with a full timer. A save that moves a start time or changes a
   length records the window it opens (one not open at that same start before) in `savedIntoWindows`:
   the save's instant and the window's start (`openedStamp`, `missionActivity.ts`, the field's one writer,
@@ -190,10 +190,16 @@ npm run release          # Build + key check + bump + rebuild + publish in one g
   `retimeCoversDay` only as a date, so a relaunch inside the window starts nothing. Every stamp
   (`lastActiveAt`, `startsAtChangedAt`, both instants of an entry) is kept only in the exact form
   `toISOString` writes (`isPastInstant`, `useMCStore.tsx`): `Date.parse` rolls '2026-02-30' over to
-  2 March and reads other shapes too. Known gaps: a start saved
-  one minute ahead still starts a minute later (a time still ahead stays automatic by design), and moving
-  an open, pending window to another open start stamps it, so that window never starts from the
-  scheduler; the phone can start it. The covered window starts nothing, charges no miss and gets no "skipped" line, but the save writes one attributed line (owner decision 2026-11-16): "⏭️ Evening mission not started: its 19:00 window was already open when Settings was saved (start it from the phone)", built in `store/savedIntoWindowLog.ts` from the state the reducer produces: a line for each mission the save stamped, unless it already ran in that window (`ranOrConcluded`, read after the save, so a start moved onto a run the retime rule counts writes none, and a completed or missed evening that is only lengthened writes none: "not started" would be false). The line asks which window the save added to `savedIntoWindows`, so a second save in the same millisecond that covers another window writes its own line (an unchanged stamp string used to read as "covered nothing"). A save that cannot open a window costs no reducer pass; a written line costs one. Known gap: when the save also ends the running mission only that "ended" line is written, and the other phase's window, if the same save opened it, is stamped with no line of its own (the running mission can be a phone start outside its own window, so the windows need not overlap). Known gap: a clock set ahead and then corrected backward can release a window (a stamp in the future is ignored until the clock reaches it).
+  2 March and reads other shapes too. Known gaps, each an owner decision (review of PR 209): (i) a save
+  that ends the running mission (a new start time for it, above) lets the other phase's window, open and
+  waiting behind it, start at once (`.coverage.test.tsx`); (ii) a clock moved backward past a save's
+  time releases the window it covered (an entry in the future is ignored until the clock reaches it,
+  as a `lastActiveAt` is); (iii) the rule is no start into the past, not no start from Settings: a
+  start saved one minute ahead still starts a minute later with a full timer (a time still ahead stays
+  automatic by design); (iv) a skip made through Settings costs the child nothing: the covered window
+  starts nothing, charges no miss, moves no shield and gets no "skipped" line, and only the log line
+  below records it. And moving an open, pending window to another open start records it, so that
+  window never starts from the scheduler; the phone can start it. The save writes one attributed line (owner decision 2026-11-16): "⏭️ Evening mission not started: its 19:00 window was open when Settings was saved (start it from the phone)", built in `store/savedIntoWindowLog.ts` from the state the reducer produces: one line for the save, naming each mission it covered ("Morning and evening missions not started: their windows were open when Settings was saved (start them from the phone)" when both), less a mission that already ran in that window (`ranOrConcluded`, read after the save, so a start moved onto a run the retime rule counts writes none, and a completed or missed evening that is only lengthened writes none: "not started" would be false). The line asks which window the save added to `savedIntoWindows`, so a second save in the same millisecond that covers another window writes its own line (an unchanged stamp string used to read as "covered nothing"). A save that cannot open a window costs no reducer pass; one that may costs one speculative pass to decide, and a written line a second for its balance snapshot. Known gap: when the save also ends the running mission only that "ended" line is written, and the other phase's window, if the same save opened it, is stamped with no line of its own (the running mission can be a phone start outside its own window, so the windows need not overlap).
   Guarded by `useMissionScheduler.no-start-on-demand*.test.tsx`, `useMissionScheduler.duration-save.test.tsx`,
   `useMissionScheduler.saved-window-kept.test.tsx`,
   `store/__tests__/settings-covers-window-log*.test.tsx`, `store/saveIntoWindow.test.ts`,

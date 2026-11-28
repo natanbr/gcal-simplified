@@ -94,12 +94,24 @@ run, so `saveKeepsRun` ignores it. The phone
 start path (SET_ACTIVE_MISSION through REMOTE_ALLOWED_ACTIONS) is unchanged, and a
 start still ahead at the save stays automatic.
 
-Out of scope, stated: a start saved one minute ahead still starts a minute later;
-moving an open window that waits behind another running mission to a different
-open start is stamped, so the scheduler never starts it (the phone can); the
-covered window gets no "skipped" line, but the save writes one log line unless the mission already ran in it (owner
-decision 2026-11-16, `store/savedIntoWindowLog.ts`; a running mission ended by the same save gets only the "ended" line); a clock set ahead
-then back. Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
+The rule is no start into the past, not no start from Settings. Known gaps, each
+an owner decision (the last four found reviewing PR 209):
+- a start saved one minute ahead still starts a minute later, with a full timer
+  (a time still ahead stays automatic by design);
+- moving an open window that waits behind another running mission to a different
+  open start is recorded, so the scheduler never starts it (the phone can);
+- a save that ends the RUNNING mission (a new start time for it) lets the other
+  phase's window, open and waiting behind it, start at once (pinned in
+  `useMissionScheduler.no-start-on-demand.coverage.test.tsx`);
+- a clock moved backward past a save's time releases the window it covered (an
+  entry in the future is ignored until the clock reaches it);
+- a skip made through Settings costs the child nothing: no start, no miss, no
+  shield step and no "skipped" line; the save's one "not started" line (owner
+  decision 2026-11-16, `store/savedIntoWindowLog.ts`, left out for a mission that
+  already ran in the window; a running mission ended by the same save gets only
+  the "ended" line) is the only trace.
+
+Pinned by `useMissionScheduler.no-start-on-demand*.test.tsx`,
 `store/saveIntoWindow.test.ts`, `store/occurrenceHandled.test.ts`,
 `store/__tests__/settings-covers-window-log*.test.tsx`, `persistence-time.test.ts` and
 `activity-stamp-boundary.test.ts`.
@@ -129,8 +141,12 @@ entry; pinned by `hooks/useMissionScheduler.saved-window-kept.test.tsx`.
 ## Verification and handoff
 
 Status: development and independent architecture, QA, security and UI review
-complete for the desktop change; the review follow-up of 2026-11-13 is in. No
-merge or production release. The phone change is mc-remote #6, not yet merged.
+complete for the desktop change; the review follow-ups of 2026-11-13 and of PR
+209 (2026-11-27: the length-only save, a covered window reported missed, two
+saves at one instant, strict stamp hydration, the fixture-clock guard's holes,
+the log wording and known gaps) are in; the PR 209 follow-up awaits its own
+review. No merge or production release. The phone change is mc-remote #6, not
+yet merged.
 
 - Desktop: component and structural tests must fail with the old Start controls;
   remote lifecycle tests must prove repeat starts and overlap refusal, a relaunch
@@ -150,6 +166,9 @@ merge or production release. The phone change is mc-remote #6, not yet merged.
   passed, 2 skipped; three load-sensitive cases failed once in the full run and
   passed when re-run alone), lint and full `npm run tsc` clean, and
   `e2e/mc-settings.spec.ts` passed 5 of 5 on a rebuilt app.
+- Desktop after the PR 209 review follow-up (2026-11-27): **3,214 tests in 268
+  files** (3,212 passed, 2 skipped), lint and full `npm run tsc` clean. E2E not
+  re-run for this follow-up (no Electron or E2E change; QA step 3.5.11b is new).
 - Phone: **114 tests**, lint and production build/typecheck passed. The final
   diff also passes the whitespace check. Vercel's PR preview check passed.
 - Interactive phone review at 390 x 844: repeat morning/evening starts, restart

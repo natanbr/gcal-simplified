@@ -5,9 +5,10 @@
 // (savedIntoWindows, missionActivity.ts): the scheduler counts that window as
 // handled. Left silent, a child could skip an unstarted mission with no trace
 // at all: no start, no miss, no "skipped" line. Owner decision 2026-11-16: the
-// save writes one attributed line for each mission it stamped, less a mission
-// that already ran in the window, read from the state the reducer produces
-// (savedIntoWindowLog.ts). A save that cannot open a window costs no reducer pass.
+// save writes one attributed line naming each mission it covered, less a
+// mission that already ran in the window, read from the state the reducer
+// produces (savedIntoWindowLog.ts). A save that cannot open a window costs no
+// reducer pass; a written line costs two (one to decide it, one for its snapshot).
 // ============================================================
 
 import { render, act } from '@testing-library/react';
@@ -35,7 +36,7 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
         const entry = createLogEntry(save({ morningStartsAt: '07:50' }, at(8, 0)), initialState);
         expect(entry).toMatchObject({
             icon: '⏭️',
-            message: 'Morning mission not started: its 07:50 window was already open when Settings was saved (start it from the phone)',
+            message: 'Morning mission not started: its 07:50 window was open when Settings was saved (start it from the phone)',
             type: 'mission',
             colorKey: 'morning',
             source: 'local',
@@ -57,7 +58,7 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
     it('both phases opened by one save: one line naming both', () => {
         const state = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 30, eveningDurationMins: 60 }, timestamp: at(3, 0) });
         const entry = createLogEntry(save({ morningStartsAt: '12:00', eveningStartsAt: '11:50' }, at(12, 5)), state);
-        expect(entry?.message).toMatch(/^Morning and evening missions not started/);
+        expect(entry?.message).toBe('Morning and evening missions not started: their windows were open when Settings was saved (start them from the phone)');
         expect(entry?.colorKey).toBeUndefined();
     });
 
@@ -119,6 +120,12 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
         reducerSpy.mockClear();
         expect(createLogEntry(save({ eveningDurationMins: 45, morningStartsAt: '09:15' }, at(8, 0)), initialState)).toBeNull();
         expect(reducerSpy).not.toHaveBeenCalled();
+    });
+
+    it('a written line costs two reducer passes: one to decide it, one for its snapshot', () => {
+        reducerSpy.mockClear();
+        expect(createLogEntry(save({ morningStartsAt: '07:50' }, at(8, 0)), initialState)).not.toBeNull();
+        expect(reducerSpy).toHaveBeenCalledTimes(2);
     });
 });
 

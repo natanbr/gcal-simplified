@@ -79,7 +79,8 @@ export interface SavedWindow { savedAt: string; windowStart: string }
 
 export interface Mission {
     phase: MissionPhase;
-    startsAt: string; // when the overlay slides in
+    /** When the overlay slides in */
+    startsAt: string;
     /** When the full lockout triggers */
     endsAt: string;
     durationMins?: number; // computed at trigger time

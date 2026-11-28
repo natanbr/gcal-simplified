@@ -147,7 +147,10 @@ const OVERSIZED_BASELINE: Record<string, number> = {
     // 304 → 308 on 2026-11-27: a save's decisions stored at the save, not re-derived
     // from the length later (Mission.retimeCoversDay, savedIntoWindows and the
     // SavedWindow type; review of PR 209). The split candidate above still stands.
-    'src/mission-control/types.ts': 308,
+    // 308 → 309 on 2026-11-27: Mission.startsAt's doc comment is back on its own line,
+    // as on main (PR 209 had folded it into a trailing comment to stay at the old
+    // baseline: squeezing to fit hides growth the ratchet exists to show).
+    'src/mission-control/types.ts': 309,
 };
 
 interface Measured {

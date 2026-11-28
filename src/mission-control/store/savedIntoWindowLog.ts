@@ -1,17 +1,19 @@
 // ============================================================
 // Mission Control — the log line for a save that covers an open window
 // ------------------------------------------------------------
-// A Settings save that opens a window already open at the save is never a start
-// (savedIntoWindows, missionActivity.ts): the scheduler counts that window as
-// handled, so nothing starts, no miss is charged and no "skipped" line is
-// written. Left silent, a child could skip an unstarted mission with no trace.
-// So the save writes one line (owner decision 2026-11-16) for each mission it
-// stamped, unless that mission already ran in the window ("not started" would
-// be false). Both are read from the state the reducer produces, so the line
-// follows the stamp and the scheduler's own answer, not a second reading of the
-// old state (a save that moves the start also writes startsAtChangedAt).
+// A Settings save that opens a window, one open at the save and not open at that
+// start before, is never a start (savedIntoWindows, missionActivity.ts): the
+// scheduler counts that window as handled, so nothing starts, no miss is
+// charged and no "skipped" line is written. Left silent, a child could skip an
+// unstarted mission with no trace. So the save writes one line (owner decision
+// 2026-11-16), naming each mission it covered (both phases share the one line),
+// less a mission that already ran in the window ("not started" would be false).
+// Both are read from the state the reducer produces, so the line follows the
+// stamp and the scheduler's own answer, not a second reading of the old state
+// (a save that moves the start also writes startsAtChangedAt).
 // A cheap check comes first: a save that cannot open a window costs no reducer
-// pass. createLogEntry asks it.
+// pass; one that may runs the reducer once here, and a written line runs it once
+// more for its balance snapshot (createLogEntry's snap). createLogEntry asks it.
 // ⚠️  Internal to src/mission-control/ only.
 // ============================================================
 
@@ -60,12 +62,12 @@ export function coveredWindowLine(state: MCState, action: Extract<MCAction, { ty
     if (opened.length === 1) {
         const { phase, startsAt } = opened[0];
         return {
-            message: `${LABEL[phase]} mission not started: its ${startsAt} window was already open when Settings was saved (start it from the phone)`,
+            message: `${LABEL[phase]} mission not started: its ${startsAt} window was open when Settings was saved (start it from the phone)`,
             colorKey: phase,
         };
     }
     return {
-        message: 'Morning and evening missions not started: their windows were already open when Settings was saved (start them from the phone)',
+        message: 'Morning and evening missions not started: their windows were open when Settings was saved (start them from the phone)',
         colorKey: undefined,
     };
 }
