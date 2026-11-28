@@ -34,7 +34,7 @@
 // ============================================================
 
 import type { MCSettings, MCState, Mission, MissionPhase } from '../types';
-import { isValidDurationMins, missionDurationMins } from './hhmm';
+import { isRunLengthMins, missionDurationMins } from './hhmm';
 import { nearerToStartOf, nextOccurrence, occurrenceOn, type Occurrence } from './missionOccurrence';
 
 export type Phase = Exclude<MissionPhase, 'none'>;
@@ -81,7 +81,7 @@ export function retimedOntoItsRun(m: Mission, o: Occurrence, nowMs: number): boo
 export function retimeAheadDay(m: Mission, settings: MCSettings, behindMins?: number): string | null {
     const activeAt = stampMs(m.lastActiveAt);
     const ahead = nextOccurrence(m, settings, new Date(activeAt));
-    const runMins = behindMins ?? (isValidDurationMins(m.baseDurationMins) ? Number(m.baseDurationMins) : missionDurationMins(m, settings));
+    const runMins = behindMins ?? (isRunLengthMins(m.baseDurationMins) ? m.baseDurationMins : missionDurationMins(m, settings));
     return ahead !== null && nearerToStartOf(ahead, m, settings, activeAt, runMins) ? ahead.day : null;
 }
 

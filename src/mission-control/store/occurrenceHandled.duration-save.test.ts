@@ -110,4 +110,17 @@ describe('a start move after a length save weighs the window behind with the run
         const movedAgain = save(shortened, { eveningStartsAt: '06:45' }, nov(11, 6, 30));
         expect(handledAt(movedAgain, 11, nov(11, 6, 45)), 'the move after the length save held back a start that was due').toBe(false);
     });
+
+    // A run of the one-second test duration stores its length from the window's arithmetic, a hair under the 1/60 min
+    // isValidDurationMins accepts, and read as invalid the length of the moment stood in for it (review of PR 209, Codex).
+    it('a one-second run timed out at 19:00:01, moved at 06:20 to 06:40, lengthened to 120 min at 06:38, moved at 06:39 to 06:41: 06:41 is handled', () => {
+        const ran = eveningRan(1 / 60, 'timeout', new Date(2026, 10, 10, 19, 0, 1));
+        expect(ran.missions.find(m => m.phase === 'evening')?.baseDurationMins, 'precondition: stored just under 1/60').toBeLessThan(1 / 60);
+        const moved = save(ran, { eveningStartsAt: '06:40' }, nov(11, 6, 20));
+        expect(handledAt(moved, 11, nov(11, 6, 40)), 'precondition: the run covers 06:40 on the 11th').toBe(true);
+
+        const lengthened = save(moved, { eveningDurationMins: 120 }, nov(11, 6, 38));
+        const movedAgain = save(lengthened, { eveningStartsAt: '06:41' }, nov(11, 6, 39));
+        expect(handledAt(movedAgain, 11, nov(11, 6, 41)), 'the 120 min of the moment stood in for the run: a fresh attempt').toBe(true);
+    });
 });

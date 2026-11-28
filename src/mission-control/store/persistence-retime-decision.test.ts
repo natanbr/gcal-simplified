@@ -130,6 +130,23 @@ describe('the decision a start-time save stores', () => {
         expect(evening(state).retimeCoversDay, 'written, so a later load reads the same').toBeNull();
     });
 
+    it("a one-second run's own length survives a restart, stored a hair under 1/60 min; a length that is not real is dropped", () => {
+        // The window behind a later move is weighed with it (retimeAheadDay); dropped, the length of the moment stood in.
+        const fixture = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningDurationMins: 1 / 60 }, timestamp: LONG_AGO });
+        const ran = act(fixture, { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'scheduler', occurrenceDate: '2026-11-10' }, nov(10, 19, 0));
+        const ended = act(ran, { type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler' }, new Date(2026, 10, 10, 19, 0, 1));
+        const stored = evening(ended).baseDurationMins;
+        expect(stored, 'precondition: just under 1/60').toBeLessThan(1 / 60);
+        vi.setSystemTime(nov(11, 6, 0));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(ended));
+        expect(evening(loadPersistedState()).baseDurationMins).toBe(stored);
+        for (const value of [0, -1, null, 1440, 'sixty']) {
+            const missions = ended.missions.map(m => (m.phase === 'evening' ? { ...m, baseDurationMins: value } : m));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...ended, missions }));
+            expect(evening(loadPersistedState()).baseDurationMins, String(value)).toBeUndefined();
+        }
+    });
+
     it('with no stamp, nothing is decided: a stray value is dropped and an absent one stays absent', () => {
         vi.setSystemTime(nov(11, 0, 11));
         const unmoved = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:30' }, timestamp: LONG_AGO });

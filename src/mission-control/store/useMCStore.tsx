@@ -22,7 +22,7 @@ import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
-import { deriveMissionWindow, hydrateMissionTimes, isValidDurationMins, missionDurationMins, sanitizeMissionTimes } from './hhmm';
+import { deriveMissionWindow, hydrateMissionTimes, isRunLengthMins, missionDurationMins, sanitizeMissionTimes } from './hhmm';
 import { keptWindows } from './missionActivity';
 import { isDateKey } from './occurrenceDay';
 import { retimeAheadDay } from './occurrenceHandled';
@@ -151,7 +151,7 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
                     savedIntoWindows: savedWindows(savedM.savedIntoWindows),
                     // The run's day and base length, kept only when real (missing: the derivations they replace).
                     occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,
-                    baseDurationMins: isValidDurationMins(savedM.baseDurationMins) ? savedM.baseDurationMins : undefined,
+                    baseDurationMins: isRunLengthMins(savedM.baseDurationMins) ? savedM.baseDurationMins : undefined,
                     // Icon + label come from the code; a Cream or School Bag task
                     // the saved run carried is kept, ticked or not (routineTasks.ts).
                     tasks: hydrateMissionTasks(defaultM.tasks, savedM.tasks),
