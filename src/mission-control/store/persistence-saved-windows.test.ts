@@ -44,7 +44,7 @@ describe('hydration — the windows a save covered, as the writer keeps them', (
         const kept = reloadMorningWith(many);
         const elapsedMs = performance.now() - startedAt;
         expect(kept).toEqual(many.slice(0, 64).reverse());
-        expect(elapsedMs, 'bounded work: about 40 ms alone, generous for a loaded machine').toBeLessThan(2_000);
+        expect(elapsedMs, 'bounded work: the whole test takes about 90 ms alone, so 2 s is generous for a loaded machine').toBeLessThan(2_000);
     });
 
     it('every window of the four latest days is kept, however many a day has (Codex: nine on two days)', () => {
