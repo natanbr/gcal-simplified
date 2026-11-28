@@ -73,6 +73,6 @@ describe('a Settings save across a DST night', () => {
         const ends = new Date(on(eve, 23, 30).getTime() + 240 * 60_000);
         const set = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '19:00', eveningDurationMins: 240 }, timestamp: SAVED_LONG_AGO });
         const saved = mcReducer(set, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:30' }, timestamp: new Date(ends.getTime() + 10 * 60_000).toISOString() });
-        expect(saved.missions.find(m => m.phase === 'evening')?.savedIntoWindowAt).toBeUndefined();
+        expect(saved.missions.find(m => m.phase === 'evening')?.savedIntoWindows).toBeUndefined();
     });
 });

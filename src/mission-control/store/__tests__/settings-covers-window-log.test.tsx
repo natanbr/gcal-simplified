@@ -2,12 +2,13 @@
 // A settings save that covers an open window says so in the log
 // ------------------------------------------------------------
 // A save that opens a window that was not open before is never a start
-// (savedIntoWindowAt, missionActivity.ts): the scheduler counts that window as
+// (savedIntoWindows, missionActivity.ts): the scheduler counts that window as
 // handled. Left silent, a child could skip an unstarted mission with no trace
 // at all: no start, no miss, no "skipped" line. Owner decision 2026-11-16: the
-// save writes one attributed line for each mission it stamped, less a mission
-// that already ran in the window, read from the state the reducer produces
-// (savedIntoWindowLog.ts). A save that cannot open a window costs no reducer pass.
+// save writes one attributed line naming each mission it covered, less a
+// mission that already ran in the window, read from the state the reducer
+// produces (savedIntoWindowLog.ts). A save that cannot open a window costs no
+// reducer pass; a written line costs two (one to decide it, one for its snapshot).
 // ============================================================
 
 import { render, act } from '@testing-library/react';
@@ -37,7 +38,7 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
         const entry = createLogEntry(save({ morningStartsAt: '07:50' }, at(8, 0)), initialState);
         expect(entry).toMatchObject({
             icon: '⏭️',
-            message: 'Morning mission not started: its 07:50 window was already open when Settings was saved (start it from the phone) — Morning start changed 06:00 → 07:50',
+            message: 'Morning mission not started: its 07:50 window was open when Settings was saved (start it from the phone) — Morning start changed 06:00 → 07:50',
             type: 'mission',
             colorKey: 'morning',
             source: 'local',
@@ -59,7 +60,7 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
     it('both phases opened by one save: one line naming both', () => {
         const state = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 30, eveningDurationMins: 60 }, timestamp: at(3, 0) });
         const entry = createLogEntry(save({ morningStartsAt: '12:00', eveningStartsAt: '11:50' }, at(12, 5)), state);
-        expect(entry?.message).toMatch(/^Morning and evening missions not started/);
+        expect(entry?.message).toBe('Morning and evening missions not started: their windows were open when Settings was saved (start them from the phone) — Morning start changed 06:00 → 12:00; Evening start changed 19:00 → 11:50');
         expect(entry?.colorKey).toBeUndefined();
     });
 
@@ -128,6 +129,12 @@ describe('createLogEntry for a save that puts a window under the clock', () => {
         expect(createLogEntry(save({ eveningDurationMins: 45, creamTaskEnabled: true }, at(8, 0)), initialState)).toBeNull();
         expect(reducerSpy).not.toHaveBeenCalled();
     });
+
+    it('a written line costs two reducer passes: one to decide it, one for its snapshot', () => {
+        reducerSpy.mockClear();
+        expect(createLogEntry(save({ morningStartsAt: '07:50' }, at(8, 0)), initialState)).not.toBeNull();
+        expect(reducerSpy).toHaveBeenCalledTimes(2);
+    });
 });
 
 describe('the line follows the stamp (saveIntoWindow.test.ts rows, on a profile where nothing ran)', () => {
@@ -148,7 +155,7 @@ describe('the line follows the stamp (saveIntoWindow.test.ts rows, on a profile 
         ['the same start time', { morningStartsAt: '06:00' }, day(16, 6, 10), false],
     ])('%s', (_label, settings, timestamp, stamped) => {
         const saved = mcReducer(initialState, save(settings, timestamp));
-        expect(saved.missions.some(m => m.savedIntoWindowAt !== undefined), 'the stamp').toBe(stamped);
+        expect(saved.missions.some(m => m.savedIntoWindows !== undefined), 'the stamp').toBe(stamped);
         expect(notStarted(createLogEntry(save(settings, timestamp), initialState)), 'the line').toBe(stamped);
     });
 
@@ -156,7 +163,7 @@ describe('the line follows the stamp (saveIntoWindow.test.ts rows, on a profile 
         const running = mcReducer(initialState, { type: 'SET_ACTIVE_MISSION', phase: 'morning', origin: 'remote', timestamp: at(19, 10) });
         const action = save({ morningStartsAt: '19:15', eveningStartsAt: '19:05' }, at(19, 20));
         expect(createLogEntry(action, running)?.message).toBe('Morning mission ended: its start time was changed in Settings — Morning start changed 06:00 → 19:15; Evening start changed 19:00 → 19:05');
-        expect(mcReducer(running, action).missions.find(m => m.phase === 'evening')?.savedIntoWindowAt).toBe(at(19, 20));
+        expect(mcReducer(running, action).missions.find(m => m.phase === 'evening')?.savedIntoWindows).toEqual([{ savedAt: at(19, 20), windowStart: at(19, 5) }]);
     });
 });
 
@@ -175,14 +182,14 @@ describe('through the store: the line is written once, with the stamp', () => {
 
     it('a save into an open window stamps the mission and writes exactly one line', () => {
         act(() => { dispatch(save({ morningStartsAt: '07:50' }, at(8, 0))); });
-        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindowAt).toBe(at(8, 0));
+        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindows).toEqual([{ savedAt: at(8, 0), windowStart: at(7, 50) }]);
         expect(lines()).toHaveLength(1);
         expect(lines()[0]).toMatchObject({ icon: '⏭️', colorKey: 'morning', source: 'local' });
     });
 
     it('a save that opens nothing writes none and stamps nothing', () => {
         act(() => { dispatch(save({ morningStartsAt: '08:30' }, at(8, 0))); });
-        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindowAt).toBeUndefined();
+        expect(live.missions.find(m => m.phase === 'morning')?.savedIntoWindows).toBeUndefined();
         expect(lines()).toEqual([]);
     });
 });

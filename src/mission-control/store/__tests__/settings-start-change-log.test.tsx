@@ -35,7 +35,7 @@ vi.mock('../mcReducer', async importOriginal => {
 const reducerSpy = vi.mocked(mcReducer);
 
 const CHANGED = /start changed/;
-const COVERED_EVENING = 'Evening mission not started: its 19:00 window was already open when Settings was saved (start it from the phone)';
+const COVERED_EVENING = 'Evening mission not started: its 19:00 window was open when Settings was saved (start it from the phone)';
 /** Local clock times on a day with no DST change. */
 const day = (d: number, h: number, m: number) => new Date(2026, 10, d, h, m, 0, 0).toISOString();
 const at = (h: number, m: number) => day(16, h, m);
@@ -81,7 +81,7 @@ describe('createLogEntry for a save that changes a start time', () => {
     it('a start moved to an earlier window that has already closed leaves a trace (the case PR 209 left silent)', () => {
         // 17:00 for 60 min closed at 18:00; saved at 18:30: no stamp, no start, no miss, no skipped line.
         const action = save({ eveningStartsAt: '17:00' }, at(18, 30));
-        expect(mcReducer(initialState, action).missions.find(m => m.phase === 'evening')?.savedIntoWindowAt, 'precondition: nothing is stamped').toBeUndefined();
+        expect(mcReducer(initialState, action).missions.find(m => m.phase === 'evening')?.savedIntoWindows, 'precondition: nothing is stamped').toBeUndefined();
         expect(createLogEntry(action, initialState)?.message).toBe('Evening start changed 19:00 → 17:00');
     });
 });
@@ -122,7 +122,7 @@ describe('the change is folded into the line a save already writes', () => {
         const entry = createLogEntry(save({ morningStartsAt: '07:50' }, at(8, 0)), initialState);
         expect(entry).toMatchObject({
             icon: '⏭️',
-            message: 'Morning mission not started: its 07:50 window was already open when Settings was saved (start it from the phone) — Morning start changed 06:00 → 07:50',
+            message: 'Morning mission not started: its 07:50 window was open when Settings was saved (start it from the phone) — Morning start changed 06:00 → 07:50',
             colorKey: 'morning',
             source: 'local',
             timestamp: at(8, 0),
@@ -141,13 +141,13 @@ describe('the change is folded into the line a save already writes', () => {
 
     it('past midnight: a start moved onto last night\'s window', () => {
         const entry = createLogEntry(save({ eveningStartsAt: '23:30' }, day(17, 0, 10)), initialState);
-        expect(entry?.message).toBe('Evening mission not started: its 23:30 window was already open when Settings was saved (start it from the phone) — Evening start changed 19:00 → 23:30');
+        expect(entry?.message).toBe('Evening mission not started: its 23:30 window was open when Settings was saved (start it from the phone) — Evening start changed 19:00 → 23:30');
     });
 
     it('both phases opened by one save: the joint line keeps its words and carries both changes', () => {
         const state = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 30, eveningDurationMins: 60 }, timestamp: at(3, 0) });
         const entry = createLogEntry(save({ morningStartsAt: '12:00', eveningStartsAt: '11:50' }, at(12, 5)), state);
-        expect(entry?.message).toBe('Morning and evening missions not started: their windows were already open when Settings was saved (start them from the phone) — Morning start changed 06:00 → 12:00; Evening start changed 19:00 → 11:50');
+        expect(entry?.message).toBe('Morning and evening missions not started: their windows were open when Settings was saved (start them from the phone) — Morning start changed 06:00 → 12:00; Evening start changed 19:00 → 11:50');
         expect(entry?.colorKey).toBeUndefined();
     });
 
@@ -200,7 +200,7 @@ describe('through the store: one line per save, none for a refused or empty save
         expect(lines()).toHaveLength(1);
         expect(lines()[0]).toMatchObject({ icon: '✏️', message: 'Evening start changed 19:00 → 17:00', colorKey: 'evening', source: 'local' });
         expect(live.activityLogs.length - before, 'no other line').toBe(1);
-        expect(evening()?.savedIntoWindowAt).toBeUndefined();
+        expect(evening()?.savedIntoWindows).toBeUndefined();
         expect(live.activeMission).toBe('none');
     });
 

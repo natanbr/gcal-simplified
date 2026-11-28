@@ -141,7 +141,7 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
             return { id, timestamp: now, icon: '⏹️', message: `Mission stopped`, type: 'mission', colorKey: action.missionPhase === 'none' ? undefined : action.missionPhase, ...snap() };
         case 'SET_SETTINGS': {
             // One line per save: the start-time change (startTimeChangeLog.ts) is folded into the
-            // line this save already writes, or stands alone. No speculative pass for a save that changes no start and cannot open a window.
+            // line this save already writes, or stands alone. No speculative pass for a save that changes no start and cannot open a window (one that may open a window and opens none pays one and writes nothing).
             const changes = startTimeChanges(state, action.settings);
             const phase = state.activeMission;
             let base: SettingsLine | null = null;
@@ -150,7 +150,8 @@ export function createLogEntry(action: MCAction, state: MCState): ActivityLogEnt
                 // The reducer's own check, so no drift; the line already says that phase's start changed.
                 base = { icon: '⏹️', message: `${phase === 'morning' ? 'Morning' : 'Evening'} mission ended: its start time was changed in Settings`, colorKey: phase };
             } else {
-                // A save that opens a window already open starts nothing (savedIntoWindowAt): say so.
+                // A save that opens a window starts nothing (savedIntoWindows): say so. A save that may open
+                // one pays a speculative pass to decide (coveredWindowLine), and a written line a second one for its snapshot (snap).
                 const covered = coveredWindowLine(state, action, now);
                 base = covered && { icon: '⏭️', message: covered.message, colorKey: covered.colorKey };
             }

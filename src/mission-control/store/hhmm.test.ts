@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-    hhmmToMins, isValidHhmm, windowEndToMins, missionWindowEnd, isValidDurationMins, missionDurationMins,
+    hhmmToMins, isValidHhmm, windowEndToMins, missionWindowEnd, isValidDurationMins, isRunLengthMins, missionDurationMins,
 } from './hhmm';
 import { isQuickGameWindowOpen } from './gameWindow';
 import { isWakingHour, moodHourlyRate } from './behaviorSync';
@@ -92,6 +92,19 @@ describe('isValidDurationMins — a real mission length', () => {
     // and 1e-7 is written in exponent form no parser reads back.
     it.each([0, -5, 1440, 1e9, 1e-7, 5e-324, Number.NaN, Number.POSITIVE_INFINITY, null, undefined, '30'])('refuses %s', bad => {
         expect(isValidDurationMins(bad)).toBe(false);
+    });
+});
+
+// A run's stored length (baseDurationMins) is read for the +/- cap and the window behind a start-time move. A
+// one-second run stores its length from the window's arithmetic, a hair under 1/60; anything under one second once
+// rounded to whole seconds is 0 in disguise: 5e-324 let the cap work from an empty run (review of PR 209, Codex).
+describe('isRunLengthMins — a run’s stored length', () => {
+    it.each([1 / 60, 0.01666666666665151, TEST_DURATION, 60, 1439.99])('accepts %j', ok => {
+        expect(isRunLengthMins(ok)).toBe(true);
+    });
+
+    it.each([5e-324, 1e-10, 0.008, 0, -1, -1 / 60, Number.NaN, Number.POSITIVE_INFINITY, 1440, 1e9, null, undefined, '60'])('refuses %s', bad => {
+        expect(isRunLengthMins(bad)).toBe(false);
     });
 });
 

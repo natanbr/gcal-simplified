@@ -26,9 +26,21 @@ import type { MCAction, MCSettings, Mission } from '../types';
 import { getLocalDateString } from './behaviorSync';
 import { occurrenceOn, openOccurrence } from './missionOccurrence';
 
-/** A local date key as getLocalDateString writes it. */
+/**
+ * A local date key as getLocalDateString writes it, by its shape. A run's day
+ * keeps this check: a damaged one ('2026-02-30') marks no real occurrence
+ * done, where dropping it dates the outcome by the calendar, and a phone
+ * start at 00:30 (yesterday's evening) marked today's done (review of PR 209).
+ */
 export function isDateKey(value: unknown): value is string {
     return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/** A date key that is a real calendar day, by round trip: for a start-time save's stored decision (retimeCoversDay). */
+export function isCalendarDay(value: unknown): value is string {
+    if (!isDateKey(value)) return false;
+    const ms = Date.parse(`${value}T00:00:00Z`);
+    return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value;
 }
 
 /**

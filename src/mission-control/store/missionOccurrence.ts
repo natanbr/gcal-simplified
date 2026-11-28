@@ -98,14 +98,16 @@ export function nextOccurrence(m: MissionWindow, settings: MCSettings, instant: 
 
 /**
  * Whether `atMs`, before `o` starts, is nearer `o`'s start than the end of the
- * occurrence before it, in real time; a tie counts as nearer, as the
- * hand-start rule's tie goes to the occurrence ahead (occurrenceDay.ts). So
- * never from inside or before the window behind (its distance is not positive),
- * and an instant leans toward one occurrence ahead at most.
+ * occurrence before it, that window lasting `behindMins` (the length of the run
+ * being weighed, not the mission's length of the moment), in real time; a tie
+ * counts as nearer, as the hand-start rule's tie goes to the occurrence ahead
+ * (occurrenceDay.ts). So never from inside or before the window behind (its
+ * distance is not positive), and an instant leans toward one occurrence ahead
+ * at most.
  */
-export function nearerToStartOf(o: Occurrence, m: MissionWindow, settings: MCSettings, atMs: number): boolean {
+export function nearerToStartOf(o: Occurrence, m: MissionWindow, settings: MCSettings, atMs: number, behindMins: number): boolean {
     const behind = occurrenceOn(m, settings, new Date(o.startMs), -1);
-    return behind !== null && atMs < o.startMs && o.startMs - atMs <= atMs - behind.endMs;
+    return behind !== null && atMs < o.startMs && o.startMs - atMs <= atMs - (behind.startMs + behindMins * 60_000);
 }
 
 /** The latest occurrence that has closed by `instant` (the day before yesterday's while yesterday's is still open). */

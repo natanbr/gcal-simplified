@@ -2,12 +2,14 @@
 // Mission Control — a Settings save never starts a mission on demand: the
 // review round's cases (the rule: useMissionScheduler.no-start-on-demand.test.tsx)
 // ------------------------------------------------------------
-// The stamp (savedIntoWindowAt, store/missionActivity.ts) is written when a
+// The stamp (savedIntoWindows, store/missionActivity.ts) is written when a
 // save's window is open at the save and was not open AT THAT START before it,
 // and it covers only that window (store/occurrenceHandled.ts). These pin:
 //   - a known gap: a window already open and pending behind another running
 //     mission, moved to another start that is open too, is stamped, so it no
 //     longer starts when the other mission ends (the phone can start it);
+//   - a known gap: a save that ends the RUNNING mission (its start time moved)
+//     lets the other phase's window, open and waiting behind it, start at once;
 //   - a second save that moves a window the first save opened: a new window
 //     opened by the save, held back too ("was anything open before" would
 //     start it);
@@ -55,7 +57,8 @@ describe('a save into the window: the review round', () => {
         jumpTo(nov(10, 19, 10));
         expect(h.live.state.activeMission, 'precondition: the evening window opened behind the running morning').toBe('morning');
         h.dispatch({ type: 'SET_SETTINGS', settings: { eveningStartsAt: '19:05' } });
-        expect(missionOf(h.live.state, 'evening')?.savedIntoWindowAt, 'precondition: the move is stamped').toBe(nov(10, 19, 10).toISOString());
+        expect(missionOf(h.live.state, 'evening')?.savedIntoWindows, 'precondition: the move is stamped')
+            .toEqual([{ savedAt: nov(10, 19, 10).toISOString(), windowStart: nov(10, 19, 5).toISOString() }]);
 
         jumpTo(nov(10, 19, 12));
         h.emit('remote-control:action', { type: 'CANCEL_MISSION', missionPhase: 'morning' });
@@ -63,6 +66,21 @@ describe('a save into the window: the review round', () => {
         expect(h.live.state.activeMission, 'the gap: the evening that was waiting stays unstarted').toBe('none');
         crossing(nov(10, 20, 5));
         expect(startLogs(h.live.state, 'evening')).toBe(0);
+        h.unmount();
+    });
+
+    it('known gap, pinned: a save that ends the running morning lets the evening waiting behind it start at once', () => {
+        // Moving the RUNNING morning's start ends it (open decision, PR 170). The evening's
+        // window did not change, so the save covers nothing of it, and the due evening starts:
+        // a Settings save that ends one mission brings on the other.
+        const h = launchAt(nov(10, 18, 55), initialState, true);
+        h.emit('remote-control:action', { type: 'SET_ACTIVE_MISSION', phase: 'morning' });
+        jumpTo(nov(10, 19, 10));
+        expect(h.live.state.activeMission, 'precondition: the evening window opened behind the running morning').toBe('morning');
+        h.dispatch({ type: 'SET_SETTINGS', settings: { morningStartsAt: '06:30' } });
+        step(2_000);
+        expect(h.live.state.activeMission, 'the gap: the evening starts right after the save').toBe('evening');
+        expect(startLogs(h.live.state, 'evening')).toBe(1);
         h.unmount();
     });
 

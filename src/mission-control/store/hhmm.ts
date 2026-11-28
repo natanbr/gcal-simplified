@@ -68,6 +68,18 @@ export function isValidDurationMins(value: unknown): boolean {
 }
 
 /**
+ * A run's stored length (baseDurationMins): at least one second in whole
+ * seconds (the +/- cap's own rounding) and under a day. Not isValidDurationMins,
+ * the rule for an entered duration: a run of the one-second minimum stores its
+ * length from the window's arithmetic, a hair under 1/60 (0.01666666666665151),
+ * and read as invalid the mission's length of the moment stood in for it. Above
+ * zero alone kept 5e-324, and the cap worked from an empty run (review of PR 209, Codex).
+ */
+export function isRunLengthMins(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && Math.round(value * 60) >= 1 && value < 24 * 60;
+}
+
+/**
  * How long a mission started now runs: its window, wrapping past midnight for
  * an end stored before `endsAt` stopped wrapping. Never NaN — `elapsedMins >= NaN`
  * never ended the mission — so an unreadable window falls back to the phase's

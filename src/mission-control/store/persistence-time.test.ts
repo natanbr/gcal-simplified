@@ -209,27 +209,78 @@ describe('hydration — when a start time was last moved', () => {
     });
 });
 
-// A save that puts a window under the clock is stamped (2026-11-15) and the
-// scheduler reads the stamp after a relaunch inside that window
-// (useMissionScheduler.no-start-on-demand.test.tsx), so a real one survives; one
-// in the future (a clock set back since) or anything that is not an instant is
-// dropped, as lastActiveAt is.
-describe('hydration — when a save last put a window under the clock', () => {
+/** Writes the morning with `fields` as a saved profile holds them, any value at all, and reloads it. */
+function restartMorningWith(fields: Record<string, unknown>): MCState {
+    const missions = initialState.missions.map(m => (m.phase === 'morning' ? { ...m, ...fields } : m));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...initialState, missions }));
+    return loadPersistedState();
+}
+
+// The decision the same save made about the occurrence ahead (retimeCoversDay)
+// across a restart and the upgrade from PR 207: persistence-retime-decision.test.ts.
+
+// Each window a save put under the clock is kept by its start (2026-11-15, by
+// window 2026-11-27), and the scheduler reads them after a relaunch inside that
+// window (useMissionScheduler.no-start-on-demand.test.tsx), so real ones survive;
+// an entry saved in the future (a clock set back since), one whose window starts
+// after its save, or anything that is not two instants is dropped.
+describe('hydration — the windows a save put under the clock', () => {
     beforeEach(() => { localStorage.removeItem(STORAGE_KEY); });
     afterEach(() => { localStorage.removeItem(STORAGE_KEY); });
 
-    function restartWith(savedIntoWindowAt: unknown): MCState {
-        return restart({ ...initialState, missions: initialState.missions.map(m => (m.phase === 'morning' ? { ...m, savedIntoWindowAt } as typeof m : m)) });
-    }
+    const ago = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
 
-    it('a past instant survives a restart, and a second one', () => {
-        const iso = new Date(Date.now() - 60_000).toISOString();
-        const once = restartWith(iso);
-        expect(mission(once, 'morning').savedIntoWindowAt).toBe(iso);
-        expect(mission(restart(once), 'morning').savedIntoWindowAt).toBe(iso);
+    it('real entries survive a restart, and a second one', () => {
+        const windows = [{ savedAt: ago(1500), windowStart: ago(1510) }, { savedAt: ago(10), windowStart: ago(20) }];
+        const once = restartMorningWith({ savedIntoWindows: windows });
+        expect(mission(once, 'morning').savedIntoWindows).toEqual(windows);
+        expect(mission(restart(once), 'morning').savedIntoWindows).toEqual(windows);
     });
 
-    it.each<[string, unknown]>([['an instant in the future', new Date(Date.now() + 3_600_000).toISOString()], ['a word', 'yesterday'], ['a number', 12345], ['null', null]])('anything else is dropped: %s', (_label, value) => {
-        expect(mission(restartWith(value), 'morning').savedIntoWindowAt).toBeUndefined();
+    it('a bad entry is dropped and the good ones kept', () => {
+        const good = { savedAt: ago(10), windowStart: ago(20) };
+        const bad = [
+            { savedAt: new Date(Date.now() + 3_600_000).toISOString(), windowStart: ago(20) },
+            { savedAt: ago(20), windowStart: ago(10) },
+            { savedAt: 'yesterday', windowStart: ago(20) },
+            { savedAt: ago(10) },
+            12345,
+            null,
+        ];
+        expect(mission(restartMorningWith({ savedIntoWindows: [...bad, good] }), 'morning').savedIntoWindows).toEqual([good]);
+    });
+
+    it.each<[string, unknown]>([['a single instant (the stamp before 2026-11-27)', ago(10)], ['an empty list', []], ['a list of bad entries', [{ savedAt: 'x', windowStart: 'y' }]], ['null', null]])('none at all: %s', (_label, value) => {
+        expect(mission(restartMorningWith({ savedIntoWindows: value }), 'morning').savedIntoWindows).toBeUndefined();
+    });
+});
+
+// Every stamp is written by toISOString, so hydration keeps one only when it reads
+// back as itself: Date.parse rolls an impossible day over ('2026-02-30' is read
+// as 2 March) and reads other shapes too, so a damaged stamp was kept as some
+// other instant (review of PR 209). All three stamps share the one check.
+describe('hydration — a stamp is kept only in the exact form the app writes', () => {
+    beforeEach(() => { localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { localStorage.removeItem(STORAGE_KEY); });
+
+    const real = new Date(Date.now() - 60_000).toISOString();
+    const kept = (value: string) => {
+        const m = mission(restartMorningWith({
+            lastActiveAt: value, startsAtChangedAt: value, savedIntoWindows: [{ savedAt: value, windowStart: value }],
+        }), 'morning');
+        return [m.lastActiveAt, m.startsAtChangedAt, m.savedIntoWindows?.[0]?.savedAt];
+    };
+
+    it('control: what toISOString wrote survives in all three', () => {
+        expect(kept(real)).toEqual([real, real, real]);
+    });
+
+    it.each<[string, string]>([
+        ['an impossible day (30 February)', '2026-02-30T06:05:00.000Z'],
+        ['no milliseconds', '2026-02-27T06:05:00Z'],
+        ['another offset', '2026-02-27T06:05:00.000+01:00'],
+        ['a date alone', '2026-02-27'],
+    ])('dropped from all three: %s', (_label, value) => {
+        expect(kept(value)).toEqual([undefined, undefined, undefined]);
     });
 });

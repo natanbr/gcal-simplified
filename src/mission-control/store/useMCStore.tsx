@@ -6,9 +6,12 @@
 
 import React, { createContext, useContext, useRef } from 'react';
 import type {
+    MCSettings,
     MCState,
     MCAction,
+    Mission,
     MissionPhase,
+    SavedWindow,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { initialState, selectTotalWealth } from './mcReducer';
@@ -19,8 +22,10 @@ import { currentPending, pendingFrom, type PendingState } from './pendingState';
 import { sanitizeSkillProgress } from './skillProgress';
 import { hydrateMissionTasks } from './routineTasks';
 import { sanitizeSchoolCalendar } from './schoolDays';
-import { deriveMissionWindow, hydrateMissionTimes, isValidDurationMins, sanitizeMissionTimes } from './hhmm';
-import { isDateKey } from './occurrenceDay';
+import { deriveMissionWindow, hydrateMissionTimes, isRunLengthMins, missionDurationMins, sanitizeMissionTimes } from './hhmm';
+import { keptWindows } from './missionActivity';
+import { isCalendarDay, isDateKey } from './occurrenceDay';
+import { retimeAheadDay } from './occurrenceHandled';
 import { runLengthRepair, settingRepairs, type MissionTimeRepair } from './missionTimeRepair';
 import { isStaleIncompleteRun } from './staleMissionRun';
 import { renewalLoggedMarker, withoutPairingCopy } from './pairingRenewal';
@@ -34,9 +39,47 @@ export const STORAGE_KEY = 'mc-state-v5'; // bumped: added gameTokens fields
 
 const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 
-/** A real instant that is not in the future (a stamp written under a clock set ahead). */
+/**
+ * A real instant that is not in the future (a stamp written under a clock set
+ * ahead), in the exact form toISOString writes every stamp: Date.parse also
+ * reads other shapes, and rolls an impossible day over ('2026-02-30' as 2 March).
+ */
 function isPastInstant(value: unknown): value is string {
-    return typeof value === 'string' && Date.parse(value) <= Date.now();
+    if (typeof value !== 'string') return false;
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) && new Date(ms).toISOString() === value && ms <= Date.now();
+}
+
+/**
+ * The windows a save opened, each kept only as two past instants with the
+ * window's start not after its save, then as the writer keeps them (keptWindows:
+ * once per window, those of the four latest days, 64 at most): a profile of
+ * 10,000 entries made every Settings save compare pairs of them.
+ */
+function savedWindows(value: unknown): SavedWindow[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const kept = value.flatMap((w: unknown): SavedWindow[] => {
+        if (typeof w !== 'object' || w === null || !('savedAt' in w) || !('windowStart' in w)) return [];
+        const { savedAt, windowStart } = w;
+        return isPastInstant(savedAt) && isPastInstant(windowStart) && Date.parse(windowStart) <= Date.parse(savedAt) ? [{ savedAt, windowStart }] : [];
+    });
+    return kept.length > 0 ? keptWindows(kept) : undefined;
+}
+
+/**
+ * `m` with the decision about the occurrence ahead that its start-time save
+ * stamp carries (retimeCoversDay: a day, or null for none), made once now
+ * when the stamp has none: PR 207 wrote the stamp alone and decided at every
+ * read, so a profile it saved read as "none" and released the start it held.
+ * Decided as PR 207 read it: the window behind as long as the mission is in the
+ * loaded settings, not the run's own length a new save weighs it with. The two
+ * differ when the length was saved between the run and the move, and the run's
+ * length released what PR 207 held, or held what it let start (review of PR
+ * 209, Codex). Written, so a later load reads the same.
+ */
+function withRetimeDecision(m: Mission, settings: MCSettings): Mission {
+    if (m.startsAtChangedAt === undefined || m.retimeCoversDay !== undefined) return m;
+    return { ...m, retimeCoversDay: retimeAheadDay(m, settings, missionDurationMins(m, settings)) };
 }
 
 export function loadPersistedState(): MCState {
@@ -97,24 +140,29 @@ export function loadPersistedStateWithRepairs(): { state: MCState; missionTimeRe
             missions: initialState.missions.map(defaultM => {
                 const savedM = parsed.missions?.find(m => m.phase === defaultM.phase);
                 if (!savedM) return defaultM;
+                const startsAtChangedAt = isPastInstant(savedM.startsAtChangedAt) ? savedM.startsAtChangedAt : undefined;
                 const merged = {
                     ...defaultM,
                     ...savedM,
-                    // All three must survive a restart: a relaunch inside the window after a stop, after a
+                    // All must survive a restart: a relaunch inside the window after a stop, after a
                     // save that moved the start time, or after one that opened the window would otherwise start it.
                     lastActiveAt: isPastInstant(savedM.lastActiveAt) ? savedM.lastActiveAt : undefined,
-                    startsAtChangedAt: isPastInstant(savedM.startsAtChangedAt) ? savedM.startsAtChangedAt : undefined,
-                    savedIntoWindowAt: isPastInstant(savedM.savedIntoWindowAt) ? savedM.savedIntoWindowAt : undefined,
+                    startsAtChangedAt,
+                    // Only beside a stamp. Absent is PR 207's, decided below (withRetimeDecision); a real day is kept;
+                    // anything else is damage, read as null (no day ahead), so the scheduled start goes ahead.
+                    retimeCoversDay: startsAtChangedAt === undefined || savedM.retimeCoversDay === undefined ? undefined
+                        : isCalendarDay(savedM.retimeCoversDay) ? savedM.retimeCoversDay : null,
+                    savedIntoWindows: savedWindows(savedM.savedIntoWindows),
                     // The run's day and base length, kept only when real (missing: the derivations they replace).
                     occurrenceDate: isDateKey(savedM.occurrenceDate) ? savedM.occurrenceDate : undefined,
-                    baseDurationMins: isValidDurationMins(savedM.baseDurationMins) ? savedM.baseDurationMins : undefined,
+                    baseDurationMins: isRunLengthMins(savedM.baseDurationMins) ? savedM.baseDurationMins : undefined,
                     // Icon + label come from the code; a Cream or School Bag task
                     // the saved run carried is kept, ticked or not (routineTasks.ts).
                     tasks: hydrateMissionTasks(defaultM.tasks, savedM.tasks),
                 };
                 // A run from an earlier day with no readable duration is left as saved:
                 // useStaleMissionRunEnd ends it after load, logged (staleMissionRun.ts).
-                const derived = deriveMissionWindow(merged, settings);
+                const derived = withRetimeDecision(deriveMissionWindow(merged, settings), settings);
                 if (isStaleIncompleteRun(derived, settings, new Date())) return derived;
                 const hydrated = hydrateMissionTimes(derived, settings);
                 repairs.push(...runLengthRepair(derived, hydrated));
