@@ -266,3 +266,33 @@ describe('hydration — the windows a save put under the clock', () => {
         expect(mission(restartMorningWith({ savedIntoWindows: value }), 'morning').savedIntoWindows).toBeUndefined();
     });
 });
+
+// Every stamp is written by toISOString, so hydration keeps one only when it reads
+// back as itself: Date.parse rolls an impossible day over ('2026-02-30' is read
+// as 2 March) and reads other shapes too, so a damaged stamp was kept as some
+// other instant (review of PR 209). All three stamps share the one check.
+describe('hydration — a stamp is kept only in the exact form the app writes', () => {
+    beforeEach(() => { localStorage.removeItem(STORAGE_KEY); });
+    afterEach(() => { localStorage.removeItem(STORAGE_KEY); });
+
+    const real = new Date(Date.now() - 60_000).toISOString();
+    const kept = (value: string) => {
+        const m = mission(restartMorningWith({
+            lastActiveAt: value, startsAtChangedAt: value, savedIntoWindows: [{ savedAt: value, windowStart: value }],
+        }), 'morning');
+        return [m.lastActiveAt, m.startsAtChangedAt, m.savedIntoWindows?.[0]?.savedAt];
+    };
+
+    it('control: what toISOString wrote survives in all three', () => {
+        expect(kept(real)).toEqual([real, real, real]);
+    });
+
+    it.each<[string, string]>([
+        ['an impossible day (30 February)', '2026-02-30T06:05:00.000Z'],
+        ['no milliseconds', '2026-02-27T06:05:00Z'],
+        ['another offset', '2026-02-27T06:05:00.000+01:00'],
+        ['a date alone', '2026-02-27'],
+    ])('dropped from all three: %s', (_label, value) => {
+        expect(kept(value)).toEqual([undefined, undefined, undefined]);
+    });
+});

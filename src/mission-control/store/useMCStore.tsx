@@ -35,9 +35,15 @@ export const STORAGE_KEY = 'mc-state-v5'; // bumped: added gameTokens fields
 
 const VALID_REWARD_IDS = new Set(Object.keys(REWARD_MAP));
 
-/** A real instant that is not in the future (a stamp written under a clock set ahead). */
+/**
+ * A real instant that is not in the future (a stamp written under a clock set
+ * ahead), in the exact form toISOString writes every stamp: Date.parse also
+ * reads other shapes, and rolls an impossible day over ('2026-02-30' as 2 March).
+ */
 function isPastInstant(value: unknown): value is string {
-    return typeof value === 'string' && Date.parse(value) <= Date.now();
+    if (typeof value !== 'string') return false;
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) && new Date(ms).toISOString() === value && ms <= Date.now();
 }
 
 /** The windows a save opened, each kept only as two past instants with the window's start not after its save. */
