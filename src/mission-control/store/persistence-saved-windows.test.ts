@@ -28,10 +28,12 @@ describe('hydration — the windows a save covered, as the writer keeps them', (
     beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(NOW); localStorage.removeItem(STORAGE_KEY); });
     afterEach(() => { vi.useRealTimers(); localStorage.removeItem(STORAGE_KEY); });
 
-    it('a window saved twice is kept once', () => {
+    it('a window saved twice is kept once, with its earlier save, whichever is listed first', () => {
         const windowStart = minsAgo(60);
-        const kept = reloadMorningWith([{ savedAt: minsAgo(50), windowStart }, { savedAt: minsAgo(40), windowStart }]);
-        expect(kept?.map(w => w.windowStart)).toEqual([windowStart]);
+        const earlier = { savedAt: minsAgo(50), windowStart };
+        const later = { savedAt: minsAgo(40), windowStart };
+        expect(reloadMorningWith([earlier, later])).toEqual([earlier]);
+        expect(reloadMorningWith([later, earlier])).toEqual([earlier]);
     });
 
     it('10,000 entries load as the eight that start latest, in order of start', () => {

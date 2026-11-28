@@ -145,21 +145,27 @@ export const KEPT_WINDOWS = 8;
 const byStartTime = (a: SavedWindow, b: SavedWindow) => Date.parse(a.windowStart) - Date.parse(b.windowStart);
 
 /**
- * `windows` once per window (the last entry of a window wins), the
- * KEPT_WINDOWS that start latest, the window that starts at `keep` among them
- * whatever its start, in order of start. The writer's rule, which hydration
- * applies to a saved profile too (useMCStore.tsx).
+ * `windows` once per window, the KEPT_WINDOWS that start latest, the window
+ * that starts at `keep` among them whatever its start, in order of start. A
+ * window saved again keeps its earliest save: taking the later one, a reopening
+ * made under a clock running ahead put the entry in the future, and the window
+ * was released while open once the clock was put right (review of PR 209).
+ * The writer's rule, which hydration applies to a saved profile too
+ * (useMCStore.tsx).
  */
 export function keptWindows(windows: readonly SavedWindow[], keep?: string): SavedWindow[] {
     const byStart = new Map<string, SavedWindow>();
-    for (const w of windows) byStart.set(w.windowStart, w);
+    for (const w of windows) {
+        const seen = byStart.get(w.windowStart);
+        if (seen === undefined || Date.parse(w.savedAt) < Date.parse(seen.savedAt)) byStart.set(w.windowStart, w);
+    }
     const pinned = keep === undefined ? undefined : byStart.get(keep);
     const others = [...byStart.values()].filter(w => w !== pinned).sort(byStartTime);
     if (pinned === undefined) return others.slice(-KEPT_WINDOWS);
     return [...others.slice(-(KEPT_WINDOWS - 1)), pinned].sort(byStartTime);
 }
 
-/** `windows` with `opened`, saved at `instant`, added (keptWindows: an earlier save of the same window replaced). */
+/** `windows` with `opened`, saved at `instant`, added (keptWindows: an earlier save of the same window kept). */
 function withSavedWindow(windows: SavedWindow[] | undefined, opened: Occurrence, instant: string): SavedWindow[] {
     const windowStart = new Date(opened.startMs).toISOString();
     return keptWindows([...(windows ?? []), { savedAt: instant, windowStart }], windowStart);

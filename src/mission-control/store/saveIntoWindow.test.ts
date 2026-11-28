@@ -93,10 +93,18 @@ describe('a recorded window is kept', () => {
         expect(windowsOf(nextDay, 'morning')).toEqual([first, { savedAt: iso(nov(11, 7, 40)), windowStart: iso(nov(11, 6, 59)) }]);
     });
 
-    it('once per window: opened again later, its entry takes the later save', () => {
+    it('once per window: opened again later, its entry keeps the earlier save', () => {
         const closed = saveAt(stamped, { morningDurationMins: 5 }, nov(10, 7, 10));
-        expect(windowsOf(saveAt(closed, { morningDurationMins: 30 }, nov(10, 7, 20)), 'morning'))
-            .toEqual([{ savedAt: iso(nov(10, 7, 20)), windowStart: iso(nov(10, 6, 59)) }]);
+        expect(windowsOf(saveAt(closed, { morningDurationMins: 30 }, nov(10, 7, 20)), 'morning')).toEqual([first]);
+    });
+
+    it('opened again under a clock running ahead, the window stays covered once the clock is put right', () => {
+        // Covered at 07:00 (06:59 for 30 min, open until 07:29). At a clock reading 07:35 the length goes to 60 min, which
+        // opens the same window again. Taking that later save, the entry was in the future at the real 07:10, so ignored.
+        const reopened = saveAt(stamped, { morningDurationMins: 60 }, nov(10, 7, 35));
+        expect(windowsOf(reopened, 'morning')).toEqual([first]);
+        const o = { day: '2026-11-10', startMs: nov(10, 6, 59).getTime(), endMs: nov(10, 7, 59).getTime() };
+        expect(occurrenceHandled(reopened, 'morning', o, nov(10, 7, 10).getTime()), 'released while open').toBe(true);
     });
 
     it('until eight windows that start later are kept: a ninth window drops the one that starts first', () => {
