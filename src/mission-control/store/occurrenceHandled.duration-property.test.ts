@@ -216,3 +216,37 @@ describe('a Settings save changes an occurrence\'s handling only where its rule 
         expect(covered, 'not vacuous: some first moves cover the 8th').toBeGreaterThan(50);
     });
 });
+
+// The property compares a save's before and after, so a rule that covered the next
+// occurrence after every move passed it unchanged (review of PR 209, Codex): these fix
+// what the nearness itself decides. A run nearer the end of the window behind than the
+// new start leaves the next occurrence to start as normal.
+describe('a move does not cover the occurrence ahead when the run is nearer the window behind', () => {
+    const nov = (day: number, h: number, m: number) => new Date(2026, 10, day, h, m);
+    const act = (s: MCState, action: MCAction, t: Date) => mcReducer(s, { ...action, timestamp: t.toISOString() });
+
+    /** The evening at `startsAt` for 60 min, started by the scheduler on the 10th and timed out at its end, `endedAt`. */
+    function missed(startsAt: string, endedAt: Date): MCState {
+        const fixture = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: startsAt, eveningDurationMins: 60 }, timestamp: new Date(0).toISOString() });
+        const started = act(fixture, { type: 'SET_ACTIVE_MISSION', phase: 'evening', origin: 'scheduler', occurrenceDate: '2026-11-10' }, new Date(endedAt.getTime() - HOUR));
+        const timedOut = act(started, { type: 'MARK_MISSION_TIMEOUT', missionPhase: 'evening', origin: 'scheduler' }, endedAt);
+        return act(timedOut, { type: 'SET_ACTIVE_MISSION', phase: 'none', origin: 'scheduler' }, endedAt);
+    }
+
+    it.each<[string, string, Date, Date, string, number]>([
+        // The 23:30 evening missed at 00:30 on the 11th, moved at 12:00 to 00:10: the run lies inside the 11th's
+        // 00:10–01:10, the window behind the 12th's 00:10, so the night after starts as normal.
+        ['the night after: 23:30 missed at 00:30, moved at 12:00 to 00:10', '23:30', nov(11, 0, 30), nov(11, 12, 0), '00:10', 12],
+        // The 19:00 evening missed at 20:00 on the 10th, moved at 06:00 to 18:00: 22 h before the 11th's 18:00,
+        // 1 h after the 10th's 18:00–19:00 behind it.
+        ['a run long before the new start: 19:00 missed at 20:00, moved at 06:00 to 18:00', '19:00', nov(10, 20, 0), nov(11, 6, 0), '18:00', 11],
+    ])('%s: the next occurrence starts', (_name, startsAt, endedAt, movedAt, movedTo, day) => {
+        const moved = act(missed(startsAt, endedAt), { type: 'SET_SETTINGS', settings: { eveningStartsAt: movedTo } }, movedAt);
+        const m = moved.missions.find(x => x.phase === 'evening');
+        const o = m && occurrenceOn(m, moved.settings, nov(day, 12, 0));
+        if (!m || !o) throw new Error('no evening occurrence');
+        expect(m.startsAtChangedAt, 'precondition: the save kept the run, so it decided').toBe(movedAt.toISOString());
+        expect(occurrenceHandled(moved, 'evening', o, o.startMs + MIN), 'held back with no phone to start it').toBe(false);
+        expect(m.retimeCoversDay, 'decided to cover the occurrence ahead').toBeNull();
+    });
+});
