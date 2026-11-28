@@ -126,9 +126,19 @@ export function skippedLines(state: MCState, phase: Phase): number {
     return state.activityLogs.filter(l => l.message.startsWith(`${name} mission skipped`)).length;
 }
 
-/** Only the evening, at `startsAt` for `durationMins`, derived the way Settings → Save derives it. */
+/**
+ * When a fixture's Settings save was made: long before any clock a test sets. Stamped
+ * at the test's clock instead, a save that sets up a window already open then puts it
+ * under the clock (savedIntoWindows), and the scheduler rightly starts nothing there.
+ * settings-fixture-clock-boundary.test.ts trusts it by name and pins it before 2000.
+ */
+export const SAVED_LONG_AGO = new Date(0).toISOString();
+
+/** Only the evening, at `startsAt` for `durationMins`, derived the way Settings → Save derives it (SAVED_LONG_AGO). */
 export function eveningOnlyAt(startsAt: string, durationMins: number): MCState {
-    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: startsAt, eveningDurationMins: durationMins } });
+    const s = mcReducer(initialState, {
+        type: 'SET_SETTINGS', settings: { eveningStartsAt: startsAt, eveningDurationMins: durationMins }, timestamp: SAVED_LONG_AGO,
+    });
     return { ...s, missions: s.missions.filter(m => m.phase === 'evening') };
 }
 

@@ -24,7 +24,7 @@ import {
 } from '../../e2e/helpers/missionClock';
 import { initialState, mcReducer } from '../mission-control/store/mcReducer';
 import { loadPersistedState } from '../mission-control/store/useMCStore';
-import { at, ranOnce, renderLiveScheduler, step } from '../mission-control/hooks/schedulerTestKit';
+import { SAVED_LONG_AGO, at, ranOnce, renderLiveScheduler, step } from '../mission-control/hooks/schedulerTestKit';
 
 const LAUNCHED_AT = Date.parse('2026-09-21T19:05:00.000-07:00');
 
@@ -199,7 +199,7 @@ describe('quietMissionClock after midnight', () => {
 
     it('at 00:30, inside last night’s 23:59 evening, a quieted launch starts nothing and logs no "skipped" line', async () => {
         const profile = ranOnce(ranOnce(
-            mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:59', eveningDurationMins: 60 } }),
+            mcReducer(initialState, { type: 'SET_SETTINGS', settings: { eveningStartsAt: '23:59', eveningDurationMins: 60 }, timestamp: SAVED_LONG_AGO }),
             'morning', at(6, 0, -3)), 'evening', at(23, 59, -3));
         const launch = at(0, 30, 1);
         vi.useFakeTimers();

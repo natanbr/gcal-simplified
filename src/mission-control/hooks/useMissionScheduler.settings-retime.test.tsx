@@ -22,7 +22,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { initialState, mcReducer } from '../store/mcReducer';
 import { loadPersistedState } from '../store/useMCStore';
 import {
-    at, crossing, eveningOnlyAt, jumpTo, loadEveningOnly, ranOnce, renderLiveScheduler, saveAndClose, skippedLines, startLogs, step,
+    SAVED_LONG_AGO, at, crossing, eveningOnlyAt, jumpTo, loadEveningOnly, ranOnce, renderLiveScheduler, saveAndClose, skippedLines, startLogs, step,
     type Phase,
 } from './schedulerTestKit';
 import type { MCState } from '../types';
@@ -34,7 +34,7 @@ function retime(phase: Phase, startsAt: string) {
 
 /** Only the morning, 06:00 for 10 min (no start-time change: nothing stamped). */
 function morningOnly(): MCState {
-    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 10 } });
+    const s = mcReducer(initialState, { type: 'SET_SETTINGS', settings: { morningDurationMins: 10 }, timestamp: SAVED_LONG_AGO });
     return { ...s, missions: s.missions.filter(m => m.phase === 'morning') };
 }
 
